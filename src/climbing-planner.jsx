@@ -1,4 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+// ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
+
+const supabase = import.meta.env.VITE_SUPABASE_URL
+  ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+  : null;
 
 // ─── DATA ────────────────────────────────────────────────────────────────────
 
@@ -138,7 +145,7 @@ function useWindowWidth() {
 
 // ─── EXPORT / IMPORT ─────────────────────────────────────────────────────────
 
-function SyncButtons({ data, onImport, compact }) {
+function SyncButtons({ data, onImport, compact, syncStatus }) {
   const importRef = useRef(null);
 
   const handleExport = () => {
@@ -172,8 +179,23 @@ function SyncButtons({ data, onImport, compact }) {
 
   const btnStyle = compact ? styles.syncBtnCompact : styles.syncBtn;
 
+  const syncIcon = syncStatus === "saving" ? "⟳"
+    : syncStatus === "saved" ? "✓"
+    : syncStatus === "offline" ? "⚡"
+    : null;
+  const syncColor = syncStatus === "saved" ? "#4ade80"
+    : syncStatus === "offline" ? "#f97316"
+    : "#555";
+
   return (
     <div style={styles.syncBtns}>
+      {syncIcon && (
+        <span style={{ ...styles.syncDot, color: syncColor }} title={
+          syncStatus === "saving" ? "Synchronisation…"
+          : syncStatus === "saved" ? "Synchronisé"
+          : "Hors ligne — données sauvées localement"
+        }>{syncIcon}</span>
+      )}
       <button style={btnStyle} onClick={handleExport} title="Exporter les données">
         {compact ? "↓" : "↓ Exporter"}
       </button>
@@ -187,6 +209,110 @@ function SyncButtons({ data, onImport, compact }) {
         style={{ display: "none" }}
         onChange={handleImport}
       />
+    </div>
+  );
+}
+
+// ─── HOOK: SYNC SUPABASE ─────────────────────────────────────────────────────
+
+function useSupabaseSync() {
+  const [session, setSession] = useState(null);
+  const [syncStatus, setSyncStatus] = useState("idle"); // "idle"|"saving"|"saved"|"offline"
+  const saveTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const loadFromCloud = useCallback(async () => {
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from("climbing_plans")
+      .select("data")
+      .single();
+    if (error && error.code !== "PGRST116") return null;
+    return data?.data ?? null;
+  }, []);
+
+  const saveToCloud = useCallback((planData, userId) => {
+    if (!supabase || !userId) return;
+    clearTimeout(saveTimerRef.current);
+    setSyncStatus("saving");
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const { error } = await supabase
+          .from("climbing_plans")
+          .upsert({ user_id: userId, data: planData }, { onConflict: "user_id" });
+        setSyncStatus(error ? "offline" : "saved");
+        setTimeout(() => setSyncStatus("idle"), 2000);
+      } catch {
+        setSyncStatus("offline");
+      }
+    }, 1500);
+  }, []);
+
+  return { session, setSession, syncStatus, loadFromCloud, saveToCloud };
+}
+
+// ─── AUTH PANEL ───────────────────────────────────────────────────────────────
+
+function AuthPanel({ session, onAuthChange }) {
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const handleSendLink = async () => {
+    if (!email.trim() || !supabase) return;
+    setSending(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: { emailRedirectTo: window.location.origin },
+    });
+    setSending(false);
+    if (!error) setSent(true);
+  };
+
+  const handleLogout = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    onAuthChange(null);
+  };
+
+  if (!supabase) return null;
+
+  if (session) {
+    return (
+      <div style={styles.authBar}>
+        <span style={styles.authEmail}>{session.user.email}</span>
+        <button style={styles.authLogoutBtn} onClick={handleLogout}>Déconnexion</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.authBar}>
+      {sent ? (
+        <span style={styles.authSentMsg}>Lien envoyé — vérifiez votre boite mail</span>
+      ) : (
+        <>
+          <input
+            style={styles.authInput}
+            type="email"
+            placeholder="votre@email.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSendLink()}
+          />
+          <button style={styles.authBtn} onClick={handleSendLink} disabled={sending}>
+            {sending ? "…" : "Recevoir le lien"}
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -522,12 +648,15 @@ function YearView({ data, currentDate, onSelectMonth, isMobile }) {
 
 export default function ClimbingPlanner() {
   const [data, setData] = useState(loadData);
+  const [cloudLoaded, setCloudLoaded] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState("week");
   const [picker, setPicker] = useState(null);
   const [feedbackTarget, setFeedbackTarget] = useState(null);
   const [metaEditing, setMetaEditing] = useState(false);
   const [tempMeta, setTempMeta] = useState({});
+
+  const { session, setSession, syncStatus, loadFromCloud, saveToCloud } = useSupabaseSync();
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -537,7 +666,25 @@ export default function ClimbingPlanner() {
   const weekSessions = data.weeks[wKey] || Array(7).fill(null).map(() => []);
   const weekMeta = data.weekMeta[wKey] || { mesocycle: "", microcycle: "", note: "" };
 
-  useEffect(() => { saveData(data); }, [data]);
+  // Phase 1 : localStorage (sync, immédiat)
+  // Phase 2 : cloud au premier login
+  useEffect(() => {
+    if (!session || cloudLoaded) return;
+    loadFromCloud().then(cloudData => {
+      setCloudLoaded(true);
+      if (cloudData) { setData(cloudData); saveData(cloudData); }
+    });
+  }, [session, cloudLoaded, loadFromCloud]);
+
+  // Réinitialiser cloudLoaded si l'utilisateur change de session
+  useEffect(() => {
+    if (!session) setCloudLoaded(false);
+  }, [session]);
+
+  useEffect(() => {
+    saveData(data);
+    saveToCloud(data, session?.user?.id);
+  }, [data]);
 
   // ── Navigation ──
   const handlePrev = () => {
@@ -655,8 +802,13 @@ export default function ClimbingPlanner() {
           </div>
           <div style={styles.headerMobileRow2}>
             {viewToggle}
-            <SyncButtons data={data} onImport={setData} compact />
+            <SyncButtons data={data} onImport={setData} compact syncStatus={syncStatus} />
           </div>
+          {!session && (
+            <div style={styles.headerMobileRow3}>
+              <AuthPanel session={session} onAuthChange={setSession} />
+            </div>
+          )}
           <div style={styles.weekNavMobile}>
             <button style={styles.navBtn} onClick={handlePrev}>←</button>
             <div style={styles.weekLabel}>
@@ -689,8 +841,9 @@ export default function ClimbingPlanner() {
           <div style={styles.headerRight}>
             <div style={styles.headerRightTop}>
               {viewToggle}
-              <SyncButtons data={data} onImport={setData} compact />
+              <SyncButtons data={data} onImport={setData} compact syncStatus={syncStatus} />
             </div>
+            <AuthPanel session={session} onAuthChange={setSession} />
             <div style={styles.totalCharge}>
               <span style={styles.totalChargeNum}>{totalPeriodCharge}</span>
               <span style={styles.totalChargeLabel}>
@@ -911,6 +1064,28 @@ const styles = {
     fontSize: 13, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center",
     transition: "all 0.15s",
   },
+  syncDot: { fontSize: 12, lineHeight: 1, transition: "color 0.3s" },
+
+  // ── Auth ──
+  authBar: { display: "flex", alignItems: "center", gap: 8, paddingTop: 4 },
+  authInput: {
+    background: "#1a1d1b", border: "1px solid #2a2e2b", color: "#c8c0b4",
+    padding: "5px 10px", borderRadius: 5, fontSize: 11, fontFamily: "inherit",
+    width: 170, outline: "none",
+  },
+  authBtn: {
+    background: "#1f2820", border: "1px solid #4ade8066", color: "#4ade80",
+    padding: "5px 12px", borderRadius: 5, cursor: "pointer",
+    fontSize: 11, fontFamily: "inherit", letterSpacing: "0.06em", transition: "all 0.15s",
+  },
+  authEmail: { fontSize: 10, color: "#555", letterSpacing: "0.06em" },
+  authLogoutBtn: {
+    background: "none", border: "1px solid #2a2e2b", color: "#6a7070",
+    padding: "4px 10px", borderRadius: 4, cursor: "pointer",
+    fontSize: 10, fontFamily: "inherit", letterSpacing: "0.06em",
+  },
+  authSentMsg: { fontSize: 11, color: "#4ade80", letterSpacing: "0.06em" },
+  headerMobileRow3: { padding: "4px 16px 10px", borderTop: "1px solid #181c1a" },
 
   // ── Meta bar ──
   metaBar: {
