@@ -93,6 +93,35 @@ function saveData(data) {
   localStorage.setItem("climbing_planner_v1", JSON.stringify(data));
 }
 
+// ─── HELPERS ACCÈS PAR DATE ───────────────────────────────────────────────────
+
+function getDaySessions(data, date) {
+  const monday = getMondayOf(date);
+  const wKey = weekKey(monday);
+  const ws = data.weeks[wKey];
+  if (!ws) return [];
+  const day = date.getDay(); // 0=Sun, 1=Mon…6=Sat
+  const idx = day === 0 ? 6 : day - 1; // 0=Mon…6=Sun
+  return ws[idx] || [];
+}
+
+function getDayCharge(data, date) {
+  return getDaySessions(data, date).reduce((a, s) => a + s.charge, 0);
+}
+
+function getMonthWeeks(year, month) {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startMonday = getMondayOf(firstDay);
+  const weeks = [];
+  let d = new Date(startMonday);
+  while (d <= lastDay) {
+    weeks.push(new Date(d));
+    d = addDays(d, 7);
+  }
+  return weeks;
+}
+
 // ─── MODAL: Ajouter une séance ────────────────────────────────────────────────
 
 function SessionPicker({ onSelect, onClose }) {
@@ -271,22 +300,211 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, onAddSession, onFee
   );
 }
 
+// ─── VUE MOIS ─────────────────────────────────────────────────────────────────
+
+function MonthView({ data, currentDate, onSelectWeek }) {
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const weeks = getMonthWeeks(year, month);
+  const today = new Date();
+
+  return (
+    <div style={styles.monthView}>
+      <div style={styles.monthDayHeaders}>
+        {DAYS.map(day => (
+          <div key={day} style={styles.monthDayHeaderCell}>{day}</div>
+        ))}
+      </div>
+      {weeks.map((weekMonday, wi) => (
+        <div key={wi} style={styles.monthWeekRow}>
+          {Array.from({ length: 7 }, (_, di) => {
+            const date = addDays(weekMonday, di);
+            const inMonth = date.getMonth() === month;
+            const isToday = date.toDateString() === today.toDateString();
+            const sessions = inMonth ? getDaySessions(data, date) : [];
+            const charge = sessions.reduce((a, s) => a + s.charge, 0);
+
+            return (
+              <div
+                key={di}
+                style={{
+                  ...styles.monthDayCell,
+                  ...(inMonth ? {} : styles.monthDayCellOut),
+                  ...(isToday ? styles.monthDayCellToday : {}),
+                }}
+                onClick={() => inMonth && onSelectWeek(weekMonday)}
+              >
+                <span style={{ ...styles.monthDayNum, ...(isToday ? styles.monthDayNumToday : {}) }}>
+                  {date.getDate()}
+                </span>
+                {sessions.length > 0 && (
+                  <div style={styles.monthDayContent}>
+                    {sessions.slice(0, 2).map((s, si) => (
+                      <div
+                        key={si}
+                        style={{
+                          ...styles.monthSessionRow,
+                          background: getChargeColor(s.charge) + "22",
+                          borderLeft: `2px solid ${getChargeColor(s.charge)}`,
+                        }}
+                      >
+                        <span style={{ ...styles.monthSessionLabel, color: getChargeColor(s.charge) }}>
+                          {s.name.length > 18 ? s.name.slice(0, 18) + "…" : s.name}
+                        </span>
+                      </div>
+                    ))}
+                    {sessions.length > 2 && (
+                      <span style={styles.monthMoreLabel}>+{sessions.length - 2}</span>
+                    )}
+                  </div>
+                )}
+                {charge > 0 && (
+                  <div style={{ ...styles.monthDayChargeBar, background: getChargeColor(charge) }} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── VUE ANNÉE ────────────────────────────────────────────────────────────────
+
+function YearView({ data, currentDate, onSelectMonth }) {
+  const year = currentDate.getFullYear();
+  const today = new Date();
+
+  return (
+    <div style={styles.yearGrid}>
+      {Array.from({ length: 12 }, (_, month) => {
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const weeks = getMonthWeeks(year, month);
+
+        let totalCharge = 0;
+        for (let d = new Date(firstDay); d <= lastDay; d = addDays(d, 1)) {
+          totalCharge += getDayCharge(data, d);
+        }
+
+        const monthName = firstDay.toLocaleDateString("fr-FR", { month: "long" });
+        const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+
+        return (
+          <div
+            key={month}
+            style={{ ...styles.yearMonthCard, ...(isCurrentMonth ? styles.yearMonthCardCurrent : {}) }}
+            onClick={() => onSelectMonth(month)}
+          >
+            <div style={styles.yearMonthHeader}>
+              <span style={{ ...styles.yearMonthName, ...(isCurrentMonth ? styles.yearMonthNameCurrent : {}) }}>
+                {monthName.charAt(0).toUpperCase() + monthName.slice(1)}
+              </span>
+              {totalCharge > 0 && (
+                <span style={{ ...styles.yearMonthCharge, color: getChargeColor(totalCharge / 25) }}>
+                  {totalCharge}
+                </span>
+              )}
+            </div>
+            <div style={styles.yearHeatmap}>
+              {weeks.map((wm, wi) => (
+                <div key={wi} style={styles.yearHeatmapRow}>
+                  {Array.from({ length: 7 }, (_, di) => {
+                    const date = addDays(wm, di);
+                    const inMonth = date.getMonth() === month;
+                    const charge = inMonth ? getDayCharge(data, date) : 0;
+                    const isToday = date.toDateString() === today.toDateString();
+                    return (
+                      <div
+                        key={di}
+                        style={{
+                          ...styles.yearHeatmapCell,
+                          background: !inMonth
+                            ? "transparent"
+                            : charge === 0
+                            ? "#1f2220"
+                            : getChargeColor(charge),
+                          outline: isToday ? "1px solid #4ade80" : "none",
+                          outlineOffset: 1,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
 
 export default function ClimbingPlanner() {
   const [data, setData] = useState(loadData);
-  const [currentMonday, setCurrentMonday] = useState(() => getMondayOf(new Date()));
-  const [picker, setPicker] = useState(null); // { dayIndex }
-  const [feedbackTarget, setFeedbackTarget] = useState(null); // { dayIndex, sessionIndex }
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [viewMode, setViewMode] = useState("week"); // "week" | "month" | "year"
+  const [picker, setPicker] = useState(null);
+  const [feedbackTarget, setFeedbackTarget] = useState(null);
   const [metaEditing, setMetaEditing] = useState(false);
   const [tempMeta, setTempMeta] = useState({});
 
-  const wKey = weekKey(currentMonday);
+  const monday = getMondayOf(currentDate);
+  const wKey = weekKey(monday);
   const weekSessions = data.weeks[wKey] || Array(7).fill(null).map(() => []);
   const weekMeta = data.weekMeta[wKey] || { mesocycle: "", microcycle: "", note: "" };
 
   useEffect(() => { saveData(data); }, [data]);
 
+  // ── Navigation ──
+  const handlePrev = () => {
+    if (viewMode === "week") setCurrentDate(d => addDays(d, -7));
+    else if (viewMode === "month") setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+    else setCurrentDate(d => new Date(d.getFullYear() - 1, 0, 1));
+  };
+
+  const handleNext = () => {
+    if (viewMode === "week") setCurrentDate(d => addDays(d, 7));
+    else if (viewMode === "month") setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+    else setCurrentDate(d => new Date(d.getFullYear() + 1, 0, 1));
+  };
+
+  // ── Label période ──
+  const periodLabel = viewMode === "week"
+    ? `${formatDate(monday)} — ${formatDate(addDays(monday, 6))}`
+    : viewMode === "month"
+    ? (() => {
+        const s = currentDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+        return s.charAt(0).toUpperCase() + s.slice(1);
+      })()
+    : currentDate.getFullYear().toString();
+
+  const isCurrentPeriod = viewMode === "week"
+    ? weekKey(monday) === weekKey(getMondayOf(new Date()))
+    : viewMode === "month"
+    ? currentDate.getFullYear() === new Date().getFullYear() && currentDate.getMonth() === new Date().getMonth()
+    : currentDate.getFullYear() === new Date().getFullYear();
+
+  const periodCurrentLabel = viewMode === "week" ? "Semaine en cours" : viewMode === "month" ? "Mois en cours" : "Année en cours";
+
+  // ── Charge totale période ──
+  const totalPeriodCharge = (() => {
+    if (viewMode === "week") return weekSessions.flat().reduce((a, s) => a + s.charge, 0);
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = viewMode === "month" ? new Date(year, month, 1) : new Date(year, 0, 1);
+    const lastDay = viewMode === "month" ? new Date(year, month + 1, 0) : new Date(year, 11, 31);
+    let total = 0;
+    for (let d = new Date(firstDay); d <= lastDay; d = addDays(d, 1)) {
+      total += getDayCharge(data, d);
+    }
+    return total;
+  })();
+
+  // ── Handlers séances ──
   const updateWeekSessions = (newSessions) => {
     setData(d => ({ ...d, weeks: { ...d.weeks, [wKey]: newSessions } }));
   };
@@ -315,13 +533,8 @@ export default function ClimbingPlanner() {
     setMetaEditing(false);
   };
 
-  const totalWeekCharge = weekSessions.flat().reduce((a, s) => a + s.charge, 0);
-  const today = getMondayOf(new Date());
-  const isCurrentWeek = weekKey(currentMonday) === weekKey(today);
-
   return (
     <div style={styles.app}>
-      {/* Texture overlay */}
       <div style={styles.grain} />
 
       {/* Header */}
@@ -330,92 +543,141 @@ export default function ClimbingPlanner() {
           <span style={styles.logo}>⛰</span>
           <div>
             <div style={styles.appTitle}>PLANIF ESCALADE</div>
-            <div style={styles.appSub}>Vue semaine · Bloc</div>
-          </div>
-        </div>
-        <div style={styles.weekNav}>
-          <button style={styles.navBtn} onClick={() => setCurrentMonday(d => addDays(d, -7))}>←</button>
-          <div style={styles.weekLabel}>
-            <div style={styles.weekRange}>
-              {formatDate(currentMonday)} — {formatDate(addDays(currentMonday, 6))}
+            <div style={styles.appSub}>
+              {viewMode === "week" ? "Vue semaine" : viewMode === "month" ? "Vue mois" : "Vue année"} · Bloc
             </div>
-            {isCurrentWeek && <div style={styles.weekCurrent}>Semaine en cours</div>}
           </div>
-          <button style={styles.navBtn} onClick={() => setCurrentMonday(d => addDays(d, 7))}>→</button>
         </div>
+
+        <div style={styles.weekNav}>
+          <button style={styles.navBtn} onClick={handlePrev}>←</button>
+          <div style={styles.weekLabel}>
+            <div style={styles.weekRange}>{periodLabel}</div>
+            {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
+          </div>
+          <button style={styles.navBtn} onClick={handleNext}>→</button>
+        </div>
+
         <div style={styles.headerRight}>
+          <div style={styles.viewToggle}>
+            {[
+              { mode: "week", label: "Sem" },
+              { mode: "month", label: "Mois" },
+              { mode: "year", label: "An" },
+            ].map(({ mode, label }) => (
+              <button
+                key={mode}
+                style={{ ...styles.viewToggleBtn, ...(viewMode === mode ? styles.viewToggleBtnActive : {}) }}
+                onClick={() => setViewMode(mode)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div style={styles.totalCharge}>
-            <span style={styles.totalChargeNum}>{totalWeekCharge}</span>
-            <span style={styles.totalChargeLabel}>charge totale</span>
+            <span style={styles.totalChargeNum}>{totalPeriodCharge}</span>
+            <span style={styles.totalChargeLabel}>
+              charge {viewMode === "week" ? "semaine" : viewMode === "month" ? "mois" : "année"}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Méta semaine */}
-      <div style={styles.metaBar}>
-        {metaEditing ? (
-          <div style={styles.metaForm}>
-            <select style={styles.metaSelect} value={tempMeta.mesocycle || ""} onChange={e => setTempMeta(m => ({ ...m, mesocycle: e.target.value }))}>
-              <option value="">— Mésocycle —</option>
-              {MESOCYCLES.map(m => <option key={m.label} value={m.label}>{m.label}</option>)}
-            </select>
-            <input style={styles.metaInput} placeholder="Microcycle (ex: Développement)" value={tempMeta.microcycle || ""} onChange={e => setTempMeta(m => ({ ...m, microcycle: e.target.value }))} />
-            <input style={styles.metaInput} placeholder="Note / thème de la semaine" value={tempMeta.note || ""} onChange={e => setTempMeta(m => ({ ...m, note: e.target.value }))} />
-            <button style={styles.saveBtn} onClick={saveMeta}>OK</button>
-            <button style={styles.cancelBtn} onClick={() => setMetaEditing(false)}>✕</button>
-          </div>
-        ) : (
-          <div style={styles.metaDisplay} onClick={() => { setTempMeta(weekMeta); setMetaEditing(true); }}>
-            {weekMeta.mesocycle ? (
-              <>
-                <span style={{ ...styles.mesoTag, background: (MESOCYCLES.find(m => m.label === weekMeta.mesocycle)?.color || "#888") + "22", color: MESOCYCLES.find(m => m.label === weekMeta.mesocycle)?.color || "#888", borderColor: (MESOCYCLES.find(m => m.label === weekMeta.mesocycle)?.color || "#888") + "55" }}>
-                  {weekMeta.mesocycle}
-                </span>
-                {weekMeta.microcycle && <span style={styles.microTag}>{weekMeta.microcycle}</span>}
-                {weekMeta.note && <span style={styles.noteTag}>"{weekMeta.note}"</span>}
-              </>
-            ) : (
-              <span style={styles.metaPlaceholder}>＋ Définir mésocycle / thème semaine</span>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Méta semaine — uniquement en vue semaine */}
+      {viewMode === "week" && (
+        <div style={styles.metaBar}>
+          {metaEditing ? (
+            <div style={styles.metaForm}>
+              <select style={styles.metaSelect} value={tempMeta.mesocycle || ""} onChange={e => setTempMeta(m => ({ ...m, mesocycle: e.target.value }))}>
+                <option value="">— Mésocycle —</option>
+                {MESOCYCLES.map(m => <option key={m.label} value={m.label}>{m.label}</option>)}
+              </select>
+              <input style={styles.metaInput} placeholder="Microcycle (ex: Développement)" value={tempMeta.microcycle || ""} onChange={e => setTempMeta(m => ({ ...m, microcycle: e.target.value }))} />
+              <input style={styles.metaInput} placeholder="Note / thème de la semaine" value={tempMeta.note || ""} onChange={e => setTempMeta(m => ({ ...m, note: e.target.value }))} />
+              <button style={styles.saveBtn} onClick={saveMeta}>OK</button>
+              <button style={styles.cancelBtn} onClick={() => setMetaEditing(false)}>✕</button>
+            </div>
+          ) : (
+            <div style={styles.metaDisplay} onClick={() => { setTempMeta(weekMeta); setMetaEditing(true); }}>
+              {weekMeta.mesocycle ? (
+                <>
+                  <span style={{ ...styles.mesoTag, background: (MESOCYCLES.find(m => m.label === weekMeta.mesocycle)?.color || "#888") + "22", color: MESOCYCLES.find(m => m.label === weekMeta.mesocycle)?.color || "#888", borderColor: (MESOCYCLES.find(m => m.label === weekMeta.mesocycle)?.color || "#888") + "55" }}>
+                    {weekMeta.mesocycle}
+                  </span>
+                  {weekMeta.microcycle && <span style={styles.microTag}>{weekMeta.microcycle}</span>}
+                  {weekMeta.note && <span style={styles.noteTag}>"{weekMeta.note}"</span>}
+                </>
+              ) : (
+                <span style={styles.metaPlaceholder}>＋ Définir mésocycle / thème semaine</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Grille semaine */}
-      <div style={styles.grid}>
-        {DAYS.map((day, i) => {
-          const date = addDays(currentMonday, i);
-          const isToday = date.toDateString() === new Date().toDateString();
-          return (
-            <DayColumn
-              key={i}
-              dayLabel={day}
-              dateLabel={formatDate(date)}
-              sessions={weekSessions[i] || []}
-              isToday={isToday}
-              onAddSession={() => setPicker({ dayIndex: i })}
-              onFeedback={(si) => setFeedbackTarget({ dayIndex: i, sessionIndex: si })}
-              onRemove={(si) => removeSession(i, si)}
-            />
-          );
-        })}
-      </div>
+      {viewMode === "week" && (
+        <>
+          <div style={styles.grid}>
+            {DAYS.map((day, i) => {
+              const date = addDays(monday, i);
+              const isToday = date.toDateString() === new Date().toDateString();
+              return (
+                <DayColumn
+                  key={i}
+                  dayLabel={day}
+                  dateLabel={formatDate(date)}
+                  sessions={weekSessions[i] || []}
+                  isToday={isToday}
+                  onAddSession={() => setPicker({ dayIndex: i })}
+                  onFeedback={(si) => setFeedbackTarget({ dayIndex: i, sessionIndex: si })}
+                  onRemove={(si) => removeSession(i, si)}
+                />
+              );
+            })}
+          </div>
 
-      {/* Charge bar */}
-      <div style={styles.chargeBar}>
-        {DAYS.map((day, i) => {
-          const dayCharge = (weekSessions[i] || []).reduce((a, s) => a + s.charge, 0);
-          const pct = Math.min(dayCharge / 80 * 100, 100);
-          return (
-            <div key={i} style={styles.chargeBarCol}>
-              <div style={styles.chargeBarTrack}>
-                <div style={{ ...styles.chargeBarFill, height: `${pct}%`, background: getChargeColor(dayCharge) }} />
-              </div>
-              <span style={{ ...styles.chargeBarLabel, color: dayCharge > 0 ? getChargeColor(dayCharge) : "#555" }}>{dayCharge || ""}</span>
-            </div>
-          );
-        })}
-      </div>
+          {/* Charge bar */}
+          <div style={styles.chargeBar}>
+            {DAYS.map((day, i) => {
+              const dayCharge = (weekSessions[i] || []).reduce((a, s) => a + s.charge, 0);
+              const pct = Math.min(dayCharge / 80 * 100, 100);
+              return (
+                <div key={i} style={styles.chargeBarCol}>
+                  <div style={styles.chargeBarTrack}>
+                    <div style={{ ...styles.chargeBarFill, height: `${pct}%`, background: getChargeColor(dayCharge) }} />
+                  </div>
+                  <span style={{ ...styles.chargeBarLabel, color: dayCharge > 0 ? getChargeColor(dayCharge) : "#555" }}>{dayCharge || ""}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Vue mois */}
+      {viewMode === "month" && (
+        <MonthView
+          data={data}
+          currentDate={currentDate}
+          onSelectWeek={(wm) => {
+            setCurrentDate(wm);
+            setViewMode("week");
+          }}
+        />
+      )}
+
+      {/* Vue année */}
+      {viewMode === "year" && (
+        <YearView
+          data={data}
+          currentDate={currentDate}
+          onSelectMonth={(month) => {
+            setCurrentDate(new Date(currentDate.getFullYear(), month, 1));
+            setViewMode("month");
+          }}
+        />
+      )}
 
       {/* Modals */}
       {picker && (
@@ -427,7 +689,7 @@ export default function ClimbingPlanner() {
       {feedbackTarget && (
         <FeedbackModal
           session={(weekSessions[feedbackTarget.dayIndex] || [])[feedbackTarget.sessionIndex]}
-          dayLabel={`${DAYS[feedbackTarget.dayIndex]} ${formatDate(addDays(currentMonday, feedbackTarget.dayIndex))}`}
+          dayLabel={`${DAYS[feedbackTarget.dayIndex]} ${formatDate(addDays(monday, feedbackTarget.dayIndex))}`}
           onSave={(fb) => saveFeedback(feedbackTarget.dayIndex, feedbackTarget.sessionIndex, fb)}
           onClose={() => setFeedbackTarget(null)}
         />
@@ -471,13 +733,23 @@ const styles = {
     width: 34, height: 34, borderRadius: 6, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
     transition: "all 0.15s",
   },
-  weekLabel: { textAlign: "center", minWidth: 160 },
+  weekLabel: { textAlign: "center", minWidth: 180 },
   weekRange: { fontSize: 13, color: "#c8c0b4", fontWeight: 600, letterSpacing: "0.05em" },
   weekCurrent: { fontSize: 10, color: "#4ade80", letterSpacing: "0.12em", marginTop: 3, textTransform: "uppercase" },
-  headerRight: {},
+  headerRight: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 },
   totalCharge: { textAlign: "right" },
   totalChargeNum: { fontSize: 28, fontWeight: 700, color: "#e8e4de", lineHeight: 1 },
   totalChargeLabel: { display: "block", fontSize: 9, color: "#555", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 2 },
+
+  // View toggle
+  viewToggle: { display: "flex", gap: 2 },
+  viewToggleBtn: {
+    background: "none", border: "1px solid #2a2e2b", color: "#6a7070",
+    padding: "4px 12px", borderRadius: 4, cursor: "pointer",
+    fontSize: 10, fontFamily: "inherit", letterSpacing: "0.08em",
+    transition: "all 0.15s",
+  },
+  viewToggleBtnActive: { background: "#1f2820", border: "1px solid #4ade8066", color: "#4ade80" },
 
   metaBar: {
     padding: "8px 24px",
@@ -510,6 +782,7 @@ const styles = {
     padding: "5px 10px", borderRadius: 5, fontSize: 11, fontFamily: "inherit", flex: 1,
   },
 
+  // Grille semaine
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(7, 1fr)",
@@ -585,6 +858,76 @@ const styles = {
   },
   chargeBarFill: { width: "100%", borderRadius: 3, transition: "height 0.3s, background 0.3s" },
   chargeBarLabel: { fontSize: 9, fontWeight: 700, letterSpacing: "0.04em" },
+
+  // ── Vue mois ──
+  monthView: {
+    flex: 1, position: "relative", zIndex: 1,
+    padding: "16px 24px", overflowY: "auto",
+  },
+  monthDayHeaders: {
+    display: "grid", gridTemplateColumns: "repeat(7, 1fr)",
+    gap: 2, marginBottom: 6,
+  },
+  monthDayHeaderCell: {
+    textAlign: "center", fontSize: 10, color: "#555",
+    letterSpacing: "0.12em", textTransform: "uppercase", padding: "4px 0",
+  },
+  monthWeekRow: {
+    display: "grid", gridTemplateColumns: "repeat(7, 1fr)",
+    gap: 2, marginBottom: 2,
+  },
+  monthDayCell: {
+    background: "#131615", border: "1px solid #1a1d1b",
+    borderRadius: 5, padding: "7px 8px", minHeight: 86,
+    cursor: "pointer", display: "flex", flexDirection: "column",
+    transition: "border-color 0.15s", position: "relative",
+    overflow: "hidden",
+  },
+  monthDayCellOut: { opacity: 0.25, cursor: "default" },
+  monthDayCellToday: { borderColor: "#4ade8055", background: "#0f1410" },
+  monthDayNum: { fontSize: 12, fontWeight: 600, color: "#6a7070", lineHeight: 1 },
+  monthDayNumToday: { color: "#4ade80" },
+  monthDayContent: { display: "flex", flexDirection: "column", gap: 2, marginTop: 5, flex: 1 },
+  monthSessionRow: {
+    borderRadius: 3, padding: "2px 5px",
+  },
+  monthSessionLabel: {
+    fontSize: 9, display: "block", letterSpacing: "0.02em", lineHeight: 1.35,
+  },
+  monthMoreLabel: { fontSize: 9, color: "#555", letterSpacing: "0.04em", paddingLeft: 2 },
+  monthDayChargeBar: {
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    height: 3, borderRadius: "0 0 5px 5px",
+  },
+
+  // ── Vue année ──
+  yearGrid: {
+    flex: 1, position: "relative", zIndex: 1,
+    padding: "16px 24px",
+    display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+    gap: 8, alignContent: "start", overflowY: "auto",
+  },
+  yearMonthCard: {
+    background: "#131615", border: "1px solid #1a1d1b",
+    borderRadius: 7, padding: "12px", cursor: "pointer",
+    transition: "border-color 0.15s",
+  },
+  yearMonthCardCurrent: { borderColor: "#4ade8044", background: "#0f1410" },
+  yearMonthHeader: {
+    display: "flex", alignItems: "baseline", justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  yearMonthName: {
+    fontSize: 11, fontWeight: 600, color: "#8a9090",
+    letterSpacing: "0.04em",
+  },
+  yearMonthNameCurrent: { color: "#4ade80" },
+  yearMonthCharge: { fontSize: 13, fontWeight: 700 },
+  yearHeatmap: { display: "flex", flexDirection: "column", gap: 2 },
+  yearHeatmapRow: {
+    display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2,
+  },
+  yearHeatmapCell: { height: 8, borderRadius: 2 },
 
   // Modal
   overlay: {
