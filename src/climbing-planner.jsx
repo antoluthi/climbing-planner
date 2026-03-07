@@ -729,45 +729,46 @@ function useSupabaseSync() {
 
 function AuthPanel({ session, onAuthChange }) {
   const { styles } = useThemeCtx();
-  const [email, setEmail] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode]         = useState("password"); // "password" | "magiclink" | "setpw" | "pwdone"
+  const [sending, setSending]   = useState(false);
+  const [sent, setSent]         = useState(false);
   const [authError, setAuthError] = useState("");
-  const [code, setCode] = useState("");
-  const [verifying, setVerifying] = useState(false);
 
-  const handleSendLink = async () => {
+  const reset = () => { setAuthError(""); setSent(false); setSending(false); };
+  const go = m => { setMode(m); reset(); setPassword(""); };
+
+  const handlePasswordLogin = async () => {
+    if (!email.trim() || !password.trim() || !supabase) return;
+    setSending(true); setAuthError("");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(), password: password.trim(),
+    });
+    setSending(false);
+    if (error) setAuthError("Email ou mot de passe incorrect");
+  };
+
+  const handleMagicLink = async () => {
     if (!email.trim() || !supabase) return;
-    setSending(true);
-    setAuthError("");
-    setCode("");
+    setSending(true); setAuthError("");
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin, shouldCreateUser: false },
+      options: { emailRedirectTo: window.location.origin },
     });
     setSending(false);
     if (error) {
-      setAuthError(error.status === 429 ? "Trop d'essais — réutilisez le dernier code reçu ↓" : error.message);
-      setSent(true); // show code field even on rate limit — user may have old code
-    } else {
-      setSent(true);
-    }
+      setAuthError(error.status === 429 ? "Trop d'essais — attendez quelques minutes" : error.message);
+    } else { setSent(true); }
   };
 
-  const handleVerifyCode = async () => {
-    if (!code.trim() || !email.trim() || !supabase) return;
-    setVerifying(true);
-    setAuthError("");
-    const { error } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: code.trim(),
-      type: "email",
-    });
-    setVerifying(false);
-    if (error) {
-      setAuthError(error.status === 429 ? "Trop de tentatives — attendez quelques minutes" : "Code invalide ou expiré");
-    }
-    // session picked up automatically by onAuthStateChange
+  const handleSetPassword = async () => {
+    if (password.trim().length < 6 || !supabase) return;
+    setSending(true); setAuthError("");
+    const { error } = await supabase.auth.updateUser({ password: password.trim() });
+    setSending(false);
+    if (error) { setAuthError(error.message); }
+    else { setMode("pwdone"); setPassword(""); }
   };
 
   const handleLogout = async () => {
@@ -778,41 +779,77 @@ function AuthPanel({ session, onAuthChange }) {
 
   if (!supabase) return null;
 
+  /* ── Connecté ── */
   if (session) {
-    return (
+    if (mode === "setpw") return (
       <div style={styles.authBar}>
         <span style={styles.authEmail}>{session.user.email}</span>
-        <button style={styles.authLogoutBtn} onClick={handleLogout}>Déconnexion</button>
-      </div>
-    );
-  }
-
-  if (sent) {
-    return (
-      <div style={styles.authBar}>
-        <span style={styles.authSentMsg}>📧 Code envoyé</span>
         <input
-          style={{ ...styles.authInput, width: 90, textAlign: "center", letterSpacing: "0.15em", fontWeight: 700 }}
-          type="text"
-          inputMode="numeric"
-          maxLength={6}
-          placeholder="123456"
-          value={code}
-          onChange={e => { setCode(e.target.value.replace(/\D/g, "")); setAuthError(""); }}
-          onKeyDown={e => e.key === "Enter" && handleVerifyCode()}
+          style={{ ...styles.authInput, width: 150 }}
+          type="password"
+          placeholder="Nouveau mot de passe (6+ car.)"
+          value={password}
           autoFocus
+          onChange={e => { setPassword(e.target.value); setAuthError(""); }}
+          onKeyDown={e => e.key === "Enter" && handleSetPassword()}
         />
-        <button style={styles.authBtn} onClick={handleVerifyCode} disabled={verifying || code.length < 6}>
-          {verifying ? "…" : "Vérifier"}
+        <button style={styles.authBtn} onClick={handleSetPassword} disabled={sending || password.length < 6}>
+          {sending ? "…" : "Enregistrer"}
         </button>
-        <button style={{ ...styles.authLogoutBtn, opacity: 0.7 }} onClick={() => { setSent(false); setAuthError(""); }}>
-          ← Email
-        </button>
+        <button style={{ ...styles.authLogoutBtn, opacity: 0.7 }} onClick={() => go("password")}>✕</button>
         {authError && <span style={styles.authErrorMsg}>{authError}</span>}
       </div>
     );
+
+    if (mode === "pwdone") return (
+      <div style={styles.authBar}>
+        <span style={styles.authEmail}>{session.user.email}</span>
+        <span style={styles.authSentMsg}>✓ Mot de passe défini</span>
+        <button style={styles.authLogoutBtn} onClick={() => go("password")}>✕</button>
+        <button style={styles.authLogoutBtn} onClick={handleLogout}>Déco</button>
+      </div>
+    );
+
+    return (
+      <div style={styles.authBar}>
+        <span style={styles.authEmail}>{session.user.email}</span>
+        <button
+          style={{ ...styles.authBtn, fontSize: 10, padding: "3px 8px", opacity: 0.75 }}
+          onClick={() => go("setpw")}
+          title="Définir un mot de passe pour se connecter sans magic link"
+        >🔑 MDP</button>
+        <button style={styles.authLogoutBtn} onClick={handleLogout}>Déco</button>
+      </div>
+    );
   }
 
+  /* ── Magic link ── */
+  if (mode === "magiclink") return (
+    <div style={styles.authBar}>
+      {sent ? (
+        <span style={styles.authSentMsg}>📧 Lien envoyé — vérifiez vos mails</span>
+      ) : (
+        <>
+          <input
+            style={styles.authInput}
+            type="email"
+            placeholder="votre@email.com"
+            value={email}
+            autoFocus
+            onChange={e => { setEmail(e.target.value); setAuthError(""); }}
+            onKeyDown={e => e.key === "Enter" && handleMagicLink()}
+          />
+          <button style={styles.authBtn} onClick={handleMagicLink} disabled={sending}>
+            {sending ? "…" : "Envoyer le lien"}
+          </button>
+        </>
+      )}
+      <button style={{ ...styles.authLogoutBtn, opacity: 0.7 }} onClick={() => go("password")}>← MDP</button>
+      {authError && <span style={styles.authErrorMsg}>{authError}</span>}
+    </div>
+  );
+
+  /* ── Mot de passe (défaut) ── */
   return (
     <div style={styles.authBar}>
       <input
@@ -821,10 +858,21 @@ function AuthPanel({ session, onAuthChange }) {
         placeholder="votre@email.com"
         value={email}
         onChange={e => { setEmail(e.target.value); setAuthError(""); }}
-        onKeyDown={e => e.key === "Enter" && handleSendLink()}
+        onKeyDown={e => e.key === "Enter" && handlePasswordLogin()}
       />
-      <button style={styles.authBtn} onClick={handleSendLink} disabled={sending}>
+      <input
+        style={{ ...styles.authInput, width: 130 }}
+        type="password"
+        placeholder="Mot de passe"
+        value={password}
+        onChange={e => { setPassword(e.target.value); setAuthError(""); }}
+        onKeyDown={e => e.key === "Enter" && handlePasswordLogin()}
+      />
+      <button style={styles.authBtn} onClick={handlePasswordLogin} disabled={sending || !password.trim()}>
         {sending ? "…" : "Connexion"}
+      </button>
+      <button style={{ ...styles.authLogoutBtn, opacity: 0.6 }} onClick={() => go("magiclink")} title="Connexion par lien email">
+        Lien →
       </button>
       {authError && <span style={styles.authErrorMsg}>{authError}</span>}
     </div>
