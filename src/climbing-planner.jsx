@@ -65,6 +65,7 @@ const DEFAULT_MESOCYCLES = MESOCYCLES.map((m, i) => ({
   label: m.label,
   color: m.color,
   durationWeeks: 4,
+  startDate: "",
   description: "",
   microcycles: [],
 }));
@@ -72,6 +73,30 @@ const DEFAULT_MESOCYCLES = MESOCYCLES.map((m, i) => ({
 function getMesoColor(mesocycles, label) {
   const found = (mesocycles || []).find(m => m.label === label)?.color;
   return found || MESOCYCLES.find(m => m.label === label)?.color || "#888";
+}
+
+// Returns { meso, micro } for a given date based on cycle startDates, or null
+function getMesoForDate(mesocycles, date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  for (const meso of (mesocycles || [])) {
+    if (!meso.startDate) continue;
+    const start = new Date(meso.startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = addDays(start, meso.durationWeeks * 7);
+    if (d >= start && d < end) {
+      let microStart = new Date(start);
+      for (const micro of (meso.microcycles || [])) {
+        const microEnd = addDays(microStart, micro.durationWeeks * 7);
+        if (d >= microStart && d < microEnd) {
+          return { meso, micro };
+        }
+        microStart = new Date(microEnd);
+      }
+      return { meso, micro: null };
+    }
+  }
+  return null;
 }
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -164,40 +189,40 @@ const useThemeCtx = () => useContext(ThemeContext);
 function makeStyles(isDark) {
   const D = isDark;
   const t = {
-    bg:              D ? "#0d0f0f"   : "#f0ebe2",
-    surface:         D ? "#131615"   : "#e8e2d8",
-    surface2:        D ? "#1a1d1b"   : "#ddd7cc",
-    border:          D ? "#1a1d1b"   : "#ccc6b8",
-    border2:         D ? "#1f2422"   : "#c4beb0",
-    headerGrad:      D ? "linear-gradient(180deg, #111413 0%, #0d0f0f 100%)" : "linear-gradient(180deg, #e0d9ce 0%, #eae4da 100%)",
+    bg:              D ? "#191e1b"   : "#f0ebe2",
+    surface:         D ? "#1f2421"   : "#e8e2d8",
+    surface2:        D ? "#252b27"   : "#ddd7cc",
+    border:          D ? "#252b27"   : "#ccc6b8",
+    border2:         D ? "#2a3028"   : "#c4beb0",
+    headerGrad:      D ? "linear-gradient(180deg, #1c2220 0%, #191e1b 100%)" : "linear-gradient(180deg, #e0d9ce 0%, #eae4da 100%)",
     text:            D ? "#e8e4de"   : "#2a2218",
     textTitle:       D ? "#c8c0b4"   : "#3a3028",
-    textMuted:       D ? "#555"      : "#8a7f70",
-    textDim:         D ? "#6a7070"   : "#7a7060",
+    textMuted:       D ? "#707870"   : "#8a7f70",
+    textDim:         D ? "#7a8480"   : "#7a7060",
     textCard:        D ? "#b0a898"   : "#4a3f32",
     accent:          D ? "#4ade80"   : "#2a7d4f",
-    accentBg:        D ? "#1f2820"   : "#d4e8db",
+    accentBg:        D ? "#263228"   : "#d4e8db",
     accentBorder:    D ? "#4ade8066" : "#2a7d4f66",
     accentFaint:     D ? "#4ade8044" : "#2a7d4f44",
     accentSolid:     D ? "#4ade8055" : "#2a7d4f55",
-    btnBorder:       D ? "#2a2e2b"   : "#bfb9aa",
-    navColor:        D ? "#8a9090"   : "#7a7060",
-    gridGap:         D ? "#161918"   : "#d0c9bf",
-    todayBg:         D ? "#0f1410"   : "#ddeee5",
-    metabarBg:       D ? "#0f1110"   : "#ece6dc",
-    subtleBorder:    D ? "#181c1a"   : "#ccc6b8",
-    modalBg:         D ? "#111413"   : "#ede8de",
-    overlayBg:       D ? "rgba(0,0,0,0.75)" : "rgba(0,0,0,0.45)",
-    actionColor:     D ? "#3a4040"   : "#8a7f70",
-    dashedBorder:    D ? "#1f2422"   : "#c4beb0",
-    sessionBorder:   D ? "#141614"   : "#d4cec4",
-    negativeBg:      D ? "#2a1515"   : "#f8d8dc",
+    btnBorder:       D ? "#2e3430"   : "#bfb9aa",
+    navColor:        D ? "#909898"   : "#7a7060",
+    gridGap:         D ? "#1f2421"   : "#d0c9bf",
+    todayBg:         D ? "#1a2a1e"   : "#ddeee5",
+    metabarBg:       D ? "#161b18"   : "#ece6dc",
+    subtleBorder:    D ? "#222927"   : "#ccc6b8",
+    modalBg:         D ? "#191e1b"   : "#ede8de",
+    overlayBg:       D ? "rgba(0,0,0,0.70)" : "rgba(0,0,0,0.45)",
+    actionColor:     D ? "#4a5450"   : "#8a7f70",
+    dashedBorder:    D ? "#2a3028"   : "#c4beb0",
+    sessionBorder:   D ? "#1e2421"   : "#d4cec4",
+    negativeBg:      D ? "#301a1a"   : "#f8d8dc",
     negativeBorder:  D ? "#f43f5e66" : "#c0394e55",
     negativeColor:   D ? "#f43f5e"   : "#c0394e",
-    inputBg:         D ? "#1a1d1b"   : "#ddd7cc",
-    starEmpty:       D ? "#444"      : "#bbb",
+    inputBg:         D ? "#252b27"   : "#ddd7cc",
+    starEmpty:       D ? "#555"      : "#bbb",
     badgeText:       D ? "#8a9898"   : "#5a6878",
-    dayEmpty:        D ? "#1f2220"   : "#ccc7bc",
+    dayEmpty:        D ? "#252b27"   : "#ccc7bc",
   };
 
   return {
@@ -452,6 +477,9 @@ function makeStyles(isDark) {
     cycleAddMicroBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 4, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit", marginTop: 4 },
     cycleAddMesoBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em" },
     cycleDurLabel: { fontSize: 10, color: t.textMuted },
+    cycleDateInput: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "4px 8px", color: t.text, fontSize: 11, fontFamily: "inherit", colorScheme: D ? "dark" : "light" },
+    cycleDateEnd: { fontSize: 10, color: t.textMuted, whiteSpace: "nowrap", flexShrink: 0 },
+    cycleMicroDate: { fontSize: 10, color: t.textDim, whiteSpace: "nowrap", flexShrink: 0, minWidth: 52 },
     // ── Custom session form ──
     customFormOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "blur(4px)" },
     customForm: { background: t.modalBg, border: `1px solid ${t.border2}`, borderRadius: 10, width: "min(680px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)" },
@@ -1321,7 +1349,7 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
 
 // ─── VUE MOIS ─────────────────────────────────────────────────────────────────
 
-function MonthView({ data, currentDate, onSelectWeek, isMobile }) {
+function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles }) {
   const { styles } = useThemeCtx();
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -1337,8 +1365,18 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile }) {
           </div>
         ))}
       </div>
-      {weeks.map((weekMonday, wi) => (
-        <div key={wi} style={styles.monthWeekRow}>
+      {weeks.map((weekMonday, wi) => {
+        const mesoInfo = getMesoForDate(mesocycles, weekMonday);
+        const prevMesoInfo = wi > 0 ? getMesoForDate(mesocycles, weeks[wi - 1]) : null;
+        const isNewMeso = mesoInfo && (!prevMesoInfo || prevMesoInfo.meso.id !== mesoInfo.meso.id);
+        return (
+        <div key={wi}>
+          {isNewMeso && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 6px 2px", borderLeft: `3px solid ${mesoInfo.meso.color}` }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: mesoInfo.meso.color, letterSpacing: "0.09em", textTransform: "uppercase" }}>{mesoInfo.meso.label}</span>
+            </div>
+          )}
+          <div style={{ ...styles.monthWeekRow, borderLeft: mesoInfo ? `3px solid ${mesoInfo.meso.color}55` : "3px solid transparent" }}>
           {Array.from({ length: 7 }, (_, di) => {
             const date = addDays(weekMonday, di);
             const inMonth = date.getMonth() === month;
@@ -1397,8 +1435,10 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile }) {
               </div>
             );
           })}
+          </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -1489,81 +1529,111 @@ function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMi
         </div>
       )}
 
-      {mesocycles.map(meso => (
-        <div key={meso.id} style={styles.cycleCard}>
-          {/* Meso row */}
-          <div style={styles.cycleMesoRow}>
-            <input
-              type="color"
-              style={styles.cycleColorInput}
-              value={meso.color}
-              onChange={e => onUpdateMeso(meso.id, { color: e.target.value })}
-              title="Couleur"
-            />
-            <input
-              style={styles.cycleLabelInput}
-              value={meso.label}
-              onChange={e => onUpdateMeso(meso.id, { label: e.target.value })}
-              placeholder="Nom du mésocycle…"
-            />
-            <input
-              style={styles.cycleDurInput}
-              type="number"
-              min="1"
-              max="24"
-              value={meso.durationWeeks}
-              onChange={e => onUpdateMeso(meso.id, { durationWeeks: +e.target.value })}
-              title="Durée (semaines)"
-            />
-            <span style={styles.cycleDurLabel}>sem.</span>
-            <input
-              style={styles.cycleDescInput}
-              value={meso.description}
-              onChange={e => onUpdateMeso(meso.id, { description: e.target.value })}
-              placeholder="Description / objectif du bloc…"
-            />
-            <button style={styles.cycleDeleteBtn} onClick={() => onDeleteMeso(meso.id)} title="Supprimer">✕</button>
-          </div>
+      {mesocycles.map(meso => {
+        const mesoStart = meso.startDate ? new Date(meso.startDate) : null;
+        const mesoEnd = mesoStart ? addDays(mesoStart, meso.durationWeeks * 7) : null;
 
-          {/* Microcycles */}
-          <div style={styles.cycleMicroList}>
-            <div style={{ fontSize: 10, color: styles.dashText, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
-              Microcycles ({meso.microcycles.length})
+        // Compute microcycle start dates
+        let microStarts = [];
+        if (mesoStart) {
+          let cursor = new Date(mesoStart);
+          for (const micro of (meso.microcycles || [])) {
+            microStarts.push(new Date(cursor));
+            cursor = addDays(cursor, micro.durationWeeks * 7);
+          }
+        }
+
+        return (
+          <div key={meso.id} style={styles.cycleCard}>
+            {/* Meso row */}
+            <div style={styles.cycleMesoRow}>
+              <input
+                type="color"
+                style={styles.cycleColorInput}
+                value={meso.color}
+                onChange={e => onUpdateMeso(meso.id, { color: e.target.value })}
+                title="Couleur"
+              />
+              <input
+                style={styles.cycleLabelInput}
+                value={meso.label}
+                onChange={e => onUpdateMeso(meso.id, { label: e.target.value })}
+                placeholder="Nom du mésocycle…"
+              />
+              <input
+                style={styles.cycleDateInput}
+                type="date"
+                value={meso.startDate || ""}
+                onChange={e => onUpdateMeso(meso.id, { startDate: e.target.value })}
+                title="Date de début"
+              />
+              {mesoEnd && (
+                <span style={styles.cycleDateEnd}>→ {mesoEnd.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "2-digit" })}</span>
+              )}
+              <input
+                style={styles.cycleDurInput}
+                type="number"
+                min="1"
+                max="24"
+                value={meso.durationWeeks}
+                onChange={e => onUpdateMeso(meso.id, { durationWeeks: +e.target.value })}
+                title="Durée (semaines)"
+              />
+              <span style={styles.cycleDurLabel}>sem.</span>
+              <input
+                style={styles.cycleDescInput}
+                value={meso.description}
+                onChange={e => onUpdateMeso(meso.id, { description: e.target.value })}
+                placeholder="Description / objectif du bloc…"
+              />
+              <button style={styles.cycleDeleteBtn} onClick={() => onDeleteMeso(meso.id)} title="Supprimer">✕</button>
             </div>
-            {meso.microcycles.map(micro => (
-              <div key={micro.id} style={styles.cycleMicroRow}>
-                <div style={{ ...styles.cycleMicroDot, background: meso.color }} />
-                <input
-                  style={styles.cycleMicroLabelInput}
-                  value={micro.label}
-                  onChange={e => onUpdateMicro(meso.id, micro.id, { label: e.target.value })}
-                  placeholder="Nom du microcycle…"
-                />
-                <input
-                  style={styles.cycleMicroDurInput}
-                  type="number"
-                  min="1"
-                  max="8"
-                  value={micro.durationWeeks}
-                  onChange={e => onUpdateMicro(meso.id, micro.id, { durationWeeks: +e.target.value })}
-                  title="Durée (semaines)"
-                />
-                <span style={styles.cycleDurLabel}>sem.</span>
-                <input
-                  style={{ ...styles.cycleDescInput, flex: "1 1 120px" }}
-                  value={micro.description || ""}
-                  onChange={e => onUpdateMicro(meso.id, micro.id, { description: e.target.value })}
-                  placeholder="Contenu…"
-                />
-                <button style={styles.cycleDeleteBtn} onClick={() => onDeleteMicro(meso.id, micro.id)} title="Supprimer">✕</button>
+
+            {/* Microcycles */}
+            <div style={styles.cycleMicroList}>
+              <div style={{ fontSize: 10, color: styles.dashText, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
+                Microcycles ({meso.microcycles.length})
               </div>
-            ))}
-            <button style={styles.cycleAddMicroBtn} onClick={() => onAddMicro(meso.id)}>
-              ＋ Microcycle
-            </button>
+              {meso.microcycles.map((micro, mi) => (
+                <div key={micro.id} style={styles.cycleMicroRow}>
+                  <div style={{ ...styles.cycleMicroDot, background: meso.color }} />
+                  <input
+                    style={styles.cycleMicroLabelInput}
+                    value={micro.label}
+                    onChange={e => onUpdateMicro(meso.id, micro.id, { label: e.target.value })}
+                    placeholder="Nom du microcycle…"
+                  />
+                  {microStarts[mi] && (
+                    <span style={styles.cycleMicroDate}>
+                      {microStarts[mi].toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                    </span>
+                  )}
+                  <input
+                    style={styles.cycleMicroDurInput}
+                    type="number"
+                    min="1"
+                    max="8"
+                    value={micro.durationWeeks}
+                    onChange={e => onUpdateMicro(meso.id, micro.id, { durationWeeks: +e.target.value })}
+                    title="Durée (semaines)"
+                  />
+                  <span style={styles.cycleDurLabel}>sem.</span>
+                  <input
+                    style={{ ...styles.cycleDescInput, flex: "1 1 120px" }}
+                    value={micro.description || ""}
+                    onChange={e => onUpdateMicro(meso.id, micro.id, { description: e.target.value })}
+                    placeholder="Contenu…"
+                  />
+                  <button style={styles.cycleDeleteBtn} onClick={() => onDeleteMicro(meso.id, micro.id)} title="Supprimer">✕</button>
+                </div>
+              ))}
+              <button style={styles.cycleAddMicroBtn} onClick={() => onAddMicro(meso.id)}>
+                ＋ Microcycle
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -1799,7 +1869,7 @@ export default function ClimbingPlanner() {
 
   // ── Mesocycle CRUD ──
   const updateMesocycles = updater => setData(d => ({ ...d, mesocycles: updater(d.mesocycles || []) }));
-  const addMesocycle = () => updateMesocycles(m => [...m, { id: generateId(), label: "Nouveau mésocycle", color: "#4ade80", durationWeeks: 4, description: "", microcycles: [] }]);
+  const addMesocycle = () => updateMesocycles(m => [...m, { id: generateId(), label: "Nouveau mésocycle", color: "#4ade80", durationWeeks: 4, startDate: "", description: "", microcycles: [] }]);
   const updateMesocycle = (id, changes) => updateMesocycles(m => m.map(x => x.id === id ? { ...x, ...changes } : x));
   const deleteMesocycle = id => updateMesocycles(m => m.filter(x => x.id !== id));
   const addMicrocycle = mesoId => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: [...x.microcycles, { id: generateId(), label: "Nouveau microcycle", durationWeeks: 1, description: "" }] } : x));
@@ -2001,6 +2071,17 @@ export default function ClimbingPlanner() {
       {/* ── Vue semaine ── */}
       {viewMode === "week" && (
         <>
+          {(() => {
+            const detected = getMesoForDate(data.mesocycles, monday);
+            if (!detected) return null;
+            const { meso, micro } = detected;
+            return (
+              <div style={{ background: meso.color + "14", borderBottom: `1px solid ${meso.color}28`, borderLeft: `3px solid ${meso.color}`, padding: "5px 20px", display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: meso.color, letterSpacing: "0.09em", textTransform: "uppercase" }}>{meso.label}</span>
+                {micro && <span style={{ fontSize: 10, color: meso.color + "99", letterSpacing: "0.04em" }}>· {micro.label}</span>}
+              </div>
+            );
+          })()}
           <div style={isMobile ? styles.gridMobile : styles.grid}>
             {DAYS.map((day, i) => {
               const date = addDays(monday, i);
@@ -2047,6 +2128,7 @@ export default function ClimbingPlanner() {
           data={data}
           currentDate={currentDate}
           isMobile={isMobile}
+          mesocycles={data.mesocycles || []}
           onSelectWeek={(wm) => {
             setCurrentDate(wm);
             setViewMode("week");
