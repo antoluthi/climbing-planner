@@ -5,7 +5,14 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 
 const supabase = import.meta.env.VITE_SUPABASE_URL
-  ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+  ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storageKey: "climbing-planner-auth",
+      },
+    })
   : null;
 
 // ─── DATA ────────────────────────────────────────────────────────────────────
@@ -698,21 +705,41 @@ function AuthPanel({ session, onAuthChange }) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
   const handleSendLink = async () => {
     if (!email.trim() || !supabase) return;
     setSending(true);
     setAuthError("");
+    setCode("");
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: window.location.origin, shouldCreateUser: false },
     });
     setSending(false);
     if (error) {
-      setAuthError(error.status === 429 ? "Trop d'essais — attendez quelques minutes" : error.message);
+      setAuthError(error.status === 429 ? "Trop d'essais — réutilisez le dernier code reçu ↓" : error.message);
+      setSent(true); // show code field even on rate limit — user may have old code
     } else {
       setSent(true);
     }
+  };
+
+  const handleVerifyCode = async () => {
+    if (!code.trim() || !email.trim() || !supabase) return;
+    setVerifying(true);
+    setAuthError("");
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: code.trim(),
+      type: "email",
+    });
+    setVerifying(false);
+    if (error) {
+      setAuthError(error.status === 429 ? "Trop de tentatives — attendez quelques minutes" : "Code invalide ou expiré");
+    }
+    // session picked up automatically by onAuthStateChange
   };
 
   const handleLogout = async () => {
@@ -732,26 +759,46 @@ function AuthPanel({ session, onAuthChange }) {
     );
   }
 
+  if (sent) {
+    return (
+      <div style={styles.authBar}>
+        <span style={styles.authSentMsg}>📧 Code envoyé</span>
+        <input
+          style={{ ...styles.authInput, width: 90, textAlign: "center", letterSpacing: "0.15em", fontWeight: 700 }}
+          type="text"
+          inputMode="numeric"
+          maxLength={6}
+          placeholder="123456"
+          value={code}
+          onChange={e => { setCode(e.target.value.replace(/\D/g, "")); setAuthError(""); }}
+          onKeyDown={e => e.key === "Enter" && handleVerifyCode()}
+          autoFocus
+        />
+        <button style={styles.authBtn} onClick={handleVerifyCode} disabled={verifying || code.length < 6}>
+          {verifying ? "…" : "Vérifier"}
+        </button>
+        <button style={{ ...styles.authLogoutBtn, opacity: 0.7 }} onClick={() => { setSent(false); setAuthError(""); }}>
+          ← Email
+        </button>
+        {authError && <span style={styles.authErrorMsg}>{authError}</span>}
+      </div>
+    );
+  }
+
   return (
     <div style={styles.authBar}>
-      {sent ? (
-        <span style={styles.authSentMsg}>Lien envoyé — vérifiez votre boite mail</span>
-      ) : (
-        <>
-          <input
-            style={styles.authInput}
-            type="email"
-            placeholder="votre@email.com"
-            value={email}
-            onChange={e => { setEmail(e.target.value); setAuthError(""); }}
-            onKeyDown={e => e.key === "Enter" && handleSendLink()}
-          />
-          <button style={styles.authBtn} onClick={handleSendLink} disabled={sending}>
-            {sending ? "…" : "Recevoir le lien"}
-          </button>
-          {authError && <span style={styles.authErrorMsg}>{authError}</span>}
-        </>
-      )}
+      <input
+        style={styles.authInput}
+        type="email"
+        placeholder="votre@email.com"
+        value={email}
+        onChange={e => { setEmail(e.target.value); setAuthError(""); }}
+        onKeyDown={e => e.key === "Enter" && handleSendLink()}
+      />
+      <button style={styles.authBtn} onClick={handleSendLink} disabled={sending}>
+        {sending ? "…" : "Connexion"}
+      </button>
+      {authError && <span style={styles.authErrorMsg}>{authError}</span>}
     </div>
   );
 }
