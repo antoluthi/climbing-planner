@@ -610,7 +610,7 @@ function useWindowWidth() {
 
 // ─── EXPORT / IMPORT ─────────────────────────────────────────────────────────
 
-function SyncButtons({ data, onImport, compact, syncStatus }) {
+function SyncButtons({ data, onImport, compact, syncStatus, session, onUpload, onPull }) {
   const { styles } = useThemeCtx();
   const importRef = useRef(null);
 
@@ -662,11 +662,21 @@ function SyncButtons({ data, onImport, compact, syncStatus }) {
           : "Hors ligne — données sauvées localement"
         }>{syncIcon}</span>
       )}
-      <button style={btnStyle} onClick={handleExport} title="Exporter les données">
-        {compact ? "↓" : "↓ Exporter"}
+      {session && onUpload && (
+        <button style={{ ...btnStyle, color: "#4ade80" }} onClick={onUpload} title="Envoyer mes données vers le cloud (écraser)">
+          ☁↑
+        </button>
+      )}
+      {session && onPull && (
+        <button style={{ ...btnStyle, color: "#60a5fa" }} onClick={onPull} title="Charger les données depuis le cloud (écraser local)">
+          ☁↓
+        </button>
+      )}
+      <button style={btnStyle} onClick={handleExport} title="Exporter en JSON">
+        {compact ? "↓" : "↓ Export"}
       </button>
-      <button style={btnStyle} onClick={() => importRef.current?.click()} title="Importer les données">
-        {compact ? "↑" : "↑ Importer"}
+      <button style={btnStyle} onClick={() => importRef.current?.click()} title="Importer un JSON">
+        {compact ? "↑" : "↑ Import"}
       </button>
       <input
         ref={importRef}
@@ -722,7 +732,22 @@ function useSupabaseSync() {
     }, 1500);
   }, []);
 
-  return { session, setSession, syncStatus, loadFromCloud, saveToCloud };
+  // Immediate upload (no debounce) — used for force-sync & first-login push
+  const uploadNow = useCallback(async (planData, userId) => {
+    if (!supabase || !userId) return;
+    setSyncStatus("saving");
+    try {
+      const { error } = await supabase
+        .from("climbing_plans")
+        .upsert({ user_id: userId, data: planData }, { onConflict: "user_id" });
+      setSyncStatus(error ? "offline" : "saved");
+      setTimeout(() => setSyncStatus("idle"), 2500);
+    } catch {
+      setSyncStatus("offline");
+    }
+  }, []);
+
+  return { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow };
 }
 
 // ─── AUTH PANEL ───────────────────────────────────────────────────────────────
@@ -1808,7 +1833,7 @@ export default function ClimbingPlanner() {
     return !d;
   });
 
-  const { session, setSession, syncStatus, loadFromCloud, saveToCloud } = useSupabaseSync();
+  const { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow } = useSupabaseSync();
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -1824,14 +1849,26 @@ export default function ClimbingPlanner() {
     if (!session || cloudLoaded) return;
     loadFromCloud().then(cloudData => {
       setCloudLoaded(true);
-      if (cloudData) { setData(cloudData); saveData(cloudData); }
+      if (cloudData) {
+        // Cloud has data → merge: prefer cloud but keep local weeks not in cloud
+        setData(cloudData);
+        saveData(cloudData);
+      } else {
+        // Cloud empty (data created before login) → push local data up immediately
+        uploadNow(data, session.user.id);
+      }
     });
-  }, [session, cloudLoaded, loadFromCloud]);
+  }, [session, cloudLoaded, loadFromCloud, uploadNow]);
 
   // Réinitialiser cloudLoaded si l'utilisateur change de session
   useEffect(() => {
     if (!session) setCloudLoaded(false);
   }, [session]);
+
+  const pullFromCloud = async () => {
+    const cloudData = await loadFromCloud();
+    if (cloudData) { setData(cloudData); saveData(cloudData); }
+  };
 
   useEffect(() => {
     saveData(data);
@@ -2015,7 +2052,7 @@ export default function ClimbingPlanner() {
             {viewToggle}
             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
               {themeBtn}
-              <SyncButtons data={data} onImport={setData} compact syncStatus={syncStatus} />
+              <SyncButtons data={data} onImport={setData} compact syncStatus={syncStatus} session={session} onUpload={() => uploadNow(data, session?.user?.id)} onPull={pullFromCloud} />
             </div>
           </div>
           {supabase && (
@@ -2060,7 +2097,7 @@ export default function ClimbingPlanner() {
             <div style={styles.headerRightTop}>
               {viewToggle}
               {themeBtn}
-              <SyncButtons data={data} onImport={setData} compact syncStatus={syncStatus} />
+              <SyncButtons data={data} onImport={setData} compact syncStatus={syncStatus} session={session} onUpload={() => uploadNow(data, session?.user?.id)} onPull={pullFromCloud} />
             </div>
             <AuthPanel session={session} onAuthChange={setSession} />
             <div style={styles.totalCharge}>
