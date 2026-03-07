@@ -1157,7 +1157,7 @@ export default function ClimbingPlanner() {
               <SyncButtons data={data} onImport={setData} compact syncStatus={syncStatus} />
             </div>
           </div>
-          {!session && (
+          {supabase && (
             <div style={styles.headerMobileRow3}>
               <AuthPanel session={session} onAuthChange={setSession} />
             </div>
