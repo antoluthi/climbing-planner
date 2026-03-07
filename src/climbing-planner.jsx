@@ -53,6 +53,20 @@ const MESOCYCLES = [
   { label: "Récupération", color: "#a78bfa" },
 ];
 
+const DEFAULT_MESOCYCLES = MESOCYCLES.map((m, i) => ({
+  id: `m_default_${i}`,
+  label: m.label,
+  color: m.color,
+  durationWeeks: 4,
+  description: "",
+  microcycles: [],
+}));
+
+function getMesoColor(mesocycles, label) {
+  const found = (mesocycles || []).find(m => m.label === label)?.color;
+  return found || MESOCYCLES.find(m => m.label === label)?.color || "#888";
+}
+
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 function getChargeColor(charge) {
@@ -96,9 +110,9 @@ function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
     const parsed = raw ? JSON.parse(raw) : {};
-    return { weeks: {}, weekMeta: {}, customSessions: [], ...parsed };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, ...parsed };
   } catch {
-    return { weeks: {}, weekMeta: {}, customSessions: [] };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES };
   }
 }
 
@@ -412,6 +426,25 @@ function makeStyles(isDark) {
     dashTooltipBg: t.surface,
     dashTooltipText: t.text,
 
+    // ── Cycles view ──
+    cyclesView: { padding: "20px 24px", overflowY: "auto", flex: 1 },
+    cyclesHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
+    cyclesTitle: { fontSize: 11, fontWeight: 700, color: t.navColor, letterSpacing: "0.1em", textTransform: "uppercase" },
+    cycleCard: { background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, marginBottom: 12, overflow: "hidden" },
+    cycleMesoRow: { display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", flexWrap: "wrap" },
+    cycleColorInput: { width: 28, height: 28, borderRadius: 4, border: `1px solid ${t.border}`, padding: 0, cursor: "pointer", background: "none" },
+    cycleLabelInput: { flex: "1 1 160px", background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "5px 9px", color: t.text, fontSize: 13, fontFamily: "inherit", fontWeight: 600 },
+    cycleDurInput: { width: 52, background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "5px 7px", color: t.text, fontSize: 12, fontFamily: "inherit", textAlign: "center" },
+    cycleDescInput: { flex: "2 1 200px", background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "5px 9px", color: t.textDim, fontSize: 11, fontFamily: "inherit" },
+    cycleMicroList: { borderTop: `1px solid ${t.border}`, padding: "8px 14px 12px" },
+    cycleMicroRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 },
+    cycleMicroDot: { width: 6, height: 6, borderRadius: "50%", flexShrink: 0 },
+    cycleMicroLabelInput: { flex: "1 1 140px", background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "4px 8px", color: t.text, fontSize: 12, fontFamily: "inherit" },
+    cycleMicroDurInput: { width: 44, background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "4px 6px", color: t.textDim, fontSize: 11, fontFamily: "inherit", textAlign: "center" },
+    cycleDeleteBtn: { background: "none", border: "none", color: t.textMuted, cursor: "pointer", fontSize: 14, padding: "2px 6px", borderRadius: 4 },
+    cycleAddMicroBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 4, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit", marginTop: 4 },
+    cycleAddMesoBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em" },
+    cycleDurLabel: { fontSize: 10, color: t.textMuted },
     // ── Custom session form ──
     customFormOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "blur(4px)" },
     customForm: { background: t.modalBg, border: `1px solid ${t.border2}`, borderRadius: 10, width: "min(680px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)" },
@@ -809,7 +842,7 @@ function renderInline(text, styles) {
 // ─── MODAL: CRÉER / MODIFIER UNE SÉANCE PERSONNALISÉE ─────────────────────────
 
 function CustomSessionModal({ initial, data, onSave, onClose }) {
-  const { styles, isDark } = useThemeCtx();
+  const { styles, isDark, mesocycles } = useThemeCtx();
   const [name, setName] = useState(initial?.name ?? "");
   const [type, setType] = useState(initial?.type ?? "Séance");
   const [charge, setCharge] = useState(initial?.charge ?? 24);
@@ -890,7 +923,7 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
           {dateMeta?.mesocycle && (
             <div style={styles.mesoHint}>
               <span>📌</span>
-              <span style={{ color: MESOCYCLES.find(m => m.label === dateMeta.mesocycle)?.color }}>{dateMeta.mesocycle}</span>
+              <span style={{ color: getMesoColor(mesocycles, dateMeta.mesocycle) }}>{dateMeta.mesocycle}</span>
               {dateMeta.microcycle && <span style={{ color: isDark ? "#8a9090" : "#7a7060" }}>· {dateMeta.microcycle}</span>}
             </div>
           )}
@@ -951,9 +984,9 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
 // ─── MODAL: DÉTAIL SÉANCE PERSONNALISÉE ──────────────────────────────────────
 
 function SessionDetailModal({ session, weekMeta, onEdit, onClose }) {
-  const { styles } = useThemeCtx();
+  const { styles, mesocycles } = useThemeCtx();
   const meso = weekMeta?.mesocycle;
-  const mesoColor = MESOCYCLES.find(m => m.label === meso)?.color;
+  const mesoColor = getMesoColor(mesocycles, meso);
 
   return (
     <div style={styles.overlay} onClick={onClose}>
@@ -1173,10 +1206,10 @@ function FeedbackModal({ session, dayLabel, onSave, onClose }) {
 // ─── COMPOSANT JOUR ───────────────────────────────────────────────────────────
 
 function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onFeedback, onRemove, onDetail, isMobile }) {
-  const { styles } = useThemeCtx();
+  const { styles, mesocycles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
   const meso = weekMeta?.mesocycle;
-  const mesoColor = meso ? (MESOCYCLES.find(m => m.label === meso)?.color || "#888") : null;
+  const mesoColor = meso ? getMesoColor(mesocycles, meso) : null;
 
   return (
     <div style={{
@@ -1387,6 +1420,103 @@ function YearView({ data, currentDate, onSelectMonth, isMobile }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ─── CYCLES VIEW ─────────────────────────────────────────────────────────────
+
+function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro }) {
+  const { styles } = useThemeCtx();
+
+  return (
+    <div style={styles.cyclesView}>
+      <div style={styles.cyclesHeader}>
+        <span style={styles.cyclesTitle}>Cycles d'entraînement</span>
+        <button style={styles.cycleAddMesoBtn} onClick={onAddMeso}>＋ Nouveau mésocycle</button>
+      </div>
+
+      {mesocycles.length === 0 && (
+        <div style={{ color: styles.dashText, fontSize: 12, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>
+          Aucun mésocycle défini. Créez-en un pour commencer.
+        </div>
+      )}
+
+      {mesocycles.map(meso => (
+        <div key={meso.id} style={styles.cycleCard}>
+          {/* Meso row */}
+          <div style={styles.cycleMesoRow}>
+            <input
+              type="color"
+              style={styles.cycleColorInput}
+              value={meso.color}
+              onChange={e => onUpdateMeso(meso.id, { color: e.target.value })}
+              title="Couleur"
+            />
+            <input
+              style={styles.cycleLabelInput}
+              value={meso.label}
+              onChange={e => onUpdateMeso(meso.id, { label: e.target.value })}
+              placeholder="Nom du mésocycle…"
+            />
+            <input
+              style={styles.cycleDurInput}
+              type="number"
+              min="1"
+              max="24"
+              value={meso.durationWeeks}
+              onChange={e => onUpdateMeso(meso.id, { durationWeeks: +e.target.value })}
+              title="Durée (semaines)"
+            />
+            <span style={styles.cycleDurLabel}>sem.</span>
+            <input
+              style={styles.cycleDescInput}
+              value={meso.description}
+              onChange={e => onUpdateMeso(meso.id, { description: e.target.value })}
+              placeholder="Description / objectif du bloc…"
+            />
+            <button style={styles.cycleDeleteBtn} onClick={() => onDeleteMeso(meso.id)} title="Supprimer">✕</button>
+          </div>
+
+          {/* Microcycles */}
+          <div style={styles.cycleMicroList}>
+            <div style={{ fontSize: 10, color: styles.dashText, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
+              Microcycles ({meso.microcycles.length})
+            </div>
+            {meso.microcycles.map(micro => (
+              <div key={micro.id} style={styles.cycleMicroRow}>
+                <div style={{ ...styles.cycleMicroDot, background: meso.color }} />
+                <input
+                  style={styles.cycleMicroLabelInput}
+                  value={micro.label}
+                  onChange={e => onUpdateMicro(meso.id, micro.id, { label: e.target.value })}
+                  placeholder="Nom du microcycle…"
+                />
+                <input
+                  style={styles.cycleMicroDurInput}
+                  type="number"
+                  min="1"
+                  max="8"
+                  value={micro.durationWeeks}
+                  onChange={e => onUpdateMicro(meso.id, micro.id, { durationWeeks: +e.target.value })}
+                  title="Durée (semaines)"
+                />
+                <span style={styles.cycleDurLabel}>sem.</span>
+                <input
+                  style={{ ...styles.cycleDescInput, flex: "1 1 120px" }}
+                  value={micro.description || ""}
+                  onChange={e => onUpdateMicro(meso.id, micro.id, { description: e.target.value })}
+                  placeholder="Contenu…"
+                />
+                <button style={styles.cycleDeleteBtn} onClick={() => onDeleteMicro(meso.id, micro.id)} title="Supprimer">✕</button>
+              </div>
+            ))}
+            <button style={styles.cycleAddMicroBtn} onClick={() => onAddMicro(meso.id)}>
+              ＋ Microcycle
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1620,6 +1750,15 @@ export default function ClimbingPlanner() {
     setMetaEditing(false);
   };
 
+  // ── Mesocycle CRUD ──
+  const updateMesocycles = updater => setData(d => ({ ...d, mesocycles: updater(d.mesocycles || []) }));
+  const addMesocycle = () => updateMesocycles(m => [...m, { id: generateId(), label: "Nouveau mésocycle", color: "#4ade80", durationWeeks: 4, description: "", microcycles: [] }]);
+  const updateMesocycle = (id, changes) => updateMesocycles(m => m.map(x => x.id === id ? { ...x, ...changes } : x));
+  const deleteMesocycle = id => updateMesocycles(m => m.filter(x => x.id !== id));
+  const addMicrocycle = mesoId => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: [...x.microcycles, { id: generateId(), label: "Nouveau microcycle", durationWeeks: 1, description: "" }] } : x));
+  const updateMicrocycle = (mesoId, microId, changes) => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: x.microcycles.map(mc => mc.id === microId ? { ...mc, ...changes } : mc) } : x));
+  const deleteMicrocycle = (mesoId, microId) => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: x.microcycles.filter(mc => mc.id !== microId) } : x));
+
   // ── Custom session handlers ──
   const saveCustomSession = (customSession, targetDayIndex) => {
     setData(d => {
@@ -1668,6 +1807,7 @@ export default function ClimbingPlanner() {
         { mode: "month", label: "Mois" },
         { mode: "year", label: "An" },
         { mode: "dash", label: "Stats" },
+        { mode: "cycles", label: "Cycles" },
       ].map(({ mode, label }) => (
         <button
           key={mode}
@@ -1687,7 +1827,7 @@ export default function ClimbingPlanner() {
   );
 
   return (
-    <ThemeContext.Provider value={{ styles, isDark, toggleTheme }}>
+    <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: data.mesocycles || [] }}>
     <div style={{ ...styles.app, overflowY: isMobile ? "auto" : "hidden", overflowX: "hidden" }}>
       <div style={styles.grain} />
 
@@ -1718,7 +1858,7 @@ export default function ClimbingPlanner() {
               <AuthPanel session={session} onAuthChange={setSession} />
             </div>
           )}
-          {viewMode !== "dash" && (
+          {viewMode !== "dash" && viewMode !== "cycles" && (
             <div style={styles.weekNavMobile}>
               <button style={styles.navBtn} onClick={handlePrev}>←</button>
               <div style={styles.weekLabel}>
@@ -1737,11 +1877,11 @@ export default function ClimbingPlanner() {
             <div>
               <div style={styles.appTitle}>PLANIF ESCALADE</div>
               <div style={styles.appSub}>
-                {viewMode === "week" ? "Vue semaine" : viewMode === "month" ? "Vue mois" : viewMode === "year" ? "Vue année" : "Statistiques"} · Bloc
+                {viewMode === "week" ? "Vue semaine" : viewMode === "month" ? "Vue mois" : viewMode === "year" ? "Vue année" : viewMode === "dash" ? "Statistiques" : "Cycles"} · Bloc
               </div>
             </div>
           </div>
-          {viewMode !== "dash" && (
+          {viewMode !== "dash" && viewMode !== "cycles" && (
             <div style={styles.weekNav}>
               <button style={styles.navBtn} onClick={handlePrev}>←</button>
               <div style={styles.weekLabel}>
@@ -1773,11 +1913,22 @@ export default function ClimbingPlanner() {
         <div style={styles.metaBar}>
           {metaEditing ? (
             <div style={styles.metaForm}>
-              <select style={styles.metaSelect} value={tempMeta.mesocycle || ""} onChange={e => setTempMeta(m => ({ ...m, mesocycle: e.target.value }))}>
+              <select style={styles.metaSelect} value={tempMeta.mesocycle || ""} onChange={e => setTempMeta(m => ({ ...m, mesocycle: e.target.value, microcycle: "" }))}>
                 <option value="">— Mésocycle —</option>
-                {MESOCYCLES.map(m => <option key={m.label} value={m.label}>{m.label}</option>)}
+                {(data.mesocycles || []).map(m => <option key={m.id} value={m.label}>{m.label}</option>)}
               </select>
-              <input style={styles.metaInput} placeholder="Microcycle (ex: Développement)" value={tempMeta.microcycle || ""} onChange={e => setTempMeta(m => ({ ...m, microcycle: e.target.value }))} />
+              {(() => {
+                const selectedMeso = (data.mesocycles || []).find(m => m.label === tempMeta.mesocycle);
+                if (selectedMeso?.microcycles?.length > 0) {
+                  return (
+                    <select style={styles.metaSelect} value={tempMeta.microcycle || ""} onChange={e => setTempMeta(m => ({ ...m, microcycle: e.target.value }))}>
+                      <option value="">— Microcycle —</option>
+                      {selectedMeso.microcycles.map(mc => <option key={mc.id} value={mc.label}>{mc.label}</option>)}
+                    </select>
+                  );
+                }
+                return <input style={styles.metaInput} placeholder="Microcycle (ex: Développement)" value={tempMeta.microcycle || ""} onChange={e => setTempMeta(m => ({ ...m, microcycle: e.target.value }))} />;
+              })()}
               <input style={styles.metaInput} placeholder="Note / thème de la semaine" value={tempMeta.note || ""} onChange={e => setTempMeta(m => ({ ...m, note: e.target.value }))} />
               <button style={styles.saveBtn} onClick={saveMeta}>OK</button>
               <button style={styles.cancelBtn} onClick={() => setMetaEditing(false)}>✕</button>
@@ -1786,7 +1937,7 @@ export default function ClimbingPlanner() {
             <div style={styles.metaDisplay} onClick={() => { setTempMeta(weekMeta); setMetaEditing(true); }}>
               {weekMeta.mesocycle ? (
                 <>
-                  <span style={{ ...styles.mesoTag, background: (MESOCYCLES.find(m => m.label === weekMeta.mesocycle)?.color || "#888") + "22", color: MESOCYCLES.find(m => m.label === weekMeta.mesocycle)?.color || "#888", borderColor: (MESOCYCLES.find(m => m.label === weekMeta.mesocycle)?.color || "#888") + "55" }}>
+                  <span style={{ ...styles.mesoTag, background: getMesoColor(data.mesocycles, weekMeta.mesocycle) + "22", color: getMesoColor(data.mesocycles, weekMeta.mesocycle), borderColor: getMesoColor(data.mesocycles, weekMeta.mesocycle) + "55" }}>
                     {weekMeta.mesocycle}
                   </span>
                   {weekMeta.microcycle && <span style={styles.microTag}>{weekMeta.microcycle}</span>}
@@ -1871,6 +2022,19 @@ export default function ClimbingPlanner() {
 
       {/* ── Dashboard ── */}
       {viewMode === "dash" && <Dashboard data={data} />}
+
+      {/* ── Cycles ── */}
+      {viewMode === "cycles" && (
+        <CyclesView
+          mesocycles={data.mesocycles || []}
+          onAddMeso={addMesocycle}
+          onUpdateMeso={updateMesocycle}
+          onDeleteMeso={deleteMesocycle}
+          onAddMicro={addMicrocycle}
+          onUpdateMicro={updateMicrocycle}
+          onDeleteMicro={deleteMicrocycle}
+        />
+      )}
 
       {/* ── Modals ── */}
       {picker && (
