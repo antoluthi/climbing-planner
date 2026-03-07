@@ -266,6 +266,7 @@ function makeStyles(isDark) {
       padding: "4px 10px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit", letterSpacing: "0.06em",
     },
     authSentMsg: { fontSize: 11, color: t.accent, letterSpacing: "0.06em" },
+    authErrorMsg: { fontSize: 11, color: "#f97316", letterSpacing: "0.04em" },
     headerMobileRow3: { padding: "4px 16px 10px", borderTop: `1px solid ${t.subtleBorder}` },
 
     metaBar: {
@@ -564,8 +565,8 @@ function useSupabaseSync() {
     const { data, error } = await supabase
       .from("climbing_plans")
       .select("data")
-      .single();
-    if (error && error.code !== "PGRST116") return null;
+      .maybeSingle();
+    if (error) return null;
     return data?.data ?? null;
   }, []);
 
@@ -596,21 +597,27 @@ function AuthPanel({ session, onAuthChange }) {
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [authError, setAuthError] = useState("");
 
   const handleSendLink = async () => {
     if (!email.trim() || !supabase) return;
     setSending(true);
+    setAuthError("");
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: { emailRedirectTo: window.location.origin },
     });
     setSending(false);
-    if (!error) setSent(true);
+    if (error) {
+      setAuthError(error.status === 429 ? "Trop d'essais — attendez quelques minutes" : error.message);
+    } else {
+      setSent(true);
+    }
   };
 
   const handleLogout = async () => {
     if (!supabase) return;
-    await supabase.auth.signOut();
+    try { await supabase.auth.signOut(); } catch {}
     onAuthChange(null);
   };
 
@@ -636,12 +643,13 @@ function AuthPanel({ session, onAuthChange }) {
             type="email"
             placeholder="votre@email.com"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={e => { setEmail(e.target.value); setAuthError(""); }}
             onKeyDown={e => e.key === "Enter" && handleSendLink()}
           />
           <button style={styles.authBtn} onClick={handleSendLink} disabled={sending}>
             {sending ? "…" : "Recevoir le lien"}
           </button>
+          {authError && <span style={styles.authErrorMsg}>{authError}</span>}
         </>
       )}
     </div>
