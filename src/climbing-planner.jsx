@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useContext, createContext } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 
@@ -388,6 +389,23 @@ function makeStyles(isDark) {
     yearHeatmapRow: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 },
     yearHeatmapCell: { height: 8, borderRadius: 2 },
     yearDayEmpty: t.dayEmpty,
+
+    dashboard: { padding: "20px 24px", overflowY: "auto", flex: 1 },
+    dashTitle: { fontSize: 11, fontWeight: 700, color: t.navColor, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 20 },
+    dashCards: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28 },
+    dashCard: {
+      background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8,
+      padding: "14px 16px", display: "flex", flexDirection: "column", gap: 4,
+    },
+    dashCardVal: { fontSize: 24, fontWeight: 700, color: t.text, lineHeight: 1 },
+    dashCardLabel: { fontSize: 10, color: t.textMuted, letterSpacing: "0.06em", textTransform: "uppercase" },
+    dashSection: { marginBottom: 28 },
+    dashSectionTitle: { fontSize: 11, fontWeight: 600, color: t.navColor, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 10 },
+    dashChartBg: t.surface,
+    dashGrid: t.border,
+    dashText: t.textMuted,
+    dashTooltipBg: t.surface,
+    dashTooltipText: t.text,
 
     overlay: {
       position: "fixed", inset: 0, background: t.overlayBg,
@@ -988,6 +1006,107 @@ function YearView({ data, currentDate, onSelectMonth, isMobile }) {
   );
 }
 
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+
+function getLast8WeeksData(data) {
+  const today = new Date();
+  return Array.from({ length: 8 }, (_, i) => {
+    const monday = getMondayOf(addDays(today, -(7 * (7 - i))));
+    const key = weekKey(monday);
+    const days = data.weeks[key] || [];
+    const sessions = days.flat().filter(Boolean);
+    const charge = sessions.reduce((s, se) => s + se.charge, 0);
+    const done = sessions.filter(s => s.feedback?.done === true);
+    const rpeVals = done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe);
+    const avgRpe = rpeVals.length
+      ? Math.round((rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length) * 10) / 10
+      : null;
+    const completion = sessions.length > 0 ? Math.round(done.length / sessions.length * 100) : null;
+    const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
+    return { label, charge, avgRpe, completion, planned: sessions.length, done: done.length };
+  });
+}
+
+function Dashboard({ data }) {
+  const { styles, isDark } = useThemeCtx();
+  const chartData = getLast8WeeksData(data);
+
+  const totalCharge4w = chartData.slice(4).reduce((s, w) => s + w.charge, 0);
+  const rpeVals = chartData.filter(w => w.avgRpe != null).map(w => w.avgRpe);
+  const globalAvgRpe = rpeVals.length
+    ? (rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length).toFixed(1)
+    : "—";
+  const compVals = chartData.filter(w => w.completion != null).map(w => w.completion);
+  const globalComp = compVals.length
+    ? Math.round(compVals.reduce((a, b) => a + b, 0) / compVals.length)
+    : null;
+
+  const tooltipStyle = {
+    background: styles.dashTooltipBg, border: "none", borderRadius: 6,
+    color: styles.dashTooltipText, fontSize: 11,
+  };
+
+  return (
+    <div style={styles.dashboard}>
+      <div style={styles.dashTitle}>Statistiques</div>
+
+      <div style={styles.dashCards}>
+        <div style={styles.dashCard}>
+          <span style={styles.dashCardVal}>{totalCharge4w}</span>
+          <span style={styles.dashCardLabel}>Charge 4 sem.</span>
+        </div>
+        <div style={styles.dashCard}>
+          <span style={styles.dashCardVal}>{globalAvgRpe}</span>
+          <span style={styles.dashCardLabel}>RPE moyen</span>
+        </div>
+        <div style={styles.dashCard}>
+          <span style={styles.dashCardVal}>{globalComp != null ? `${globalComp}%` : "—"}</span>
+          <span style={styles.dashCardLabel}>Complétion</span>
+        </div>
+      </div>
+
+      <div style={styles.dashSection}>
+        <div style={styles.dashSectionTitle}>Charge hebdomadaire (8 semaines)</div>
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
+            <Bar dataKey="charge" name="Charge" fill={isDark ? "#4ade80" : "#2a7d4f"} radius={[3, 3, 0, 0]} maxBarSize={36} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div style={styles.dashSection}>
+        <div style={styles.dashSectionTitle}>RPE moyen par semaine</div>
+        <ResponsiveContainer width="100%" height={160}>
+          <LineChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+            <YAxis domain={[0, 10]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Line type="monotone" dataKey="avgRpe" name="RPE" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} connectNulls={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div style={styles.dashSection}>
+        <div style={styles.dashSectionTitle}>Taux de complétion (%)</div>
+        <ResponsiveContainer width="100%" height={160}>
+          <BarChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+            <YAxis domain={[0, 100]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
+            <Bar dataKey="completion" name="Complétion %" fill="#60a5fa" radius={[3, 3, 0, 0]} maxBarSize={36} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
 
 export default function ClimbingPlanner() {
@@ -1120,6 +1239,7 @@ export default function ClimbingPlanner() {
         { mode: "week", label: "Sem" },
         { mode: "month", label: "Mois" },
         { mode: "year", label: "An" },
+        { mode: "dash", label: "Stats" },
       ].map(({ mode, label }) => (
         <button
           key={mode}
@@ -1170,14 +1290,16 @@ export default function ClimbingPlanner() {
               <AuthPanel session={session} onAuthChange={setSession} />
             </div>
           )}
-          <div style={styles.weekNavMobile}>
-            <button style={styles.navBtn} onClick={handlePrev}>←</button>
-            <div style={styles.weekLabel}>
-              <div style={styles.weekRange}>{periodLabel}</div>
-              {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
+          {viewMode !== "dash" && (
+            <div style={styles.weekNavMobile}>
+              <button style={styles.navBtn} onClick={handlePrev}>←</button>
+              <div style={styles.weekLabel}>
+                <div style={styles.weekRange}>{periodLabel}</div>
+                {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
+              </div>
+              <button style={styles.navBtn} onClick={handleNext}>→</button>
             </div>
-            <button style={styles.navBtn} onClick={handleNext}>→</button>
-          </div>
+          )}
         </div>
       ) : (
         /* ── HEADER DESKTOP ── */
@@ -1187,18 +1309,20 @@ export default function ClimbingPlanner() {
             <div>
               <div style={styles.appTitle}>PLANIF ESCALADE</div>
               <div style={styles.appSub}>
-                {viewMode === "week" ? "Vue semaine" : viewMode === "month" ? "Vue mois" : "Vue année"} · Bloc
+                {viewMode === "week" ? "Vue semaine" : viewMode === "month" ? "Vue mois" : viewMode === "year" ? "Vue année" : "Statistiques"} · Bloc
               </div>
             </div>
           </div>
-          <div style={styles.weekNav}>
-            <button style={styles.navBtn} onClick={handlePrev}>←</button>
-            <div style={styles.weekLabel}>
-              <div style={styles.weekRange}>{periodLabel}</div>
-              {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
+          {viewMode !== "dash" && (
+            <div style={styles.weekNav}>
+              <button style={styles.navBtn} onClick={handlePrev}>←</button>
+              <div style={styles.weekLabel}>
+                <div style={styles.weekRange}>{periodLabel}</div>
+                {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
+              </div>
+              <button style={styles.navBtn} onClick={handleNext}>→</button>
             </div>
-            <button style={styles.navBtn} onClick={handleNext}>→</button>
-          </div>
+          )}
           <div style={styles.headerRight}>
             <div style={styles.headerRightTop}>
               {viewToggle}
@@ -1209,7 +1333,7 @@ export default function ClimbingPlanner() {
             <div style={styles.totalCharge}>
               <span style={styles.totalChargeNum}>{totalPeriodCharge}</span>
               <span style={styles.totalChargeLabel}>
-                charge {viewMode === "week" ? "semaine" : viewMode === "month" ? "mois" : "année"}
+                charge {viewMode === "week" ? "semaine" : viewMode === "month" ? "mois" : viewMode === "year" ? "année" : ""}
               </span>
             </div>
           </div>
@@ -1314,6 +1438,9 @@ export default function ClimbingPlanner() {
           }}
         />
       )}
+
+      {/* ── Dashboard ── */}
+      {viewMode === "dash" && <Dashboard data={data} />}
 
       {/* ── Modals ── */}
       {picker && (
