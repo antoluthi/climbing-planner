@@ -88,12 +88,17 @@ function weekKey(monday) {
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
 
+function generateId() {
+  return "c_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
 function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
-    return raw ? JSON.parse(raw) : { weeks: {}, weekMeta: {} };
+    const parsed = raw ? JSON.parse(raw) : {};
+    return { weeks: {}, weekMeta: {}, customSessions: [], ...parsed };
   } catch {
-    return { weeks: {}, weekMeta: {} };
+    return { weeks: {}, weekMeta: {}, customSessions: [] };
   }
 }
 
@@ -407,6 +412,50 @@ function makeStyles(isDark) {
     dashTooltipBg: t.surface,
     dashTooltipText: t.text,
 
+    // ── Custom session form ──
+    customFormOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "blur(4px)" },
+    customForm: { background: t.modalBg, border: `1px solid ${t.border2}`, borderRadius: 10, width: "min(680px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)" },
+    customFormBody: { overflowY: "auto", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, flex: 1 },
+    customFormRow: { display: "flex", gap: 10, alignItems: "center" },
+    customFormField: { display: "flex", flexDirection: "column", gap: 5 },
+    customFormLabel: { fontSize: 10, color: t.textMuted, letterSpacing: "0.07em", textTransform: "uppercase" },
+    customFormInput: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 5, padding: "7px 10px", color: t.text, fontSize: 13, fontFamily: "inherit", outline: "none", width: "100%" },
+    customFormSelect: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 5, padding: "7px 10px", color: t.text, fontSize: 12, fontFamily: "inherit", outline: "none", cursor: "pointer" },
+    customFormTextarea: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 5, padding: "8px 10px", color: t.text, fontSize: 12, fontFamily: "inherit", outline: "none", width: "100%", resize: "vertical", lineHeight: 1.6 },
+    customFormHint: { fontSize: 10, color: t.textMuted, letterSpacing: "0.04em", fontStyle: "italic" },
+    customFormSectionTabs: { display: "flex", gap: 6, borderBottom: `1px solid ${t.border}`, paddingBottom: 8, marginBottom: 8 },
+    customFormSectionTab: { fontSize: 11, padding: "4px 10px", borderRadius: 4, border: `1px solid ${t.border}`, background: "none", color: t.textDim, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em" },
+    customFormSectionTabActive: { background: t.accentBg, borderColor: t.accentBorder, color: t.accent },
+    customFormChargeRow: { display: "flex", alignItems: "center", gap: 12 },
+    customFormChargeVal: { fontSize: 18, fontWeight: 700, minWidth: 32 },
+    customFormSlider: { flex: 1, accentColor: t.accent },
+    mesoHint: { fontSize: 10, color: t.navColor, letterSpacing: "0.04em", padding: "4px 8px", background: t.accentFaint, borderRadius: 4, display: "inline-flex", gap: 6 },
+    // ── Rich text ──
+    richText: { fontSize: 12, color: t.text, lineHeight: 1.7, padding: "8px 0" },
+    richUl: { paddingLeft: 16, display: "flex", flexDirection: "column", gap: 2 },
+    richLi: { display: "flex", gap: 6, alignItems: "flex-start" },
+    richBullet: { color: t.accent, flexShrink: 0, marginTop: 3 },
+    richCheckbox: { width: 13, height: 13, borderRadius: 3, border: `1px solid ${t.border2}`, background: "none", flexShrink: 0, marginTop: 3, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
+    richCheckboxDone: { background: t.accent, borderColor: t.accent },
+    richImg: { maxWidth: "100%", borderRadius: 6, marginTop: 4 },
+    richLink: { color: t.accent, textDecoration: "none" },
+    // ── Detail modal ──
+    detailModal: { background: t.modalBg, border: `1px solid ${t.border2}`, borderRadius: 10, width: "min(600px, 96vw)", maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)" },
+    detailBody: { overflowY: "auto", padding: "16px 20px", flex: 1 },
+    detailSection: { marginBottom: 16 },
+    detailSectionTitle: { fontSize: 10, fontWeight: 700, color: t.textMuted, letterSpacing: "0.09em", textTransform: "uppercase", marginBottom: 6, paddingBottom: 4, borderBottom: `1px solid ${t.border}` },
+    detailMeta: { display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 },
+    detailMetaChip: { fontSize: 11, color: t.textCard, background: t.surface2, padding: "3px 10px", borderRadius: 12 },
+    detailMesoBar: { display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" },
+    // ── Session card extras ──
+    sessionCardMeso: { fontSize: 9, letterSpacing: "0.05em", padding: "1px 6px", borderRadius: 3, fontWeight: 600, marginTop: 2, alignSelf: "flex-start" },
+    sessionCardDetailBtn: { fontSize: 11, background: "none", border: "none", color: t.textMuted, cursor: "pointer", padding: "2px 4px" },
+    customBadge: { fontSize: 9, background: t.accentFaint, color: t.accent, padding: "1px 5px", borderRadius: 3, letterSpacing: "0.04em", border: `1px solid ${t.accentBorder}`, alignSelf: "flex-start" },
+    // ── Custom session in picker ──
+    customPickerSection: { padding: "10px 16px 4px", borderTop: `1px solid ${t.border}` },
+    customPickerLabel: { fontSize: 10, color: t.textMuted, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 },
+    createCustomBtn: { width: "100%", padding: "10px 14px", background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 6, color: t.accent, fontSize: 12, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em", textAlign: "left" },
+
     overlay: {
       position: "fixed", inset: 0, background: t.overlayBg,
       display: "flex", alignItems: "center", justifyContent: "center",
@@ -674,14 +723,309 @@ function AuthPanel({ session, onAuthChange }) {
   );
 }
 
+// ─── RICH TEXT ────────────────────────────────────────────────────────────────
+
+function RichText({ text, onCheckToggle }) {
+  const { styles } = useThemeCtx();
+  if (!text?.trim()) return null;
+
+  const lines = text.split("\n");
+
+  return (
+    <div style={styles.richText}>
+      {lines.map((line, i) => {
+        const trimmed = line.trim();
+
+        // Checkbox
+        const cbDone = trimmed.startsWith("[x] ") || trimmed.startsWith("[X] ");
+        const cbOpen = trimmed.startsWith("[ ] ");
+        if (cbDone || cbOpen) {
+          const content = trimmed.slice(4);
+          return (
+            <div key={i} style={styles.richLi}>
+              <div
+                style={{ ...styles.richCheckbox, ...(cbDone ? styles.richCheckboxDone : {}) }}
+                onClick={() => onCheckToggle?.(i, !cbDone)}
+              >
+                {cbDone && <span style={{ fontSize: 9, color: "#fff" }}>✓</span>}
+              </div>
+              <span style={cbDone ? { textDecoration: "line-through", opacity: 0.5 } : {}}>{renderInline(content, styles)}</span>
+            </div>
+          );
+        }
+
+        // Bullet
+        if (trimmed.startsWith("* ") || trimmed.startsWith("- ")) {
+          return (
+            <div key={i} style={styles.richLi}>
+              <span style={styles.richBullet}>•</span>
+              <span>{renderInline(trimmed.slice(2), styles)}</span>
+            </div>
+          );
+        }
+
+        // Image
+        const imgMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+        if (imgMatch) {
+          return <img key={i} src={imgMatch[2]} alt={imgMatch[1]} style={styles.richImg} />;
+        }
+
+        // Empty line → spacer
+        if (!trimmed) return <div key={i} style={{ height: 6 }} />;
+
+        return <div key={i}>{renderInline(trimmed, styles)}</div>;
+      })}
+    </div>
+  );
+}
+
+function renderInline(text, styles) {
+  const parts = [];
+  let rest = text;
+  const patterns = [
+    { re: /\*\*(.+?)\*\*/, render: (m, i) => <strong key={i}>{m[1]}</strong> },
+    { re: /`(.+?)`/, render: (m, i) => <code key={i} style={{ background: "#ffffff15", padding: "1px 4px", borderRadius: 3, fontSize: "0.9em" }}>{m[1]}</code> },
+    { re: /\[([^\]]+)\]\(([^)]+)\)/, render: (m, i) => <a key={i} href={m[2]} target="_blank" rel="noopener" style={styles.richLink}>{m[1]}</a> },
+  ];
+  let key = 0;
+  while (rest) {
+    let earliest = null, match = null, renderer = null;
+    for (const { re, render } of patterns) {
+      const m = rest.match(re);
+      if (m && (earliest === null || m.index < earliest)) {
+        earliest = m.index;
+        match = m;
+        renderer = render;
+      }
+    }
+    if (match === null) { parts.push(rest); break; }
+    if (match.index > 0) parts.push(rest.slice(0, match.index));
+    parts.push(renderer(match, key++));
+    rest = rest.slice(match.index + match[0].length);
+  }
+  return parts.length === 1 && typeof parts[0] === "string" ? parts[0] : <>{parts}</>;
+}
+
+// ─── MODAL: CRÉER / MODIFIER UNE SÉANCE PERSONNALISÉE ─────────────────────────
+
+function CustomSessionModal({ initial, data, onSave, onClose }) {
+  const { styles, isDark } = useThemeCtx();
+  const [name, setName] = useState(initial?.name ?? "");
+  const [type, setType] = useState(initial?.type ?? "Séance");
+  const [charge, setCharge] = useState(initial?.charge ?? 24);
+  const [estimatedTime, setEstimatedTime] = useState(initial?.estimatedTime ?? "");
+  const [location, setLocation] = useState(initial?.location ?? "");
+  const [date, setDate] = useState(initial?.date ?? "");
+  const [minRecovery, setMinRecovery] = useState(initial?.minRecovery ?? "");
+  const [warmup, setWarmup] = useState(initial?.warmup ?? "");
+  const [main, setMain] = useState(initial?.main ?? "");
+  const [cooldown, setCooldown] = useState(initial?.cooldown ?? "");
+  const [section, setSection] = useState("main");
+  const [preview, setPreview] = useState(false);
+
+  // Mesocycle/microcycle for selected date
+  const dateMeta = (() => {
+    if (!date) return null;
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return null;
+    const key = weekKey(getMondayOf(d));
+    return data.weekMeta?.[key] || null;
+  })();
+
+  const currentText = section === "warmup" ? warmup : section === "main" ? main : cooldown;
+  const setCurrentText = section === "warmup" ? setWarmup : section === "main" ? setMain : setCooldown;
+
+  const handleSave = () => {
+    if (!name.trim()) return;
+    const session = {
+      id: initial?.id ?? generateId(),
+      type, name: name.trim(), charge,
+      estimatedTime: estimatedTime ? +estimatedTime : null,
+      location: location.trim() || null,
+      date: date || null,
+      minRecovery: minRecovery ? +minRecovery : null,
+      warmup, main, cooldown,
+      isCustom: true,
+    };
+    onSave(session);
+  };
+
+  const sectionLabels = { warmup: "Échauffement", main: "Cœur de séance", cooldown: "Retour au calme" };
+
+  return (
+    <div style={styles.customFormOverlay} onClick={onClose}>
+      <div style={styles.customForm} onClick={e => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <span style={styles.modalTitle}>{initial ? "Modifier la séance" : "Nouvelle séance personnalisée"}</span>
+          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+        </div>
+
+        <div style={styles.customFormBody}>
+          {/* Nom + type */}
+          <div style={styles.customFormRow}>
+            <select style={styles.customFormSelect} value={type} onChange={e => setType(e.target.value)}>
+              <option>Séance</option>
+              <option>Exercice</option>
+            </select>
+            <input style={{ ...styles.customFormInput, flex: 1 }} placeholder="Nom de la séance…" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+
+          {/* Temps / Lieu / Date */}
+          <div style={{ ...styles.customFormRow, flexWrap: "wrap" }}>
+            <div style={{ ...styles.customFormField, flex: "1 1 100px" }}>
+              <span style={styles.customFormLabel}>Temps estimé (min)</span>
+              <input style={styles.customFormInput} type="number" min="0" placeholder="90" value={estimatedTime} onChange={e => setEstimatedTime(e.target.value)} />
+            </div>
+            <div style={{ ...styles.customFormField, flex: "2 1 160px" }}>
+              <span style={styles.customFormLabel}>Lieu</span>
+              <input style={styles.customFormInput} placeholder="Salle, falaise…" value={location} onChange={e => setLocation(e.target.value)} />
+            </div>
+            <div style={{ ...styles.customFormField, flex: "1 1 140px" }}>
+              <span style={styles.customFormLabel}>Date</span>
+              <input style={styles.customFormInput} type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Meso hint */}
+          {dateMeta?.mesocycle && (
+            <div style={styles.mesoHint}>
+              <span>📌</span>
+              <span style={{ color: MESOCYCLES.find(m => m.label === dateMeta.mesocycle)?.color }}>{dateMeta.mesocycle}</span>
+              {dateMeta.microcycle && <span style={{ color: isDark ? "#8a9090" : "#7a7060" }}>· {dateMeta.microcycle}</span>}
+            </div>
+          )}
+
+          {/* Charge + récup */}
+          <div style={{ ...styles.customFormField }}>
+            <span style={styles.customFormLabel}>Charge d'entraînement</span>
+            <div style={styles.customFormChargeRow}>
+              <span style={{ ...styles.customFormChargeVal, color: getChargeColor(charge) }}>{charge}</span>
+              <input style={styles.customFormSlider} type="range" min="0" max="60" value={charge} onChange={e => setCharge(+e.target.value)} />
+              <div style={{ ...styles.customFormField, flex: "0 0 120px" }}>
+                <span style={styles.customFormLabel}>Récup. mini (h)</span>
+                <input style={styles.customFormInput} type="number" min="0" placeholder="48" value={minRecovery} onChange={e => setMinRecovery(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          {/* Section tabs */}
+          <div>
+            <div style={styles.customFormSectionTabs}>
+              {["warmup", "main", "cooldown"].map(s => (
+                <button key={s} style={{ ...styles.customFormSectionTab, ...(section === s ? styles.customFormSectionTabActive : {}) }} onClick={() => { setSection(s); setPreview(false); }}>
+                  {sectionLabels[s]}
+                </button>
+              ))}
+              <button style={{ ...styles.customFormSectionTab, marginLeft: "auto", ...(preview ? styles.customFormSectionTabActive : {}) }} onClick={() => setPreview(p => !p)}>
+                {preview ? "✎ Éditer" : "👁 Aperçu"}
+              </button>
+            </div>
+            {preview ? (
+              <div style={{ ...styles.customFormInput, minHeight: 120, padding: "10px 12px" }}>
+                <RichText text={currentText} />
+              </div>
+            ) : (
+              <textarea
+                style={{ ...styles.customFormTextarea, minHeight: 120 }}
+                placeholder={`${sectionLabels[section]}…\n* bullet point\n[ ] checkbox\n**gras**  \`code\`  [lien](url)  ![img](url)`}
+                value={currentText}
+                onChange={e => setCurrentText(e.target.value)}
+                rows={6}
+              />
+            )}
+            <div style={styles.customFormHint}>
+              Syntaxe : <code style={{ opacity: 0.8 }}>* puce</code> · <code style={{ opacity: 0.8 }}>[ ] checkbox</code> · <code style={{ opacity: 0.8 }}>[x]</code> · <code style={{ opacity: 0.8 }}>**gras**</code> · <code style={{ opacity: 0.8 }}>[texte](url)</code> · <code style={{ opacity: 0.8 }}>![alt](url)</code>
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.feedbackFooter}>
+          <button style={styles.cancelBtn} onClick={onClose}>Annuler</button>
+          <button style={{ ...styles.saveBtn, opacity: name.trim() ? 1 : 0.4 }} onClick={handleSave} disabled={!name.trim()}>Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MODAL: DÉTAIL SÉANCE PERSONNALISÉE ──────────────────────────────────────
+
+function SessionDetailModal({ session, weekMeta, onEdit, onClose }) {
+  const { styles } = useThemeCtx();
+  const meso = weekMeta?.mesocycle;
+  const mesoColor = MESOCYCLES.find(m => m.label === meso)?.color;
+
+  return (
+    <div style={styles.overlay} onClick={onClose}>
+      <div style={styles.detailModal} onClick={e => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <div>
+            <span style={styles.modalTitle}>{session.name}</span>
+            <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+              <span style={{ ...styles.sessionTypeBadge, background: session.type === "Séance" ? styles.seanceBadgeBg : styles.exerciceBadgeBg }}>{session.type}</span>
+              <span style={{ ...styles.chargePill, background: getChargeColor(session.charge) + "33", color: getChargeColor(session.charge), border: `1px solid ${getChargeColor(session.charge)}55` }}>⚡{session.charge}</span>
+              {session.estimatedTime && <span style={styles.detailMetaChip}>⏱ {session.estimatedTime} min</span>}
+              {session.location && <span style={styles.detailMetaChip}>📍 {session.location}</span>}
+              {session.minRecovery && <span style={styles.detailMetaChip}>⏳ récup {session.minRecovery}h</span>}
+            </div>
+          </div>
+          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+        </div>
+
+        <div style={styles.detailBody}>
+          {meso && (
+            <div style={styles.detailMesoBar}>
+              <span style={{ ...styles.sessionCardMeso, background: mesoColor + "22", color: mesoColor, border: `1px solid ${mesoColor}55` }}>{meso}</span>
+              {weekMeta.microcycle && <span style={styles.detailMetaChip}>{weekMeta.microcycle}</span>}
+              {weekMeta.note && <span style={{ ...styles.detailMetaChip, fontStyle: "italic" }}>"{weekMeta.note}"</span>}
+            </div>
+          )}
+          {session.warmup?.trim() && (
+            <div style={styles.detailSection}>
+              <div style={styles.detailSectionTitle}>Échauffement</div>
+              <RichText text={session.warmup} />
+            </div>
+          )}
+          {session.main?.trim() && (
+            <div style={styles.detailSection}>
+              <div style={styles.detailSectionTitle}>Cœur de séance</div>
+              <RichText text={session.main} />
+            </div>
+          )}
+          {session.cooldown?.trim() && (
+            <div style={styles.detailSection}>
+              <div style={styles.detailSectionTitle}>Retour au calme</div>
+              <RichText text={session.cooldown} />
+            </div>
+          )}
+          {!session.warmup?.trim() && !session.main?.trim() && !session.cooldown?.trim() && (
+            <div style={{ color: styles.dashText, fontSize: 12, fontStyle: "italic" }}>Aucun contenu — modifiez pour ajouter des détails.</div>
+          )}
+        </div>
+
+        <div style={styles.feedbackFooter}>
+          {onEdit && <button style={styles.cancelBtn} onClick={onEdit}>✎ Modifier le template</button>}
+          <button style={styles.saveBtn} onClick={onClose}>Fermer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MODAL: Ajouter une séance ────────────────────────────────────────────────
 
-function SessionPicker({ onSelect, onClose }) {
+function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom }) {
   const { styles } = useThemeCtx();
   const [filter, setFilter] = useState("Tous");
   const [search, setSearch] = useState("");
 
   const filtered = SESSIONS.filter(s => {
+    const matchType = filter === "Tous" || s.type === filter;
+    const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
+    return matchType && matchSearch;
+  });
+
+  const filteredCustom = (customSessions || []).filter(s => {
     const matchType = filter === "Tous" || s.type === filter;
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
     return matchType && matchSearch;
@@ -715,6 +1059,29 @@ function SessionPicker({ onSelect, onClose }) {
           </div>
         </div>
         <div style={styles.sessionList}>
+          {/* Custom sessions section */}
+          {filteredCustom.length > 0 && (
+            <>
+              <div style={{ ...styles.customPickerLabel, padding: "6px 14px 2px", fontSize: 9 }}>MES SÉANCES</div>
+              {filteredCustom.map(s => (
+                <div key={s.id} style={{ ...styles.sessionItem, borderLeft: `2px solid ${getChargeColor(s.charge)}` }} onClick={() => onSelect(s)}>
+                  <div style={styles.sessionItemLeft}>
+                    <span style={{ ...styles.sessionTypeBadge, background: s.type === "Séance" ? styles.seanceBadgeBg : styles.exerciceBadgeBg }}>{s.type}</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <span style={styles.sessionItemName}>{s.name}</span>
+                      {(s.estimatedTime || s.location) && (
+                        <span style={{ fontSize: 10, color: styles.dashText }}>
+                          {s.estimatedTime ? `⏱${s.estimatedTime}min` : ""}{s.location ? `  📍${s.location}` : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span style={{ ...styles.chargePill, background: getChargeColor(s.charge) + "33", color: getChargeColor(s.charge), border: `1px solid ${getChargeColor(s.charge)}55` }}>{s.charge}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {/* Predefined sessions */}
           {filtered.map(s => (
             <div key={s.id} style={styles.sessionItem} onClick={() => onSelect(s)}>
               <div style={styles.sessionItemLeft}>
@@ -728,9 +1095,15 @@ function SessionPicker({ onSelect, onClose }) {
               </span>
             </div>
           ))}
-          {filtered.length === 0 && (
+          {filtered.length === 0 && filteredCustom.length === 0 && (
             <div style={styles.emptySearch}>Aucune séance trouvée</div>
           )}
+        </div>
+        {/* Create custom session button */}
+        <div style={{ padding: "10px 12px", borderTop: `1px solid ${styles.dashGrid}` }}>
+          <button style={styles.createCustomBtn} onClick={onCreateCustom}>
+            ＋ Créer une séance / exercice personnalisé
+          </button>
         </div>
       </div>
     </div>
@@ -799,9 +1172,11 @@ function FeedbackModal({ session, dayLabel, onSave, onClose }) {
 
 // ─── COMPOSANT JOUR ───────────────────────────────────────────────────────────
 
-function DayColumn({ dayLabel, dateLabel, sessions, isToday, onAddSession, onFeedback, onRemove, isMobile }) {
+function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onFeedback, onRemove, onDetail, isMobile }) {
   const { styles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
+  const meso = weekMeta?.mesocycle;
+  const mesoColor = meso ? (MESOCYCLES.find(m => m.label === meso)?.color || "#888") : null;
 
   return (
     <div style={{
@@ -827,6 +1202,13 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, onAddSession, onFee
             <div style={{ ...styles.sessionCardAccent, background: getChargeColor(s.charge) }} />
             <div style={styles.sessionCardContent}>
               <span style={styles.sessionCardName}>{s.name}</span>
+              {s.isCustom && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
+                  <span style={styles.customBadge}>✎ perso</span>
+                  {s.estimatedTime && <span style={{ ...styles.customBadge, background: "none", borderColor: "transparent", color: styles.dashText }}>⏱{s.estimatedTime}min</span>}
+                  {meso && <span style={{ ...styles.sessionCardMeso, background: mesoColor + "22", color: mesoColor, border: `1px solid ${mesoColor}55` }}>{meso}</span>}
+                </div>
+              )}
               <div style={styles.sessionCardFooter}>
                 <span style={{ ...styles.sessionCardCharge, color: getChargeColor(s.charge) }}>⚡{s.charge}</span>
                 {s.feedback && (
@@ -837,6 +1219,9 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, onAddSession, onFee
               </div>
             </div>
             <div style={styles.sessionCardActions}>
+              {s.isCustom && (
+                <button style={styles.actionBtn} title="Voir détail" onClick={() => onDetail?.(i)}>≡</button>
+              )}
               <button style={styles.actionBtn} title="Feedback" onClick={() => onFeedback(i)}>
                 {s.feedback ? "📋" : "＋"}
               </button>
@@ -1118,6 +1503,8 @@ export default function ClimbingPlanner() {
   const [feedbackTarget, setFeedbackTarget] = useState(null);
   const [metaEditing, setMetaEditing] = useState(false);
   const [tempMeta, setTempMeta] = useState({});
+  const [customSessionForm, setCustomSessionForm] = useState(null); // null | { initial?: session, targetDay?: number }
+  const [detailTarget, setDetailTarget] = useState(null); // { dayIndex, sessionIndex }
   const [isDark, setIsDark] = useState(() => localStorage.getItem("climbing_theme") !== "light");
 
   const styles = makeStyles(isDark);
@@ -1231,6 +1618,47 @@ export default function ClimbingPlanner() {
   const saveMeta = () => {
     setData(d => ({ ...d, weekMeta: { ...d.weekMeta, [wKey]: tempMeta } }));
     setMetaEditing(false);
+  };
+
+  // ── Custom session handlers ──
+  const saveCustomSession = (customSession, targetDayIndex) => {
+    setData(d => {
+      const existing = d.customSessions || [];
+      const idx = existing.findIndex(s => s.id === customSession.id);
+      const updated = idx >= 0
+        ? existing.map(s => s.id === customSession.id ? customSession : s)
+        : [...existing, customSession];
+      let weeks = d.weeks;
+      // If targetDayIndex is set, also place in the planner day
+      if (targetDayIndex !== undefined && targetDayIndex !== null) {
+        const monday = getMondayOf(currentDate);
+        const key = weekKey(monday);
+        const daySessions = (d.weeks[key] || Array(7).fill(null).map(() => []))[targetDayIndex];
+        const newDay = [...daySessions, { ...customSession, feedback: null }];
+        const ws = d.weeks[key] ? [...d.weeks[key]] : Array(7).fill(null).map(() => []);
+        ws[targetDayIndex] = newDay;
+        weeks = { ...d.weeks, [key]: ws };
+      }
+      // If there's a date on the session, auto-place it there too
+      if (customSession.date && targetDayIndex === undefined) {
+        const d2 = new Date(customSession.date);
+        if (!isNaN(d2.getTime())) {
+          const mon = getMondayOf(d2);
+          const key2 = weekKey(mon);
+          const dayOfWeek = d2.getDay();
+          const di = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+          const ws2 = weeks[key2] ? [...weeks[key2]] : Array(7).fill(null).map(() => []);
+          // Only auto-place if not already there
+          const alreadyPlaced = ws2[di]?.some(s => s.id === customSession.id);
+          if (!alreadyPlaced) {
+            ws2[di] = [...(ws2[di] || []), { ...customSession, feedback: null }];
+            weeks = { ...weeks, [key2]: ws2 };
+          }
+        }
+      }
+      return { ...d, customSessions: updated, weeks };
+    });
+    setCustomSessionForm(null);
   };
 
   const viewToggle = (
@@ -1386,9 +1814,11 @@ export default function ClimbingPlanner() {
                   dateLabel={formatDate(date)}
                   sessions={weekSessions[i] || []}
                   isToday={isToday}
+                  weekMeta={weekMeta}
                   onAddSession={() => setPicker({ dayIndex: i })}
                   onFeedback={(si) => setFeedbackTarget({ dayIndex: i, sessionIndex: si })}
                   onRemove={(si) => removeSession(i, si)}
+                  onDetail={(si) => setDetailTarget({ dayIndex: i, sessionIndex: si })}
                   isMobile={isMobile}
                 />
               );
@@ -1447,6 +1877,8 @@ export default function ClimbingPlanner() {
         <SessionPicker
           onSelect={s => { addSession(picker.dayIndex, s); setPicker(null); }}
           onClose={() => setPicker(null)}
+          customSessions={data.customSessions || []}
+          onCreateCustom={() => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
         />
       )}
       {feedbackTarget && (
@@ -1457,6 +1889,25 @@ export default function ClimbingPlanner() {
           onClose={() => setFeedbackTarget(null)}
         />
       )}
+      {customSessionForm !== null && (
+        <CustomSessionModal
+          initial={customSessionForm.initial}
+          data={data}
+          onSave={cs => saveCustomSession(cs, customSessionForm.targetDay)}
+          onClose={() => setCustomSessionForm(null)}
+        />
+      )}
+      {detailTarget && (() => {
+        const s = (weekSessions[detailTarget.dayIndex] || [])[detailTarget.sessionIndex];
+        return s ? (
+          <SessionDetailModal
+            session={s}
+            weekMeta={weekMeta}
+            onEdit={() => { setCustomSessionForm({ initial: s, targetDay: null }); setDetailTarget(null); }}
+            onClose={() => setDetailTarget(null)}
+          />
+        ) : null;
+      })()}
     </div>
     </ThemeContext.Provider>
   );
