@@ -672,12 +672,12 @@ function SyncButtons({ data, onImport, compact, syncStatus, session, onUpload, o
           ☁↓
         </button>
       )}
-      <button style={btnStyle} onClick={handleExport} title="Exporter en JSON">
-        {compact ? "↓" : "↓ Export"}
-      </button>
-      <button style={btnStyle} onClick={() => importRef.current?.click()} title="Importer un JSON">
-        {compact ? "↑" : "↑ Import"}
-      </button>
+      {!compact && (
+        <>
+          <button style={btnStyle} onClick={handleExport} title="Exporter en JSON">↓ Export</button>
+          <button style={btnStyle} onClick={() => importRef.current?.click()} title="Importer un JSON">↑ Import</button>
+        </>
+      )}
       <input
         ref={importRef}
         type="file"
@@ -1129,70 +1129,6 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
   );
 }
 
-// ─── MODAL: DÉTAIL SÉANCE PERSONNALISÉE ──────────────────────────────────────
-
-function SessionDetailModal({ session, weekMeta, onEdit, onClose }) {
-  const { styles, mesocycles } = useThemeCtx();
-  const meso = weekMeta?.mesocycle;
-  const mesoColor = getMesoColor(mesocycles, meso);
-
-  return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.detailModal} onClick={e => e.stopPropagation()}>
-        <div style={styles.modalHeader}>
-          <div>
-            <span style={styles.modalTitle}>{session.name}</span>
-            <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-              <span style={{ ...styles.sessionTypeBadge, background: session.type === "Séance" ? styles.seanceBadgeBg : styles.exerciceBadgeBg }}>{session.type}</span>
-              <span style={{ ...styles.chargePill, background: getChargeColor(session.charge) + "33", color: getChargeColor(session.charge), border: `1px solid ${getChargeColor(session.charge)}55` }}>⚡{session.charge}</span>
-              {session.estimatedTime && <span style={styles.detailMetaChip}>⏱ {session.estimatedTime} min</span>}
-              {session.location && <span style={styles.detailMetaChip}>📍 {session.location}</span>}
-              {session.minRecovery && <span style={styles.detailMetaChip}>⏳ récup {session.minRecovery}h</span>}
-            </div>
-          </div>
-          <button style={styles.closeBtn} onClick={onClose}>✕</button>
-        </div>
-
-        <div style={styles.detailBody}>
-          {meso && (
-            <div style={styles.detailMesoBar}>
-              <span style={{ ...styles.sessionCardMeso, background: mesoColor + "22", color: mesoColor, border: `1px solid ${mesoColor}55` }}>{meso}</span>
-              {weekMeta.microcycle && <span style={styles.detailMetaChip}>{weekMeta.microcycle}</span>}
-              {weekMeta.note && <span style={{ ...styles.detailMetaChip, fontStyle: "italic" }}>"{weekMeta.note}"</span>}
-            </div>
-          )}
-          {session.warmup?.trim() && (
-            <div style={styles.detailSection}>
-              <div style={styles.detailSectionTitle}>Échauffement</div>
-              <RichText text={session.warmup} />
-            </div>
-          )}
-          {session.main?.trim() && (
-            <div style={styles.detailSection}>
-              <div style={styles.detailSectionTitle}>Cœur de séance</div>
-              <RichText text={session.main} />
-            </div>
-          )}
-          {session.cooldown?.trim() && (
-            <div style={styles.detailSection}>
-              <div style={styles.detailSectionTitle}>Retour au calme</div>
-              <RichText text={session.cooldown} />
-            </div>
-          )}
-          {!session.warmup?.trim() && !session.main?.trim() && !session.cooldown?.trim() && (
-            <div style={{ color: styles.dashText, fontSize: 12, fontStyle: "italic" }}>Aucun contenu — modifiez pour ajouter des détails.</div>
-          )}
-        </div>
-
-        <div style={styles.feedbackFooter}>
-          {onEdit && <button style={styles.cancelBtn} onClick={onEdit}>✎ Modifier le template</button>}
-          <button style={styles.saveBtn} onClick={onClose}>Fermer</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── MODAL: Ajouter une séance ────────────────────────────────────────────────
 
 function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom }) {
@@ -1291,60 +1227,179 @@ function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom }) {
   );
 }
 
-// ─── MODAL: Feedback séance ───────────────────────────────────────────────────
+// ─── MODAL: SESSION UNIFIÉE (Séance + Ressenti) ───────────────────────────────
 
-function FeedbackModal({ session, dayLabel, onSave, onClose }) {
-  const { styles } = useThemeCtx();
-  const [rpe, setRpe] = useState(session.feedback?.rpe ?? 5);
-  const [quality, setQuality] = useState(session.feedback?.quality ?? 3);
-  const [notes, setNotes] = useState(session.feedback?.notes ?? "");
-  const [done, setDone] = useState(session.feedback?.done ?? true);
+function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) {
+  const { styles, isDark, mesocycles } = useThemeCtx();
+  const [tab, setTab] = useState("session");
+  const hasWarmup = !!session.warmup?.trim();
+  const hasMain   = !!session.main?.trim();
+  const hasCooldown = !!session.cooldown?.trim();
+  const hasContent = hasWarmup || hasMain || hasCooldown;
+
+  const defaultContent = hasWarmup ? "warmup" : hasMain ? "main" : hasCooldown ? "cooldown" : "main";
+  const [contentTab, setContentTab] = useState(defaultContent);
+
+  const [done,    setDone]    = useState(session.feedback?.done    ?? false);
+  const [rpe,     setRpe]     = useState(session.feedback?.rpe     ?? 5);
+  const [quality, setQuality] = useState(session.feedback?.quality ?? null);
+  const [notes,   setNotes]   = useState(session.feedback?.notes   ?? "");
+
+  const mesoLabel = weekMeta?.mesocycle || session.dateMeta?.mesocycle;
+  const mesoColor = getMesoColor(mesocycles, mesoLabel);
+  const hasFeedback = !!session.feedback;
+
+  const contentTabs = [
+    hasWarmup   && { key: "warmup",   label: "Échauffement" },
+    { key: "main", label: "Cœur de séance" },
+    hasCooldown && { key: "cooldown", label: "Retour au calme" },
+  ].filter(Boolean);
+
+  // Tab bar style helpers
+  const mainTabStyle = (t) => ({
+    flex: 1, padding: "10px 4px", background: "none", border: "none", cursor: "pointer",
+    fontSize: 11, fontFamily: "inherit", letterSpacing: "0.07em", textTransform: "uppercase",
+    fontWeight: tab === t ? 700 : 400,
+    color: tab === t ? (isDark ? "#4ade80" : "#2a7d4f") : (isDark ? "#707870" : "#8a7f70"),
+    borderBottom: `2px solid ${tab === t ? (isDark ? "#4ade80" : "#2a7d4f") : "transparent"}`,
+    transition: "color 0.15s, border-color 0.15s",
+  });
+
+  const contentTabStyle = (k) => ({
+    flex: 1, padding: "7px 4px", background: "none", border: "none", cursor: "pointer",
+    fontSize: 11, fontFamily: "inherit", letterSpacing: "0.04em",
+    fontWeight: contentTab === k ? 600 : 400,
+    color: contentTab === k ? (isDark ? "#e8e4de" : "#2a2218") : (isDark ? "#707870" : "#8a7f70"),
+    borderBottom: `2px solid ${contentTab === k ? (isDark ? "#e8e4de" : "#2a2218") : "transparent"}`,
+  });
 
   return (
     <div style={styles.overlay} onClick={onClose}>
-      <div style={{ ...styles.modal, maxWidth: 420 }} onClick={e => e.stopPropagation()}>
-        <div style={styles.modalHeader}>
-          <div>
-            <span style={styles.modalTitle}>Feedback</span>
-            <div style={styles.feedbackSubtitle}>{dayLabel} · {session.name}</div>
-          </div>
-          <button style={styles.closeBtn} onClick={onClose}>✕</button>
-        </div>
-        <div style={styles.feedbackBody}>
-          <label style={styles.feedbackLabel}>
-            <span>Séance réalisée ?</span>
-            <div style={styles.doneToggle}>
-              <button style={{ ...styles.doneBtn, ...(done ? styles.doneBtnActive : {}) }} onClick={() => setDone(true)}>Oui</button>
-              <button style={{ ...styles.doneBtn, ...(!done ? styles.doneBtnActiveNeg : {}) }} onClick={() => setDone(false)}>Non</button>
+      <div style={{ ...styles.modal, maxWidth: 500, display: "flex", flexDirection: "column", maxHeight: "90vh" }} onClick={e => e.stopPropagation()}>
+
+        {/* ── Header ── */}
+        <div style={{ padding: "16px 18px 12px", borderBottom: `1px solid ${isDark ? "#252b27" : "#ccc6b8"}`, flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: isDark ? "#e8e4de" : "#2a2218", lineHeight: 1.3, paddingRight: 8 }}>
+              {session.name}
+            </span>
+            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+              {session.isCustom && onEdit && (
+                <button style={{ ...styles.actionBtn, fontSize: 14, opacity: 0.75 }} onClick={onEdit} title="Modifier la séance">⚙</button>
+              )}
+              <button style={styles.closeBtn} onClick={onClose}>✕</button>
             </div>
-          </label>
-          {done && <>
-            <label style={styles.feedbackLabel}>
-              <span>Fatigue RPE</span>
-              <span style={{ ...styles.rpeValue, color: getChargeColor(rpe * 3) }}>{rpe} / 10</span>
-            </label>
-            <input type="range" min="1" max="10" value={rpe} onChange={e => setRpe(+e.target.value)} style={styles.slider} />
-            <label style={styles.feedbackLabel}>
-              <span>Qualité de séance</span>
-              <div style={styles.stars}>
-                {[1,2,3,4,5].map(i => (
-                  <button key={i} style={{ ...styles.star, color: i <= quality ? "#fbbf24" : styles.starEmpty }} onClick={() => setQuality(i)}>★</button>
-                ))}
-              </div>
-            </label>
-            <label style={styles.feedbackLabel}><span>Notes</span></label>
-            <textarea
-              style={styles.textarea}
-              placeholder="Sensations, observations, ajustements..."
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={3}
-            />
-          </>}
+          </div>
+          {/* Chips */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+            <span style={{ ...styles.sessionTypeBadge, background: session.type === "Séance" ? styles.seanceBadgeBg : styles.exerciceBadgeBg }}>
+              {session.type || "Séance"}
+            </span>
+            <span style={{ ...styles.chargePill, background: getChargeColor(session.charge) + "33", color: getChargeColor(session.charge), border: `1px solid ${getChargeColor(session.charge)}55` }}>
+              ⚡{session.charge}
+            </span>
+            {session.estimatedTime && <span style={styles.detailMetaChip}>⏱ {session.estimatedTime} min</span>}
+            {session.location      && <span style={styles.detailMetaChip}>📍 {session.location}</span>}
+            {session.minRecovery   && <span style={styles.detailMetaChip}>⏳ {session.minRecovery}h récup</span>}
+            {mesoLabel && <span style={{ ...styles.sessionCardMeso, background: mesoColor + "22", color: mesoColor, border: `1px solid ${mesoColor}55` }}>{mesoLabel}</span>}
+            {weekMeta?.microcycle && <span style={styles.detailMetaChip}>{weekMeta.microcycle}</span>}
+          </div>
+          {dayLabel && (
+            <div style={{ fontSize: 10, color: isDark ? "#707870" : "#8a7f70", marginTop: 6, letterSpacing: "0.05em" }}>{dayLabel}</div>
+          )}
         </div>
-        <div style={styles.feedbackFooter}>
-          <button style={styles.cancelBtn} onClick={onClose}>Annuler</button>
-          <button style={styles.saveBtn} onClick={() => onSave({ rpe, quality, notes, done })}>Enregistrer</button>
+
+        {/* ── Main tab bar ── */}
+        <div style={{ display: "flex", borderBottom: `1px solid ${isDark ? "#252b27" : "#ccc6b8"}`, flexShrink: 0, background: isDark ? "#1f2421" : "#e8e2d8" }}>
+          <button style={mainTabStyle("session")} onClick={() => setTab("session")}>Séance</button>
+          <button style={mainTabStyle("ressenti")} onClick={() => setTab("ressenti")}>
+            Ressenti{hasFeedback ? " ✓" : ""}
+          </button>
+        </div>
+
+        {/* ── Content ── */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {tab === "session" ? (
+            hasContent ? (
+              <>
+                {/* Content sub-tabs */}
+                <div style={{ display: "flex", borderBottom: `1px solid ${isDark ? "#252b27" : "#ccc6b8"}`, padding: "0 8px", background: isDark ? "#191e1b" : "#f0ebe2" }}>
+                  {contentTabs.map(ct => (
+                    <button key={ct.key} style={contentTabStyle(ct.key)} onClick={() => setContentTab(ct.key)}>
+                      {ct.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ padding: "14px 18px" }}>
+                  {contentTab === "warmup"   && <RichText text={session.warmup} />}
+                  {contentTab === "main"     && <RichText text={session.main} />}
+                  {contentTab === "cooldown" && <RichText text={session.cooldown} />}
+                </div>
+              </>
+            ) : (
+              <div style={{ padding: "28px 18px", color: isDark ? "#707870" : "#8a7f70", fontSize: 12, fontStyle: "italic", textAlign: "center" }}>
+                Pas de contenu détaillé pour cette séance.
+              </div>
+            )
+          ) : (
+            /* ── Ressenti ── */
+            <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 18 }}>
+              {/* Done */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  style={{ ...styles.doneBtn, ...(done ? styles.doneBtnActive : {}), flex: 1 }}
+                  onClick={() => setDone(true)}
+                >✓ Réalisée</button>
+                <button
+                  style={{ ...styles.doneBtn, ...(!done ? styles.doneBtnActiveNeg : {}), flex: 1 }}
+                  onClick={() => setDone(false)}
+                >✗ Non réalisée</button>
+              </div>
+
+              {done && (
+                <>
+                  {/* RPE */}
+                  <div>
+                    <div style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7f70", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                      <span>Fatigue RPE</span>
+                      <span style={{ color: getChargeColor(rpe * 3), fontWeight: 700 }}>{rpe}/10</span>
+                    </div>
+                    <input type="range" min={1} max={10} step={1} value={rpe}
+                      onChange={e => setRpe(+e.target.value)} style={styles.slider} />
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: isDark ? "#707870" : "#8a7f70", marginTop: 2 }}>
+                      <span>Facile</span><span>Modéré</span><span>Maximal</span>
+                    </div>
+                  </div>
+
+                  {/* Quality */}
+                  <div>
+                    <div style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7f70", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>Qualité de séance</div>
+                    <div style={styles.stars}>
+                      {[1,2,3,4,5].map(s => (
+                        <button key={s}
+                          style={{ ...styles.star, color: quality >= s ? "#fbbf24" : (isDark ? "#555" : "#bbb") }}
+                          onClick={() => setQuality(s === quality ? null : s)}
+                        >★</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <div style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7f70", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6 }}>Notes</div>
+                    <textarea style={{ ...styles.textarea, minHeight: 80 }}
+                      placeholder="Sensations, observations, ajustements…"
+                      value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+                    />
+                  </div>
+                </>
+              )}
+
+              <button style={styles.saveBtn} onClick={() => onSave({ done, rpe: done ? rpe : null, quality: done ? quality : null, notes })}>
+                Enregistrer le ressenti
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1353,7 +1408,7 @@ function FeedbackModal({ session, dayLabel, onSave, onClose }) {
 
 // ─── COMPOSANT JOUR ───────────────────────────────────────────────────────────
 
-function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onFeedback, onRemove, onDetail, isMobile }) {
+function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile }) {
   const { styles, mesocycles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
   const meso = weekMeta?.mesocycle;
@@ -1379,7 +1434,11 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
 
       <div style={styles.sessionCards}>
         {sessions.map((s, i) => (
-          <div key={i} style={styles.sessionCard}>
+          <div
+            key={i}
+            style={{ ...styles.sessionCard, cursor: "pointer" }}
+            onClick={() => onOpenSession(i)}
+          >
             <div style={{ ...styles.sessionCardAccent, background: getChargeColor(s.charge) }} />
             <div style={styles.sessionCardContent}>
               <span style={styles.sessionCardName}>{s.name}</span>
@@ -1400,13 +1459,7 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
               </div>
             </div>
             <div style={styles.sessionCardActions}>
-              {s.isCustom && (
-                <button style={styles.actionBtn} title="Voir détail" onClick={() => onDetail?.(i)}>≡</button>
-              )}
-              <button style={styles.actionBtn} title="Feedback" onClick={() => onFeedback(i)}>
-                {s.feedback ? "📋" : "＋"}
-              </button>
-              <button style={styles.actionBtn} title="Supprimer" onClick={() => onRemove(i)}>✕</button>
+              <button style={styles.actionBtn} title="Supprimer" onClick={e => { e.stopPropagation(); onRemove(i); }}>✕</button>
             </div>
           </div>
         ))}
@@ -1422,7 +1475,7 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
 
 // ─── VUE MOIS ─────────────────────────────────────────────────────────────────
 
-function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles }) {
+function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick }) {
   const { styles } = useThemeCtx();
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -1480,7 +1533,9 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles }) {
                           ...styles.monthSessionRow,
                           background: getChargeColor(s.charge) + "22",
                           borderLeft: `2px solid ${getChargeColor(s.charge)}`,
+                          cursor: "pointer",
                         }}
+                        onClick={e => { e.stopPropagation(); onSessionClick && onSessionClick(date, si); }}
                       >
                         <span style={{ ...styles.monthSessionLabel, color: getChargeColor(s.charge) }}>
                           {s.name.length > 18 ? s.name.slice(0, 18) + "…" : s.name}
@@ -1820,11 +1875,10 @@ export default function ClimbingPlanner() {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState("week");
   const [picker, setPicker] = useState(null);
-  const [feedbackTarget, setFeedbackTarget] = useState(null);
   const [metaEditing, setMetaEditing] = useState(false);
   const [tempMeta, setTempMeta] = useState({});
   const [customSessionForm, setCustomSessionForm] = useState(null); // null | { initial?: session, targetDay?: number }
-  const [detailTarget, setDetailTarget] = useState(null); // { dayIndex, sessionIndex }
+  const [sessionModal, setSessionModal] = useState(null); // null | { weekKey, dayIndex, sessionIndex }
   const [isDark, setIsDark] = useState(() => localStorage.getItem("climbing_theme") !== "light");
 
   const styles = makeStyles(isDark);
@@ -1938,13 +1992,23 @@ export default function ClimbingPlanner() {
     updateWeekSessions(updated);
   };
 
-  const saveFeedback = (dayIndex, sessionIndex, feedback) => {
-    const updated = weekSessions.map((d, i) => i === dayIndex
-      ? d.map((s, j) => j === sessionIndex ? { ...s, feedback } : s)
-      : d
-    );
-    updateWeekSessions(updated);
-    setFeedbackTarget(null);
+  const saveSessionFeedback = (feedback) => {
+    if (!sessionModal) return;
+    const { weekKey: smKey, dayIndex, sessionIndex } = sessionModal;
+    setData(d => ({
+      ...d,
+      weeks: {
+        ...d.weeks,
+        [smKey]: (d.weeks[smKey] || Array(7).fill(null).map(() => [])).map((day, i) =>
+          i === dayIndex ? day.map((s, j) => j === sessionIndex ? { ...s, feedback } : s) : d.weeks[smKey][i]
+        ),
+      },
+    }));
+    setSessionModal(null);
+  };
+
+  const openSessionModal = (wKey, dayIndex, sessionIndex) => {
+    setSessionModal({ weekKey: wKey, dayIndex, sessionIndex });
   };
 
   const saveMeta = () => {
@@ -2180,9 +2244,8 @@ export default function ClimbingPlanner() {
                   isToday={isToday}
                   weekMeta={weekMeta}
                   onAddSession={() => setPicker({ dayIndex: i })}
-                  onFeedback={(si) => setFeedbackTarget({ dayIndex: i, sessionIndex: si })}
+                  onOpenSession={(si) => openSessionModal(wKey, i, si)}
                   onRemove={(si) => removeSession(i, si)}
-                  onDetail={(si) => setDetailTarget({ dayIndex: i, sessionIndex: si })}
                   isMobile={isMobile}
                 />
               );
@@ -2217,6 +2280,12 @@ export default function ClimbingPlanner() {
           onSelectWeek={(wm) => {
             setCurrentDate(wm);
             setViewMode("week");
+          }}
+          onSessionClick={(date, si) => {
+            const wKey2 = weekKey(getMondayOf(date));
+            const dow = date.getDay();
+            const di = dow === 0 ? 6 : dow - 1;
+            openSessionModal(wKey2, di, si);
           }}
         />
       )}
@@ -2259,14 +2328,6 @@ export default function ClimbingPlanner() {
           onCreateCustom={() => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
         />
       )}
-      {feedbackTarget && (
-        <FeedbackModal
-          session={(weekSessions[feedbackTarget.dayIndex] || [])[feedbackTarget.sessionIndex]}
-          dayLabel={`${DAYS[feedbackTarget.dayIndex]} ${formatDate(addDays(monday, feedbackTarget.dayIndex))}`}
-          onSave={(fb) => saveFeedback(feedbackTarget.dayIndex, feedbackTarget.sessionIndex, fb)}
-          onClose={() => setFeedbackTarget(null)}
-        />
-      )}
       {customSessionForm !== null && (
         <CustomSessionModal
           initial={customSessionForm.initial}
@@ -2275,16 +2336,26 @@ export default function ClimbingPlanner() {
           onClose={() => setCustomSessionForm(null)}
         />
       )}
-      {detailTarget && (() => {
-        const s = (weekSessions[detailTarget.dayIndex] || [])[detailTarget.sessionIndex];
-        return s ? (
-          <SessionDetailModal
-            session={s}
-            weekMeta={weekMeta}
-            onEdit={() => { setCustomSessionForm({ initial: s, targetDay: null }); setDetailTarget(null); }}
-            onClose={() => setDetailTarget(null)}
+      {/* ── Session Modal ── */}
+      {sessionModal && (() => {
+        const { weekKey: smKey, dayIndex: smDi, sessionIndex: smSi } = sessionModal;
+        const smSessions = (data.weeks[smKey] || Array(7).fill(null).map(() => []))[smDi] || [];
+        const smSession = smSessions[smSi];
+        const smMonday = new Date(smKey);
+        const smDate = addDays(smMonday, smDi);
+        const smDayLabel = `${DAYS[smDi]} ${formatDate(smDate)}`;
+        const smWeekMeta = data.weekMeta[smKey] || {};
+        if (!smSession) return null;
+        return (
+          <SessionModal
+            session={smSession}
+            dayLabel={smDayLabel}
+            weekMeta={smWeekMeta}
+            onClose={() => setSessionModal(null)}
+            onEdit={smSession.isCustom ? () => { setCustomSessionForm({ initial: smSession, targetDay: null }); setSessionModal(null); } : null}
+            onSave={saveSessionFeedback}
           />
-        ) : null;
+        );
       })()}
     </div>
     </ThemeContext.Provider>
