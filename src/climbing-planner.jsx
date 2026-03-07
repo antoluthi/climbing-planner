@@ -1284,7 +1284,7 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
               {session.name}
             </span>
             <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-              {session.isCustom && onEdit && (
+              {onEdit && (
                 <button style={{ ...styles.actionBtn, fontSize: 14, opacity: 0.75 }} onClick={onEdit} title="Modifier la séance">⚙</button>
               )}
               <button style={styles.closeBtn} onClick={onClose}>✕</button>
@@ -2027,6 +2027,11 @@ export default function ClimbingPlanner() {
 
   // ── Custom session handlers ──
   const saveCustomSession = (customSession, targetDayIndex) => {
+    // If the form has a custom onSave (e.g. editing a predefined instance), use it
+    if (customSessionForm?.onSave) {
+      customSessionForm.onSave(customSession);
+      return;
+    }
     setData(d => {
       const existing = d.customSessions || [];
       const idx = existing.findIndex(s => s.id === customSession.id);
@@ -2352,7 +2357,28 @@ export default function ClimbingPlanner() {
             dayLabel={smDayLabel}
             weekMeta={smWeekMeta}
             onClose={() => setSessionModal(null)}
-            onEdit={smSession.isCustom ? () => { setCustomSessionForm({ initial: smSession, targetDay: null }); setSessionModal(null); } : null}
+            onEdit={() => {
+              if (smSession.isCustom) {
+                // Edit the custom session template + all placements
+                setCustomSessionForm({ initial: smSession, targetDay: null });
+              } else {
+                // Edit only this specific instance (predefined session override)
+                setCustomSessionForm({
+                  initial: { ...smSession, isCustom: true },
+                  targetDay: null,
+                  onSave: (edited) => {
+                    setData(d => {
+                      const ws = d.weeks[smKey] ? d.weeks[smKey].map(day => [...day]) : Array(7).fill(null).map(() => []);
+                      ws[smDi] = [...(ws[smDi] || [])];
+                      ws[smDi][smSi] = { ...edited, isCustom: true, feedback: ws[smDi][smSi]?.feedback ?? null };
+                      return { ...d, weeks: { ...d.weeks, [smKey]: ws } };
+                    });
+                    setCustomSessionForm(null);
+                  },
+                });
+              }
+              setSessionModal(null);
+            }}
             onSave={saveSessionFeedback}
           />
         );
