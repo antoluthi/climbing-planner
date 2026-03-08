@@ -181,9 +181,9 @@ function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
     const parsed = raw ? JSON.parse(raw) : {};
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, ...parsed };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, ...parsed };
   } catch {
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {} };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {} };
   }
 }
 
@@ -1744,8 +1744,8 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
 
 // ─── COMPOSANT JOUR ───────────────────────────────────────────────────────────
 
-function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile }) {
-  const { styles, mesocycles } = useThemeCtx();
+function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine }) {
+  const { styles, isDark, mesocycles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
   const meso = weekMeta?.mesocycle;
   const mesoColor = meso ? getMesoColor(mesocycles, meso) : null;
@@ -1761,11 +1761,16 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
           <span style={{ ...styles.dayName, ...(isToday ? styles.dayNameToday : {}) }}>{dayLabel}</span>
           <span style={styles.dayDate}>{dateLabel}</span>
         </div>
-        {totalCharge > 0 && (
-          <span style={{ ...styles.dayCharge, color: getChargeColor(totalCharge) }}>
-            ⚡{totalCharge}
-          </span>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          {hasCreatine && (
+            <span style={{ fontSize: 7, color: isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", lineHeight: 1 }} title="Créatine">▲</span>
+          )}
+          {totalCharge > 0 && (
+            <span style={{ ...styles.dayCharge, color: getChargeColor(totalCharge) }}>
+              ⚡{totalCharge}
+            </span>
+          )}
+        </div>
       </div>
 
       <div style={styles.sessionCards}>
@@ -1811,8 +1816,8 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
 
 // ─── VUE MOIS ─────────────────────────────────────────────────────────────────
 
-function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick }) {
-  const { styles } = useThemeCtx();
+function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine }) {
+  const { styles, isDark } = useThemeCtx();
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const weeks = getMonthWeeks(year, month);
@@ -1854,6 +1859,8 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
             const isToday = date.toDateString() === today.toDateString();
             const sessions = inMonth ? getDaySessions(data, date) : [];
             const charge = sessions.reduce((a, s) => a + s.charge, 0);
+            const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+            const hasCreatine = inMonth && !!creatine?.[dateISO];
 
             return (
               <div
@@ -1905,6 +1912,9 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
                 {charge > 0 && (
                   <div style={{ ...styles.monthDayChargeBar, background: getChargeColor(charge) }} />
                 )}
+                {hasCreatine && (
+                  <span style={{ position: "absolute", top: 2, right: 3, fontSize: 6, color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)", lineHeight: 1 }} title="Créatine">▲</span>
+                )}
               </div>
             );
           })}
@@ -1918,7 +1928,7 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
 
 // ─── VUE ANNÉE ────────────────────────────────────────────────────────────────
 
-function YearView({ data, currentDate, onSelectMonth, isMobile }) {
+function YearView({ data, currentDate, onSelectMonth, isMobile, creatine }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const year = currentDate.getFullYear();
   const today = new Date();
@@ -1991,6 +2001,8 @@ function YearView({ data, currentDate, onSelectMonth, isMobile }) {
                       const isToday  = date.toDateString() === today.toDateString();
                       const sessions = inMonth ? getDaySessions(data, date) : [];
                       const nSess    = sessions.length;
+                      const dateISO  = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+                      const hasCr    = inMonth && !!creatine?.[dateISO];
 
                       return (
                         <div
@@ -2003,6 +2015,7 @@ function YearView({ data, currentDate, onSelectMonth, isMobile }) {
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
+                            position: "relative",
                           }}
                         >
                           {inMonth && nSess > 0 && (
@@ -2014,6 +2027,9 @@ function YearView({ data, currentDate, onSelectMonth, isMobile }) {
                               opacity:      0.9,
                               flexShrink:   0,
                             }} />
+                          )}
+                          {hasCr && (
+                            <span style={{ position: "absolute", top: 0, right: 0, fontSize: 4, color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)", lineHeight: 1 }}>▲</span>
                           )}
                         </div>
                       );
@@ -2297,7 +2313,7 @@ function SleepSection({ sleepData, onImport, range }) {
 
 // ─── NOTES JOURNALIÈRES ──────────────────────────────────────────────────────
 
-function DailyNotesSection({ notes, onSave }) {
+function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine }) {
   const { styles, isDark } = useThemeCtx();
   const today = new Date().toISOString().slice(0, 10);
   const [text, setText] = useState(notes[today] || "");
@@ -2346,6 +2362,18 @@ function DailyNotesSection({ notes, onSave }) {
         onChange={e => setText(e.target.value)}
         onBlur={handleBlur}
       />
+      <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer", userSelect: "none" }}>
+        <input
+          type="checkbox"
+          checked={!!creatine?.[today]}
+          onChange={() => onToggleCreatine?.(today)}
+          style={{ cursor: "pointer", width: 14, height: 14, accentColor: isDark ? "#4ade80" : "#2a7d4f" }}
+        />
+        <span style={{ fontSize: 12, color: isDark ? "#9ca3af" : "#6b7280" }}>
+          Créatine prise
+          {creatine?.[today] && <span style={{ marginLeft: 6, fontSize: 10, color: isDark ? "#4ade80" : "#2a7d4f" }}>▲</span>}
+        </span>
+      </label>
       {recent.length > 0 && (
         <div style={{ marginTop: 10 }}>
           {recent.map(([d, t]) => (
@@ -2574,7 +2602,7 @@ function getChartData(data, range) {
   });
 }
 
-function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote }) {
+function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreatine }) {
   const { styles, isDark } = useThemeCtx();
   const [range, setRange] = useState("sem"); // "sem" | "mois" | "an"
 
@@ -2647,7 +2675,7 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote }) {
         </ResponsiveContainer>
       </div>
 
-      <DailyNotesSection notes={data.notes || {}} onSave={onSaveNote} />
+      <DailyNotesSection notes={data.notes || {}} onSave={onSaveNote} creatine={data.creatine || {}} onToggleCreatine={onToggleCreatine} />
 
       <HooperSection hoopers={data.hooper || []} onAdd={onAddHooper} range={range} />
 
@@ -3014,6 +3042,7 @@ export default function ClimbingPlanner() {
                   onOpenSession={(si) => openSessionModal(wKey, i, si)}
                   onRemove={(si) => removeSession(i, si)}
                   isMobile={isMobile}
+                  hasCreatine={!!data.creatine?.[`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`]}
                 />
               );
             })}
@@ -3044,6 +3073,7 @@ export default function ClimbingPlanner() {
           currentDate={currentDate}
           isMobile={isMobile}
           mesocycles={data.mesocycles || []}
+          creatine={data.creatine || {}}
           onSelectWeek={(wm) => {
             setCurrentDate(wm);
             setViewMode("week");
@@ -3063,6 +3093,7 @@ export default function ClimbingPlanner() {
           data={data}
           currentDate={currentDate}
           isMobile={isMobile}
+          creatine={data.creatine || {}}
           onSelectMonth={(month) => {
             setCurrentDate(new Date(currentDate.getFullYear(), month, 1));
             setViewMode("month");
@@ -3084,6 +3115,11 @@ export default function ClimbingPlanner() {
             return { ...d, hooper: [...existing, entry].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)) };
           })}
           onSaveNote={(date, text) => setData(d => ({ ...d, notes: { ...(d.notes || {}), [date]: text } }))}
+          onToggleCreatine={date => setData(d => {
+            const c = { ...(d.creatine || {}) };
+            if (c[date]) delete c[date]; else c[date] = true;
+            return { ...d, creatine: c };
+          })}
         />
       )}
 
