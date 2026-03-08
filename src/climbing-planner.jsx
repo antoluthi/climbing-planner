@@ -2380,6 +2380,29 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
   const { styles, isDark } = useThemeCtx();
   const [popover, setPopover] = useState(null); // { meso, micro, x, y }
 
+  // Measure actual container width to compute pixel-accurate text truncation
+  const containerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    setContainerWidth(el.getBoundingClientRect().width);
+    const ro = new ResizeObserver(entries => setContainerWidth(entries[0].contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Return how many chars of `label` fit in `px` pixels, or null if none
+  const fitLabel = (label, px) => {
+    const avail = px - 12; // subtract 6px left+right padding
+    const charW = 5.5;     // ~5.5 px per char at font-size 9
+    if (avail < charW) return null;
+    const maxChars = Math.floor(avail / charW);
+    if (maxChars >= label.length) return label;
+    if (maxChars <= 1) return label.charAt(0);
+    return label.slice(0, maxChars - 1) + "…";
+  };
+
   // Chain start dates: if a meso has no startDate, pick up from previous end
   const chainedMesos = useMemo(() => {
     let runningDate = null;
@@ -2416,7 +2439,7 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
   };
 
   return (
-    <div style={styles.timelineWrap} onClick={() => setPopover(null)}>
+    <div ref={containerRef} style={styles.timelineWrap} onClick={() => setPopover(null)}>
       {/* Top bar */}
       <div style={styles.timelineTopBar}>
         <span style={styles.timelineTitle}>Planification</span>
@@ -2435,6 +2458,9 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
         const barPct = (meso.durationWeeks / maxMesoWeeks) * 100;
         const totalMicroWeeks = meso.microcycles.reduce((a, m) => a + m.durationWeeks, 0);
         const hasMicros = meso.microcycles.length > 0;
+        // Pixel width of this meso's bar (label col = 148px)
+        const barAreaPx = Math.max(0, containerWidth - 148);
+        const barPx = barAreaPx * (barPct / 100);
         const startLabel = fmtDate(meso.computedStart);
         const endLabel = fmtDate(meso.computedEnd);
 
@@ -2485,11 +2511,11 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
                 {!hasMicros ? (
                   // No microcycles — single undivided block
                   <div
-                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden" }}
                     onClick={e => handleMicroClick(e, meso, null)}
                   >
                     <span style={{ fontSize: 10, color: meso.color, opacity: 0.75, fontWeight: 500 }}>
-                      {meso.description || `${meso.durationWeeks}s`}
+                      {fitLabel(meso.description || `${meso.durationWeeks}s`, barPx) || `${meso.durationWeeks}s`}
                     </span>
                   </div>
                 ) : (
@@ -2497,7 +2523,10 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
                     const ref = totalMicroWeeks > 0 ? totalMicroWeeks : meso.durationWeeks;
                     const microPct = (micro.durationWeeks / ref) * 100;
                     const isLast = mi === meso.microcycles.length - 1;
-                    const isNarrow = microPct < 12;
+                    const segPx = barPx * (microPct / 100);
+                    const isNarrow = segPx < 18;
+                    const label = fitLabel(micro.label, segPx);
+                    const showSub = segPx >= 28 && label;
                     return (
                       <div
                         key={micro.id}
@@ -2514,9 +2543,9 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
                         ) : (
                           <div>
                             <div style={{ ...styles.timelineMicroLabel, color: meso.color }}>
-                              {micro.label.length > 12 ? micro.label.slice(0, 12) + "…" : micro.label}
+                              {label}
                             </div>
-                            <div style={{ ...styles.timelineMicroSub, color: meso.color }}>{micro.durationWeeks}s</div>
+                            {showSub && <div style={{ ...styles.timelineMicroSub, color: meso.color }}>{micro.durationWeeks}s</div>}
                           </div>
                         )}
                       </div>
@@ -2538,6 +2567,8 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
             const label = cc.isRepetitive
               ? `Répétitif · ${cc.onWeeks}s ON / ${cc.offWeeks}s OFF`
               : `${cc.durationWeeks} sem.`;
+            const ccBarPx = Math.max(0, containerWidth - 148) * Math.max(barPct, 4) / 100;
+            const ccBarText = cc.isRepetitive ? `${cc.onWeeks}s ON / ${cc.offWeeks}s OFF` : `${cc.durationWeeks}s`;
             return (
               <div key={cc.id} style={styles.timelineCustomRow}>
                 <div style={{ ...styles.timelineLabelCol }}>
@@ -2554,8 +2585,8 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
                     background: cc.color + "25",
                     borderColor: cc.color + "60",
                   }}>
-                    <span style={{ fontSize: 9, color: cc.color, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {cc.isRepetitive ? `${cc.onWeeks}s ON / ${cc.offWeeks}s OFF` : `${cc.durationWeeks}s`}
+                    <span style={{ fontSize: 9, color: cc.color, fontWeight: 600, overflow: "hidden" }}>
+                      {fitLabel(ccBarText, ccBarPx) || ""}
                     </span>
                   </div>
                 </div>
@@ -2951,7 +2982,7 @@ function SleepSection({ sleepData, onImport, range }) {
 
 // ─── NOTES JOURNALIÈRES ──────────────────────────────────────────────────────
 
-function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine, creatineEnabled }) {
+function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine }) {
   const { styles, isDark } = useThemeCtx();
   const today = new Date().toISOString().slice(0, 10);
   const [text, setText] = useState(notes[today] || "");
@@ -3000,8 +3031,7 @@ function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine, creatine
         onChange={e => setText(e.target.value)}
         onBlur={handleBlur}
       />
-      {creatineEnabled && (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer", userSelect: "none" }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer", userSelect: "none" }}>
           <input
             type="checkbox"
             checked={!!creatine?.[today]}
@@ -3013,7 +3043,6 @@ function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine, creatine
             {creatine?.[today] && <span style={{ marginLeft: 6, fontSize: 10, color: isDark ? "#4ade80" : "#2a7d4f" }}>▲</span>}
           </span>
         </label>
-      )}
       {recent.length > 0 && (
         <div style={{ marginTop: 10 }}>
           {recent.map(([d, t]) => (
@@ -3518,19 +3547,6 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
         </div>
       </div>
 
-      {/* ── Suivi ── */}
-      <div style={styles.profileSection}>
-        <div style={styles.profileSectionTitle}>Suivi</div>
-        <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
-          <input
-            type="checkbox"
-            checked={!!profile.creatineEnabled}
-            onChange={() => onUpdateProfile({ ...profile, creatineEnabled: !profile.creatineEnabled })}
-            style={{ cursor: "pointer", width: 14, height: 14, accentColor: accent }}
-          />
-          <span style={{ fontSize: 12, color: textColor }}>Suivi créatine</span>
-        </label>
-      </div>
 
       {/* ── Données ── */}
       <div style={styles.profileSection}>
@@ -3618,7 +3634,7 @@ function getChartData(data, range, refDate) {
   });
 }
 
-function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreatine, creatineEnabled }) {
+function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreatine }) {
   const { styles, isDark } = useThemeCtx();
   const [range, setRange] = useState("sem"); // "sem" | "mois" | "an"
   const [statsRefDate, setStatsRefDate] = useState(() => new Date());
@@ -3743,7 +3759,7 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
         </ResponsiveContainer>
       </div>
 
-      <DailyNotesSection notes={data.notes || {}} onSave={onSaveNote} creatine={data.creatine || {}} onToggleCreatine={onToggleCreatine} creatineEnabled={creatineEnabled} />
+      <DailyNotesSection notes={data.notes || {}} onSave={onSaveNote} creatine={data.creatine || {}} onToggleCreatine={onToggleCreatine} />
 
       <HooperSection hoopers={data.hooper || []} onAdd={onAddHooper} range={range} />
 
@@ -3815,11 +3831,9 @@ export default function ClimbingPlanner() {
   }, [data]);
 
   // ── Navigation ──
-  const handleDateDrillUp = () => {
-    if (viewMode === "week") setViewMode("month");
-    else if (viewMode === "month") setViewMode("year");
+  const handleDateGoToCurrent = () => {
+    setCurrentDate(new Date());
   };
-  const canDrillUp = viewMode === "week" || viewMode === "month";
 
   const handlePrev = () => {
     if (viewMode === "week") setCurrentDate(d => addDays(d, -7));
@@ -4042,9 +4056,9 @@ export default function ClimbingPlanner() {
             <div style={styles.weekNavMobile}>
               <button style={styles.navBtn} onClick={handlePrev}>←</button>
               <div
-                style={{ ...styles.weekLabel, cursor: canDrillUp ? "pointer" : "default" }}
-                onClick={canDrillUp ? handleDateDrillUp : undefined}
-                title={viewMode === "week" ? "Voir le mois" : viewMode === "month" ? "Voir l'année" : undefined}
+                style={{ ...styles.weekLabel, cursor: isCurrentPeriod ? "default" : "pointer" }}
+                onClick={isCurrentPeriod ? undefined : handleDateGoToCurrent}
+                title={isCurrentPeriod ? undefined : viewMode === "week" ? "Aller à la semaine en cours" : viewMode === "month" ? "Aller au mois en cours" : "Aller à l'année en cours"}
               >
                 <div style={styles.weekRange}>{periodLabel}</div>
                 {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
@@ -4069,9 +4083,9 @@ export default function ClimbingPlanner() {
             <div style={styles.weekNav}>
               <button style={styles.navBtn} onClick={handlePrev}>←</button>
               <div
-                style={{ ...styles.weekLabel, cursor: canDrillUp ? "pointer" : "default" }}
-                onClick={canDrillUp ? handleDateDrillUp : undefined}
-                title={viewMode === "week" ? "Voir le mois" : viewMode === "month" ? "Voir l'année" : undefined}
+                style={{ ...styles.weekLabel, cursor: isCurrentPeriod ? "default" : "pointer" }}
+                onClick={isCurrentPeriod ? undefined : handleDateGoToCurrent}
+                title={isCurrentPeriod ? undefined : viewMode === "week" ? "Aller à la semaine en cours" : viewMode === "month" ? "Aller au mois en cours" : "Aller à l'année en cours"}
               >
                 <div style={styles.weekRange}>{periodLabel}</div>
                 {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
@@ -4143,7 +4157,7 @@ export default function ClimbingPlanner() {
                   onOpenSession={(si) => openSessionModal(wKey, i, si)}
                   onRemove={(si) => removeSession(i, si)}
                   isMobile={isMobile}
-                  hasCreatine={!!data.profile?.creatineEnabled && !!data.creatine?.[`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`]}
+                  hasCreatine={!!data.creatine?.[`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`]}
                   note={data.notes?.[`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`] || ""}
                   onSaveNote={text => {
                     const iso = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
@@ -4179,7 +4193,7 @@ export default function ClimbingPlanner() {
           currentDate={currentDate}
           isMobile={isMobile}
           mesocycles={data.mesocycles || []}
-          creatine={data.profile?.creatineEnabled ? (data.creatine || {}) : {}}
+          creatine={data.creatine || {}}
           customCycles={data.customCycles || []}
           onSelectWeek={(wm) => {
             setCurrentDate(wm);
@@ -4200,7 +4214,7 @@ export default function ClimbingPlanner() {
           data={data}
           currentDate={currentDate}
           isMobile={isMobile}
-          creatine={data.profile?.creatineEnabled ? (data.creatine || {}) : {}}
+          creatine={data.creatine || {}}
           customCycles={data.customCycles || []}
           onSelectMonth={(month) => {
             setCurrentDate(new Date(currentDate.getFullYear(), month, 1));
@@ -4213,7 +4227,6 @@ export default function ClimbingPlanner() {
       {viewMode === "dash" && (
         <Dashboard
           data={data}
-          creatineEnabled={!!data.profile?.creatineEnabled}
           onUpdateSleep={newRows => setData(d => {
             const map = Object.fromEntries((d.sleep || []).map(r => [r.date, r]));
             for (const r of newRows) map[r.date] = r;
