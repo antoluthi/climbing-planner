@@ -2951,7 +2951,7 @@ function SleepSection({ sleepData, onImport, range }) {
 
 // ─── NOTES JOURNALIÈRES ──────────────────────────────────────────────────────
 
-function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine }) {
+function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine, creatineEnabled }) {
   const { styles, isDark } = useThemeCtx();
   const today = new Date().toISOString().slice(0, 10);
   const [text, setText] = useState(notes[today] || "");
@@ -3000,18 +3000,20 @@ function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine }) {
         onChange={e => setText(e.target.value)}
         onBlur={handleBlur}
       />
-      <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer", userSelect: "none" }}>
-        <input
-          type="checkbox"
-          checked={!!creatine?.[today]}
-          onChange={() => onToggleCreatine?.(today)}
-          style={{ cursor: "pointer", width: 14, height: 14, accentColor: isDark ? "#4ade80" : "#2a7d4f" }}
-        />
-        <span style={{ fontSize: 12, color: isDark ? "#9ca3af" : "#6b7280" }}>
-          Créatine prise
-          {creatine?.[today] && <span style={{ marginLeft: 6, fontSize: 10, color: isDark ? "#4ade80" : "#2a7d4f" }}>▲</span>}
-        </span>
-      </label>
+      {creatineEnabled && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer", userSelect: "none" }}>
+          <input
+            type="checkbox"
+            checked={!!creatine?.[today]}
+            onChange={() => onToggleCreatine?.(today)}
+            style={{ cursor: "pointer", width: 14, height: 14, accentColor: isDark ? "#4ade80" : "#2a7d4f" }}
+          />
+          <span style={{ fontSize: 12, color: isDark ? "#9ca3af" : "#6b7280" }}>
+            Créatine prise
+            {creatine?.[today] && <span style={{ marginLeft: 6, fontSize: 10, color: isDark ? "#4ade80" : "#2a7d4f" }}>▲</span>}
+          </span>
+        </label>
+      )}
       {recent.length > 0 && (
         <div style={{ marginTop: 10 }}>
           {recent.map(([d, t]) => (
@@ -3516,6 +3518,20 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
         </div>
       </div>
 
+      {/* ── Suivi ── */}
+      <div style={styles.profileSection}>
+        <div style={styles.profileSectionTitle}>Suivi</div>
+        <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+          <input
+            type="checkbox"
+            checked={!!profile.creatineEnabled}
+            onChange={() => onUpdateProfile({ ...profile, creatineEnabled: !profile.creatineEnabled })}
+            style={{ cursor: "pointer", width: 14, height: 14, accentColor: accent }}
+          />
+          <span style={{ fontSize: 12, color: textColor }}>Suivi créatine</span>
+        </label>
+      </div>
+
       {/* ── Données ── */}
       <div style={styles.profileSection}>
         <div style={styles.profileSectionTitle}>Données</div>
@@ -3602,7 +3618,7 @@ function getChartData(data, range, refDate) {
   });
 }
 
-function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreatine }) {
+function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreatine, creatineEnabled }) {
   const { styles, isDark } = useThemeCtx();
   const [range, setRange] = useState("sem"); // "sem" | "mois" | "an"
   const [statsRefDate, setStatsRefDate] = useState(() => new Date());
@@ -3727,7 +3743,7 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
         </ResponsiveContainer>
       </div>
 
-      <DailyNotesSection notes={data.notes || {}} onSave={onSaveNote} creatine={data.creatine || {}} onToggleCreatine={onToggleCreatine} />
+      <DailyNotesSection notes={data.notes || {}} onSave={onSaveNote} creatine={data.creatine || {}} onToggleCreatine={onToggleCreatine} creatineEnabled={creatineEnabled} />
 
       <HooperSection hoopers={data.hooper || []} onAdd={onAddHooper} range={range} />
 
@@ -3799,6 +3815,12 @@ export default function ClimbingPlanner() {
   }, [data]);
 
   // ── Navigation ──
+  const handleDateDrillUp = () => {
+    if (viewMode === "week") setViewMode("month");
+    else if (viewMode === "month") setViewMode("year");
+  };
+  const canDrillUp = viewMode === "week" || viewMode === "month";
+
   const handlePrev = () => {
     if (viewMode === "week") setCurrentDate(d => addDays(d, -7));
     else if (viewMode === "month") setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
@@ -4019,7 +4041,11 @@ export default function ClimbingPlanner() {
           {viewMode !== "dash" && viewMode !== "cycles" && viewMode !== "profil" && (
             <div style={styles.weekNavMobile}>
               <button style={styles.navBtn} onClick={handlePrev}>←</button>
-              <div style={styles.weekLabel}>
+              <div
+                style={{ ...styles.weekLabel, cursor: canDrillUp ? "pointer" : "default" }}
+                onClick={canDrillUp ? handleDateDrillUp : undefined}
+                title={viewMode === "week" ? "Voir le mois" : viewMode === "month" ? "Voir l'année" : undefined}
+              >
                 <div style={styles.weekRange}>{periodLabel}</div>
                 {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
               </div>
@@ -4042,7 +4068,11 @@ export default function ClimbingPlanner() {
           {viewMode !== "dash" && viewMode !== "cycles" && viewMode !== "profil" && (
             <div style={styles.weekNav}>
               <button style={styles.navBtn} onClick={handlePrev}>←</button>
-              <div style={styles.weekLabel}>
+              <div
+                style={{ ...styles.weekLabel, cursor: canDrillUp ? "pointer" : "default" }}
+                onClick={canDrillUp ? handleDateDrillUp : undefined}
+                title={viewMode === "week" ? "Voir le mois" : viewMode === "month" ? "Voir l'année" : undefined}
+              >
                 <div style={styles.weekRange}>{periodLabel}</div>
                 {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
               </div>
@@ -4113,7 +4143,7 @@ export default function ClimbingPlanner() {
                   onOpenSession={(si) => openSessionModal(wKey, i, si)}
                   onRemove={(si) => removeSession(i, si)}
                   isMobile={isMobile}
-                  hasCreatine={!!data.creatine?.[`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`]}
+                  hasCreatine={!!data.profile?.creatineEnabled && !!data.creatine?.[`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`]}
                   note={data.notes?.[`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`] || ""}
                   onSaveNote={text => {
                     const iso = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
@@ -4149,7 +4179,7 @@ export default function ClimbingPlanner() {
           currentDate={currentDate}
           isMobile={isMobile}
           mesocycles={data.mesocycles || []}
-          creatine={data.creatine || {}}
+          creatine={data.profile?.creatineEnabled ? (data.creatine || {}) : {}}
           customCycles={data.customCycles || []}
           onSelectWeek={(wm) => {
             setCurrentDate(wm);
@@ -4170,7 +4200,7 @@ export default function ClimbingPlanner() {
           data={data}
           currentDate={currentDate}
           isMobile={isMobile}
-          creatine={data.creatine || {}}
+          creatine={data.profile?.creatineEnabled ? (data.creatine || {}) : {}}
           customCycles={data.customCycles || []}
           onSelectMonth={(month) => {
             setCurrentDate(new Date(currentDate.getFullYear(), month, 1));
@@ -4183,6 +4213,7 @@ export default function ClimbingPlanner() {
       {viewMode === "dash" && (
         <Dashboard
           data={data}
+          creatineEnabled={!!data.profile?.creatineEnabled}
           onUpdateSleep={newRows => setData(d => {
             const map = Object.fromEntries((d.sleep || []).map(r => [r.date, r]));
             for (const r of newRows) map[r.date] = r;
