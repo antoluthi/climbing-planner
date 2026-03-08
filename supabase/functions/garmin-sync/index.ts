@@ -33,17 +33,6 @@ async function hmacSha1(key: string, message: string): Promise<string> {
   return btoa(String.fromCharCode(...new Uint8Array(sig)));
 }
 
-function oauthHeader(
-  method: string,
-  url: string,
-  params: Record<string, string>,
-  signature: string
-): string {
-  const all = { ...params, oauth_signature: signature };
-  return "OAuth " + Object.entries(all)
-    .map(([k, v]) => `${k}="${encodeURIComponent(v)}"`)
-    .join(", ");
-}
 
 // ── Cookie helpers ─────────────────────────────────────────────────────────────
 
@@ -151,12 +140,42 @@ async function garminLogin(email: string, password: string): Promise<string> {
 
 // ── OAuth1 → OAuth2 token exchange ────────────────────────────────────────────
 
-async function getOAuth1Token(cookies: string): Promise<{ token: string; tokenSecret: string }> {
-  const url = "https://connectapi.garmin.com/oauth-service/oauth/preauthorized?oauth_callback=oob&accepts_tos=true&api=%2F";
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const nonce = crypto.randomUUID().replace(/-/g, "");
+function buildOAuth1Header(
+  method: string,
+  baseUrl: string,
+  oauthParams: Record<string, string>,  // only oauth_* to put in header
+  extraSignatureParams: Record<string, string>,  // additional query/body params for signature only
+  signature: string,
+): string {
+  const headerParams = { ...oauthParams, oauth_signature: signature };
+  return "OAuth " + Object.entries(headerParams)
+    .map(([k, v]) => `${k}="${encodeURIComponent(v)}"`)
+    .join(", ");
+}
 
+async function buildOAuth1Signature(
+  method: string,
+  baseUrl: string,
+  allParams: Record<string, string>,
+  signingKey: string,
+): Promise<string> {
+  const normalized = Object.entries(allParams)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join("&");
+  const base = `${method}&${encodeURIComponent(baseUrl)}&${encodeURIComponent(normalized)}`;
+  return await hmacSha1(signingKey, base);
+}
+
+async function getOAuth1Token(cookies: string): Promise<{ token: string; tokenSecret: string }> {
+  const baseUrl = "https://connectapi.garmin.com/oauth-service/oauth/preauthorized";
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(12)))
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+
+  // oauth_callback goes in BOTH the header and the signature
   const oauthParams: Record<string, string> = {
+    oauth_callback: "oob",
     oauth_consumer_key: CONSUMER_KEY,
     oauth_nonce: nonce,
     oauth_signature_method: "HMAC-SHA1",
@@ -164,42 +183,35 @@ async function getOAuth1Token(cookies: string): Promise<{ token: string; tokenSe
     oauth_version: "1.0",
   };
 
-  // Signature base string (only params without query string extras)
-  const baseUrl = "https://connectapi.garmin.com/oauth-service/oauth/preauthorized";
-  const queryParams: Record<string, string> = {
-    oauth_callback: "oob",
-    accepts_tos: "true",
-    api: "/",
-    ...oauthParams,
-  };
-  const sortedQuery = Object.entries(queryParams)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-    .join("&");
-  const signatureBase = `GET&${encodeURIComponent(baseUrl)}&${encodeURIComponent(sortedQuery)}`;
+  // Signature includes oauth params + query string params
+  const allParams = { ...oauthParams, accepts_tos: "true" };
   const signingKey = `${encodeURIComponent(CONSUMER_SECRET)}&`;
-  const signature = await hmacSha1(signingKey, signatureBase);
+  const signature = await buildOAuth1Signature("GET", baseUrl, allParams, signingKey);
 
-  const resp = await fetch(url, {
+  const resp = await fetch(`${baseUrl}?accepts_tos=true`, {
     headers: {
-      "Authorization": oauthHeader("GET", baseUrl, oauthParams, signature),
+      "Authorization": buildOAuth1Header("GET", baseUrl, oauthParams, {}, signature),
       "Cookie": cookies,
     },
   });
 
-  if (!resp.ok) throw new Error(`OAuth1 preauthorized failed (${resp.status})`);
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    throw new Error(`OAuth1 preauthorized failed (${resp.status}): ${body.slice(0, 300)}`);
+  }
   const text = await resp.text();
-  const oauthToken = decodeURIComponent(text.match(/oauth_token=([^&]+)/)?.[1] ?? "");
-  const oauthTokenSecret = decodeURIComponent(text.match(/oauth_token_secret=([^&]+)/)?.[1] ?? "");
-  if (!oauthToken) throw new Error(`Could not get OAuth1 token: ${text.slice(0, 200)}`);
+  const oauthToken = decodeURIComponent(text.match(/oauth_token=([^&\s]+)/)?.[1] ?? "");
+  const oauthTokenSecret = decodeURIComponent(text.match(/oauth_token_secret=([^&\s]+)/)?.[1] ?? "");
+  if (!oauthToken) throw new Error(`Could not parse OAuth1 token: ${text.slice(0, 200)}`);
 
   return { token: oauthToken, tokenSecret: oauthTokenSecret };
 }
 
 async function getOAuth2Token(oauth1Token: string, oauth1Secret: string): Promise<string> {
-  const url = "https://connectapi.garmin.com/oauth-service/oauth/exchange/user/2.0";
+  const baseUrl = "https://connectapi.garmin.com/oauth-service/oauth/exchange/user/2.0";
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  const nonce = crypto.randomUUID().replace(/-/g, "");
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(12)))
+    .map(b => b.toString(16).padStart(2, "0")).join("");
 
   const oauthParams: Record<string, string> = {
     oauth_consumer_key: CONSUMER_KEY,
@@ -210,24 +222,22 @@ async function getOAuth2Token(oauth1Token: string, oauth1Secret: string): Promis
     oauth_version: "1.0",
   };
 
-  const sortedQuery = Object.entries(oauthParams)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-    .join("&");
-  const signatureBase = `POST&${encodeURIComponent(url)}&${encodeURIComponent(sortedQuery)}`;
   const signingKey = `${encodeURIComponent(CONSUMER_SECRET)}&${encodeURIComponent(oauth1Secret)}`;
-  const signature = await hmacSha1(signingKey, signatureBase);
+  const signature = await buildOAuth1Signature("POST", baseUrl, oauthParams, signingKey);
 
-  const resp = await fetch(url, {
+  const resp = await fetch(baseUrl, {
     method: "POST",
     headers: {
-      "Authorization": oauthHeader("POST", url, oauthParams, signature),
+      "Authorization": buildOAuth1Header("POST", baseUrl, oauthParams, {}, signature),
     },
   });
 
-  if (!resp.ok) throw new Error(`OAuth2 exchange failed (${resp.status})`);
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    throw new Error(`OAuth2 exchange failed (${resp.status}): ${body.slice(0, 300)}`);
+  }
   const data = await resp.json();
-  if (!data.access_token) throw new Error(`No access_token in OAuth2 response`);
+  if (!data.access_token) throw new Error(`No access_token in OAuth2 response: ${JSON.stringify(data)}`);
   return data.access_token;
 }
 
@@ -242,28 +252,31 @@ async function fetchSleep(
   const headers = {
     "Authorization": `Bearer ${accessToken}`,
     "User-Agent": UA,
-    "di-backend": "connectapi.garmin.com",
   };
 
-  // Get display name
+  // Get display name directly from connectapi.garmin.com
   const profileResp = await fetch(
-    "https://connect.garmin.com/modern/proxy/userprofile-service/socialProfile",
+    "https://connectapi.garmin.com/userprofile-service/socialProfile",
     { headers }
   );
   if (!profileResp.ok) {
-    throw new Error(`Profile fetch failed (${profileResp.status})`);
+    const body = await profileResp.text().catch(() => "");
+    throw new Error(`Profile fetch failed (${profileResp.status}): ${body.slice(0, 200)}`);
   }
   // deno-lint-ignore no-explicit-any
   const profile = await profileResp.json() as any;
   const displayName: string = profile?.displayName ?? profile?.userName ?? "";
-  if (!displayName) throw new Error("Could not resolve Garmin display name from profile");
+  if (!displayName) throw new Error("Could not resolve display name from profile");
 
-  // Fetch sleep
+  // Fetch sleep directly from connectapi.garmin.com
   const sleepResp = await fetch(
-    `https://connect.garmin.com/modern/proxy/wellness-service/wellness/dailySleepData/${displayName}?startDate=${startDate}&endDate=${endDate}&nonSleepBufferMinutes=60`,
+    `https://connectapi.garmin.com/wellness-service/wellness/dailySleepData/${displayName}?startDate=${startDate}&endDate=${endDate}&nonSleepBufferMinutes=60`,
     { headers }
   );
-  if (!sleepResp.ok) throw new Error(`Sleep data fetch failed (${sleepResp.status})`);
+  if (!sleepResp.ok) {
+    const body = await sleepResp.text().catch(() => "");
+    throw new Error(`Sleep data fetch failed (${sleepResp.status}): ${body.slice(0, 200)}`);
+  }
 
   // deno-lint-ignore no-explicit-any
   const raw = await sleepResp.json() as any;
