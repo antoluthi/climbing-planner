@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm run build)",
+      "Bash(git add src/climbing-planner.jsx .claude/launch.json)",
+      "Bash(git commit:*)",
+      "Bash(git push origin master)",
+      "Bash(where npm)",
+      "Bash(where node)"
+    ]
+  }
+}
