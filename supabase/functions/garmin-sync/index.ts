@@ -18,11 +18,16 @@ interface SleepRecord {
 
 // ── Cookie helpers ─────────────────────────────────────────────────────────────
 
-function parseCookies(header: string): string[] {
-  return header
-    .split(/,(?=[^;]+=[^;]+;|[^;]+=)/)
-    .map((c) => c.split(";")[0].trim())
-    .filter(Boolean);
+// Extract name=value pairs from Set-Cookie headers.
+// Uses getSetCookie() (Deno 1.37+ / modern runtime) to get ALL headers correctly,
+// falling back to manual comma-splitting which is unreliable with expires dates.
+function extractCookies(headers: Headers): string[] {
+  // deno-lint-ignore no-explicit-any
+  const raw: string[] = typeof (headers as any).getSetCookie === "function"
+    // deno-lint-ignore no-explicit-any
+    ? (headers as any).getSetCookie()
+    : (headers.get("set-cookie") ?? "").split(/,(?=[^;]+=[^;]+;|[^;]+=)/);
+  return raw.map((c) => c.split(";")[0].trim()).filter(Boolean);
 }
 
 // Merge cookie jars — newer values override older ones by name
@@ -77,7 +82,7 @@ async function garminLogin(email: string, password: string): Promise<string> {
   if (!csrfMatch) throw new Error("Could not retrieve CSRF token from Garmin login page");
 
   const csrf = csrfMatch[1];
-  let cookieJar = parseCookies(pageResp.headers.get("set-cookie") ?? "");
+  let cookieJar = extractCookies(pageResp.headers);
 
   // Step 2 — POST credentials
   const formBody = new URLSearchParams({
@@ -100,7 +105,7 @@ async function garminLogin(email: string, password: string): Promise<string> {
     body: formBody.toString(),
   });
 
-  cookieJar = mergeCookies(cookieJar, parseCookies(postResp.headers.get("set-cookie") ?? ""));
+  cookieJar = mergeCookies(cookieJar, extractCookies(postResp.headers));
 
   const location = postResp.headers.get("location") ?? "";
   let ticket = location.match(/ticket=([^&]+)/)?.[1] ?? "";
@@ -123,7 +128,7 @@ async function garminLogin(email: string, password: string): Promise<string> {
         "User-Agent": UA,
       },
     });
-    cookieJar = mergeCookies(cookieJar, parseCookies(resp.headers.get("set-cookie") ?? ""));
+    cookieJar = mergeCookies(cookieJar, extractCookies(resp.headers));
     if (resp.status === 200 || resp.status === 204) break;
     const loc = resp.headers.get("location");
     if (!loc) break;
