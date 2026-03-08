@@ -210,7 +210,16 @@ function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
     const parsed = raw ? JSON.parse(raw) : {};
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], cyclesLocked: false, ...parsed };
+    const result = { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], cyclesLocked: false, ...parsed };
+    // Migrate photo from legacy separate key → profile.avatarDataUrl
+    if (!result.profile?.avatarDataUrl) {
+      const legacy = localStorage.getItem("climbing_planner_photo");
+      if (legacy) {
+        result.profile = { ...(result.profile || {}), avatarDataUrl: legacy };
+        localStorage.removeItem("climbing_planner_photo");
+      }
+    }
+    return result;
   } catch {
     return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], cyclesLocked: false };
   }
@@ -3180,6 +3189,7 @@ function PhotoCropModal({ onSave, onClose }) {
   const dragRef = useRef(null);
   const pinchRef = useRef(null);
   const fileRef = useRef(null);
+  const cropAreaRef = useRef(null);
 
   const handleFile = (e) => {
     const file = e.target.files[0];
@@ -3224,11 +3234,11 @@ function PhotoCropModal({ onSave, onClose }) {
   };
   const handleMouseUp = () => { dragRef.current = null; };
 
-  const handleWheel = (e) => {
+  const handleWheel = useCallback((e) => {
     e.preventDefault();
     const delta = e.deltaY < 0 ? 1.1 : 1 / 1.1;
     setScale(s => Math.max(0.1, Math.min(s * delta, 20)));
-  };
+  }, []);
 
   const handleTouchStart = (e) => {
     if (e.touches.length === 1) {
@@ -3239,7 +3249,7 @@ function PhotoCropModal({ onSave, onClose }) {
       pinchRef.current = { dist: Math.hypot(dx, dy), scale };
     }
   };
-  const handleTouchMove = (e) => {
+  const handleTouchMove = useCallback((e) => {
     e.preventDefault();
     if (e.touches.length === 1 && dragRef.current) {
       const { startX, startY, posX, posY } = dragRef.current;
@@ -3251,8 +3261,20 @@ function PhotoCropModal({ onSave, onClose }) {
       const ratio = newDist / pinchRef.current.dist;
       setScale(Math.max(0.1, Math.min(pinchRef.current.scale * ratio, 20)));
     }
-  };
+  }, []);
   const handleTouchEnd = () => { dragRef.current = null; pinchRef.current = null; };
+
+  // Attach wheel + touchmove as non-passive so preventDefault() works
+  useEffect(() => {
+    const el = cropAreaRef.current;
+    if (!el) return;
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    el.addEventListener("touchmove", handleTouchMove, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", handleWheel);
+      el.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, [imgSrc, handleWheel, handleTouchMove]); // re-attach when image loads (el becomes visible)
 
   const handleConfirm = () => {
     if (!imgSrc) return;
@@ -3299,23 +3321,21 @@ function PhotoCropModal({ onSave, onClose }) {
           </div>
         ) : (
           <>
-            {/* Crop area */}
-            <div style={{ position: "relative", width: SIZE, height: SIZE, margin: "0 auto", borderRadius: "50%", overflow: "hidden", cursor: dragRef.current ? "grabbing" : "grab", background: "#000", userSelect: "none" }}
+            {/* Crop area — wheel + touchmove attached via useEffect (passive:false) */}
+            <div
+              ref={cropAreaRef}
+              style={{ position: "relative", width: SIZE, height: SIZE, margin: "0 auto", borderRadius: "50%", overflow: "hidden", cursor: dragRef.current ? "grabbing" : "grab", background: "#000", userSelect: "none" }}
               onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
-              onWheel={handleWheel}
-              onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
+              onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}
             >
               <img src={imgSrc} style={getImgStyle()} alt="" />
-              {/* Dark overlay with radial gradient to show circle boundary */}
+              {/* Radial gradient to show circle edge */}
               <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: `radial-gradient(circle at center, transparent ${SIZE / 2 - 5}px, rgba(0,0,0,0.55) ${SIZE / 2 - 4}px)` }} />
-            </div>
-            {/* Circular border (SVG overlay) */}
-            <div style={{ position: "relative", width: SIZE, height: SIZE, marginTop: -SIZE, margin: `-${SIZE}px auto 0` }}>
+              {/* SVG circle border — inside the crop div so it never blocks pointer events */}
               <svg width={SIZE} height={SIZE} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}>
-                <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2 - 3} fill="none" stroke={accent} strokeWidth="2" />
+                <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2 - 2} fill="none" stroke={accent} strokeWidth="1.5" />
               </svg>
             </div>
-            <div style={{ height: SIZE }} /> {/* spacer */}
             <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: mutedColor }}>Glisser · Molette ou pincer pour zoomer</div>
             <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
               <button
@@ -3347,12 +3367,11 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
   const [lastName, setLastName] = useState(profile.lastName || "");
   const importRef = useRef(null);
 
-  // Load photo from separate localStorage key (avoid bloating main data blob)
-  const [photoUrl, setPhotoUrl] = useState(() => localStorage.getItem("climbing_planner_photo") || "");
+  // Photo stored in data.profile.avatarDataUrl — syncs via Supabase automatically
+  const photoUrl = profile.avatarDataUrl || "";
 
   const handleSavePhoto = (dataUrl) => {
-    localStorage.setItem("climbing_planner_photo", dataUrl);
-    setPhotoUrl(dataUrl);
+    onUpdateProfile({ ...profile, avatarDataUrl: dataUrl });
     setShowCrop(false);
   };
 
