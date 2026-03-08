@@ -2181,7 +2181,10 @@ function SleepSection({ sleepData, onImport, garminCredentials, onSaveGarminCred
         headers: { "Content-Type": "application/json", "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` },
         body: JSON.stringify({ email: garminCredentials.email, password: garminCredentials.password, days: 45 }),
       });
-      const json = await resp.json();
+      const text = await resp.text();
+      let json;
+      try { json = JSON.parse(text); }
+      catch { throw new Error(`Réponse invalide (${resp.status}) — fonction non déployée ?`); }
       if (json.error) throw new Error(json.error);
       if (json.records?.length > 0) {
         onImport(json.records);
