@@ -2123,9 +2123,15 @@ function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMi
 
 // ─── SECTION SOMMEIL ──────────────────────────────────────────────────────────
 
-function SleepSection({ sleepData, onImport }) {
+function SleepSection({ sleepData, onImport, garminCredentials, onSaveGarminCredentials }) {
   const { styles, isDark } = useThemeCtx();
   const fileRef = useRef(null);
+  const [showSetup, setShowSetup]         = useState(!garminCredentials?.email);
+  const [garminEmail, setGarminEmail]     = useState(garminCredentials?.email ?? "");
+  const [garminPwd, setGarminPwd]         = useState(garminCredentials?.password ?? "");
+  const [syncing, setSyncing]             = useState(false);
+  const [syncMsg, setSyncMsg]             = useState("");
+  const [syncError, setSyncError]         = useState("");
 
   const last45 = (sleepData || []).slice(-45);
   const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
@@ -2136,49 +2142,128 @@ function SleepSection({ sleepData, onImport }) {
   const avgRem   = avg(last45.map(d => d.rem));
   const scores   = last45.filter(d => d.score != null).map(d => d.score);
   const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+  const lastDate = last45.length ? last45[last45.length - 1].date : null;
 
   const chartData = last45.map(d => ({
     date:  d.date.slice(5).replace("-", "/"),
-    deep:  d.deep,
-    rem:   d.rem,
-    light: d.light,
-    awake: d.awake,
-    score: d.score,
+    deep:  d.deep, rem: d.rem, light: d.light, awake: d.awake, score: d.score,
   }));
 
   const tooltipStyle = { background: styles.dashTooltipBg, border: "none", borderRadius: 6, color: styles.dashTooltipText, fontSize: 11 };
 
+  // CSV fallback
   const handleFile = e => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
       const parsed = parseGarminSleepCSV(ev.target.result);
-      if (parsed.length > 0) onImport(parsed);
+      if (parsed.length > 0) { onImport(parsed); setSyncMsg(`${parsed.length} nuits importées`); }
+      else setSyncError("Aucune donnée reconnue dans ce fichier.");
     };
     reader.readAsText(file, "utf-8");
     e.target.value = "";
   };
 
+  // Garmin sync via Edge Function
+  const handleSync = async () => {
+    if (!garminCredentials?.email || !garminCredentials?.password) {
+      setShowSetup(true); return;
+    }
+    setSyncing(true); setSyncMsg(""); setSyncError("");
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      if (!supabaseUrl) throw new Error("Supabase non configuré");
+
+      const resp = await fetch(`${supabaseUrl}/functions/v1/garmin-sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` },
+        body: JSON.stringify({ email: garminCredentials.email, password: garminCredentials.password, days: 45 }),
+      });
+      const json = await resp.json();
+      if (json.error) throw new Error(json.error);
+      if (json.records?.length > 0) {
+        onImport(json.records);
+        setSyncMsg(`${json.records.length} nuits synchronisées depuis Garmin ✓`);
+      } else {
+        setSyncMsg("Aucune nouvelle nuit disponible.");
+      }
+    } catch (err) {
+      setSyncError(err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleSaveCredentials = () => {
+    onSaveGarminCredentials({ email: garminEmail.trim(), password: garminPwd });
+    setShowSetup(false);
+    setSyncMsg("Identifiants sauvegardés");
+  };
+
+  const hasCreds = !!garminCredentials?.email;
+
   return (
     <div style={styles.dashSection}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={styles.dashSectionTitle}>Sommeil · Garmin</div>
-        <button style={styles.sleepImportBtn} onClick={() => fileRef.current?.click()}>
-          ↑ Importer CSV
+      {/* En-tête */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        <div style={{ ...styles.dashSectionTitle, marginBottom: 0, flex: 1 }}>Sommeil · Garmin</div>
+        {hasCreds && (
+          <button style={{ ...styles.sleepImportBtn, minWidth: 90 }} onClick={handleSync} disabled={syncing}>
+            {syncing ? "⏳ Sync…" : "↻ Sync Garmin"}
+          </button>
+        )}
+        <button style={{ ...styles.sleepImportBtn, background: "none" }} onClick={() => setShowSetup(s => !s)} title="Configurer">
+          ⚙ {hasCreds ? garminCredentials.email : "Connecter Garmin"}
+        </button>
+        <button style={{ ...styles.sleepImportBtn, background: "none", fontSize: 10 }} onClick={() => fileRef.current?.click()} title="Importer CSV manuellement">
+          ↑ CSV
         </button>
         <input ref={fileRef} type="file" accept=".csv,.CSV" style={{ display: "none" }} onChange={handleFile} />
       </div>
 
+      {/* Messages */}
+      {syncMsg   && <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 8 }}>{syncMsg}</div>}
+      {syncError && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>⚠ {syncError}</div>}
+
+      {/* Formulaire identifiants Garmin */}
+      {showSetup && (
+        <div style={{ ...styles.calcPanel, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: isDark ? "#9ca3af" : "#6b7280", marginBottom: 8 }}>
+            Identifiants Garmin Connect — stockés localement et sur ton cloud Supabase.
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div style={styles.calcField}>
+              <span style={styles.calcLabel}>Email Garmin</span>
+              <input style={styles.calcInput} type="email" placeholder="email@exemple.com" value={garminEmail} onChange={e => setGarminEmail(e.target.value)} />
+            </div>
+            <div style={styles.calcField}>
+              <span style={styles.calcLabel}>Mot de passe</span>
+              <input style={styles.calcInput} type="password" placeholder="••••••••" value={garminPwd} onChange={e => setGarminPwd(e.target.value)} />
+            </div>
+            <button style={styles.calcApplyBtn} onClick={handleSaveCredentials} disabled={!garminEmail || !garminPwd}>
+              Sauvegarder
+            </button>
+          </div>
+        </div>
+      )}
+
       {last45.length === 0 ? (
         <div style={styles.sleepEmptyMsg}>
-          <div>Aucune donnée de sommeil importée</div>
+          <div>Aucune donnée de sommeil</div>
           <div style={{ fontSize: 11, marginTop: 6, opacity: 0.6 }}>
-            Garmin Connect → Santé → Sommeil → Exporter CSV
+            {hasCreds ? "Clique sur « ↻ Sync Garmin » pour récupérer tes données" : "Configure tes identifiants Garmin ou importe un CSV"}
           </div>
         </div>
       ) : (
         <>
+          {lastDate && (
+            <div style={{ fontSize: 10, color: isDark ? "#707870" : "#8a7060", marginBottom: 10 }}>
+              Dernière nuit : {lastDate} · {last45.length} nuits chargées
+            </div>
+          )}
+
           {/* Cartes résumé */}
           <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
             <div style={styles.sleepCard}>
@@ -2266,7 +2351,7 @@ function getLast8WeeksData(data) {
   });
 }
 
-function Dashboard({ data, onUpdateSleep }) {
+function Dashboard({ data, onUpdateSleep, onSaveGarminCredentials }) {
   const { styles, isDark } = useThemeCtx();
   const chartData = getLast8WeeksData(data);
 
@@ -2322,7 +2407,12 @@ function Dashboard({ data, onUpdateSleep }) {
         </ResponsiveContainer>
       </div>
 
-      <SleepSection sleepData={data.sleep || []} onImport={onUpdateSleep} />
+      <SleepSection
+        sleepData={data.sleep || []}
+        onImport={onUpdateSleep}
+        garminCredentials={data.garminCredentials}
+        onSaveGarminCredentials={onSaveGarminCredentials}
+      />
     </div>
   );
 }
@@ -2782,6 +2872,7 @@ export default function ClimbingPlanner() {
             for (const r of newRows) map[r.date] = r;
             return { ...d, sleep: Object.values(map).sort((a, b) => a.date.localeCompare(b.date)) };
           })}
+          onSaveGarminCredentials={creds => setData(d => ({ ...d, garminCredentials: creds }))}
         />
       )}
 
