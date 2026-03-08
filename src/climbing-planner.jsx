@@ -70,6 +70,35 @@ const DEFAULT_MESOCYCLES = MESOCYCLES.map((m, i) => ({
   microcycles: [],
 }));
 
+const CUSTOM_CYCLE_COLORS = [
+  "#4ade80", "#22d3ee", "#f59e0b", "#f87171",
+  "#a78bfa", "#fb923c", "#34d399", "#60a5fa",
+  "#e879f9", "#facc15", "#94a3b8", "#ff6b9d",
+];
+
+function isDateInCustomCycle(cycle, date) {
+  if (!cycle.startDate) return false;
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const start = new Date(cycle.startDate + "T00:00:00");
+  const startNorm = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  if (!cycle.isRepetitive) {
+    if (!cycle.endDate) return false;
+    const end = new Date(cycle.endDate + "T00:00:00");
+    const endNorm = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    return d >= startNorm && d <= endNorm;
+  }
+  if (d < startNorm) return false;
+  const msPerDay = 24 * 3600 * 1000;
+  const elapsed = Math.round((d - startNorm) / msPerDay);
+  const onDays = (cycle.onWeeks || 4) * 7;
+  const offDays = (cycle.offWeeks || 2) * 7;
+  return (elapsed % (onDays + offDays)) < onDays;
+}
+
+function getCustomCyclesForDate(customCycles, date) {
+  return (customCycles || []).filter(cc => isDateInCustomCycle(cc, date));
+}
+
 function getMesoColor(mesocycles, label) {
   const found = (mesocycles || []).find(m => m.label === label)?.color;
   return found || MESOCYCLES.find(m => m.label === label)?.color || "#888";
@@ -181,9 +210,9 @@ function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
     const parsed = raw ? JSON.parse(raw) : {};
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, ...parsed };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], ...parsed };
   } catch {
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {} };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [] };
   }
 }
 
@@ -545,11 +574,11 @@ function makeStyles(isDark) {
     monthWeekRow: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 2 },
     monthDayCell: {
       background: t.surface, border: `1px solid ${t.border}`,
-      borderRadius: 5, padding: "7px 8px", minHeight: 86,
+      borderRadius: 5, padding: "7px 8px", minHeight: 100,
       cursor: "pointer", display: "flex", flexDirection: "column",
       transition: "border-color 0.15s", position: "relative", overflow: "hidden",
     },
-    monthDayCellMobile: { minHeight: 52, padding: "5px 4px" },
+    monthDayCellMobile: { minHeight: 64, padding: "5px 4px" },
     monthDayCellOut: { opacity: 0.25, cursor: "default" },
     monthDayCellToday: { borderColor: t.accentSolid, background: t.todayBg },
     monthDayNum: { fontSize: 12, fontWeight: 600, color: t.textDim, lineHeight: 1 },
@@ -579,7 +608,7 @@ function makeStyles(isDark) {
     yearMonthCharge: { fontSize: 13, fontWeight: 700 },
     yearHeatmap: { display: "flex", flexDirection: "column", gap: 2 },
     yearHeatmapRow: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 },
-    yearHeatmapCell: { height: 8, borderRadius: 2 },
+    yearHeatmapCell: { height: 14, borderRadius: 2 },
     yearDayEmpty: t.dayEmpty,
 
     dashboard: { padding: "20px 24px", overflowY: "auto", flex: 1 },
@@ -644,6 +673,19 @@ function makeStyles(isDark) {
     cycleAddMicroBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 4, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit", marginTop: 4 },
     cycleAddMesoBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em" },
     cycleDurLabel: { fontSize: 10, color: t.textMuted },
+    // ── Custom cycles section ──
+    customCyclesSection: { marginTop: 32, borderTop: `1px solid ${t.border}`, paddingTop: 20 },
+    customCyclesSectionHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
+    customCyclesSectionTitle: { fontSize: 13, fontWeight: 700, color: t.text, letterSpacing: "0.04em" },
+    customCycleRow: { display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: t.inputBg, borderRadius: 6, marginBottom: 6, border: `1px solid ${t.border}` },
+    customCycleColorSwatch: { width: 12, height: 36, borderRadius: 3, flexShrink: 0 },
+    customCycleInfo: { flex: 1, display: "flex", flexDirection: "column", gap: 2, minWidth: 0 },
+    customCycleName: { fontSize: 13, fontWeight: 500, color: t.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+    customCycleDate: { fontSize: 10, color: t.textDim },
+    customCycleBars: { marginTop: "auto", display: "flex", flexDirection: "column", gap: 1, paddingBottom: 5, paddingTop: 2 },
+    customCycleBar: { height: 3, borderRadius: 1.5, opacity: 0.85 },
+    customCycleDots: { display: "flex", gap: 2, paddingTop: 2, flexWrap: "wrap" },
+    customCycleDot: { width: 5, height: 5, borderRadius: "50%", opacity: 0.9 },
     cycleDateInput: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "4px 8px", color: t.text, fontSize: 11, fontFamily: "inherit", colorScheme: D ? "dark" : "light" },
     cycleDateEnd: { fontSize: 10, color: t.textMuted, whiteSpace: "nowrap", flexShrink: 0 },
     cycleMicroDate: { fontSize: 10, color: t.textDim, whiteSpace: "nowrap", flexShrink: 0, minWidth: 52 },
@@ -1932,7 +1974,7 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
 
 // ─── VUE MOIS ─────────────────────────────────────────────────────────────────
 
-function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine }) {
+function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles }) {
   const { styles, isDark } = useThemeCtx();
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -1977,6 +2019,7 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
             const charge = sessions.reduce((a, s) => a + s.charge, 0);
             const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
             const hasCreatine = inMonth && !!creatine?.[dateISO];
+            const activeCycles = inMonth ? getCustomCyclesForDate(customCycles, date) : [];
 
             return (
               <div
@@ -2025,6 +2068,20 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
                     ))}
                   </div>
                 )}
+                {activeCycles.length > 0 && !isMobile && (
+                  <div style={styles.customCycleBars}>
+                    {activeCycles.slice(0, 4).map(cc => (
+                      <div key={cc.id} title={cc.name} style={{ ...styles.customCycleBar, background: cc.color }} />
+                    ))}
+                  </div>
+                )}
+                {activeCycles.length > 0 && isMobile && (
+                  <div style={styles.customCycleDots}>
+                    {activeCycles.slice(0, 3).map(cc => (
+                      <div key={cc.id} title={cc.name} style={{ ...styles.customCycleDot, background: cc.color }} />
+                    ))}
+                  </div>
+                )}
                 {charge > 0 && (
                   <div style={{ ...styles.monthDayChargeBar, background: getChargeColor(charge) }} />
                 )}
@@ -2044,7 +2101,7 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
 
 // ─── VUE ANNÉE ────────────────────────────────────────────────────────────────
 
-function YearView({ data, currentDate, onSelectMonth, isMobile, creatine }) {
+function YearView({ data, currentDate, onSelectMonth, isMobile, creatine, customCycles }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const year = currentDate.getFullYear();
   const today = new Date();
@@ -2119,6 +2176,7 @@ function YearView({ data, currentDate, onSelectMonth, isMobile, creatine }) {
                       const nSess    = sessions.length;
                       const dateISO  = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
                       const hasCr    = inMonth && !!creatine?.[dateISO];
+                      const activeCycles = inMonth ? getCustomCyclesForDate(customCycles, date) : [];
 
                       return (
                         <div
@@ -2147,6 +2205,13 @@ function YearView({ data, currentDate, onSelectMonth, isMobile, creatine }) {
                           {hasCr && (
                             <span style={{ position: "absolute", top: 0, right: 0, fontSize: 4, color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)", lineHeight: 1 }}>▲</span>
                           )}
+                          {activeCycles.length > 0 && (
+                            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", flexDirection: "column", gap: 0, borderRadius: "0 0 2px 2px", overflow: "hidden" }}>
+                              {activeCycles.slice(0, 2).map(cc => (
+                                <div key={cc.id} title={cc.name} style={{ height: 2, background: cc.color, opacity: 0.8 }} />
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -2161,11 +2226,132 @@ function YearView({ data, currentDate, onSelectMonth, isMobile, creatine }) {
   );
 }
 
+// ─── CUSTOM CYCLE MODAL ───────────────────────────────────────────────────────
+
+function CustomCycleModal({ initial, onSave, onClose }) {
+  const { styles, isDark } = useThemeCtx();
+  const [name, setName] = useState(initial?.name || "");
+  const [color, setColor] = useState(initial?.color || CUSTOM_CYCLE_COLORS[0]);
+  const [startDate, setStartDate] = useState(initial?.startDate || "");
+  const [endDate, setEndDate] = useState(initial?.endDate || "");
+  const [description, setDescription] = useState(initial?.description || "");
+  const [isRepetitive, setIsRepetitive] = useState(initial?.isRepetitive || false);
+  const [onWeeks, setOnWeeks] = useState(initial?.onWeeks || 8);
+  const [offWeeks, setOffWeeks] = useState(initial?.offWeeks || 4);
+
+  const canSave = name.trim() && startDate && (isRepetitive || endDate);
+
+  const handleSave = () => {
+    if (!canSave) return;
+    onSave({
+      id: initial?.id || generateId(),
+      name: name.trim(),
+      color,
+      startDate,
+      endDate: isRepetitive ? "" : endDate,
+      description: description.trim(),
+      isRepetitive,
+      onWeeks: +onWeeks,
+      offWeeks: +offWeeks,
+    });
+  };
+
+  const inputStyle = { ...styles.customFormInput, width: "100%", boxSizing: "border-box" };
+  const fieldStyle = { ...styles.customFormField, flex: 1 };
+  const labelColor = isDark ? "#8a9090" : "#6b7060";
+
+  return (
+    <div style={styles.confirmOverlay}>
+      <div style={{ ...styles.confirmModal, width: "min(400px, 96vw)", gap: 14, padding: "20px 22px" }}>
+        <div style={styles.modalHeader}>
+          <span style={styles.modalTitle}>{initial ? "Modifier le cycle" : "Nouveau cycle personnalisé"}</span>
+          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+        </div>
+
+        {/* Nom */}
+        <input style={inputStyle} placeholder="Nom du cycle… (ex: Créatine, Décharge)" value={name} onChange={e => setName(e.target.value)} />
+
+        {/* Palette couleurs */}
+        <div>
+          <div style={{ fontSize: 10, color: labelColor, marginBottom: 7, textTransform: "uppercase", letterSpacing: "0.1em" }}>Couleur</div>
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+            {CUSTOM_CYCLE_COLORS.map(c => (
+              <div key={c} onClick={() => setColor(c)} style={{
+                width: 24, height: 24, borderRadius: "50%", background: c, cursor: "pointer",
+                border: color === c ? "3px solid #fff" : "3px solid transparent",
+                boxShadow: color === c ? `0 0 0 2px ${c}` : "none",
+                flexShrink: 0,
+              }} />
+            ))}
+          </div>
+        </div>
+
+        {/* Répétitif */}
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: labelColor, cursor: "pointer" }}>
+          <input type="checkbox" checked={isRepetitive} onChange={e => setIsRepetitive(e.target.checked)} style={{ accentColor: color }} />
+          Cycle répétitif (alterne ON / OFF depuis la date de début)
+        </label>
+
+        {/* Dates */}
+        {!isRepetitive ? (
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={fieldStyle}>
+              <span style={styles.customFormLabel}>Date de début</span>
+              <input style={inputStyle} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </div>
+            <div style={fieldStyle}>
+              <span style={styles.customFormLabel}>Date de fin</span>
+              <input style={inputStyle} type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ ...fieldStyle, flex: "2 1 140px" }}>
+              <span style={styles.customFormLabel}>Date de début</span>
+              <input style={inputStyle} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </div>
+            <div style={{ ...fieldStyle, flex: "0 0 80px" }}>
+              <span style={styles.customFormLabel}>ON (sem.)</span>
+              <input style={inputStyle} type="number" min="1" max="52" value={onWeeks} onChange={e => setOnWeeks(e.target.value)} />
+            </div>
+            <div style={{ ...fieldStyle, flex: "0 0 80px" }}>
+              <span style={styles.customFormLabel}>OFF (sem.)</span>
+              <input style={inputStyle} type="number" min="1" max="52" value={offWeeks} onChange={e => setOffWeeks(e.target.value)} />
+            </div>
+          </div>
+        )}
+
+        {/* Description */}
+        <textarea
+          style={{ ...inputStyle, resize: "vertical", minHeight: 52, fontFamily: "inherit", fontSize: 12, lineHeight: 1.5 }}
+          placeholder="Notes… (optionnel)"
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+        />
+
+        {/* Boutons */}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button style={styles.confirmCancelBtn} onClick={onClose}>Annuler</button>
+          <button
+            style={{ ...styles.confirmDeleteBtn, background: canSave ? color : (isDark ? "#333" : "#ccc"), cursor: canSave ? "pointer" : "default" }}
+            onClick={handleSave}
+            disabled={!canSave}
+          >
+            {initial ? "Enregistrer" : "Créer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── CYCLES VIEW ─────────────────────────────────────────────────────────────
 
-function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro }) {
-  const { styles } = useThemeCtx();
+function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro, customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle }) {
+  const { styles, isDark } = useThemeCtx();
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [showCustomCycleForm, setShowCustomCycleForm] = useState(false);
+  const [editingCustomCycle, setEditingCustomCycle] = useState(null);
 
   return (
     <div style={styles.cyclesView}>
@@ -2286,15 +2472,68 @@ function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMi
         );
       })}
 
+      {/* ── Cycles personnalisés ── */}
+      <div style={styles.customCyclesSection}>
+        <div style={styles.customCyclesSectionHeader}>
+          <span style={styles.customCyclesSectionTitle}>Cycles personnalisés</span>
+          <button style={styles.cycleAddMesoBtn} onClick={() => { setShowCustomCycleForm(true); setEditingCustomCycle(null); }}>
+            ＋ Nouveau cycle
+          </button>
+        </div>
+
+        {(customCycles || []).length === 0 && (
+          <div style={{ color: isDark ? "#5a6060" : "#9a9890", fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 4 }}>
+            Aucun cycle personnalisé. Ex : créatine, décharge, compétition…
+          </div>
+        )}
+
+        {(customCycles || []).map(cc => {
+          const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : "—";
+          const dateInfo = cc.isRepetitive
+            ? `Rép. ${cc.onWeeks}s ON / ${cc.offWeeks}s OFF · depuis le ${fmtDate(cc.startDate)}`
+            : `${fmtDate(cc.startDate)} → ${fmtDate(cc.endDate)}`;
+          return (
+            <div key={cc.id} style={styles.customCycleRow}>
+              <div style={{ ...styles.customCycleColorSwatch, background: cc.color }} />
+              <div style={styles.customCycleInfo}>
+                <span style={styles.customCycleName}>{cc.name}</span>
+                <span style={styles.customCycleDate}>{dateInfo}</span>
+                {cc.description && <span style={{ ...styles.customCycleDate, fontStyle: "italic", marginTop: 1 }}>{cc.description}</span>}
+              </div>
+              <button style={styles.cycleDeleteBtn} onClick={() => { setEditingCustomCycle(cc); setShowCustomCycleForm(false); }} title="Modifier">✎</button>
+              <button style={styles.cycleDeleteBtn} onClick={() => setPendingDelete({ type: "customCycle", id: cc.id, label: cc.name })} title="Supprimer">✕</button>
+            </div>
+          );
+        })}
+      </div>
+
       {pendingDelete && (
         <ConfirmModal
-          title={pendingDelete.type === "meso" ? "Supprimer ce mésocycle ?" : "Supprimer ce microcycle ?"}
+          title={
+            pendingDelete.type === "meso" ? "Supprimer ce mésocycle ?" :
+            pendingDelete.type === "micro" ? "Supprimer ce microcycle ?" :
+            "Supprimer ce cycle personnalisé ?"
+          }
           sub={pendingDelete.label}
           onConfirm={() => {
             if (pendingDelete.type === "meso") onDeleteMeso(pendingDelete.id);
-            else onDeleteMicro(pendingDelete.mesoId, pendingDelete.microId);
+            else if (pendingDelete.type === "micro") onDeleteMicro(pendingDelete.mesoId, pendingDelete.microId);
+            else onDeleteCustomCycle(pendingDelete.id);
           }}
           onClose={() => setPendingDelete(null)}
+        />
+      )}
+
+      {(showCustomCycleForm || editingCustomCycle) && (
+        <CustomCycleModal
+          initial={editingCustomCycle}
+          onSave={cc => {
+            if (editingCustomCycle) onUpdateCustomCycle(cc.id, cc);
+            else onAddCustomCycle(cc);
+            setShowCustomCycleForm(false);
+            setEditingCustomCycle(null);
+          }}
+          onClose={() => { setShowCustomCycleForm(false); setEditingCustomCycle(null); }}
         />
       )}
     </div>
@@ -3375,6 +3614,12 @@ export default function ClimbingPlanner() {
   const updateMicrocycle = (mesoId, microId, changes) => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: x.microcycles.map(mc => mc.id === microId ? { ...mc, ...changes } : mc) } : x));
   const deleteMicrocycle = (mesoId, microId) => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: x.microcycles.filter(mc => mc.id !== microId) } : x));
 
+  // ── Custom cycle CRUD ──
+  const updateCustomCycles = updater => setData(d => ({ ...d, customCycles: updater(d.customCycles || []) }));
+  const addCustomCycle = cc => updateCustomCycles(list => [...list, cc]);
+  const updateCustomCycle = (id, cc) => updateCustomCycles(list => list.map(x => x.id === id ? { ...x, ...cc } : x));
+  const deleteCustomCycle = id => updateCustomCycles(list => list.filter(x => x.id !== id));
+
   // ── Custom session handlers ──
   const saveCustomSession = (customSession, targetDayIndex) => {
     // If the form has a custom onSave (e.g. editing a predefined instance), use it
@@ -3625,6 +3870,7 @@ export default function ClimbingPlanner() {
           isMobile={isMobile}
           mesocycles={data.mesocycles || []}
           creatine={data.creatine || {}}
+          customCycles={data.customCycles || []}
           onSelectWeek={(wm) => {
             setCurrentDate(wm);
             setViewMode("week");
@@ -3645,6 +3891,7 @@ export default function ClimbingPlanner() {
           currentDate={currentDate}
           isMobile={isMobile}
           creatine={data.creatine || {}}
+          customCycles={data.customCycles || []}
           onSelectMonth={(month) => {
             setCurrentDate(new Date(currentDate.getFullYear(), month, 1));
             setViewMode("month");
@@ -3684,6 +3931,10 @@ export default function ClimbingPlanner() {
           onAddMicro={addMicrocycle}
           onUpdateMicro={updateMicrocycle}
           onDeleteMicro={deleteMicrocycle}
+          customCycles={data.customCycles || []}
+          onAddCustomCycle={addCustomCycle}
+          onUpdateCustomCycle={updateCustomCycle}
+          onDeleteCustomCycle={deleteCustomCycle}
         />
       )}
 
