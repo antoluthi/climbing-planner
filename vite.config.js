@@ -8,15 +8,18 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Planif Escalade',
-        short_name: 'Escalade',
-        theme_color: '#0d0f0f',
+        name: 'Climbing Planner',
+        short_name: 'Planif',
+        description: 'Planificateur d\'entraînement escalade',
+        theme_color: '#1a2e1a',
         background_color: '#0d0f0f',
         display: 'standalone',
+        orientation: 'portrait',
         start_url: '/',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' }
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ]
       }
     })
