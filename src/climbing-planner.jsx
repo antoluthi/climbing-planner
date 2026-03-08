@@ -181,10 +181,68 @@ function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
     const parsed = raw ? JSON.parse(raw) : {};
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, ...parsed };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], ...parsed };
   } catch {
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [] };
   }
+}
+
+// ─── GARMIN SLEEP CSV PARSER ──────────────────────────────────────────────────
+
+function parseGarminSleepCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+
+  const header = lines[0].split(",").map(h => h.replace(/"/g, "").trim().toLowerCase());
+
+  const col = (...patterns) => {
+    for (const p of patterns) {
+      const idx = header.findIndex(h => h.includes(p));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+
+  const dateIdx  = col("date");
+  const totalIdx = col("sleep time", "durée de sommeil");
+  const deepIdx  = col("deep sleep", "sommeil profond");
+  const lightIdx = col("light sleep", "sommeil léger", "sommeil lger");
+  const remIdx   = col("rem sleep", "sommeil paradoxal");
+  const awakeIdx = col("awake time", "durée d'éveil", "veil");
+  const scoreIdx = col("sleep score", "score de sommeil");
+
+  const results = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i].split(",").map(v => v.replace(/"/g, "").trim());
+    if (!row[dateIdx]) continue;
+
+    const toMin = idx => {
+      if (idx < 0 || !row[idx]) return 0;
+      const v = parseFloat(row[idx]);
+      if (isNaN(v)) return 0;
+      return Math.round(v / 60); // Garmin stores seconds
+    };
+
+    const raw = row[dateIdx];
+    let date = "";
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw))        date = raw.slice(0, 10);
+    else if (/^\d{2}\/\d{2}\/\d{4}/.test(raw)) { const [d, m, y] = raw.split("/"); date = `${y}-${m}-${d}`; }
+    else continue;
+
+    const total = toMin(totalIdx);
+    if (total === 0) continue;
+
+    results.push({
+      date,
+      total,
+      deep:  toMin(deepIdx),
+      light: toMin(lightIdx),
+      rem:   toMin(remIdx),
+      awake: toMin(awakeIdx),
+      score: scoreIdx >= 0 && row[scoreIdx] ? parseInt(row[scoreIdx]) || null : null,
+    });
+  }
+  return results.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function saveData(data) {
@@ -496,6 +554,12 @@ function makeStyles(isDark) {
     dashText: t.textMuted,
     dashTooltipBg: t.surface,
     dashTooltipText: t.text,
+    // ── Sleep ──
+    sleepImportBtn: { fontSize: 11, padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.border2}`, background: t.accentFaint, color: t.accent, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.03em", whiteSpace: "nowrap" },
+    sleepEmptyMsg: { textAlign: "center", padding: "28px 0", color: t.textMuted, fontSize: 12 },
+    sleepCard: { background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4, flex: "1 1 80px" },
+    sleepLegend: { display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8 },
+    sleepLegendDot: { width: 8, height: 8, borderRadius: "50%", display: "inline-block", marginRight: 4 },
 
     // ── Cycles view ──
     cyclesView: { padding: "20px 24px", overflowY: "auto", flex: 1 },
@@ -2057,6 +2121,130 @@ function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMi
   );
 }
 
+// ─── SECTION SOMMEIL ──────────────────────────────────────────────────────────
+
+function SleepSection({ sleepData, onImport }) {
+  const { styles, isDark } = useThemeCtx();
+  const fileRef = useRef(null);
+
+  const last45 = (sleepData || []).slice(-45);
+  const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+  const fmt = min => `${Math.floor(min / 60)}h${(min % 60).toString().padStart(2, "0")}`;
+
+  const avgTotal = avg(last45.map(d => d.total));
+  const avgDeep  = avg(last45.map(d => d.deep));
+  const avgRem   = avg(last45.map(d => d.rem));
+  const scores   = last45.filter(d => d.score != null).map(d => d.score);
+  const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+
+  const chartData = last45.map(d => ({
+    date:  d.date.slice(5).replace("-", "/"),
+    deep:  d.deep,
+    rem:   d.rem,
+    light: d.light,
+    awake: d.awake,
+    score: d.score,
+  }));
+
+  const tooltipStyle = { background: styles.dashTooltipBg, border: "none", borderRadius: 6, color: styles.dashTooltipText, fontSize: 11 };
+
+  const handleFile = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const parsed = parseGarminSleepCSV(ev.target.result);
+      if (parsed.length > 0) onImport(parsed);
+    };
+    reader.readAsText(file, "utf-8");
+    e.target.value = "";
+  };
+
+  return (
+    <div style={styles.dashSection}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={styles.dashSectionTitle}>Sommeil · Garmin</div>
+        <button style={styles.sleepImportBtn} onClick={() => fileRef.current?.click()}>
+          ↑ Importer CSV
+        </button>
+        <input ref={fileRef} type="file" accept=".csv,.CSV" style={{ display: "none" }} onChange={handleFile} />
+      </div>
+
+      {last45.length === 0 ? (
+        <div style={styles.sleepEmptyMsg}>
+          <div>Aucune donnée de sommeil importée</div>
+          <div style={{ fontSize: 11, marginTop: 6, opacity: 0.6 }}>
+            Garmin Connect → Santé → Sommeil → Exporter CSV
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Cartes résumé */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+            <div style={styles.sleepCard}>
+              <span style={{ ...styles.dashCardVal, fontSize: 17 }}>{fmt(avgTotal)}</span>
+              <span style={styles.dashCardLabel}>Durée moy.</span>
+            </div>
+            <div style={styles.sleepCard}>
+              <span style={{ ...styles.dashCardVal, fontSize: 17, color: "#6366f1" }}>{fmt(avgDeep)}</span>
+              <span style={styles.dashCardLabel}>Profond moy.</span>
+            </div>
+            <div style={styles.sleepCard}>
+              <span style={{ ...styles.dashCardVal, fontSize: 17, color: "#a855f7" }}>{fmt(avgRem)}</span>
+              <span style={styles.dashCardLabel}>REM moy.</span>
+            </div>
+            {avgScore != null && (
+              <div style={styles.sleepCard}>
+                <span style={{ ...styles.dashCardVal, fontSize: 17, color: avgScore >= 80 ? "#4ade80" : avgScore >= 60 ? "#fbbf24" : "#f87171" }}>{avgScore}</span>
+                <span style={styles.dashCardLabel}>Score moy.</span>
+              </div>
+            )}
+          </div>
+
+          {/* Légende */}
+          <div style={styles.sleepLegend}>
+            {[["#6366f1","Profond"],["#a855f7","REM"],["#22d3ee","Léger"],["#f9731666","Éveil"]].map(([c,l]) => (
+              <span key={l} style={{ fontSize: 10, color: isDark ? "#9ca3af" : "#6b7280", display: "flex", alignItems: "center" }}>
+                <span style={{ ...styles.sleepLegendDot, background: c }} />{l}
+              </span>
+            ))}
+          </div>
+
+          {/* Graphe barres empilées */}
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }} barCategoryGap="15%">
+              <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
+              <XAxis dataKey="date" tick={{ fill: styles.dashText, fontSize: 9 }} axisLine={false} tickLine={false} interval={Math.floor(chartData.length / 6)} />
+              <YAxis tickFormatter={v => `${Math.floor(v / 60)}h`} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v, name) => [fmt(v), name]} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
+              <Bar dataKey="deep"  name="Profond" stackId="s" fill="#6366f1" />
+              <Bar dataKey="rem"   name="REM"     stackId="s" fill="#a855f7" />
+              <Bar dataKey="light" name="Léger"   stackId="s" fill="#22d3ee" />
+              <Bar dataKey="awake" name="Éveil"   stackId="s" fill="#f9731644" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+
+          {/* Score de sommeil */}
+          {scores.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ ...styles.dashSectionTitle, marginBottom: 6 }}>Score de sommeil</div>
+              <ResponsiveContainer width="100%" height={110}>
+                <LineChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
+                  <XAxis dataKey="date" tick={{ fill: styles.dashText, fontSize: 9 }} axisLine={false} tickLine={false} interval={Math.floor(chartData.length / 6)} />
+                  <YAxis domain={[40, 100]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Line type="monotone" dataKey="score" name="Score" stroke={isDark ? "#4ade80" : "#2a7d4f"} strokeWidth={2} dot={false} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
 function getLast8WeeksData(data) {
@@ -2078,7 +2266,7 @@ function getLast8WeeksData(data) {
   });
 }
 
-function Dashboard({ data }) {
+function Dashboard({ data, onUpdateSleep }) {
   const { styles, isDark } = useThemeCtx();
   const chartData = getLast8WeeksData(data);
 
@@ -2087,10 +2275,6 @@ function Dashboard({ data }) {
   const globalAvgRpe = rpeVals.length
     ? (rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length).toFixed(1)
     : "—";
-  const compVals = chartData.filter(w => w.completion != null).map(w => w.completion);
-  const globalComp = compVals.length
-    ? Math.round(compVals.reduce((a, b) => a + b, 0) / compVals.length)
-    : null;
 
   const tooltipStyle = {
     background: styles.dashTooltipBg, border: "none", borderRadius: 6,
@@ -2101,7 +2285,7 @@ function Dashboard({ data }) {
     <div style={styles.dashboard}>
       <div style={styles.dashTitle}>Statistiques</div>
 
-      <div style={styles.dashCards}>
+      <div style={{ ...styles.dashCards, gridTemplateColumns: "repeat(2, 1fr)" }}>
         <div style={styles.dashCard}>
           <span style={styles.dashCardVal}>{totalCharge4w}</span>
           <span style={styles.dashCardLabel}>Charge 4 sem.</span>
@@ -2109,10 +2293,6 @@ function Dashboard({ data }) {
         <div style={styles.dashCard}>
           <span style={styles.dashCardVal}>{globalAvgRpe}</span>
           <span style={styles.dashCardLabel}>RPE moyen</span>
-        </div>
-        <div style={styles.dashCard}>
-          <span style={styles.dashCardVal}>{globalComp != null ? `${globalComp}%` : "—"}</span>
-          <span style={styles.dashCardLabel}>Complétion</span>
         </div>
       </div>
 
@@ -2142,18 +2322,7 @@ function Dashboard({ data }) {
         </ResponsiveContainer>
       </div>
 
-      <div style={styles.dashSection}>
-        <div style={styles.dashSectionTitle}>Taux de complétion (%)</div>
-        <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis domain={[0, 100]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
-            <Bar dataKey="completion" name="Complétion %" fill="#60a5fa" radius={[3, 3, 0, 0]} maxBarSize={36} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      <SleepSection sleepData={data.sleep || []} onImport={onUpdateSleep} />
     </div>
   );
 }
@@ -2605,7 +2774,16 @@ export default function ClimbingPlanner() {
       )}
 
       {/* ── Dashboard ── */}
-      {viewMode === "dash" && <Dashboard data={data} />}
+      {viewMode === "dash" && (
+        <Dashboard
+          data={data}
+          onUpdateSleep={newRows => setData(d => {
+            const map = Object.fromEntries((d.sleep || []).map(r => [r.date, r]));
+            for (const r of newRows) map[r.date] = r;
+            return { ...d, sleep: Object.values(map).sort((a, b) => a.date.localeCompare(b.date)) };
+          })}
+        />
+      )}
 
       {/* ── Cycles ── */}
       {viewMode === "cycles" && (
