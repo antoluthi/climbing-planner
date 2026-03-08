@@ -181,9 +181,9 @@ function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
     const parsed = raw ? JSON.parse(raw) : {};
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, ...parsed };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, ...parsed };
   } catch {
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {} };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {} };
   }
 }
 
@@ -422,6 +422,12 @@ function makeStyles(isDark) {
       fontSize: 14, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center",
       transition: "all 0.15s",
     },
+    profileBtn: {
+      background: "none", border: `1px solid ${t.btnBorder}`, color: t.textDim,
+      width: 28, height: 28, borderRadius: "50%", cursor: "pointer",
+      fontSize: 14, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center",
+      transition: "all 0.15s", overflow: "hidden", padding: 0,
+    },
 
     syncBtns: { display: "flex", gap: 4 },
     syncBtn: {
@@ -598,6 +604,19 @@ function makeStyles(isDark) {
     sleepCard: { background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4, flex: "1 1 80px" },
     sleepLegend: { display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8 },
     sleepLegendDot: { width: 8, height: 8, borderRadius: "50%", display: "inline-block", marginRight: 4 },
+
+    // ── Profile view ──
+    profileView: { padding: "20px 24px", overflowY: "auto", flex: 1, maxWidth: 600, margin: "0 auto", width: "100%" },
+    profileAvatar: { width: 96, height: 96, borderRadius: "50%", background: t.surface, border: `2px solid ${t.border2}`, overflow: "hidden", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "border-color 0.15s" },
+    profileAvatarHint: { fontSize: 10, color: t.accent, marginTop: 6, cursor: "pointer", letterSpacing: "0.05em" },
+    profileNameInput: { background: t.inputBg, border: `1px solid ${t.btnBorder}`, borderRadius: 5, padding: "8px 12px", color: t.text, fontSize: 13, fontFamily: "inherit", outline: "none", width: "100%" },
+    profileSection: { marginBottom: 28 },
+    profileSectionTitle: { fontSize: 10, fontWeight: 700, color: t.textMuted, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 12, paddingBottom: 6, borderBottom: `1px solid ${t.border}` },
+    profileRow: { display: "flex", gap: 12, marginBottom: 10, alignItems: "center" },
+    profileSaveBtn: { background: t.accentBg, border: `1px solid ${t.accentBorder}`, color: t.accent, padding: "7px 18px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", letterSpacing: "0.06em" },
+    profileCancelBtn: { background: "none", border: `1px solid ${t.btnBorder}`, color: t.textDim, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" },
+    cropOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(6px)" },
+    cropModal: { background: t.surface, border: `1px solid ${t.border2}`, borderRadius: 12, padding: "20px", width: "min(360px, 94vw)", boxShadow: "0 32px 96px rgba(0,0,0,0.5)" },
 
     // ── Cycles view ──
     cyclesView: { padding: "20px 24px", overflowY: "auto", flex: 1 },
@@ -927,8 +946,12 @@ function useSupabaseSync() {
 
 // ─── AUTH PANEL ───────────────────────────────────────────────────────────────
 
-function AuthPanel({ session, onAuthChange }) {
-  const { styles } = useThemeCtx();
+function AuthPanel({ session, onAuthChange, fullWidth }) {
+  const { styles, isDark } = useThemeCtx();
+  const wideInput = fullWidth ? { ...styles.authInput, width: "100%", maxWidth: 280, boxSizing: "border-box" } : styles.authInput;
+  const barStyle = fullWidth ? { ...styles.authBar, flexDirection: "column", alignItems: "flex-start", gap: 10 } : styles.authBar;
+  /* eslint-disable no-unused-vars */
+  void isDark; // theme available if needed
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode]         = useState("password"); // "password" | "magiclink" | "setpw" | "pwdone"
@@ -982,10 +1005,10 @@ function AuthPanel({ session, onAuthChange }) {
   /* ── Connecté ── */
   if (session) {
     if (mode === "setpw") return (
-      <div style={styles.authBar}>
+      <div style={barStyle}>
         <span style={styles.authEmail}>{session.user.email}</span>
         <input
-          style={{ ...styles.authInput, width: 150 }}
+          style={{ ...wideInput, width: fullWidth ? undefined : 150 }}
           type="password"
           placeholder="Nouveau mot de passe (6+ car.)"
           value={password}
@@ -993,45 +1016,51 @@ function AuthPanel({ session, onAuthChange }) {
           onChange={e => { setPassword(e.target.value); setAuthError(""); }}
           onKeyDown={e => e.key === "Enter" && handleSetPassword()}
         />
-        <button style={styles.authBtn} onClick={handleSetPassword} disabled={sending || password.length < 6}>
-          {sending ? "…" : "Enregistrer"}
-        </button>
-        <button style={{ ...styles.authLogoutBtn, opacity: 0.7 }} onClick={() => go("password")}>✕</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={styles.authBtn} onClick={handleSetPassword} disabled={sending || password.length < 6}>
+            {sending ? "…" : "Enregistrer"}
+          </button>
+          <button style={{ ...styles.authLogoutBtn, opacity: 0.7 }} onClick={() => go("password")}>✕</button>
+        </div>
         {authError && <span style={styles.authErrorMsg}>{authError}</span>}
       </div>
     );
 
     if (mode === "pwdone") return (
-      <div style={styles.authBar}>
+      <div style={barStyle}>
         <span style={styles.authEmail}>{session.user.email}</span>
         <span style={styles.authSentMsg}>✓ Mot de passe défini</span>
-        <button style={styles.authLogoutBtn} onClick={() => go("password")}>✕</button>
-        <button style={styles.authLogoutBtn} onClick={handleLogout}>Déco</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={styles.authLogoutBtn} onClick={() => go("password")}>✕</button>
+          <button style={styles.authLogoutBtn} onClick={handleLogout}>Déco</button>
+        </div>
       </div>
     );
 
     return (
-      <div style={styles.authBar}>
+      <div style={barStyle}>
         <span style={styles.authEmail}>{session.user.email}</span>
-        <button
-          style={{ ...styles.authBtn, fontSize: 10, padding: "3px 8px", opacity: 0.75 }}
-          onClick={() => go("setpw")}
-          title="Définir un mot de passe pour se connecter sans magic link"
-        >🔑 MDP</button>
-        <button style={styles.authLogoutBtn} onClick={handleLogout}>Déco</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            style={{ ...styles.authBtn, fontSize: 10, padding: "3px 8px", opacity: 0.75 }}
+            onClick={() => go("setpw")}
+            title="Définir un mot de passe pour se connecter sans magic link"
+          >🔑 Définir MDP</button>
+          <button style={styles.authLogoutBtn} onClick={handleLogout}>Déconnexion</button>
+        </div>
       </div>
     );
   }
 
   /* ── Magic link ── */
   if (mode === "magiclink") return (
-    <div style={styles.authBar}>
+    <div style={barStyle}>
       {sent ? (
         <span style={styles.authSentMsg}>📧 Lien envoyé — vérifiez vos mails</span>
       ) : (
         <>
           <input
-            style={styles.authInput}
+            style={wideInput}
             type="email"
             placeholder="votre@email.com"
             value={email}
@@ -1044,16 +1073,16 @@ function AuthPanel({ session, onAuthChange }) {
           </button>
         </>
       )}
-      <button style={{ ...styles.authLogoutBtn, opacity: 0.7 }} onClick={() => go("password")}>← MDP</button>
+      <button style={{ ...styles.authLogoutBtn, opacity: 0.7 }} onClick={() => go("password")}>← Connexion MDP</button>
       {authError && <span style={styles.authErrorMsg}>{authError}</span>}
     </div>
   );
 
   /* ── Mot de passe (défaut) ── */
   return (
-    <div style={styles.authBar}>
+    <div style={barStyle}>
       <input
-        style={styles.authInput}
+        style={wideInput}
         type="email"
         placeholder="votre@email.com"
         value={email}
@@ -1061,19 +1090,21 @@ function AuthPanel({ session, onAuthChange }) {
         onKeyDown={e => e.key === "Enter" && handlePasswordLogin()}
       />
       <input
-        style={{ ...styles.authInput, width: 130 }}
+        style={{ ...wideInput, width: fullWidth ? undefined : 130 }}
         type="password"
         placeholder="Mot de passe"
         value={password}
         onChange={e => { setPassword(e.target.value); setAuthError(""); }}
         onKeyDown={e => e.key === "Enter" && handlePasswordLogin()}
       />
-      <button style={styles.authBtn} onClick={handlePasswordLogin} disabled={sending || !password.trim()}>
-        {sending ? "…" : "Connexion"}
-      </button>
-      <button style={{ ...styles.authLogoutBtn, opacity: 0.6 }} onClick={() => go("magiclink")} title="Connexion par lien email">
-        Lien →
-      </button>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button style={styles.authBtn} onClick={handlePasswordLogin} disabled={sending || !password.trim()}>
+          {sending ? "…" : "Connexion"}
+        </button>
+        <button style={{ ...styles.authLogoutBtn, opacity: 0.6 }} onClick={() => go("magiclink")} title="Connexion par lien email">
+          Lien →
+        </button>
+      </div>
       {authError && <span style={styles.authErrorMsg}>{authError}</span>}
     </div>
   );
@@ -1214,8 +1245,8 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
   const sectionLabels = { warmup: "Échauffement", main: "Cœur de séance", cooldown: "Retour au calme" };
 
   return (
-    <div style={styles.customFormOverlay} onClick={onClose}>
-      <div style={styles.customForm} onClick={e => e.stopPropagation()}>
+    <div style={styles.customFormOverlay}>
+      <div style={styles.customForm}>
         <div style={styles.modalHeader}>
           <span style={styles.modalTitle}>{initial ? "Modifier la séance" : "Nouvelle séance personnalisée"}</span>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
@@ -1488,8 +1519,8 @@ function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom }) {
   });
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
+    <div style={styles.overlay}>
+      <div style={styles.modal}>
         <div style={styles.modalHeader}>
           <span style={styles.modalTitle}>Choisir une séance</span>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
@@ -1613,8 +1644,8 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
   });
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={{ ...styles.modal, maxWidth: 500, display: "flex", flexDirection: "column", maxHeight: "90vh" }} onClick={e => e.stopPropagation()}>
+    <div style={styles.overlay}>
+      <div style={{ ...styles.modal, maxWidth: 500, display: "flex", flexDirection: "column", maxHeight: "90vh" }}>
 
         {/* ── Main tab bar — en haut ── */}
         <div style={{ display: "flex", borderBottom: `1px solid ${isDark ? "#252b27" : "#ccc6b8"}`, flexShrink: 0, background: isDark ? "#1f2421" : "#e8e2d8", borderRadius: "8px 8px 0 0", overflow: "hidden" }}>
@@ -2606,10 +2637,362 @@ function HooperSection({ hoopers, onAdd, range }) {
   );
 }
 
+// ─── PHOTO CROP MODAL ─────────────────────────────────────────────────────────
+
+function PhotoCropModal({ onSave, onClose }) {
+  const { styles, isDark } = useThemeCtx();
+  const SIZE = 260;
+  const OUTPUT = 300;
+
+  const [imgSrc, setImgSrc] = useState(null);
+  const [scale, setScale] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const naturalRef = useRef({ w: 1, h: 1 });
+  const dragRef = useRef(null);
+  const pinchRef = useRef(null);
+  const fileRef = useRef(null);
+
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target.result;
+      const img = new Image();
+      img.onload = () => {
+        naturalRef.current = { w: img.naturalWidth, h: img.naturalHeight };
+        const fit = Math.max(SIZE / img.naturalWidth, SIZE / img.naturalHeight) * 1.05;
+        setScale(fit);
+        setPos({ x: 0, y: 0 });
+      };
+      img.src = src;
+      setImgSrc(src);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const getImgStyle = () => {
+    const nat = naturalRef.current;
+    const w = nat.w * scale;
+    const h = nat.h * scale;
+    return {
+      position: "absolute",
+      left: SIZE / 2 + pos.x - w / 2,
+      top: SIZE / 2 + pos.y - h / 2,
+      width: w, height: h,
+      pointerEvents: "none", userSelect: "none", draggable: false,
+    };
+  };
+
+  const handleMouseDown = (e) => {
+    dragRef.current = { startX: e.clientX, startY: e.clientY, posX: pos.x, posY: pos.y };
+  };
+  const handleMouseMove = (e) => {
+    if (!dragRef.current) return;
+    const { startX, startY, posX, posY } = dragRef.current;
+    setPos({ x: posX + (e.clientX - startX), y: posY + (e.clientY - startY) });
+  };
+  const handleMouseUp = () => { dragRef.current = null; };
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    setScale(s => Math.max(0.1, Math.min(s * delta, 20)));
+  };
+
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 1) {
+      dragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, posX: pos.x, posY: pos.y };
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchRef.current = { dist: Math.hypot(dx, dy), scale };
+    }
+  };
+  const handleTouchMove = (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1 && dragRef.current) {
+      const { startX, startY, posX, posY } = dragRef.current;
+      setPos({ x: posX + (e.touches[0].clientX - startX), y: posY + (e.touches[0].clientY - startY) });
+    } else if (e.touches.length === 2 && pinchRef.current) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const newDist = Math.hypot(dx, dy);
+      const ratio = newDist / pinchRef.current.dist;
+      setScale(Math.max(0.1, Math.min(pinchRef.current.scale * ratio, 20)));
+    }
+  };
+  const handleTouchEnd = () => { dragRef.current = null; pinchRef.current = null; };
+
+  const handleConfirm = () => {
+    if (!imgSrc) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = OUTPUT; canvas.height = OUTPUT;
+    const ctx = canvas.getContext("2d");
+    ctx.beginPath();
+    ctx.arc(OUTPUT / 2, OUTPUT / 2, OUTPUT / 2, 0, Math.PI * 2);
+    ctx.clip();
+    const img = new Image();
+    img.onload = () => {
+      const ratio = OUTPUT / SIZE;
+      const nat = naturalRef.current;
+      const w = nat.w * scale * ratio;
+      const h = nat.h * scale * ratio;
+      const x = OUTPUT / 2 + pos.x * ratio - w / 2;
+      const y = OUTPUT / 2 + pos.y * ratio - h / 2;
+      ctx.drawImage(img, x, y, w, h);
+      onSave(canvas.toDataURL("image/jpeg", 0.88));
+    };
+    img.src = imgSrc;
+  };
+
+  const accent = isDark ? "#4ade80" : "#2a7d4f";
+  const mutedColor = isDark ? "#707870" : "#8a7f70";
+  const textColor = isDark ? "#e8e4de" : "#2a2218";
+
+  return (
+    <div style={styles.cropOverlay}>
+      <div style={styles.cropModal}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: textColor, letterSpacing: "0.08em" }}>RECADRER LA PHOTO</span>
+          <button style={{ background: "none", border: "none", color: mutedColor, cursor: "pointer", fontSize: 18 }} onClick={onClose}>✕</button>
+        </div>
+
+        {!imgSrc ? (
+          <div style={{ textAlign: "center", padding: "32px 0" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📷</div>
+            <button
+              style={{ background: "none", border: `1px solid ${accent}55`, color: accent, padding: "8px 20px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}
+              onClick={() => fileRef.current?.click()}
+            >Choisir une photo</button>
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
+          </div>
+        ) : (
+          <>
+            {/* Crop area */}
+            <div style={{ position: "relative", width: SIZE, height: SIZE, margin: "0 auto", borderRadius: "50%", overflow: "hidden", cursor: dragRef.current ? "grabbing" : "grab", background: "#000", userSelect: "none" }}
+              onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
+              onWheel={handleWheel}
+              onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
+            >
+              <img src={imgSrc} style={getImgStyle()} alt="" />
+              {/* Dark overlay with radial gradient to show circle boundary */}
+              <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: `radial-gradient(circle at center, transparent ${SIZE / 2 - 5}px, rgba(0,0,0,0.55) ${SIZE / 2 - 4}px)` }} />
+            </div>
+            {/* Circular border (SVG overlay) */}
+            <div style={{ position: "relative", width: SIZE, height: SIZE, marginTop: -SIZE, margin: `-${SIZE}px auto 0` }}>
+              <svg width={SIZE} height={SIZE} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}>
+                <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2 - 3} fill="none" stroke={accent} strokeWidth="2" />
+              </svg>
+            </div>
+            <div style={{ height: SIZE }} /> {/* spacer */}
+            <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: mutedColor }}>Glisser · Molette ou pincer pour zoomer</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+              <button
+                style={{ flex: 1, background: "none", border: `1px solid ${isDark ? "#2e3430" : "#bfb9aa"}`, color: mutedColor, padding: "8px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+                onClick={() => fileRef.current?.click()}
+              >Changer</button>
+              <button
+                style={{ flex: 2, background: isDark ? "#263228" : "#d4e8db", border: `1px solid ${accent}66`, color: accent, padding: "8px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
+                onClick={handleConfirm}
+              >Confirmer</button>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
+
+function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus, onUpload, onPull, onImport, toggleTheme, isDark }) {
+  const { styles } = useThemeCtx();
+  const profile = data.profile || {};
+
+  const [showCrop, setShowCrop] = useState(false);
+  const [editName, setEditName] = useState(false);
+  const [firstName, setFirstName] = useState(profile.firstName || "");
+  const [lastName, setLastName] = useState(profile.lastName || "");
+  const importRef = useRef(null);
+
+  // Load photo from separate localStorage key (avoid bloating main data blob)
+  const [photoUrl, setPhotoUrl] = useState(() => localStorage.getItem("climbing_planner_photo") || "");
+
+  const handleSavePhoto = (dataUrl) => {
+    localStorage.setItem("climbing_planner_photo", dataUrl);
+    setPhotoUrl(dataUrl);
+    setShowCrop(false);
+  };
+
+  const handleSaveName = () => {
+    onUpdateProfile({ ...profile, firstName, lastName });
+    setEditName(false);
+  };
+
+  const handleExport = () => {
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `planif-escalade-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        if (parsed.weeks !== undefined && parsed.weekMeta !== undefined) onImport(parsed);
+      } catch {}
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const accent = isDark ? "#4ade80" : "#2a7d4f";
+  const mutedColor = isDark ? "#707870" : "#8a7f70";
+  const textColor = isDark ? "#e8e4de" : "#2a2218";
+  const surfaceBg = isDark ? "#1f2421" : "#e8e2d8";
+  const borderColor = isDark ? "#252b27" : "#ccc6b8";
+  const inputBg = isDark ? "#252b27" : "#ddd7cc";
+  const btnBorder = isDark ? "#2e3430" : "#bfb9aa";
+
+  const syncIcon = syncStatus === "saving" ? "⟳" : syncStatus === "saved" ? "✓" : syncStatus === "offline" ? "⚡" : null;
+  const syncColor = syncStatus === "saved" ? accent : syncStatus === "offline" ? "#f97316" : mutedColor;
+
+  const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || null;
+
+  return (
+    <div style={styles.profileView}>
+      {/* ── Photo + identité ── */}
+      <div style={{ ...styles.profileSection }}>
+        <div style={styles.profileSectionTitle}>Profil</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+          {/* Avatar */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ ...styles.profileAvatar, borderColor: accent + "55" }} onClick={() => setShowCrop(true)}>
+              {photoUrl
+                ? <img src={photoUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
+                : <span style={{ fontSize: 40, color: mutedColor }}>👤</span>
+              }
+            </div>
+            <span style={styles.profileAvatarHint} onClick={() => setShowCrop(true)}>
+              {photoUrl ? "Modifier" : "Ajouter une photo"}
+            </span>
+          </div>
+
+          {/* Nom */}
+          <div style={{ flex: 1, minWidth: 200 }}>
+            {editName ? (
+              <>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                  <input
+                    style={{ ...styles.profileNameInput, flex: 1, minWidth: 100 }}
+                    value={firstName} onChange={e => setFirstName(e.target.value)}
+                    placeholder="Prénom" autoFocus
+                    onKeyDown={e => e.key === "Enter" && handleSaveName()}
+                  />
+                  <input
+                    style={{ ...styles.profileNameInput, flex: 1, minWidth: 100 }}
+                    value={lastName} onChange={e => setLastName(e.target.value)}
+                    placeholder="Nom de famille"
+                    onKeyDown={e => e.key === "Enter" && handleSaveName()}
+                  />
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button style={styles.profileSaveBtn} onClick={handleSaveName}>Enregistrer</button>
+                  <button style={styles.profileCancelBtn} onClick={() => { setFirstName(profile.firstName || ""); setLastName(profile.lastName || ""); setEditName(false); }}>Annuler</button>
+                </div>
+              </>
+            ) : (
+              <div
+                style={{ cursor: "pointer", padding: "10px 0" }}
+                onClick={() => setEditName(true)}
+              >
+                <div style={{ fontSize: displayName ? 20 : 13, fontWeight: 600, color: displayName ? textColor : mutedColor, letterSpacing: displayName ? "0.02em" : "0.04em" }}>
+                  {displayName || "Ajouter un nom"}
+                </div>
+                <div style={{ fontSize: 11, color: mutedColor, marginTop: 4 }}>{session?.user?.email || "Non connecté"}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Connexion ── */}
+      {supabase && (
+        <div style={styles.profileSection}>
+          <div style={styles.profileSectionTitle}>Connexion</div>
+          <AuthPanel session={session} onAuthChange={onAuthChange} fullWidth />
+        </div>
+      )}
+
+      {/* ── Apparence ── */}
+      <div style={styles.profileSection}>
+        <div style={styles.profileSectionTitle}>Apparence</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <span style={{ fontSize: 12, color: textColor }}>Thème</span>
+          <button
+            onClick={toggleTheme}
+            style={{ background: "none", border: `1px solid ${btnBorder}`, color: mutedColor, padding: "6px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", letterSpacing: "0.06em" }}
+          >
+            {isDark ? "☀ Mode clair" : "● Mode sombre"}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Données ── */}
+      <div style={styles.profileSection}>
+        <div style={styles.profileSectionTitle}>Données</div>
+        {/* Cloud sync */}
+        {session && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+            {syncIcon && <span style={{ fontSize: 12, color: syncColor }}>{syncIcon}</span>}
+            {onUpload && (
+              <button
+                style={{ background: "none", border: `1px solid ${btnBorder}`, color: accent, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+                onClick={onUpload} title="Envoyer mes données vers le cloud (écraser)"
+              >☁ ↑ Envoyer vers le cloud</button>
+            )}
+            {onPull && (
+              <button
+                style={{ background: "none", border: `1px solid ${btnBorder}`, color: isDark ? "#60a5fa" : "#2563eb", padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+                onClick={onPull} title="Charger les données depuis le cloud (écraser local)"
+              >☁ ↓ Charger depuis le cloud</button>
+            )}
+          </div>
+        )}
+        {/* Local import/export */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            style={{ background: "none", border: `1px solid ${btnBorder}`, color: mutedColor, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+            onClick={handleExport}
+          >↓ Exporter JSON</button>
+          <button
+            style={{ background: "none", border: `1px solid ${btnBorder}`, color: mutedColor, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+            onClick={() => importRef.current?.click()}
+          >↑ Importer JSON</button>
+          <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={handleImportFile} />
+        </div>
+      </div>
+
+      {showCrop && <PhotoCropModal onSave={handleSavePhoto} onClose={() => setShowCrop(false)} />}
+    </div>
+  );
+}
+
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
-function getChartData(data, range) {
-  const today = new Date();
+function getChartData(data, range, refDate) {
+  const today = refDate || new Date();
 
   if (range === "an") {
     // Last 12 months grouped by month
@@ -2655,8 +3038,52 @@ function getChartData(data, range) {
 function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreatine }) {
   const { styles, isDark } = useThemeCtx();
   const [range, setRange] = useState("sem"); // "sem" | "mois" | "an"
+  const [statsRefDate, setStatsRefDate] = useState(() => new Date());
 
-  const chartData = getChartData(data, range);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const handleStatsPrev = () => {
+    if (range === "sem") setStatsRefDate(d => addDays(d, -7));
+    else if (range === "mois") setStatsRefDate(d => new Date(d.getFullYear(), d.getMonth() - 1, d.getDate()));
+    else setStatsRefDate(d => new Date(d.getFullYear() - 1, d.getMonth(), d.getDate()));
+  };
+  const handleStatsNext = () => {
+    if (range === "sem") setStatsRefDate(d => addDays(d, 7));
+    else if (range === "mois") setStatsRefDate(d => new Date(d.getFullYear(), d.getMonth() + 1, d.getDate()));
+    else setStatsRefDate(d => new Date(d.getFullYear() + 1, d.getMonth(), d.getDate()));
+  };
+
+  // Is the statsRefDate within the current period?
+  const isCurrentPeriod = (() => {
+    const ref = new Date(statsRefDate); ref.setHours(0, 0, 0, 0);
+    if (range === "sem") {
+      const refMonday = getMondayOf(ref); const todayMonday = getMondayOf(today);
+      return refMonday.getTime() >= todayMonday.getTime();
+    }
+    if (range === "mois") return ref.getFullYear() > today.getFullYear() || (ref.getFullYear() === today.getFullYear() && ref.getMonth() >= today.getMonth());
+    return ref.getFullYear() >= today.getFullYear();
+  })();
+
+  // Label for the current period
+  const statsPeriodLabel = (() => {
+    const ref = statsRefDate;
+    if (range === "sem") {
+      const nWeeks = 8;
+      const endMonday = getMondayOf(ref);
+      const startMonday = getMondayOf(addDays(endMonday, -(7 * (nWeeks - 1))));
+      return `${formatDate(startMonday)} — ${formatDate(addDays(endMonday, 6))}`;
+    }
+    if (range === "mois") {
+      const nWeeks = 13;
+      const endMonday = getMondayOf(ref);
+      const startMonday = getMondayOf(addDays(endMonday, -(7 * (nWeeks - 1))));
+      return `${formatDate(startMonday)} — ${formatDate(addDays(endMonday, 6))}`;
+    }
+    return ref.toLocaleDateString("fr-FR", { year: "numeric" });
+  })();
+
+  const chartData = getChartData(data, range, statsRefDate);
 
   const totalCharge4w = getChartData(data, "sem").slice(4).reduce((s, w) => s + w.charge, 0);
   const rpeVals = chartData.filter(w => w.avgRpe != null).map(w => w.avgRpe);
@@ -2669,7 +3096,7 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
   const rangeLabel = { sem: "8 semaines", mois: "3 mois", an: "12 mois" }[range];
 
   const RangeBtn = ({ r, label }) => (
-    <button onClick={() => setRange(r)}
+    <button onClick={() => { setRange(r); setStatsRefDate(new Date()); }}
       style={{ ...styles.viewToggleBtn, ...(range === r ? styles.viewToggleBtnActive : {}), padding: "3px 9px", fontSize: 10 }}>
       {label}
     </button>
@@ -2677,13 +3104,21 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
 
   return (
     <div style={styles.dashboard}>
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+      {/* Range selector row */}
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 10, gap: 4 }}>
         <div style={{ ...styles.dashTitle, marginBottom: 0, flex: 1 }}>Statistiques</div>
-        <div style={{ display: "flex", gap: 4 }}>
-          <RangeBtn r="sem" label="Sem" />
-          <RangeBtn r="mois" label="Mois" />
-          <RangeBtn r="an" label="An" />
+        <RangeBtn r="sem" label="Sem" />
+        <RangeBtn r="mois" label="Mois" />
+        <RangeBtn r="an" label="An" />
+      </div>
+      {/* Period navigation — same style as calendar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 8 }}>
+        <button style={styles.navBtn} onClick={handleStatsPrev}>←</button>
+        <div style={{ textAlign: "center" }}>
+          <div style={styles.weekRange}>{statsPeriodLabel}</div>
+          {isCurrentPeriod && <div style={styles.weekCurrent}>Période actuelle</div>}
         </div>
+        <button style={{ ...styles.navBtn, visibility: isCurrentPeriod ? "hidden" : "visible" }} onClick={handleStatsNext}>→</button>
       </div>
 
       <div style={{ ...styles.dashCards, gridTemplateColumns: "repeat(2, 1fr)" }}>
@@ -2939,7 +3374,7 @@ export default function ClimbingPlanner() {
   };
 
   const viewToggle = (
-    <div style={styles.viewToggle}>
+    <div style={{ ...styles.viewToggle, flexWrap: "wrap" }}>
       {[
         { mode: "week", label: "Sem" },
         { mode: "month", label: "Mois" },
@@ -2958,11 +3393,26 @@ export default function ClimbingPlanner() {
     </div>
   );
 
-  const themeBtn = (
-    <button style={styles.themeBtn} onClick={toggleTheme} title={isDark ? "Passer en mode clair" : "Passer en mode sombre"}>
-      {isDark ? "○" : "●"}
+  // Profile avatar button (shows photo or default icon, goes to profile page)
+  const profilePhoto = typeof window !== "undefined" ? localStorage.getItem("climbing_planner_photo") : "";
+  const profileBtn = (
+    <button
+      style={{ ...styles.profileBtn, ...(viewMode === "profil" ? { borderColor: isDark ? "#4ade80" : "#2a7d4f", background: isDark ? "#263228" : "#d4e8db" } : {}) }}
+      onClick={() => setViewMode("profil")}
+      title="Profil"
+    >
+      {profilePhoto
+        ? <img src={profilePhoto} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
+        : <span style={{ fontSize: 13 }}>👤</span>
+      }
     </button>
   );
+
+  // Small sync status indicator for header
+  const syncDot = syncStatus === "saving" ? <span style={{ fontSize: 11, color: "#888" }} title="Synchronisation…">⟳</span>
+    : syncStatus === "saved" ? <span style={{ fontSize: 11, color: isDark ? "#4ade80" : "#2a7d4f" }} title="Synchronisé">✓</span>
+    : syncStatus === "offline" ? <span style={{ fontSize: 11, color: "#f97316" }} title="Hors ligne">⚡</span>
+    : null;
 
   return (
     <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: data.mesocycles || [] }}>
@@ -2978,25 +3428,22 @@ export default function ClimbingPlanner() {
               <div style={styles.appTitle}>PLANIF ESCALADE</div>
             </div>
             <div style={styles.headerMobileRight}>
-              <div style={styles.totalChargeMobile}>
-                <span style={styles.totalChargeNum}>{totalPeriodCharge}</span>
-                <span style={styles.totalChargeLabel}>charge</span>
-              </div>
+              {syncDot && <span style={{ marginRight: 4 }}>{syncDot}</span>}
+              {viewMode !== "profil" && (
+                <div style={styles.totalChargeMobile}>
+                  <span style={styles.totalChargeNum}>{totalPeriodCharge}</span>
+                  <span style={styles.totalChargeLabel}>charge</span>
+                </div>
+              )}
             </div>
           </div>
           <div style={styles.headerMobileRow2}>
             {viewToggle}
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              {themeBtn}
-              <SyncButtons data={data} onImport={setData} compact syncStatus={syncStatus} session={session} onUpload={() => uploadNow(data, session?.user?.id)} onPull={pullFromCloud} />
+            <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+              {profileBtn}
             </div>
           </div>
-          {supabase && (
-            <div style={styles.headerMobileRow3}>
-              <AuthPanel session={session} onAuthChange={setSession} />
-            </div>
-          )}
-          {viewMode !== "dash" && viewMode !== "cycles" && (
+          {viewMode !== "dash" && viewMode !== "cycles" && viewMode !== "profil" && (
             <div style={styles.weekNavMobile}>
               <button style={styles.navBtn} onClick={handlePrev}>←</button>
               <div style={styles.weekLabel}>
@@ -3015,11 +3462,11 @@ export default function ClimbingPlanner() {
             <div>
               <div style={styles.appTitle}>PLANIF ESCALADE</div>
               <div style={styles.appSub}>
-                {viewMode === "week" ? "Vue semaine" : viewMode === "month" ? "Vue mois" : viewMode === "year" ? "Vue année" : viewMode === "dash" ? "Statistiques" : "Cycles"} · Bloc
+                {viewMode === "week" ? "Vue semaine" : viewMode === "month" ? "Vue mois" : viewMode === "year" ? "Vue année" : viewMode === "dash" ? "Statistiques" : viewMode === "cycles" ? "Cycles" : "Profil"} · Bloc
               </div>
             </div>
           </div>
-          {viewMode !== "dash" && viewMode !== "cycles" && (
+          {viewMode !== "dash" && viewMode !== "cycles" && viewMode !== "profil" && (
             <div style={styles.weekNav}>
               <button style={styles.navBtn} onClick={handlePrev}>←</button>
               <div style={styles.weekLabel}>
@@ -3032,16 +3479,17 @@ export default function ClimbingPlanner() {
           <div style={styles.headerRight}>
             <div style={styles.headerRightTop}>
               {viewToggle}
-              {themeBtn}
-              <SyncButtons data={data} onImport={setData} compact syncStatus={syncStatus} session={session} onUpload={() => uploadNow(data, session?.user?.id)} onPull={pullFromCloud} />
+              {syncDot && <span style={{ fontSize: 12 }}>{syncDot}</span>}
+              {profileBtn}
             </div>
-            <AuthPanel session={session} onAuthChange={setSession} />
-            <div style={styles.totalCharge}>
-              <span style={styles.totalChargeNum}>{totalPeriodCharge}</span>
-              <span style={styles.totalChargeLabel}>
-                charge {viewMode === "week" ? "semaine" : viewMode === "month" ? "mois" : viewMode === "year" ? "année" : ""}
-              </span>
-            </div>
+            {viewMode !== "profil" && (
+              <div style={styles.totalCharge}>
+                <span style={styles.totalChargeNum}>{totalPeriodCharge}</span>
+                <span style={styles.totalChargeLabel}>
+                  charge {viewMode === "week" ? "semaine" : viewMode === "month" ? "mois" : viewMode === "year" ? "année" : ""}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -3188,6 +3636,22 @@ export default function ClimbingPlanner() {
           onAddMicro={addMicrocycle}
           onUpdateMicro={updateMicrocycle}
           onDeleteMicro={deleteMicrocycle}
+        />
+      )}
+
+      {/* ── Profil ── */}
+      {viewMode === "profil" && (
+        <ProfileView
+          data={data}
+          onUpdateProfile={profile => setData(d => ({ ...d, profile }))}
+          session={session}
+          onAuthChange={setSession}
+          syncStatus={syncStatus}
+          onUpload={session ? () => uploadNow(data, session.user.id) : null}
+          onPull={session ? pullFromCloud : null}
+          onImport={setData}
+          toggleTheme={toggleTheme}
+          isDark={isDark}
         />
       )}
 
