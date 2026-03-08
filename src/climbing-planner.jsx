@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useContext, createContext } from "react";
+import { useState, useEffect, useRef, useCallback, useContext, createContext, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
@@ -210,9 +210,9 @@ function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
     const parsed = raw ? JSON.parse(raw) : {};
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], ...parsed };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], cyclesLocked: false, ...parsed };
   } catch {
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [] };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], cyclesLocked: false };
   }
 }
 
@@ -686,6 +686,29 @@ function makeStyles(isDark) {
     customCycleBar: { height: 3, borderRadius: 1.5, opacity: 0.85 },
     customCycleDots: { display: "flex", gap: 2, paddingTop: 2, flexWrap: "wrap" },
     customCycleDot: { width: 5, height: 5, borderRadius: "50%", opacity: 0.9 },
+    // ── Timeline ──
+    timelineWrap: { padding: "20px 24px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column" },
+    timelineTopBar: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 },
+    timelineTitle: { fontSize: 13, fontWeight: 700, color: t.text, letterSpacing: "0.06em", textTransform: "uppercase" },
+    timelineEditBtn: { display: "flex", alignItems: "center", gap: 6, background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textDim, padding: "6px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" },
+    timelineSaveBtn: { display: "flex", alignItems: "center", gap: 8, background: t.accentBg, border: `1px solid ${t.accentBorder}`, borderRadius: 7, color: t.accent, padding: "10px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.03em", marginTop: 32, alignSelf: "center" },
+    timelineRow: { display: "flex", alignItems: "stretch", marginBottom: 10, gap: 0 },
+    timelineLabelCol: { width: 148, flexShrink: 0, paddingRight: 14, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 },
+    timelineLabelName: { fontSize: 12, fontWeight: 600, color: t.text, display: "flex", alignItems: "center", gap: 7 },
+    timelineLabelDot: { width: 9, height: 9, borderRadius: "50%", flexShrink: 0 },
+    timelineLabelMeta: { fontSize: 10, color: t.textDim, paddingLeft: 16 },
+    timelineBarArea: { flex: 1, display: "flex", alignItems: "center", minWidth: 0 },
+    timelineBar: { height: 38, borderRadius: 6, display: "flex", overflow: "hidden", position: "relative", minWidth: 24, border: "1px solid" },
+    timelineMicroSeg: { height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 6px", cursor: "pointer", overflow: "hidden", flexShrink: 0, borderRight: "1px solid" },
+    timelineMicroLabel: { fontSize: 9, fontWeight: 600, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "center" },
+    timelineMicroSub: { fontSize: 8, opacity: 0.65, textAlign: "center", lineHeight: 1 },
+    timelineCustomRow: { display: "flex", alignItems: "center", marginBottom: 7, gap: 0 },
+    timelineCustomBar: { height: 20, borderRadius: 4, display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden", border: "1px solid" },
+    timelineSectionSep: { borderTop: `1px solid ${t.border}`, paddingTop: 16, marginTop: 20, marginBottom: 14, fontSize: 10, fontWeight: 700, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.1em" },
+    timelinePopoverWrap: { position: "fixed", inset: 0, zIndex: 300 },
+    timelinePopover: { position: "fixed", background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: "12px 16px", minWidth: 160, maxWidth: 240, boxShadow: "0 8px 28px rgba(0,0,0,0.35)", zIndex: 301 },
+    timelinePopoverTitle: { fontSize: 13, fontWeight: 600, color: t.text, marginBottom: 4 },
+    timelinePopoverMeta: { fontSize: 11, color: t.textDim },
     cycleDateInput: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "4px 8px", color: t.text, fontSize: 11, fontFamily: "inherit", colorScheme: D ? "dark" : "light" },
     cycleDateEnd: { fontSize: 10, color: t.textMuted, whiteSpace: "nowrap", flexShrink: 0 },
     cycleMicroDate: { fontSize: 10, color: t.textDim, whiteSpace: "nowrap", flexShrink: 0, minWidth: 52 },
@@ -2345,13 +2368,225 @@ function CustomCycleModal({ initial, onSave, onClose }) {
   );
 }
 
+// ─── CYCLES TIMELINE ─────────────────────────────────────────────────────────
+
+function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
+  const { styles, isDark } = useThemeCtx();
+  const [popover, setPopover] = useState(null); // { meso, micro, x, y }
+
+  // Chain start dates: if a meso has no startDate, pick up from previous end
+  const chainedMesos = useMemo(() => {
+    let runningDate = null;
+    return mesocycles.map(meso => {
+      const start = meso.startDate ? new Date(meso.startDate + "T00:00:00") : runningDate;
+      const end = start ? addDays(start, meso.durationWeeks * 7) : null;
+      runningDate = end;
+      return { ...meso, computedStart: start, computedEnd: end };
+    });
+  }, [mesocycles]);
+
+  const maxMesoWeeks = Math.max(...mesocycles.map(m => m.durationWeeks), 1);
+
+  // Custom cycle duration in weeks
+  const ccWithDuration = (customCycles || []).map(cc => {
+    let weeks = 0;
+    if (cc.isRepetitive) {
+      weeks = (cc.onWeeks || 0) + (cc.offWeeks || 0);
+    } else if (cc.startDate && cc.endDate) {
+      const s = new Date(cc.startDate + "T00:00:00");
+      const e = new Date(cc.endDate + "T00:00:00");
+      weeks = Math.max(1, Math.round((e - s) / (7 * 24 * 3600 * 1000)));
+    }
+    return { ...cc, durationWeeks: weeks };
+  });
+
+  const fmtDate = d => d ? d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : null;
+  const accent = isDark ? "#4ade80" : "#2a7d4f";
+
+  const handleMicroClick = (e, meso, micro) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setPopover({ meso, micro, x: rect.left, y: rect.bottom + 6 });
+  };
+
+  return (
+    <div style={styles.timelineWrap} onClick={() => setPopover(null)}>
+      {/* Top bar */}
+      <div style={styles.timelineTopBar}>
+        <span style={styles.timelineTitle}>Planification</span>
+        <button style={styles.timelineEditBtn} onClick={onEdit}>⚙ Modifier</button>
+      </div>
+
+      {/* Empty state */}
+      {mesocycles.length === 0 && (
+        <div style={{ color: isDark ? "#5a6060" : "#9a9890", fontSize: 13, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>
+          Aucun mésocycle défini. Cliquez sur ⚙ Modifier pour commencer.
+        </div>
+      )}
+
+      {/* Mésocycles */}
+      {chainedMesos.map((meso, idx) => {
+        const barPct = (meso.durationWeeks / maxMesoWeeks) * 100;
+        const totalMicroWeeks = meso.microcycles.reduce((a, m) => a + m.durationWeeks, 0);
+        const hasMicros = meso.microcycles.length > 0;
+        const startLabel = fmtDate(meso.computedStart);
+        const endLabel = fmtDate(meso.computedEnd);
+
+        return (
+          <div key={meso.id} style={styles.timelineRow}>
+            {/* Label */}
+            <div style={styles.timelineLabelCol}>
+              <div style={styles.timelineLabelName}>
+                <div style={{ ...styles.timelineLabelDot, background: meso.color }} />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meso.label}</span>
+              </div>
+              <div style={styles.timelineLabelMeta}>
+                {meso.durationWeeks} sem.
+                {startLabel && <span style={{ color: isDark ? "#4a5050" : "#b0a898" }}> · {startLabel}</span>}
+              </div>
+            </div>
+
+            {/* Bar */}
+            <div style={styles.timelineBarArea}>
+              <div style={{
+                ...styles.timelineBar,
+                width: `${barPct}%`,
+                background: meso.color + (isDark ? "18" : "12"),
+                borderColor: meso.color + "55",
+              }}>
+                {!hasMicros ? (
+                  // No microcycles — single undivided block
+                  <div
+                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                    onClick={e => handleMicroClick(e, meso, null)}
+                  >
+                    <span style={{ fontSize: 10, color: meso.color, opacity: 0.75, fontWeight: 500 }}>
+                      {meso.description || `${meso.durationWeeks}s`}
+                    </span>
+                  </div>
+                ) : (
+                  meso.microcycles.map((micro, mi) => {
+                    const ref = totalMicroWeeks > 0 ? totalMicroWeeks : meso.durationWeeks;
+                    const microPct = (micro.durationWeeks / ref) * 100;
+                    const isLast = mi === meso.microcycles.length - 1;
+                    const isNarrow = microPct < 12;
+                    return (
+                      <div
+                        key={micro.id}
+                        title={`${micro.label} · ${micro.durationWeeks}s`}
+                        style={{
+                          ...styles.timelineMicroSeg,
+                          width: `${microPct}%`,
+                          borderRightColor: isLast ? "transparent" : meso.color + "44",
+                        }}
+                        onClick={e => handleMicroClick(e, meso, micro)}
+                      >
+                        {isNarrow ? (
+                          <div style={{ width: 3, height: 12, borderRadius: 2, background: meso.color, opacity: 0.5 }} />
+                        ) : (
+                          <div>
+                            <div style={{ ...styles.timelineMicroLabel, color: meso.color }}>
+                              {micro.label.length > 12 ? micro.label.slice(0, 12) + "…" : micro.label}
+                            </div>
+                            <div style={{ ...styles.timelineMicroSub, color: meso.color }}>{micro.durationWeeks}s</div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Custom cycles */}
+      {ccWithDuration.length > 0 && (
+        <>
+          <div style={styles.timelineSectionSep}>Cycles personnalisés</div>
+          {ccWithDuration.map(cc => {
+            const barPct = Math.min(100, (cc.durationWeeks / maxMesoWeeks) * 100);
+            const label = cc.isRepetitive
+              ? `Répétitif · ${cc.onWeeks}s ON / ${cc.offWeeks}s OFF`
+              : `${cc.durationWeeks} sem.`;
+            return (
+              <div key={cc.id} style={styles.timelineCustomRow}>
+                <div style={{ ...styles.timelineLabelCol }}>
+                  <div style={styles.timelineLabelName}>
+                    <div style={{ width: 9, height: 4, borderRadius: 2, background: cc.color, flexShrink: 0 }} />
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cc.name}</span>
+                  </div>
+                  <div style={styles.timelineLabelMeta}>{label}</div>
+                </div>
+                <div style={styles.timelineBarArea}>
+                  <div style={{
+                    ...styles.timelineCustomBar,
+                    width: `${Math.max(barPct, 4)}%`,
+                    background: cc.color + "25",
+                    borderColor: cc.color + "60",
+                  }}>
+                    <span style={{ fontSize: 9, color: cc.color, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {cc.isRepetitive ? `${cc.onWeeks}s ON / ${cc.offWeeks}s OFF` : `${cc.durationWeeks}s`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      {/* Popover */}
+      {popover && (
+        <div style={styles.timelinePopoverWrap} onClick={() => setPopover(null)}>
+          <div
+            style={{ ...styles.timelinePopover, left: Math.min(popover.x, window.innerWidth - 260), top: popover.y }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: popover.meso.color }} />
+              <span style={styles.timelinePopoverTitle}>{popover.meso.label}</span>
+            </div>
+            {popover.micro ? (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#d0d8d0" : "#4a5050", marginBottom: 4 }}>
+                  {popover.micro.label}
+                </div>
+                <div style={styles.timelinePopoverMeta}>{popover.micro.durationWeeks} semaine{popover.micro.durationWeeks > 1 ? "s" : ""}</div>
+                {popover.micro.description && <div style={{ ...styles.timelinePopoverMeta, marginTop: 4, fontStyle: "italic" }}>{popover.micro.description}</div>}
+              </>
+            ) : (
+              <>
+                <div style={styles.timelinePopoverMeta}>{popover.meso.durationWeeks} semaines</div>
+                {popover.meso.description && <div style={{ ...styles.timelinePopoverMeta, marginTop: 4, fontStyle: "italic" }}>{popover.meso.description}</div>}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── CYCLES VIEW ─────────────────────────────────────────────────────────────
 
-function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro, customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle }) {
+function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro, customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle, locked, onSetLocked }) {
   const { styles, isDark } = useThemeCtx();
   const [pendingDelete, setPendingDelete] = useState(null);
   const [showCustomCycleForm, setShowCustomCycleForm] = useState(false);
   const [editingCustomCycle, setEditingCustomCycle] = useState(null);
+
+  // ── Timeline mode ──
+  if (locked) {
+    return (
+      <CyclesTimeline
+        mesocycles={mesocycles}
+        customCycles={customCycles || []}
+        onEdit={() => onSetLocked(false)}
+      />
+    );
+  }
 
   return (
     <div style={styles.cyclesView}>
@@ -2423,7 +2658,7 @@ function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMi
                 onChange={e => onUpdateMeso(meso.id, { description: e.target.value })}
                 placeholder="Description / objectif du bloc…"
               />
-              <button style={styles.cycleDeleteBtn} onClick={() => setPendingDelete({ type: "meso", id: meso.id, label: meso.name })} title="Supprimer">✕</button>
+              <button style={styles.cycleDeleteBtn} onClick={() => setPendingDelete({ type: "meso", id: meso.id, label: meso.label })} title="Supprimer">✕</button>
             </div>
 
             {/* Microcycles */}
@@ -2535,6 +2770,13 @@ function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMi
           }}
           onClose={() => { setShowCustomCycleForm(false); setEditingCustomCycle(null); }}
         />
+      )}
+
+      {/* Save button */}
+      {mesocycles.length > 0 && (
+        <button style={styles.timelineSaveBtn} onClick={() => onSetLocked(true)}>
+          ✓ Enregistrer la planification
+        </button>
       )}
     </div>
   );
@@ -3935,6 +4177,8 @@ export default function ClimbingPlanner() {
           onAddCustomCycle={addCustomCycle}
           onUpdateCustomCycle={updateCustomCycle}
           onDeleteCustomCycle={deleteCustomCycle}
+          locked={!!data.cyclesLocked}
+          onSetLocked={val => setData(d => ({ ...d, cyclesLocked: val }))}
         />
       )}
 
