@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useContext, createContext } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 
@@ -181,9 +181,9 @@ function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
     const parsed = raw ? JSON.parse(raw) : {};
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], ...parsed };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], ...parsed };
   } catch {
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [] };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [] };
   }
 }
 
@@ -363,7 +363,7 @@ function makeStyles(isDark) {
   return {
     app: {
       minHeight: "100vh", background: t.bg, color: t.text,
-      fontFamily: "'DM Mono', 'Fira Mono', 'Courier New', monospace",
+      fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
       position: "relative", display: "flex", flexDirection: "column",
     },
     grain: {
@@ -2161,23 +2161,27 @@ function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMi
 
 // ─── SECTION SOMMEIL ──────────────────────────────────────────────────────────
 
-function SleepSection({ sleepData, onImport }) {
-  const { styles } = useThemeCtx();
+function SleepSection({ sleepData, onImport, range }) {
+  const { styles, isDark } = useThemeCtx();
   const fileRef = useRef(null);
   const [importMsg, setImportMsg] = useState("");
 
-  const last45 = (sleepData || []).slice(-45);
+  const sorted = [...(sleepData || [])].sort((a, b) => a.date.localeCompare(b.date));
+  const days = range === "an" ? 365 : range === "mois" ? 91 : 45;
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  const filtered = sorted.filter(d => d.date >= cutoff);
+
   const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
   const fmt = min => `${Math.floor(min / 60)}h${(min % 60).toString().padStart(2, "0")}`;
 
-  const avgTotal = avg(last45.map(d => d.total));
-  const avgDeep  = avg(last45.map(d => d.deep));
-  const avgRem   = avg(last45.map(d => d.rem));
-  const scores   = last45.filter(d => d.score != null).map(d => d.score);
+  const avgTotal = avg(filtered.map(d => d.total));
+  const avgDeep  = avg(filtered.map(d => d.deep));
+  const avgRem   = avg(filtered.map(d => d.rem));
+  const scores   = filtered.filter(d => d.score != null).map(d => d.score);
   const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-  const lastDate = last45.length ? last45[last45.length - 1].date : null;
+  const lastDate = filtered.length ? filtered[filtered.length - 1].date : null;
 
-  const chartData = last45.map(d => ({
+  const chartData = filtered.map(d => ({
     date:  d.date.slice(5).replace("-", "/"),
     deep:  d.deep, rem: d.rem, light: d.light, awake: d.awake, score: d.score,
   }));
@@ -2213,7 +2217,7 @@ function SleepSection({ sleepData, onImport }) {
         </div>
       )}
 
-      {last45.length === 0 ? (
+      {filtered.length === 0 ? (
         <div style={styles.sleepEmptyMsg}>
           <div>Aucune donnée de sommeil</div>
           <div style={{ fontSize: 11, marginTop: 6, opacity: 0.6 }}>
@@ -2224,7 +2228,7 @@ function SleepSection({ sleepData, onImport }) {
         <>
           {lastDate && (
             <div style={{ fontSize: 10, color: isDark ? "#707870" : "#8a7060", marginBottom: 10 }}>
-              Dernière nuit : {lastDate} · {last45.length} nuits chargées
+              Dernière nuit : {lastDate} · {filtered.length} nuits chargées
             </div>
           )}
 
@@ -2294,12 +2298,197 @@ function SleepSection({ sleepData, onImport }) {
   );
 }
 
+// ─── HOOPER INDEX ─────────────────────────────────────────────────────────────
+
+function hooperLabel(total) {
+  if (total <= 14) return "Bien récupéré";
+  if (total <= 17) return "Modérément fatigué";
+  if (total <= 20) return "Très fatigué";
+  return "Surmenage";
+}
+
+function hooperColor(total, isDark) {
+  if (total <= 14) return isDark ? "#4ade80" : "#2a7d4f";
+  if (total <= 17) return "#f97316";
+  return "#f87171";
+}
+
+function HooperSection({ hoopers, onAdd, range }) {
+  const { styles, isDark } = useThemeCtx();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ fatigue: null, stress: null, soreness: null, sleep: null });
+  const [saved, setSaved] = useState(false);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const todayEntry = (hoopers || []).find(h => h.date === today);
+  const allFilled = form.fatigue && form.stress && form.soreness && form.sleep;
+  const total = allFilled ? form.fatigue + form.stress + form.soreness + form.sleep : null;
+
+  const handleSave = () => {
+    if (!allFilled) return;
+    onAdd({
+      id: "h_" + Date.now().toString(36),
+      date: today,
+      time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+      ...form, total,
+    });
+    setForm({ fatigue: null, stress: null, soreness: null, sleep: null });
+    setSaved(true); setOpen(false);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  // Build chart data based on range
+  const sorted = [...(hoopers || [])].sort((a, b) => a.date.localeCompare(b.date));
+  const chartData = (() => {
+    if (range === "an") {
+      // Group by week, show weekly averages
+      const byWeek = {};
+      sorted.forEach(h => {
+        const mon = getMondayOf(new Date(h.date + "T12:00:00"));
+        const k = weekKey(mon);
+        if (!byWeek[k]) byWeek[k] = [];
+        byWeek[k].push(h.total);
+      });
+      return Object.entries(byWeek).slice(-52).map(([k, vals]) => {
+        const d = new Date(k);
+        return {
+          date: `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}`,
+          total: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
+        };
+      });
+    }
+    const days = range === "mois" ? 91 : 30;
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    return sorted.filter(h => h.date >= cutoff).map(h => ({
+      date: h.date.slice(5).replace("-", "/"),
+      total: h.total, fatigue: h.fatigue, stress: h.stress, soreness: h.soreness, sleep: h.sleep,
+    }));
+  })();
+
+  const tooltipStyle = { background: styles.dashTooltipBg, border: "none", borderRadius: 6, color: styles.dashTooltipText, fontSize: 11 };
+
+  const CRITERIA = [
+    { key: "fatigue",  label: "Fatigue",      sub: "épuisement général" },
+    { key: "stress",   label: "Stress",        sub: "mental / émotionnel" },
+    { key: "soreness", label: "Courbatures",   sub: "douleurs musculaires" },
+    { key: "sleep",    label: "Sommeil ↓",     sub: "1 = excellent · 7 = très mauvais" },
+  ];
+
+  const btnBase = { width: 28, height: 28, borderRadius: 4, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "inherit", transition: "all 0.12s" };
+
+  return (
+    <div style={styles.dashSection}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        <div style={{ ...styles.dashSectionTitle, marginBottom: 0, flex: 1 }}>Indice Hooper</div>
+        {todayEntry && !open && (
+          <span style={{ fontSize: 10, color: hooperColor(todayEntry.total, isDark) }}>
+            {todayEntry.time} · {todayEntry.total} — {hooperLabel(todayEntry.total)}
+          </span>
+        )}
+        <button
+          onClick={() => { setOpen(o => !o); setForm({ fatigue: null, stress: null, soreness: null, sleep: null }); }}
+          style={styles.sleepImportBtn}
+        >
+          {open ? "✕ Fermer" : "+ Remplir"}
+        </button>
+      </div>
+
+      {open && (
+        <div style={{ marginBottom: 14, padding: "12px 14px", background: isDark ? "#1e231f" : "#e8e3da", borderRadius: 8 }}>
+          {CRITERIA.map(({ key, label, sub }) => (
+            <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <div style={{ width: 110, flexShrink: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>{label}</div>
+                <div style={{ fontSize: 9, opacity: 0.55 }}>{sub}</div>
+              </div>
+              <div style={{ display: "flex", gap: 4 }}>
+                {[1, 2, 3, 4, 5, 6, 7].map(v => {
+                  const active = form[key] === v;
+                  const bg = active
+                    ? (v <= 2 ? (isDark ? "#4ade80" : "#2a7d4f") : v <= 4 ? "#f97316" : "#f87171")
+                    : (isDark ? "#2a2f2a" : "#d8d3ca");
+                  return (
+                    <button key={v} onClick={() => setForm(f => ({ ...f, [key]: v }))}
+                      style={{ ...btnBase, background: bg, color: active ? "#fff" : styles.dashText, fontWeight: active ? 600 : 400 }}>
+                      {v}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {total !== null && (
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: hooperColor(total, isDark) }}>
+              Indice : {total} — {hooperLabel(total)}
+            </div>
+          )}
+          <button onClick={handleSave} disabled={!allFilled}
+            style={{ ...styles.sleepImportBtn, opacity: allFilled ? 1 : 0.4, cursor: allFilled ? "pointer" : "default" }}>
+            Enregistrer
+          </button>
+        </div>
+      )}
+
+      {saved && <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 8 }}>Indice enregistré ✓</div>}
+
+      {chartData.length > 0 ? (
+        <ResponsiveContainer width="100%" height={160}>
+          <LineChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
+            <XAxis dataKey="date" tick={{ fill: styles.dashText, fontSize: 9 }} axisLine={false} tickLine={false}
+              interval={Math.max(0, Math.floor(chartData.length / 6) - 1)} />
+            <YAxis domain={[4, 28]} ticks={[4, 10, 14, 17, 20, 28]} tick={{ fill: styles.dashText, fontSize: 9 }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle}
+              formatter={(v, n) => [v, n === "total" ? "Hooper" : n]}
+            />
+            <ReferenceLine y={14} stroke={isDark ? "#4ade8033" : "#2a7d4f33"} strokeDasharray="4 4" />
+            <ReferenceLine y={17} stroke="#f9731633" strokeDasharray="4 4" />
+            <ReferenceLine y={20} stroke="#f8717133" strokeDasharray="4 4" />
+            <Line type="monotone" dataKey="total" name="Hooper" stroke={isDark ? "#4ade80" : "#2a7d4f"}
+              strokeWidth={2} dot={{ r: 3, fill: isDark ? "#4ade80" : "#2a7d4f" }} connectNulls />
+          </LineChart>
+        </ResponsiveContainer>
+      ) : (
+        <div style={styles.sleepEmptyMsg}>
+          <div style={{ fontSize: 11, opacity: 0.6 }}>Remplis ton premier indice pour voir l'évolution</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
-function getLast8WeeksData(data) {
+function getChartData(data, range) {
   const today = new Date();
-  return Array.from({ length: 8 }, (_, i) => {
-    const monday = getMondayOf(addDays(today, -(7 * (7 - i))));
+
+  if (range === "an") {
+    // Last 12 months grouped by month
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(today.getFullYear(), today.getMonth() - (11 - i), 1);
+      const targetYear = d.getFullYear();
+      const targetMonth = d.getMonth();
+      let totalCharge = 0, allRpe = [], allDone = 0, allPlanned = 0;
+      Object.entries(data.weeks).forEach(([key, days]) => {
+        const monday = new Date(key);
+        if (monday.getFullYear() === targetYear && monday.getMonth() === targetMonth) {
+          const sessions = days.flat().filter(Boolean);
+          totalCharge += sessions.reduce((s, se) => s + se.charge, 0);
+          const done = sessions.filter(s => s.feedback?.done === true);
+          allRpe.push(...done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe));
+          allDone += done.length; allPlanned += sessions.length;
+        }
+      });
+      const avgRpe = allRpe.length ? Math.round(allRpe.reduce((a, b) => a + b, 0) / allRpe.length * 10) / 10 : null;
+      const label = d.toLocaleDateString("fr-FR", { month: "short" });
+      return { label, charge: totalCharge, avgRpe, done: allDone, planned: allPlanned };
+    });
+  }
+
+  // "sem" = 8 weeks, "mois" = 13 weeks (~3 months)
+  const nWeeks = range === "mois" ? 13 : 8;
+  return Array.from({ length: nWeeks }, (_, i) => {
+    const monday = getMondayOf(addDays(today, -(7 * (nWeeks - 1 - i))));
     const key = weekKey(monday);
     const days = data.weeks[key] || [];
     const sessions = days.flat().filter(Boolean);
@@ -2309,30 +2498,44 @@ function getLast8WeeksData(data) {
     const avgRpe = rpeVals.length
       ? Math.round((rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length) * 10) / 10
       : null;
-    const completion = sessions.length > 0 ? Math.round(done.length / sessions.length * 100) : null;
     const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
-    return { label, charge, avgRpe, completion, planned: sessions.length, done: done.length };
+    return { label, charge, avgRpe, planned: sessions.length, done: done.length };
   });
 }
 
-function Dashboard({ data, onUpdateSleep }) {
+function Dashboard({ data, onUpdateSleep, onAddHooper }) {
   const { styles, isDark } = useThemeCtx();
-  const chartData = getLast8WeeksData(data);
+  const [range, setRange] = useState("sem"); // "sem" | "mois" | "an"
 
-  const totalCharge4w = chartData.slice(4).reduce((s, w) => s + w.charge, 0);
+  const chartData = getChartData(data, range);
+
+  const totalCharge4w = getChartData(data, "sem").slice(4).reduce((s, w) => s + w.charge, 0);
   const rpeVals = chartData.filter(w => w.avgRpe != null).map(w => w.avgRpe);
   const globalAvgRpe = rpeVals.length
     ? (rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length).toFixed(1)
     : "—";
 
-  const tooltipStyle = {
-    background: styles.dashTooltipBg, border: "none", borderRadius: 6,
-    color: styles.dashTooltipText, fontSize: 11,
-  };
+  const tooltipStyle = { background: styles.dashTooltipBg, border: "none", borderRadius: 6, color: styles.dashTooltipText, fontSize: 11 };
+
+  const rangeLabel = { sem: "8 semaines", mois: "3 mois", an: "12 mois" }[range];
+
+  const RangeBtn = ({ r, label }) => (
+    <button onClick={() => setRange(r)}
+      style={{ ...styles.viewToggleBtn, ...(range === r ? styles.viewToggleBtnActive : {}), padding: "3px 9px", fontSize: 10 }}>
+      {label}
+    </button>
+  );
 
   return (
     <div style={styles.dashboard}>
-      <div style={styles.dashTitle}>Statistiques</div>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ ...styles.dashTitle, marginBottom: 0, flex: 1 }}>Statistiques</div>
+        <div style={{ display: "flex", gap: 4 }}>
+          <RangeBtn r="sem" label="Sem" />
+          <RangeBtn r="mois" label="Mois" />
+          <RangeBtn r="an" label="An" />
+        </div>
+      </div>
 
       <div style={{ ...styles.dashCards, gridTemplateColumns: "repeat(2, 1fr)" }}>
         <div style={styles.dashCard}>
@@ -2346,11 +2549,12 @@ function Dashboard({ data, onUpdateSleep }) {
       </div>
 
       <div style={styles.dashSection}>
-        <div style={styles.dashSectionTitle}>Charge hebdomadaire (8 semaines)</div>
+        <div style={styles.dashSectionTitle}>Charge — {rangeLabel}</div>
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
+              interval={range === "an" ? 0 : "preserveStartEnd"} />
             <YAxis tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
             <Bar dataKey="charge" name="Charge" fill={isDark ? "#4ade80" : "#2a7d4f"} radius={[3, 3, 0, 0]} maxBarSize={36} />
@@ -2359,11 +2563,12 @@ function Dashboard({ data, onUpdateSleep }) {
       </div>
 
       <div style={styles.dashSection}>
-        <div style={styles.dashSectionTitle}>RPE moyen par semaine</div>
+        <div style={styles.dashSectionTitle}>RPE moyen — {rangeLabel}</div>
         <ResponsiveContainer width="100%" height={160}>
           <LineChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
+              interval={range === "an" ? 0 : "preserveStartEnd"} />
             <YAxis domain={[0, 10]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={tooltipStyle} />
             <Line type="monotone" dataKey="avgRpe" name="RPE" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} connectNulls={false} />
@@ -2371,10 +2576,9 @@ function Dashboard({ data, onUpdateSleep }) {
         </ResponsiveContainer>
       </div>
 
-      <SleepSection
-        sleepData={data.sleep || []}
-        onImport={onUpdateSleep}
-      />
+      <HooperSection hoopers={data.hooper || []} onAdd={onAddHooper} range={range} />
+
+      <SleepSection sleepData={data.sleep || []} onImport={onUpdateSleep} range={range} />
     </div>
   );
 }
@@ -2834,6 +3038,9 @@ export default function ClimbingPlanner() {
             for (const r of newRows) map[r.date] = r;
             return { ...d, sleep: Object.values(map).sort((a, b) => a.date.localeCompare(b.date)) };
           })}
+          onAddHooper={entry => setData(d => ({
+            ...d, hooper: [...(d.hooper || []), entry].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)),
+          }))}
         />
       )}
 
