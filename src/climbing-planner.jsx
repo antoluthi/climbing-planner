@@ -634,6 +634,13 @@ function makeStyles(isDark) {
     cycleMicroLabelInput: { flex: "1 1 140px", background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "4px 8px", color: t.text, fontSize: 12, fontFamily: "inherit" },
     cycleMicroDurInput: { width: 44, background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "4px 6px", color: t.textDim, fontSize: 11, fontFamily: "inherit", textAlign: "center" },
     cycleDeleteBtn: { background: "none", border: "none", color: t.textMuted, cursor: "pointer", fontSize: 14, padding: "2px 6px", borderRadius: 4 },
+    confirmOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(4px)" },
+    confirmModal: { background: t.surface, border: `1px solid ${t.border}`, borderRadius: 10, padding: "20px 24px", width: "min(300px, 90vw)", boxShadow: "0 8px 32px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column", gap: 14 },
+    confirmTitle: { fontSize: 14, fontWeight: 600, color: t.text, textAlign: "center" },
+    confirmSub: { fontSize: 12, color: t.textDim, textAlign: "center", marginTop: -6 },
+    confirmBtnRow: { display: "flex", gap: 8, justifyContent: "center" },
+    confirmDeleteBtn: { background: "#b83030", border: "none", borderRadius: 6, color: "#fff", padding: "8px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
+    confirmCancelBtn: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.text, padding: "8px 22px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" },
     cycleAddMicroBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 4, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit", marginTop: 4 },
     cycleAddMesoBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em" },
     cycleDurLabel: { fontSize: 10, color: t.textMuted },
@@ -1773,6 +1780,24 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
   );
 }
 
+// ─── CONFIRM DELETE MODAL ─────────────────────────────────────────────────────
+
+function ConfirmModal({ title, sub, onConfirm, onClose }) {
+  const { styles } = useThemeCtx();
+  return (
+    <div style={styles.confirmOverlay}>
+      <div style={styles.confirmModal}>
+        <div style={styles.confirmTitle}>{title}</div>
+        {sub && <div style={styles.confirmSub}>{sub}</div>}
+        <div style={styles.confirmBtnRow}>
+          <button style={styles.confirmCancelBtn} onClick={onClose}>Annuler</button>
+          <button style={styles.confirmDeleteBtn} onClick={() => { onConfirm(); onClose(); }}>Supprimer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── COMPOSANT JOUR ───────────────────────────────────────────────────────────
 
 function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine, note, onSaveNote }) {
@@ -1784,6 +1809,7 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState(note || "");
   const noteRef = useRef(null);
+  const [pendingDeleteIdx, setPendingDeleteIdx] = useState(null);
 
   // Sync external note changes when not editing
   useEffect(() => { if (!noteOpen) setNoteText(note || ""); }, [note, noteOpen]);
@@ -1853,7 +1879,7 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
               </div>
             </div>
             <div style={styles.sessionCardActions}>
-              <button style={styles.actionBtn} title="Supprimer" onClick={e => { e.stopPropagation(); onRemove(i); }}>✕</button>
+              <button style={styles.actionBtn} title="Supprimer" onClick={e => { e.stopPropagation(); setPendingDeleteIdx(i); }}>✕</button>
             </div>
           </div>
         ))}
@@ -1891,6 +1917,15 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
         <span style={styles.addBtnIcon}>＋</span>
         <span style={styles.addBtnLabel}>Séance</span>
       </button>
+
+      {pendingDeleteIdx !== null && (
+        <ConfirmModal
+          title="Supprimer cette séance ?"
+          sub={sessions[pendingDeleteIdx]?.name}
+          onConfirm={() => onRemove(pendingDeleteIdx)}
+          onClose={() => setPendingDeleteIdx(null)}
+        />
+      )}
     </div>
   );
 }
@@ -2130,6 +2165,7 @@ function YearView({ data, currentDate, onSelectMonth, isMobile, creatine }) {
 
 function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro }) {
   const { styles } = useThemeCtx();
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   return (
     <div style={styles.cyclesView}>
@@ -2201,7 +2237,7 @@ function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMi
                 onChange={e => onUpdateMeso(meso.id, { description: e.target.value })}
                 placeholder="Description / objectif du bloc…"
               />
-              <button style={styles.cycleDeleteBtn} onClick={() => onDeleteMeso(meso.id)} title="Supprimer">✕</button>
+              <button style={styles.cycleDeleteBtn} onClick={() => setPendingDelete({ type: "meso", id: meso.id, label: meso.name })} title="Supprimer">✕</button>
             </div>
 
             {/* Microcycles */}
@@ -2239,7 +2275,7 @@ function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMi
                     onChange={e => onUpdateMicro(meso.id, micro.id, { description: e.target.value })}
                     placeholder="Contenu…"
                   />
-                  <button style={styles.cycleDeleteBtn} onClick={() => onDeleteMicro(meso.id, micro.id)} title="Supprimer">✕</button>
+                  <button style={styles.cycleDeleteBtn} onClick={() => setPendingDelete({ type: "micro", mesoId: meso.id, microId: micro.id, label: micro.label })} title="Supprimer">✕</button>
                 </div>
               ))}
               <button style={styles.cycleAddMicroBtn} onClick={() => onAddMicro(meso.id)}>
@@ -2249,6 +2285,18 @@ function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMi
           </div>
         );
       })}
+
+      {pendingDelete && (
+        <ConfirmModal
+          title={pendingDelete.type === "meso" ? "Supprimer ce mésocycle ?" : "Supprimer ce microcycle ?"}
+          sub={pendingDelete.label}
+          onConfirm={() => {
+            if (pendingDelete.type === "meso") onDeleteMeso(pendingDelete.id);
+            else onDeleteMicro(pendingDelete.mesoId, pendingDelete.microId);
+          }}
+          onClose={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 }
