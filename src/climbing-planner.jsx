@@ -2441,6 +2441,18 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
         const startLabel = fmtDate(meso.computedStart);
         const endLabel = fmtDate(meso.computedEnd);
 
+        // Today indicator — position within this meso's bar
+        let todayPct = null;
+        if (meso.computedStart && meso.computedEnd) {
+          const now = new Date(); now.setHours(0, 0, 0, 0);
+          const s = new Date(meso.computedStart); s.setHours(0, 0, 0, 0);
+          const e = new Date(meso.computedEnd); e.setHours(0, 0, 0, 0);
+          if (now >= s && now < e) {
+            const msPerDay = 864e5;
+            todayPct = ((now - s) / msPerDay) / (meso.durationWeeks * 7) * 100;
+          }
+        }
+
         return (
           <div key={meso.id} style={styles.timelineRow}>
             {/* Label */}
@@ -2463,6 +2475,16 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
                 background: meso.color + (isDark ? "18" : "12"),
                 borderColor: meso.color + "55",
               }}>
+                {/* Today line */}
+                {todayPct !== null && (
+                  <div style={{
+                    position: "absolute", left: `${todayPct}%`,
+                    top: -1, bottom: -1, width: 2,
+                    background: "#ef4444",
+                    boxShadow: "0 0 4px #ef444488",
+                    borderRadius: 1, zIndex: 5, pointerEvents: "none",
+                  }} />
+                )}
                 {!hasMicros ? (
                   // No microcycles — single undivided block
                   <div
