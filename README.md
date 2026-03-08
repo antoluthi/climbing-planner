@@ -1,16 +1,32 @@
-# React + Vite
+# Planif Escalade 🧗
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Application web de planification d'entraînement escalade — PWA, multi-appareils.
 
-Currently, two official plugins are available:
+**Production :** https://climbing-planner-theta.vercel.app/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Fonctionnalités
 
-## React Compiler
+- **Vue semaine / mois / année** — planning des séances par jour
+- **Cycles (mésocycles / microcycles)** — timeline visuelle, éditeur intégré
+- **Statistiques** — charge d'entraînement, sommeil, indice Hooper
+- **Notes journalières + suivi créatine**
+- **Profil** — avatar (recadrage/zoom), thème dark/light
+- **Sync multi-appareils** via Supabase (magic link email, pas de mot de passe)
+- **PWA** — installable sur mobile et desktop, fonctionne offline
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Stack
 
-## Expanding the ESLint configuration
+- React 19 + Vite 7
+- Supabase (Auth + base de données)
+- Recharts
+- Déployé sur Vercel
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Dev local
+
+```bash
+npm install
+# Créer .env.local avec VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY
+npm run dev
+```
+
+Voir `CLAUDE.md` pour la documentation technique complète.
