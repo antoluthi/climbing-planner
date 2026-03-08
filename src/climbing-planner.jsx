@@ -101,6 +101,45 @@ function getMesoForDate(mesocycles, date) {
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
+// ─── CHARGE CALCULATOR REFERENCE DATA ─────────────────────────────────────────
+
+const VOLUME_ZONES = [
+  { index: 1, label: "Spécifique",           range: "< 10 mouvements" },
+  { index: 2, label: "Bloc intensif",         range: "10 – 25 mouvements" },
+  { index: 3, label: "Endurance de puissance",range: "25 – 40 mouvements" },
+  { index: 4, label: "Mixte",                 range: "40 – 60 mouvements" },
+  { index: 5, label: "Contest / Volume",      range: "60 – 100 mouvements" },
+  { index: 6, label: "Gros volume",           range: "> 100 mouvements" },
+];
+
+const INTENSITY_ZONES = [
+  { index: 1, label: "Récupération active",    pct: "< 45 %",     effort: "Continu léger",    recovery: "< 30 s" },
+  { index: 2, label: "Endurance de force",     pct: "45 – 60 %",  effort: "Continu modéré",   recovery: "1 – 2 min" },
+  { index: 3, label: "Seuil de puissance",     pct: "60 – 75 %",  effort: "Intervalles",      recovery: "2 – 3 min" },
+  { index: 4, label: "Sub-maximale",           pct: "75 – 90 %",  effort: "Intensité haute",  recovery: "3 – 5 min" },
+  { index: 5, label: "Maximale",               pct: "90 – 100 %", effort: "Effort maximal",   recovery: "5 – 10 min" },
+  { index: 6, label: "Supra-maximale",         pct: "> 100 %",    effort: "Effort explosif",  recovery: "> 10 min" },
+];
+
+const COMPLEXITY_ZONES = [
+  { index: 1, label: "Familiarisation",        desc: "Geste simple déjà maîtrisé" },
+  { index: 2, label: "Exercices simples",      desc: "Coordination simple" },
+  { index: 3, label: "Exercices techniques",   desc: "Technique ciblée" },
+  { index: 4, label: "Coordination normale",   desc: "Séquences variées" },
+  { index: 5, label: "Coordination complexe",  desc: "Voies / Blocs techniques" },
+  { index: 6, label: "Compétition",            desc: "Conditions de compétition" },
+];
+
+function getNbMouvementsZone(nb) {
+  if (!nb || nb <= 0) return 1;
+  if (nb < 10)  return 1;
+  if (nb < 25)  return 2;
+  if (nb < 40)  return 3;
+  if (nb < 60)  return 4;
+  if (nb < 100) return 5;
+  return 6;
+}
+
 function getChargeColor(charge) {
   if (charge === 0) return "#4ade80";
   if (charge <= 12) return "#86efac";
@@ -498,6 +537,27 @@ function makeStyles(isDark) {
     customFormChargeVal: { fontSize: 18, fontWeight: 700, minWidth: 32 },
     customFormSlider: { flex: 1, accentColor: t.accent },
     mesoHint: { fontSize: 10, color: t.navColor, letterSpacing: "0.04em", padding: "4px 8px", background: t.accentFaint, borderRadius: 4, display: "inline-flex", gap: 6 },
+    // ── Charge calculator ──
+    calcBtn: { fontSize: 11, padding: "2px 8px", borderRadius: 4, border: `1px solid ${t.border2}`, background: t.accentFaint, color: t.accent, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.03em", whiteSpace: "nowrap" },
+    calcPanel: { background: t.surface2, border: `1px solid ${t.border2}`, borderRadius: 7, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 },
+    calcRow: { display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" },
+    calcField: { display: "flex", flexDirection: "column", gap: 4, flex: "1 1 100px" },
+    calcLabel: { fontSize: 10, color: t.textMuted, letterSpacing: "0.07em", textTransform: "uppercase" },
+    calcSelect: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 5, padding: "6px 8px", color: t.text, fontSize: 12, fontFamily: "inherit", outline: "none", cursor: "pointer" },
+    calcInput: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 5, padding: "6px 8px", color: t.text, fontSize: 12, fontFamily: "inherit", outline: "none", width: "100%" },
+    calcResultRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
+    calcResultVal: { fontSize: 20, fontWeight: 700 },
+    calcApplyBtn: { fontSize: 12, padding: "5px 14px", borderRadius: 5, border: "none", background: t.accent, color: "#fff", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
+    calcVolumeHint: { fontSize: 10, color: t.textDim, fontStyle: "italic" },
+    // ── Info panel (reference tables) ──
+    infoOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(4px)" },
+    infoPanel: { background: t.modalBg, border: `1px solid ${t.border2}`, borderRadius: 10, width: "min(720px, 96vw)", maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)" },
+    infoPanelBody: { overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 20 },
+    infoTableTitle: { fontSize: 11, fontWeight: 700, color: t.accent, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 },
+    infoTable: { width: "100%", borderCollapse: "collapse", fontSize: 11 },
+    infoTh: { padding: "5px 8px", background: t.surface2, color: t.textMuted, fontWeight: 600, letterSpacing: "0.05em", textAlign: "left", borderBottom: `1px solid ${t.border}`, fontSize: 10 },
+    infoTd: { padding: "5px 8px", color: t.text, borderBottom: `1px solid ${t.border}`, verticalAlign: "top" },
+    infoIndexBadge: { display: "inline-block", minWidth: 20, textAlign: "center", fontWeight: 700, borderRadius: 3, padding: "1px 4px", fontSize: 11 },
     // ── Rich text ──
     richText: { fontSize: 12, color: t.text, lineHeight: 1.7, padding: "8px 0" },
     richUl: { paddingLeft: 16, display: "flex", flexDirection: "column", gap: 2 },
@@ -698,9 +758,22 @@ function useSupabaseSync() {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        // Stale/invalid token in storage → wipe it cleanly
+        supabase.auth.signOut().catch(() => {});
+        setSession(null);
+      } else {
+        setSession(session);
+      }
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      // TOKEN_REFRESHED failure emits SIGNED_OUT — nothing extra needed,
+      // but if we still have stale keys we force-clear them here.
+      if (event === "SIGNED_OUT" && !session) {
+        try { Object.keys(localStorage).filter(k => k.includes("supabase")).forEach(k => localStorage.removeItem(k)); } catch {}
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -1003,6 +1076,11 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
   const [cooldown, setCooldown] = useState(initial?.cooldown ?? "");
   const [section, setSection] = useState("main");
   const [preview, setPreview] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [nbMouvements, setNbMouvements] = useState("");
+  const [calcZone, setCalcZone] = useState(3);
+  const [calcComplexity, setCalcComplexity] = useState(3);
 
   // Mesocycle/microcycle for selected date
   const dateMeta = (() => {
@@ -1078,16 +1156,175 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
 
           {/* Charge + récup */}
           <div style={{ ...styles.customFormField }}>
-            <span style={styles.customFormLabel}>Charge d'entraînement</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={styles.customFormLabel}>Charge d'entraînement</span>
+              <button style={styles.calcBtn} onClick={() => { setCalcOpen(o => !o); setInfoOpen(false); }}>
+                🧮 Calculateur
+              </button>
+              <button style={{ ...styles.calcBtn, background: "none" }} onClick={() => { setInfoOpen(o => !o); setCalcOpen(false); }}>
+                ℹ Infos
+              </button>
+            </div>
             <div style={styles.customFormChargeRow}>
               <span style={{ ...styles.customFormChargeVal, color: getChargeColor(charge) }}>{charge}</span>
-              <input style={styles.customFormSlider} type="range" min="0" max="60" value={charge} onChange={e => setCharge(+e.target.value)} />
+              <input style={styles.customFormSlider} type="range" min="0" max="216" value={charge} onChange={e => setCharge(+e.target.value)} />
               <div style={{ ...styles.customFormField, flex: "0 0 120px" }}>
                 <span style={styles.customFormLabel}>Récup. mini (h)</span>
                 <input style={styles.customFormInput} type="number" min="0" placeholder="48" value={minRecovery} onChange={e => setMinRecovery(e.target.value)} />
               </div>
             </div>
+
+            {/* ── Inline calculator ── */}
+            {calcOpen && (() => {
+              const volZone = getNbMouvementsZone(+nbMouvements);
+              const volLabel = VOLUME_ZONES[volZone - 1].label;
+              const computed = nbMouvements ? volZone * calcZone * calcComplexity : null;
+              return (
+                <div style={styles.calcPanel}>
+                  <div style={styles.calcRow}>
+                    <div style={styles.calcField}>
+                      <span style={styles.calcLabel}>Nb de mouvements</span>
+                      <input
+                        style={styles.calcInput}
+                        type="number" min="1" placeholder="ex: 40"
+                        value={nbMouvements}
+                        onChange={e => setNbMouvements(e.target.value)}
+                      />
+                      {nbMouvements && (
+                        <span style={styles.calcVolumeHint}>
+                          → Zone {volZone} · {volLabel} ({VOLUME_ZONES[volZone - 1].range})
+                        </span>
+                      )}
+                    </div>
+                    <div style={styles.calcField}>
+                      <span style={styles.calcLabel}>Zone d'intensité</span>
+                      <select style={styles.calcSelect} value={calcZone} onChange={e => setCalcZone(+e.target.value)}>
+                        {INTENSITY_ZONES.map(z => (
+                          <option key={z.index} value={z.index}>{z.index} – {z.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={styles.calcField}>
+                      <span style={styles.calcLabel}>Complexité</span>
+                      <select style={styles.calcSelect} value={calcComplexity} onChange={e => setCalcComplexity(+e.target.value)}>
+                        {COMPLEXITY_ZONES.map(z => (
+                          <option key={z.index} value={z.index}>{z.index} – {z.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {computed !== null && (
+                    <div style={styles.calcResultRow}>
+                      <span style={{ ...styles.calcResultVal, color: getChargeColor(computed) }}>{computed}</span>
+                      <span style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7060" }}>
+                        = Zone vol.{volZone} × Int.{calcZone} × Compl.{calcComplexity}
+                      </span>
+                      <button style={styles.calcApplyBtn} onClick={() => { setCharge(computed); setCalcOpen(false); }}>
+                        Appliquer →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
+
+          {/* ── Info modal (reference tables) ── */}
+          {infoOpen && (
+            <div style={styles.infoOverlay} onClick={() => setInfoOpen(false)}>
+              <div style={styles.infoPanel} onClick={e => e.stopPropagation()}>
+                <div style={styles.modalHeader}>
+                  <span style={styles.modalTitle}>Référence — Calcul de charge</span>
+                  <button style={styles.closeBtn} onClick={() => setInfoOpen(false)}>✕</button>
+                </div>
+                <div style={styles.infoPanelBody}>
+
+                  {/* Table 1 – Volume */}
+                  <div>
+                    <div style={styles.infoTableTitle}>1 · Volume (nb de mouvements → zone)</div>
+                    <table style={styles.infoTable}>
+                      <thead>
+                        <tr>
+                          <th style={styles.infoTh}>Zone</th>
+                          <th style={styles.infoTh}>Catégorie</th>
+                          <th style={styles.infoTh}>Nb mouvements</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {VOLUME_ZONES.map(z => (
+                          <tr key={z.index}>
+                            <td style={styles.infoTd}>
+                              <span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span>
+                            </td>
+                            <td style={styles.infoTd}>{z.label}</td>
+                            <td style={styles.infoTd}>{z.range}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Table 2 – Intensité */}
+                  <div>
+                    <div style={styles.infoTableTitle}>2 · Zone d'intensité</div>
+                    <table style={styles.infoTable}>
+                      <thead>
+                        <tr>
+                          <th style={styles.infoTh}>Zone</th>
+                          <th style={styles.infoTh}>Catégorie</th>
+                          <th style={styles.infoTh}>% Perf max</th>
+                          <th style={styles.infoTh}>Type d'effort</th>
+                          <th style={styles.infoTh}>Récupération</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {INTENSITY_ZONES.map(z => (
+                          <tr key={z.index}>
+                            <td style={styles.infoTd}>
+                              <span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span>
+                            </td>
+                            <td style={styles.infoTd}>{z.label}</td>
+                            <td style={styles.infoTd}>{z.pct}</td>
+                            <td style={styles.infoTd}>{z.effort}</td>
+                            <td style={styles.infoTd}>{z.recovery}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Table 3 – Complexité */}
+                  <div>
+                    <div style={styles.infoTableTitle}>3 · Index de complexité</div>
+                    <table style={styles.infoTable}>
+                      <thead>
+                        <tr>
+                          <th style={styles.infoTh}>Index</th>
+                          <th style={styles.infoTh}>Catégorie</th>
+                          <th style={styles.infoTh}>Description</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {COMPLEXITY_ZONES.map(z => (
+                          <tr key={z.index}>
+                            <td style={styles.infoTd}>
+                              <span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span>
+                            </td>
+                            <td style={styles.infoTd}>{z.label}</td>
+                            <td style={styles.infoTd}>{z.desc}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7060", fontStyle: "italic" }}>
+                    Formule : Charge = Zone volume × Zone intensité × Index complexité (max 216)
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Section tabs */}
           <div>
@@ -1495,11 +1732,20 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
         const mesoInfo = getMesoForDate(mesocycles, weekMonday);
         const prevMesoInfo = wi > 0 ? getMesoForDate(mesocycles, weeks[wi - 1]) : null;
         const isNewMeso = mesoInfo && (!prevMesoInfo || prevMesoInfo.meso.id !== mesoInfo.meso.id);
+        const isNewMicro = !isNewMeso && mesoInfo?.micro && prevMesoInfo?.micro && prevMesoInfo.micro.id !== mesoInfo.micro.id;
+        const isFirstMicro = !isNewMeso && mesoInfo?.micro && !prevMesoInfo?.micro;
         return (
         <div key={wi}>
           {isNewMeso && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 6px 2px", borderLeft: `3px solid ${mesoInfo.meso.color}` }}>
               <span style={{ fontSize: 9, fontWeight: 700, color: mesoInfo.meso.color, letterSpacing: "0.09em", textTransform: "uppercase" }}>{mesoInfo.meso.label}</span>
+              {mesoInfo.micro && <span style={{ fontSize: 9, color: mesoInfo.meso.color + "bb", background: mesoInfo.meso.color + "22", padding: "0 5px", borderRadius: 8, border: `1px solid ${mesoInfo.meso.color}33` }}>{mesoInfo.micro.label}</span>}
+            </div>
+          )}
+          {(isNewMicro || isFirstMicro) && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 6px 1px 14px", borderLeft: `3px solid ${mesoInfo.meso.color}44` }}>
+              <span style={{ fontSize: 8, color: mesoInfo.meso.color + "bb", letterSpacing: "0.06em" }}>↳</span>
+              <span style={{ fontSize: 9, color: mesoInfo.meso.color + "cc", background: mesoInfo.meso.color + "18", padding: "0 5px", borderRadius: 8, border: `1px solid ${mesoInfo.meso.color}28` }}>{mesoInfo.micro.label}</span>
             </div>
           )}
           <div style={{ ...styles.monthWeekRow, borderLeft: mesoInfo ? `3px solid ${mesoInfo.meso.color}55` : "3px solid transparent" }}>
@@ -2230,9 +2476,14 @@ export default function ClimbingPlanner() {
             if (!detected) return null;
             const { meso, micro } = detected;
             return (
-              <div style={{ background: meso.color + "14", borderBottom: `1px solid ${meso.color}28`, borderLeft: `3px solid ${meso.color}`, padding: "5px 20px", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ background: meso.color + "14", borderBottom: `1px solid ${meso.color}28`, borderLeft: `3px solid ${meso.color}`, padding: "5px 20px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: meso.color, letterSpacing: "0.09em", textTransform: "uppercase" }}>{meso.label}</span>
-                {micro && <span style={{ fontSize: 10, color: meso.color + "99", letterSpacing: "0.04em" }}>· {micro.label}</span>}
+                {micro && (
+                  <>
+                    <span style={{ fontSize: 10, color: meso.color + "55" }}>›</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: meso.color + "cc", letterSpacing: "0.06em", background: meso.color + "22", padding: "1px 7px", borderRadius: 10, border: `1px solid ${meso.color}44` }}>{micro.label}</span>
+                  </>
+                )}
               </div>
             );
           })()}
