@@ -1820,7 +1820,7 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
 // ─── VUE ANNÉE ────────────────────────────────────────────────────────────────
 
 function YearView({ data, currentDate, onSelectMonth, isMobile }) {
-  const { styles } = useThemeCtx();
+  const { styles, isDark, mesocycles } = useThemeCtx();
   const year = currentDate.getFullYear();
   const today = new Date();
 
@@ -1828,12 +1828,17 @@ function YearView({ data, currentDate, onSelectMonth, isMobile }) {
     <div style={{ ...styles.yearGrid, ...(isMobile ? styles.yearGridMobile : {}) }}>
       {Array.from({ length: 12 }, (_, month) => {
         const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        const weeks = getMonthWeeks(year, month);
+        const lastDay  = new Date(year, month + 1, 0);
+        const weeks    = getMonthWeeks(year, month);
 
-        let totalCharge = 0;
-        for (let d = new Date(firstDay); d <= lastDay; d = addDays(d, 1)) {
-          totalCharge += getDayCharge(data, d);
+        // Mesos present in this month (for the header dots)
+        const monthMesos = [];
+        for (const meso of (mesocycles || [])) {
+          if (!meso.startDate) continue;
+          const s = new Date(meso.startDate);
+          const e = addDays(s, meso.durationWeeks * 7);
+          if (s <= lastDay && e >= firstDay && !monthMesos.find(m => m.id === meso.id))
+            monthMesos.push(meso);
         }
 
         const monthName = firstDay.toLocaleDateString("fr-FR", { month: isMobile ? "short" : "long" });
@@ -1845,38 +1850,78 @@ function YearView({ data, currentDate, onSelectMonth, isMobile }) {
             style={{ ...styles.yearMonthCard, ...(isCurrentMonth ? styles.yearMonthCardCurrent : {}) }}
             onClick={() => onSelectMonth(month)}
           >
+            {/* Header: mois + dots mésocycles */}
             <div style={styles.yearMonthHeader}>
               <span style={{ ...styles.yearMonthName, ...(isCurrentMonth ? styles.yearMonthNameCurrent : {}) }}>
                 {monthName.charAt(0).toUpperCase() + monthName.slice(1)}
               </span>
-              {totalCharge > 0 && (
-                <span style={{ ...styles.yearMonthCharge, color: getChargeColor(totalCharge / 25) }}>
-                  {totalCharge}
-                </span>
-              )}
+              <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                {monthMesos.map(m => (
+                  <span key={m.id} style={{ width: 6, height: 6, borderRadius: "50%", background: m.color, display: "inline-block", flexShrink: 0 }} title={m.label} />
+                ))}
+              </div>
             </div>
+
+            {/* Heatmap: 1 ligne = 1 semaine, colorée par mésocycle/microcycle */}
             <div style={styles.yearHeatmap}>
-              {weeks.map((wm, wi) => (
-                <div key={wi} style={styles.yearHeatmapRow}>
-                  {Array.from({ length: 7 }, (_, di) => {
-                    const date = addDays(wm, di);
-                    const inMonth = date.getMonth() === month;
-                    const charge = inMonth ? getDayCharge(data, date) : 0;
-                    const isToday = date.toDateString() === today.toDateString();
-                    return (
-                      <div
-                        key={di}
-                        style={{
-                          ...styles.yearHeatmapCell,
-                          background: !inMonth ? "transparent" : charge === 0 ? styles.yearDayEmpty : getChargeColor(charge),
-                          outline: isToday ? "1px solid #4ade80" : "none",
-                          outlineOffset: 1,
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              ))}
+              {weeks.map((wm, wi) => {
+                const mesoInfo  = getMesoForDate(mesocycles, wm);
+                const mesoColor = mesoInfo?.meso?.color;
+                // Microcycle: check if micro changes mid-week vs previous week
+                const prevMesoInfo = wi > 0 ? getMesoForDate(mesocycles, weeks[wi - 1]) : null;
+                const microChanged = mesoInfo?.micro && prevMesoInfo?.micro && prevMesoInfo.micro.id !== mesoInfo.micro.id;
+
+                return (
+                  <div
+                    key={wi}
+                    style={{
+                      ...styles.yearHeatmapRow,
+                      borderLeft: mesoColor ? `2px solid ${mesoColor}99` : "2px solid transparent",
+                      background: mesoColor
+                        ? microChanged
+                          ? mesoColor + "1e"   // micro transition: légèrement plus visible
+                          : mesoColor + "12"
+                        : "transparent",
+                      borderRadius: 2,
+                      gap: 1,
+                    }}
+                  >
+                    {Array.from({ length: 7 }, (_, di) => {
+                      const date     = addDays(wm, di);
+                      const inMonth  = date.getMonth() === month;
+                      const isToday  = date.toDateString() === today.toDateString();
+                      const sessions = inMonth ? getDaySessions(data, date) : [];
+                      const nSess    = sessions.length;
+
+                      return (
+                        <div
+                          key={di}
+                          style={{
+                            ...styles.yearHeatmapCell,
+                            background: "transparent",
+                            outline: isToday ? `1px solid ${isDark ? "#4ade80" : "#2a7d4f"}` : "none",
+                            outlineOffset: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {inMonth && nSess > 0 && (
+                            <div style={{
+                              width:        nSess > 1 ? 5 : 4,
+                              height:       nSess > 1 ? 5 : 4,
+                              borderRadius: "50%",
+                              background:   getChargeColor(getDayCharge(data, date)),
+                              opacity:      0.9,
+                              flexShrink:   0,
+                            }} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
