@@ -149,6 +149,13 @@ async function fetchSleep(
     "DI-Backend": "connectapi.garmin.com",
   };
 
+  // Helper: parse JSON only if response is actually JSON
+  async function safeJson(resp: Response): Promise<unknown | null> {
+    const ct = resp.headers.get("content-type") ?? "";
+    if (!ct.includes("json")) return null;
+    try { return await resp.json(); } catch { return null; }
+  }
+
   // Get display name — try multiple endpoints
   let displayName = "";
 
@@ -157,8 +164,9 @@ async function fetchSleep(
     { headers: baseHeaders }
   );
   if (profileResp.ok) {
-    const profile = await profileResp.json();
-    displayName = profile.displayName ?? profile.userName ?? "";
+    // deno-lint-ignore no-explicit-any
+    const profile = await safeJson(profileResp) as any;
+    displayName = profile?.displayName ?? profile?.userName ?? "";
   }
 
   if (!displayName) {
@@ -167,14 +175,15 @@ async function fetchSleep(
       { headers: baseHeaders }
     );
     if (settingsResp.ok) {
-      const settings = await settingsResp.json();
-      displayName = settings.displayName ?? settings.userName ?? "";
+      // deno-lint-ignore no-explicit-any
+      const settings = await safeJson(settingsResp) as any;
+      displayName = settings?.displayName ?? settings?.userName ?? "";
     }
   }
 
   if (!displayName) {
     throw new Error(
-      `Could not resolve Garmin display name (profile status: ${profileResp.status})`
+      `Could not resolve Garmin display name — session invalide ? (profile HTTP ${profileResp.status})`
     );
   }
 
@@ -187,8 +196,10 @@ async function fetchSleep(
     throw new Error(`Could not fetch Garmin sleep data (${sleepResp.status})`);
   }
 
-  const raw = await sleepResp.json();
-  const items: unknown[] = Array.isArray(raw) ? raw : raw?.dailySleepDTO ? [raw] : [];
+  const raw = await safeJson(sleepResp) as unknown;
+  // deno-lint-ignore no-explicit-any
+  const rawAny = raw as any;
+  const items: unknown[] = Array.isArray(rawAny) ? rawAny : rawAny?.dailySleepDTO ? [rawAny] : [];
 
   const toMin = (s: number | null | undefined): number =>
     s ? Math.round(s / 60) : 0;
