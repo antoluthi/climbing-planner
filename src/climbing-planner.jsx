@@ -1744,11 +1744,33 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
 
 // ─── COMPOSANT JOUR ───────────────────────────────────────────────────────────
 
-function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine }) {
+function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine, note, onSaveNote }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
   const meso = weekMeta?.mesocycle;
   const mesoColor = meso ? getMesoColor(mesocycles, meso) : null;
+
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteText, setNoteText] = useState(note || "");
+  const noteRef = useRef(null);
+
+  // Sync external note changes when not editing
+  useEffect(() => { if (!noteOpen) setNoteText(note || ""); }, [note, noteOpen]);
+  useEffect(() => { if (noteOpen && noteRef.current) noteRef.current.focus(); }, [noteOpen]);
+
+  const handleNoteBlur = () => {
+    setNoteOpen(false);
+    if (noteText !== (note || "")) onSaveNote?.(noteText);
+  };
+
+  const noteAreaStyle = {
+    width: "100%", boxSizing: "border-box",
+    background: isDark ? "#1a1f1c" : "#e4dfd6",
+    border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
+    borderRadius: 4, color: isDark ? "#d8d4ce" : "#2a2218",
+    fontSize: 10, fontFamily: "inherit", lineHeight: 1.45,
+    padding: "5px 7px", resize: "none", height: 56, outline: "none",
+  };
 
   return (
     <div style={{
@@ -1806,7 +1828,35 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
         ))}
       </div>
 
-      <button style={styles.addBtn} onClick={onAddSession}>
+      {/* ── Note du jour ── */}
+      {!isMobile && (
+        <div style={{ marginTop: "auto", paddingTop: 8 }}>
+          {noteOpen ? (
+            <textarea ref={noteRef} style={noteAreaStyle} value={noteText}
+              onChange={e => setNoteText(e.target.value)} onBlur={handleNoteBlur}
+              placeholder="Note du jour..." />
+          ) : noteText ? (
+            <div onClick={() => setNoteOpen(true)} style={{
+              fontSize: 10, color: isDark ? "#8a9090" : "#6b7060", lineHeight: 1.4,
+              cursor: "text", padding: "4px 6px", borderRadius: 4,
+              borderLeft: `2px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
+              background: isDark ? "#1a1f1c55" : "#e4dfd655",
+              wordBreak: "break-word",
+            }}>
+              {noteText.length > 70 ? noteText.slice(0, 70) + "…" : noteText}
+            </div>
+          ) : (
+            <div onClick={() => setNoteOpen(true)} style={{
+              fontSize: 9, color: isDark ? "#303530" : "#ccc8c0",
+              cursor: "text", padding: "2px 4px", letterSpacing: "0.03em",
+            }}>
+              ＋ note
+            </div>
+          )}
+        </div>
+      )}
+
+      <button style={{ ...styles.addBtn, marginTop: noteOpen || noteText ? 6 : 0 }} onClick={onAddSession}>
         <span style={styles.addBtnIcon}>＋</span>
         <span style={styles.addBtnLabel}>Séance</span>
       </button>
@@ -3043,6 +3093,11 @@ export default function ClimbingPlanner() {
                   onRemove={(si) => removeSession(i, si)}
                   isMobile={isMobile}
                   hasCreatine={!!data.creatine?.[`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`]}
+                  note={data.notes?.[`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`] || ""}
+                  onSaveNote={text => {
+                    const iso = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+                    setData(d => ({ ...d, notes: { ...(d.notes || {}), [iso]: text } }));
+                  }}
                 />
               );
             })}
