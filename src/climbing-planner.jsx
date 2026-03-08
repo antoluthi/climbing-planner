@@ -2048,7 +2048,6 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
             const inMonth = date.getMonth() === month;
             const isToday = date.toDateString() === today.toDateString();
             const sessions = inMonth ? getDaySessions(data, date) : [];
-            const charge = sessions.reduce((a, s) => a + s.charge, 0);
             const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
             const hasCreatine = inMonth && !!creatine?.[dateISO];
             const activeCycles = inMonth ? getCustomCyclesForDate(customCycles, date) : [];
@@ -2114,9 +2113,7 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
                     ))}
                   </div>
                 )}
-                {charge > 0 && (
-                  <div style={{ ...styles.monthDayChargeBar, background: getChargeColor(charge) }} />
-                )}
+
                 {hasCreatine && (
                   <span style={{ position: "absolute", top: 2, right: 3, fontSize: 6, color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)", lineHeight: 1 }} title="Créatine">▲</span>
                 )}
