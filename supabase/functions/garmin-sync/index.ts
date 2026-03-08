@@ -16,12 +16,31 @@ interface SleepRecord {
   score: number | null;
 }
 
+// ── Cookie helpers ─────────────────────────────────────────────────────────────
+
+function parseCookies(header: string): string[] {
+  return header
+    .split(/,(?=[^;]+=[^;]+;|[^;]+=)/)
+    .map((c) => c.split(";")[0].trim())
+    .filter(Boolean);
+}
+
+// Merge cookie jars — newer values override older ones by name
+function mergeCookies(existing: string[], incoming: string[]): string[] {
+  const map = new Map<string, string>();
+  for (const c of [...existing, ...incoming]) {
+    const name = c.split("=")[0].trim();
+    if (name) map.set(name, c);
+  }
+  return Array.from(map.values());
+}
+
 // ── Garmin SSO auth ───────────────────────────────────────────────────────────
 
 async function garminLogin(email: string, password: string): Promise<string> {
   const SERVICE = "https://connect.garmin.com/modern/";
   const SSO = "https://sso.garmin.com/sso/signin";
-  const UA = "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36";
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
   const params = new URLSearchParams({
     service: SERVICE,
@@ -58,13 +77,10 @@ async function garminLogin(email: string, password: string): Promise<string> {
   if (!csrfMatch) throw new Error("Could not retrieve CSRF token from Garmin login page");
 
   const csrf = csrfMatch[1];
-  const pageCookies = (pageResp.headers.get("set-cookie") ?? "")
-    .split(/,(?=[^;]+=[^;]+;)/)
-    .map((c) => c.split(";")[0].trim())
-    .filter(Boolean);
+  let cookieJar = parseCookies(pageResp.headers.get("set-cookie") ?? "");
 
   // Step 2 — POST credentials
-  const body = new URLSearchParams({
+  const formBody = new URLSearchParams({
     username: email,
     password,
     embed: "false",
@@ -76,46 +92,45 @@ async function garminLogin(email: string, password: string): Promise<string> {
     redirect: "manual",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      "Cookie": pageCookies.join("; "),
+      "Cookie": cookieJar.join("; "),
       "User-Agent": UA,
       "Origin": "https://sso.garmin.com",
       "Referer": `${SSO}?${params}`,
     },
-    body: body.toString(),
+    body: formBody.toString(),
   });
 
-  const postCookies = (postResp.headers.get("set-cookie") ?? "")
-    .split(/,(?=[^;]+=[^;]+;)/)
-    .map((c) => c.split(";")[0].trim())
-    .filter(Boolean);
+  cookieJar = mergeCookies(cookieJar, parseCookies(postResp.headers.get("set-cookie") ?? ""));
 
   const location = postResp.headers.get("location") ?? "";
   let ticket = location.match(/ticket=([^&]+)/)?.[1] ?? "";
 
   if (!ticket) {
-    // Sometimes Garmin embeds the ticket in the response body
     const body2 = await postResp.text();
     ticket = body2.match(/ticket=([^"&\s<]+)/)?.[1] ?? "";
   }
 
   if (!ticket) throw new Error("Login failed — check Garmin credentials");
 
-  // Step 3 — Exchange ticket for session cookies
-  const allCookies = [...pageCookies, ...postCookies];
-  const ticketResp = await fetch(`${SERVICE}?ticket=${ticket}`, {
-    redirect: "manual",
-    headers: {
-      "Cookie": allCookies.join("; "),
-      "User-Agent": UA,
-    },
-  });
+  // Step 3 — Follow all redirects to collect all session cookies
+  let nextUrl = `${SERVICE}?ticket=${ticket}`;
 
-  const sessionCookies = (ticketResp.headers.get("set-cookie") ?? "")
-    .split(/,(?=[^;]+=[^;]+;)/)
-    .map((c) => c.split(";")[0].trim())
-    .filter(Boolean);
+  for (let i = 0; i < 6; i++) {
+    const resp = await fetch(nextUrl, {
+      redirect: "manual",
+      headers: {
+        "Cookie": cookieJar.join("; "),
+        "User-Agent": UA,
+      },
+    });
+    cookieJar = mergeCookies(cookieJar, parseCookies(resp.headers.get("set-cookie") ?? ""));
+    if (resp.status === 200 || resp.status === 204) break;
+    const loc = resp.headers.get("location");
+    if (!loc) break;
+    nextUrl = loc.startsWith("http") ? loc : `https://connect.garmin.com${loc}`;
+  }
 
-  return [...allCookies, ...sessionCookies].join("; ");
+  return cookieJar.join("; ");
 }
 
 // ── Fetch sleep data ──────────────────────────────────────────────────────────
@@ -125,7 +140,7 @@ async function fetchSleep(
   startDate: string,
   endDate: string
 ): Promise<SleepRecord[]> {
-  const UA = "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36";
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
   const baseHeaders = {
     Cookie: cookies,
     "NK": "NT",
@@ -134,22 +149,43 @@ async function fetchSleep(
     "DI-Backend": "connectapi.garmin.com",
   };
 
-  // Get display name
+  // Get display name — try multiple endpoints
+  let displayName = "";
+
   const profileResp = await fetch(
     "https://connect.garmin.com/modern/proxy/userprofile-service/socialProfile",
     { headers: baseHeaders }
   );
-  if (!profileResp.ok) throw new Error("Could not fetch Garmin profile");
-  const profile = await profileResp.json();
-  const displayName: string = profile.displayName ?? profile.userName ?? "";
-  if (!displayName) throw new Error("Could not resolve Garmin display name");
+  if (profileResp.ok) {
+    const profile = await profileResp.json();
+    displayName = profile.displayName ?? profile.userName ?? "";
+  }
+
+  if (!displayName) {
+    const settingsResp = await fetch(
+      "https://connect.garmin.com/modern/proxy/userprofile-service/userprofile",
+      { headers: baseHeaders }
+    );
+    if (settingsResp.ok) {
+      const settings = await settingsResp.json();
+      displayName = settings.displayName ?? settings.userName ?? "";
+    }
+  }
+
+  if (!displayName) {
+    throw new Error(
+      `Could not resolve Garmin display name (profile status: ${profileResp.status})`
+    );
+  }
 
   // Fetch sleep list
   const sleepResp = await fetch(
     `https://connect.garmin.com/modern/proxy/wellness-service/wellness/dailySleepData/${displayName}?startDate=${startDate}&endDate=${endDate}&nonSleepBufferMinutes=60`,
     { headers: baseHeaders }
   );
-  if (!sleepResp.ok) throw new Error("Could not fetch Garmin sleep data");
+  if (!sleepResp.ok) {
+    throw new Error(`Could not fetch Garmin sleep data (${sleepResp.status})`);
+  }
 
   const raw = await sleepResp.json();
   const items: unknown[] = Array.isArray(raw) ? raw : raw?.dailySleepDTO ? [raw] : [];
