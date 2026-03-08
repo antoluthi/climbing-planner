@@ -181,9 +181,9 @@ function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
     const parsed = raw ? JSON.parse(raw) : {};
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], ...parsed };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, ...parsed };
   } catch {
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [] };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {} };
   }
 }
 
@@ -1616,20 +1616,25 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
     <div style={styles.overlay} onClick={onClose}>
       <div style={{ ...styles.modal, maxWidth: 500, display: "flex", flexDirection: "column", maxHeight: "90vh" }} onClick={e => e.stopPropagation()}>
 
-        {/* ── Header ── */}
-        <div style={{ padding: "16px 18px 12px", borderBottom: `1px solid ${isDark ? "#252b27" : "#ccc6b8"}`, flexShrink: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: isDark ? "#e8e4de" : "#2a2218", lineHeight: 1.3, paddingRight: 8 }}>
-              {session.name}
-            </span>
-            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-              {onEdit && (
-                <button style={{ ...styles.actionBtn, fontSize: 14, opacity: 0.75 }} onClick={onEdit} title="Modifier la séance">⚙</button>
-              )}
-              <button style={styles.closeBtn} onClick={onClose}>✕</button>
-            </div>
+        {/* ── Main tab bar — en haut ── */}
+        <div style={{ display: "flex", borderBottom: `1px solid ${isDark ? "#252b27" : "#ccc6b8"}`, flexShrink: 0, background: isDark ? "#1f2421" : "#e8e2d8", borderRadius: "8px 8px 0 0", overflow: "hidden" }}>
+          <button style={mainTabStyle("session")} onClick={() => setTab("session")}>Séance</button>
+          <button style={mainTabStyle("ressenti")} onClick={() => setTab("ressenti")}>
+            Ressenti{hasFeedback ? " ✓" : ""}
+          </button>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 2, padding: "0 8px", alignItems: "center" }}>
+            {onEdit && (
+              <button style={{ ...styles.actionBtn, fontSize: 14, opacity: 0.65 }} onClick={onEdit} title="Modifier la séance">⚙</button>
+            )}
+            <button style={styles.closeBtn} onClick={onClose}>✕</button>
           </div>
-          {/* Chips */}
+        </div>
+
+        {/* ── Résumé statique ── */}
+        <div style={{ padding: "12px 18px 10px", borderBottom: `1px solid ${isDark ? "#252b27" : "#ccc6b8"}`, flexShrink: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: isDark ? "#e8e4de" : "#2a2218", lineHeight: 1.3, marginBottom: 8 }}>
+            {session.name}
+          </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
             <span style={{ ...styles.sessionTypeBadge, background: session.type === "Séance" ? styles.seanceBadgeBg : styles.exerciceBadgeBg }}>
               {session.type || "Séance"}
@@ -1644,16 +1649,8 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
             {weekMeta?.microcycle && <span style={styles.detailMetaChip}>{weekMeta.microcycle}</span>}
           </div>
           {dayLabel && (
-            <div style={{ fontSize: 10, color: isDark ? "#707870" : "#8a7f70", marginTop: 6, letterSpacing: "0.05em" }}>{dayLabel}</div>
+            <div style={{ fontSize: 10, color: isDark ? "#707870" : "#8a7f70", marginTop: 5, letterSpacing: "0.05em" }}>{dayLabel}</div>
           )}
-        </div>
-
-        {/* ── Main tab bar ── */}
-        <div style={{ display: "flex", borderBottom: `1px solid ${isDark ? "#252b27" : "#ccc6b8"}`, flexShrink: 0, background: isDark ? "#1f2421" : "#e8e2d8" }}>
-          <button style={mainTabStyle("session")} onClick={() => setTab("session")}>Séance</button>
-          <button style={mainTabStyle("ressenti")} onClick={() => setTab("ressenti")}>
-            Ressenti{hasFeedback ? " ✓" : ""}
-          </button>
         </div>
 
         {/* ── Content ── */}
@@ -2298,6 +2295,71 @@ function SleepSection({ sleepData, onImport, range }) {
   );
 }
 
+// ─── NOTES JOURNALIÈRES ──────────────────────────────────────────────────────
+
+function DailyNotesSection({ notes, onSave }) {
+  const { styles, isDark } = useThemeCtx();
+  const today = new Date().toISOString().slice(0, 10);
+  const [text, setText] = useState(notes[today] || "");
+
+  // Sync if today's note changes externally
+  const savedText = notes[today] || "";
+  const [lastSaved, setLastSaved] = useState(savedText);
+
+  const handleBlur = () => {
+    if (text !== lastSaved) {
+      onSave(today, text);
+      setLastSaved(text);
+    }
+  };
+
+  // Recent entries (last 5, excluding today if empty)
+  const recent = Object.entries(notes)
+    .filter(([d, t]) => d !== today && t?.trim())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .slice(0, 4);
+
+  const fmtDate = d => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+
+  const taStyle = {
+    width: "100%", boxSizing: "border-box",
+    background: isDark ? "#1e231f" : "#e8e3da",
+    border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
+    borderRadius: 6, color: isDark ? "#e8e4de" : "#2a2218",
+    fontSize: 12, fontFamily: "inherit", lineHeight: 1.5,
+    padding: "10px 12px", resize: "vertical", minHeight: 72,
+    outline: "none", transition: "border-color 0.15s",
+  };
+
+  return (
+    <div style={styles.dashSection}>
+      <div style={{ ...styles.dashSectionTitle, marginBottom: 8 }}>
+        Notes du jour
+        <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.55, marginLeft: 8 }}>
+          {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+        </span>
+      </div>
+      <textarea
+        style={taStyle}
+        placeholder="Comment tu te sens ? Observations, intentions du jour..."
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onBlur={handleBlur}
+      />
+      {recent.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          {recent.map(([d, t]) => (
+            <div key={d} style={{ marginBottom: 6, fontSize: 11, color: isDark ? "#9ca3af" : "#6b7280" }}>
+              <span style={{ fontWeight: 600, marginRight: 6, color: isDark ? "#707870" : "#8a7060" }}>{fmtDate(d)}</span>
+              {t.length > 100 ? t.slice(0, 100) + "…" : t}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── HOOPER INDEX ─────────────────────────────────────────────────────────────
 
 function hooperLabel(total) {
@@ -2324,10 +2386,19 @@ function HooperSection({ hoopers, onAdd, range }) {
   const allFilled = form.fatigue && form.stress && form.soreness && form.sleep;
   const total = allFilled ? form.fatigue + form.stress + form.soreness + form.sleep : null;
 
+  const openForm = (editing = false) => {
+    if (editing && todayEntry) {
+      setForm({ fatigue: todayEntry.fatigue, stress: todayEntry.stress, soreness: todayEntry.soreness, sleep: todayEntry.sleep });
+    } else {
+      setForm({ fatigue: null, stress: null, soreness: null, sleep: null });
+    }
+    setOpen(o => !o);
+  };
+
   const handleSave = () => {
     if (!allFilled) return;
     onAdd({
-      id: "h_" + Date.now().toString(36),
+      id: todayEntry?.id || "h_" + Date.now().toString(36),
       date: today,
       time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
       ...form, total,
@@ -2386,10 +2457,10 @@ function HooperSection({ hoopers, onAdd, range }) {
           </span>
         )}
         <button
-          onClick={() => { setOpen(o => !o); setForm({ fatigue: null, stress: null, soreness: null, sleep: null }); }}
+          onClick={() => open ? setOpen(false) : openForm(!todayEntry ? false : true)}
           style={styles.sleepImportBtn}
         >
-          {open ? "✕ Fermer" : "+ Remplir"}
+          {open ? "✕ Fermer" : todayEntry ? "✎ Modifier" : "+ Remplir"}
         </button>
       </div>
 
@@ -2503,7 +2574,7 @@ function getChartData(data, range) {
   });
 }
 
-function Dashboard({ data, onUpdateSleep, onAddHooper }) {
+function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote }) {
   const { styles, isDark } = useThemeCtx();
   const [range, setRange] = useState("sem"); // "sem" | "mois" | "an"
 
@@ -2575,6 +2646,8 @@ function Dashboard({ data, onUpdateSleep, onAddHooper }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      <DailyNotesSection notes={data.notes || {}} onSave={onSaveNote} />
 
       <HooperSection hoopers={data.hooper || []} onAdd={onAddHooper} range={range} />
 
@@ -2895,46 +2968,14 @@ export default function ClimbingPlanner() {
         </div>
       )}
 
-      {/* ── Méta semaine — uniquement en vue semaine desktop ── */}
-      {viewMode === "week" && !isMobile && (
-        <div style={styles.metaBar}>
-          {metaEditing ? (
-            <div style={styles.metaForm}>
-              <select style={styles.metaSelect} value={tempMeta.mesocycle || ""} onChange={e => setTempMeta(m => ({ ...m, mesocycle: e.target.value, microcycle: "" }))}>
-                <option value="">— Mésocycle —</option>
-                {(data.mesocycles || []).map(m => <option key={m.id} value={m.label}>{m.label}</option>)}
-              </select>
-              {(() => {
-                const selectedMeso = (data.mesocycles || []).find(m => m.label === tempMeta.mesocycle);
-                if (selectedMeso?.microcycles?.length > 0) {
-                  return (
-                    <select style={styles.metaSelect} value={tempMeta.microcycle || ""} onChange={e => setTempMeta(m => ({ ...m, microcycle: e.target.value }))}>
-                      <option value="">— Microcycle —</option>
-                      {selectedMeso.microcycles.map(mc => <option key={mc.id} value={mc.label}>{mc.label}</option>)}
-                    </select>
-                  );
-                }
-                return <input style={styles.metaInput} placeholder="Microcycle (ex: Développement)" value={tempMeta.microcycle || ""} onChange={e => setTempMeta(m => ({ ...m, microcycle: e.target.value }))} />;
-              })()}
-              <input style={styles.metaInput} placeholder="Note / thème de la semaine" value={tempMeta.note || ""} onChange={e => setTempMeta(m => ({ ...m, note: e.target.value }))} />
-              <button style={styles.saveBtn} onClick={saveMeta}>OK</button>
-              <button style={styles.cancelBtn} onClick={() => setMetaEditing(false)}>✕</button>
-            </div>
-          ) : (
-            <div style={styles.metaDisplay} onClick={() => { setTempMeta(weekMeta); setMetaEditing(true); }}>
-              {weekMeta.mesocycle ? (
-                <>
-                  <span style={{ ...styles.mesoTag, background: getMesoColor(data.mesocycles, weekMeta.mesocycle) + "22", color: getMesoColor(data.mesocycles, weekMeta.mesocycle), borderColor: getMesoColor(data.mesocycles, weekMeta.mesocycle) + "55" }}>
-                    {weekMeta.mesocycle}
-                  </span>
-                  {weekMeta.microcycle && <span style={styles.microTag}>{weekMeta.microcycle}</span>}
-                  {weekMeta.note && <span style={styles.noteTag}>"{weekMeta.note}"</span>}
-                </>
-              ) : (
-                <span style={styles.metaPlaceholder}>＋ Définir mésocycle / thème semaine</span>
-              )}
-            </div>
-          )}
+      {/* ── Méta semaine — lecture seule (éditable via onglet Cycles) ── */}
+      {viewMode === "week" && !isMobile && weekMeta.mesocycle && (
+        <div style={{ ...styles.metaBar, cursor: "default" }}>
+          <span style={{ ...styles.mesoTag, background: getMesoColor(data.mesocycles, weekMeta.mesocycle) + "22", color: getMesoColor(data.mesocycles, weekMeta.mesocycle), borderColor: getMesoColor(data.mesocycles, weekMeta.mesocycle) + "55" }}>
+            {weekMeta.mesocycle}
+          </span>
+          {weekMeta.microcycle && <span style={styles.microTag}>{weekMeta.microcycle}</span>}
+          {weekMeta.note && <span style={styles.noteTag}>"{weekMeta.note}"</span>}
         </div>
       )}
 
@@ -3038,9 +3079,11 @@ export default function ClimbingPlanner() {
             for (const r of newRows) map[r.date] = r;
             return { ...d, sleep: Object.values(map).sort((a, b) => a.date.localeCompare(b.date)) };
           })}
-          onAddHooper={entry => setData(d => ({
-            ...d, hooper: [...(d.hooper || []), entry].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)),
-          }))}
+          onAddHooper={entry => setData(d => {
+            const existing = (d.hooper || []).filter(h => !(h.date === entry.date));
+            return { ...d, hooper: [...existing, entry].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)) };
+          })}
+          onSaveNote={(date, text) => setData(d => ({ ...d, notes: { ...(d.notes || {}), [date]: text } }))}
         />
       )}
 
