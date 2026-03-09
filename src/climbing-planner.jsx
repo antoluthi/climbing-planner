@@ -1955,7 +1955,6 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
             {!isMobile && (
               <span>{warn ? (isToday ? "Compléter le journal" : "Journal incomplet") : (isToday ? "Journal du jour ✓" : "Journal")}</span>
             )}
-            {isMobile && <span>{warn ? "!" : "≡"}</span>}
           </button>
         );
       })()}
