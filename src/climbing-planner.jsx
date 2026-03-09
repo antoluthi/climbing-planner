@@ -3999,8 +3999,13 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
   }, [dateISO]);
   const hAllFilled = hForm.fatigue && hForm.stress && hForm.soreness && hForm.sleep;
   const hTotal = hAllFilled ? hForm.fatigue + hForm.stress + hForm.soreness + hForm.sleep : null;
+  const hFormDirty = existingH
+    ? (hForm.fatigue !== existingH.fatigue || hForm.stress !== existingH.stress ||
+       hForm.soreness !== existingH.soreness || hForm.sleep !== existingH.sleep)
+    : hAllFilled; // nouvelle entrée : prête dès que tout est rempli
+  const hCanSave = hAllFilled && (!existingH || hFormDirty);
   const handleHSave = () => {
-    if (!hAllFilled) return;
+    if (!hCanSave) return;
     onAddHooper({ date: dateISO, time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), ...hForm, total: hTotal });
     setHSaved(true);
     setTimeout(() => setHSaved(false), 3000);
@@ -4130,9 +4135,19 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
               </div>
             )}
             {hSaved && <div style={{ fontSize: 11, color: accentGreen, marginBottom: 8 }}>Enregistré ✓</div>}
-            <button onClick={handleHSave} disabled={!hAllFilled}
-              style={{ background: hAllFilled ? accentGreen : sectionBg, border: "none", borderRadius: 6, color: hAllFilled ? "#fff" : textMuted, padding: "8px 20px", cursor: hAllFilled ? "pointer" : "default", fontSize: 12, fontFamily: "inherit", fontWeight: 600, opacity: hAllFilled ? 1 : 0.5 }}>
-              {existingH ? "Modifier" : "Enregistrer"}
+            <button onClick={handleHSave} disabled={!hCanSave}
+              style={{
+                background: hCanSave ? accentGreen : sectionBg,
+                border: "none", borderRadius: 6,
+                color: hCanSave ? "#fff" : textMuted,
+                padding: "8px 20px",
+                cursor: hCanSave ? "pointer" : "default",
+                fontSize: 12, fontFamily: "inherit", fontWeight: 600,
+                opacity: hCanSave ? 1 : 0.45,
+                boxShadow: hCanSave ? "none" : "inset 0 1px 3px rgba(0,0,0,0.25)",
+                transform: hCanSave ? "none" : "translateY(1px)",
+              }}>
+              Enregistrer
             </button>
           </div>
 
