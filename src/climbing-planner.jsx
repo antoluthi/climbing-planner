@@ -4011,6 +4011,7 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
     if (hCanSave) {
       onAddHooper({ date: dateISO, time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), ...hForm, total: hTotal });
     }
+    onClose();
   };
 
   const bg = isDark ? "#161b17" : "#f5f0e8";
