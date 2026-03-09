@@ -169,12 +169,20 @@ function getNbMouvementsZone(nb) {
   return 6;
 }
 
-function getChargeColor(charge) {
-  if (charge === 0) return "#4ade80";
-  if (charge <= 12) return "#86efac";
-  if (charge <= 20) return "#fbbf24";
-  if (charge <= 30) return "#f97316";
-  return "#f43f5e";
+function getChargeColor(charge, isDark = true) {
+  if (isDark) {
+    if (charge === 0) return "#4ade80";
+    if (charge <= 12) return "#86efac";
+    if (charge <= 20) return "#fbbf24";
+    if (charge <= 30) return "#f97316";
+    return "#f43f5e";
+  }
+  // Light theme: more saturated for contrast on light backgrounds
+  if (charge === 0) return "#16a34a";
+  if (charge <= 12) return "#15803d";
+  if (charge <= 20) return "#b45309";
+  if (charge <= 30) return "#c2410c";
+  return "#b91c1c";
 }
 
 function getMondayOf(date) {
@@ -1283,7 +1291,7 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
   const [charge, setCharge] = useState(initial?.charge ?? 24);
   const [estimatedTime, setEstimatedTime] = useState(initial?.estimatedTime ?? "");
   const [location, setLocation] = useState(initial?.location ?? "");
-  const [date, setDate] = useState(initial?.date ?? "");
+
   const [minRecovery, setMinRecovery] = useState(initial?.minRecovery ?? "");
   const [warmup, setWarmup] = useState(initial?.warmup ?? "");
   const [main, setMain] = useState(initial?.main ?? "");
@@ -1296,14 +1304,7 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
   const [calcZone, setCalcZone] = useState(3);
   const [calcComplexity, setCalcComplexity] = useState(3);
 
-  // Mesocycle/microcycle for selected date
-  const dateMeta = (() => {
-    if (!date) return null;
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return null;
-    const key = weekKey(getMondayOf(d));
-    return data.weekMeta?.[key] || null;
-  })();
+
 
   const currentText = section === "warmup" ? warmup : section === "main" ? main : cooldown;
   const setCurrentText = section === "warmup" ? setWarmup : section === "main" ? setMain : setCooldown;
@@ -1315,7 +1316,6 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
       type, name: name.trim(), charge,
       estimatedTime: estimatedTime ? +estimatedTime : null,
       location: location.trim() || null,
-      date: date || null,
       minRecovery: minRecovery ? +minRecovery : null,
       warmup, main, cooldown,
       isCustom: true,
@@ -1343,7 +1343,7 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
             <input style={{ ...styles.customFormInput, flex: 1 }} placeholder="Nom de la séance…" value={name} onChange={e => setName(e.target.value)} />
           </div>
 
-          {/* Temps / Lieu / Date */}
+          {/* Temps / Lieu */}
           <div style={{ ...styles.customFormRow, flexWrap: "wrap" }}>
             <div style={{ ...styles.customFormField, flex: "1 1 100px" }}>
               <span style={styles.customFormLabel}>Temps estimé (min)</span>
@@ -1353,20 +1353,9 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
               <span style={styles.customFormLabel}>Lieu</span>
               <input style={styles.customFormInput} placeholder="Salle, falaise…" value={location} onChange={e => setLocation(e.target.value)} />
             </div>
-            <div style={{ ...styles.customFormField, flex: "1 1 140px" }}>
-              <span style={styles.customFormLabel}>Date</span>
-              <input style={styles.customFormInput} type="date" value={date} onChange={e => setDate(e.target.value)} />
-            </div>
           </div>
 
-          {/* Meso hint */}
-          {dateMeta?.mesocycle && (
-            <div style={styles.mesoHint}>
-              <span>📌</span>
-              <span style={{ color: getMesoColor(mesocycles, dateMeta.mesocycle) }}>{dateMeta.mesocycle}</span>
-              {dateMeta.microcycle && <span style={{ color: isDark ? "#8a9090" : "#7a7060" }}>· {dateMeta.microcycle}</span>}
-            </div>
-          )}
+
 
           {/* Charge + récup */}
           <div style={{ ...styles.customFormField }}>
@@ -2073,8 +2062,8 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
                         key={si}
                         style={{
                           ...styles.monthSessionRow,
-                          background: getChargeColor(s.charge) + "22",
-                          borderLeft: `2px solid ${getChargeColor(s.charge)}`,
+                          background: getChargeColor(s.charge, isDark) + (isDark ? "22" : "33"),
+                          borderLeft: `2px solid ${getChargeColor(s.charge, isDark)}`,
                           cursor: "pointer",
                         }}
                         onClick={e => { e.stopPropagation(); onSessionClick && onSessionClick(date, si); }}
@@ -3230,7 +3219,7 @@ function HooperSection({ hoopers, onAdd, range }) {
 function PhotoCropModal({ onSave, onClose }) {
   const { styles, isDark } = useThemeCtx();
   const SIZE = 260;
-  const OUTPUT = 300;
+  const OUTPUT = 240;
 
   const [imgSrc, setImgSrc] = useState(null);
   const [scale, setScale] = useState(1);
@@ -3343,7 +3332,7 @@ function PhotoCropModal({ onSave, onClose }) {
       const x = OUTPUT / 2 + pos.x * ratio - w / 2;
       const y = OUTPUT / 2 + pos.y * ratio - h / 2;
       ctx.drawImage(img, x, y, w, h);
-      onSave(canvas.toDataURL("image/jpeg", 0.88));
+      onSave(canvas.toDataURL("image/jpeg", 0.82));
     };
     img.src = imgSrc;
   };
@@ -3732,10 +3721,14 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
         <RangeBtn r="mois" label="Mois" />
         <RangeBtn r="an" label="An" />
       </div>
-      {/* Period navigation — same style as calendar */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 8 }}>
+      {/* Period navigation */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16, gap: 8 }}>
         <button style={styles.navBtn} onClick={handleStatsPrev}>←</button>
-        <div style={{ textAlign: "center" }}>
+        <div
+          style={{ textAlign: "center", minWidth: 190, cursor: isCurrentPeriod ? "default" : "pointer" }}
+          onClick={isCurrentPeriod ? undefined : () => setStatsRefDate(new Date())}
+          title={isCurrentPeriod ? undefined : "Aller à la période en cours"}
+        >
           <div style={styles.weekRange}>{statsPeriodLabel}</div>
           {isCurrentPeriod && <div style={styles.weekCurrent}>Période actuelle</div>}
         </div>
@@ -4137,36 +4130,29 @@ export default function ClimbingPlanner() {
         </div>
       )}
 
-      {/* ── Méta semaine — lecture seule (éditable via onglet Cycles) ── */}
-      {viewMode === "week" && !isMobile && weekMeta.mesocycle && (
-        <div style={{ ...styles.metaBar, cursor: "default" }}>
-          <span style={{ ...styles.mesoTag, background: getMesoColor(data.mesocycles, weekMeta.mesocycle) + "22", color: getMesoColor(data.mesocycles, weekMeta.mesocycle), borderColor: getMesoColor(data.mesocycles, weekMeta.mesocycle) + "55" }}>
-            {weekMeta.mesocycle}
-          </span>
-          {weekMeta.microcycle && <span style={styles.microTag}>{weekMeta.microcycle}</span>}
-          {weekMeta.note && <span style={styles.noteTag}>"{weekMeta.note}"</span>}
-        </div>
-      )}
+      {/* ── Méta semaine — barre unique fusionnant mésocycle daté + meta manuelle ── */}
+      {viewMode === "week" && !isMobile && (() => {
+        const detected = getMesoForDate(data.mesocycles, monday);
+        const color = detected?.meso?.color || (weekMeta.mesocycle ? getMesoColor(data.mesocycles, weekMeta.mesocycle) : null);
+        if (!detected && !weekMeta.mesocycle) return null;
+        return (
+          <div style={{ background: (color || "#888") + "14", borderBottom: `1px solid ${color || "#888"}28`, borderLeft: `3px solid ${color || "#888"}`, padding: "5px 20px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {detected?.meso && <span style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: "0.09em", textTransform: "uppercase" }}>{detected.meso.label}</span>}
+            {detected?.micro && (
+              <>
+                <span style={{ fontSize: 10, color: color + "55" }}>›</span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: color + "cc", letterSpacing: "0.06em", background: color + "22", padding: "1px 7px", borderRadius: 10, border: `1px solid ${color}44` }}>{detected.micro.label}</span>
+              </>
+            )}
+            {weekMeta.note && <span style={{ fontSize: 10, fontStyle: "italic", color: isDark ? "#9ca3af" : "#6b7280" }}>"{weekMeta.note}"</span>}
+          </div>
+        );
+      })()}
 
       {/* ── Vue semaine ── */}
       {viewMode === "week" && (
         <>
-          {(() => {
-            const detected = getMesoForDate(data.mesocycles, monday);
-            if (!detected) return null;
-            const { meso, micro } = detected;
-            return (
-              <div style={{ background: meso.color + "14", borderBottom: `1px solid ${meso.color}28`, borderLeft: `3px solid ${meso.color}`, padding: "5px 20px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: meso.color, letterSpacing: "0.09em", textTransform: "uppercase" }}>{meso.label}</span>
-                {micro && (
-                  <>
-                    <span style={{ fontSize: 10, color: meso.color + "55" }}>›</span>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: meso.color + "cc", letterSpacing: "0.06em", background: meso.color + "22", padding: "1px 7px", borderRadius: 10, border: `1px solid ${meso.color}44` }}>{micro.label}</span>
-                  </>
-                )}
-              </div>
-            );
-          })()}
+          {null}
           <div style={isMobile ? styles.gridMobile : styles.grid}>
             {DAYS.map((day, i) => {
               const date = addDays(monday, i);
