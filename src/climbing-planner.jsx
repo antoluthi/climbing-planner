@@ -3952,11 +3952,6 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
     setNoteSaved(data.notes?.[dateISO] || "");
   }, [dateISO]);
   const noteDirty = noteText !== noteSaved;
-  const handleNoteSave = () => {
-    if (!noteDirty) return;
-    onSaveNote(dateISO, noteText);
-    setNoteSaved(noteText);
-  };
 
   // Weight
   const [weightInput, setWeightInput] = useState(
@@ -3965,11 +3960,8 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
   useEffect(() => {
     setWeightInput(data.weight?.[dateISO] != null ? String(data.weight[dateISO]) : "");
   }, [dateISO]);
-  const commitWeight = () => {
-    const val = parseFloat(weightInput.replace(",", "."));
-    if (!isNaN(val) && val > 0) onSaveWeight(dateISO, Math.round(val * 10) / 10);
-    else if (weightInput.trim() === "") onSaveWeight(dateISO, null);
-  };
+  const weightSavedStr = data.weight?.[dateISO] != null ? String(data.weight[dateISO]) : "";
+  const weightDirty = weightInput.trim() !== weightSavedStr;
 
   // Creatine
   const hasCreatine = !!data.creatine?.[dateISO];
@@ -3991,27 +3983,34 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
       ? { fatigue: existingH.fatigue, stress: existingH.stress, soreness: existingH.soreness, sleep: existingH.sleep }
       : { fatigue: null, stress: null, soreness: null, sleep: null }
   );
-  const [hSaved, setHSaved] = useState(false);
   useEffect(() => {
     const h = (data.hooper || []).find(e => e.date === dateISO);
     setHForm(h
       ? { fatigue: h.fatigue, stress: h.stress, soreness: h.soreness, sleep: h.sleep }
       : { fatigue: null, stress: null, soreness: null, sleep: null }
     );
-    setHSaved(false);
   }, [dateISO]);
   const hAllFilled = hForm.fatigue && hForm.stress && hForm.soreness && hForm.sleep;
   const hTotal = hAllFilled ? hForm.fatigue + hForm.stress + hForm.soreness + hForm.sleep : null;
   const hFormDirty = existingH
     ? (hForm.fatigue !== existingH.fatigue || hForm.stress !== existingH.stress ||
        hForm.soreness !== existingH.soreness || hForm.sleep !== existingH.sleep)
-    : hAllFilled; // nouvelle entrée : prête dès que tout est rempli
+    : hAllFilled;
   const hCanSave = hAllFilled && (!existingH || hFormDirty);
-  const handleHSave = () => {
-    if (!hCanSave) return;
-    onAddHooper({ date: dateISO, time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), ...hForm, total: hTotal });
-    setHSaved(true);
-    setTimeout(() => setHSaved(false), 3000);
+
+  // Unified save
+  const anyDirty = noteDirty || weightDirty || hCanSave;
+  const handleSaveAll = () => {
+    if (!anyDirty) return;
+    if (noteDirty) { onSaveNote(dateISO, noteText); setNoteSaved(noteText); }
+    if (weightDirty) {
+      const val = parseFloat(weightInput.replace(",", "."));
+      if (!isNaN(val) && val > 0) onSaveWeight(dateISO, Math.round(val * 10) / 10);
+      else if (weightInput.trim() === "") onSaveWeight(dateISO, null);
+    }
+    if (hCanSave) {
+      onAddHooper({ date: dateISO, time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), ...hForm, total: hTotal });
+    }
   };
 
   const bg = isDark ? "#161b17" : "#f5f0e8";
@@ -4063,21 +4062,6 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
               value={noteText}
               onChange={e => setNoteText(e.target.value)}
             />
-            <button onClick={handleNoteSave} disabled={!noteDirty}
-              style={{
-                marginTop: 8,
-                background: noteDirty ? accentGreen : sectionBg,
-                border: "none", borderRadius: 6,
-                color: noteDirty ? "#fff" : textMuted,
-                padding: "8px 20px",
-                cursor: noteDirty ? "pointer" : "default",
-                fontSize: 12, fontFamily: "inherit", fontWeight: 600,
-                opacity: noteDirty ? 1 : 0.45,
-                boxShadow: noteDirty ? "none" : "inset 0 1px 3px rgba(0,0,0,0.25)",
-                transform: noteDirty ? "none" : "translateY(1px)",
-              }}>
-              Enregistrer
-            </button>
           </div>
 
           {/* Poids */}
@@ -4087,14 +4071,9 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
               <input type="number" step="0.1" min="20" max="300" placeholder="—"
                 value={weightInput}
                 onChange={e => setWeightInput(e.target.value)}
-                onBlur={commitWeight}
-                onKeyDown={e => { if (e.key === "Enter") { commitWeight(); e.target.blur(); } }}
                 style={{ background: sectionBg, border: borderStyle, borderRadius: 8, color: textMain, fontSize: 22, fontFamily: "inherit", fontWeight: 700, padding: "6px 12px", outline: "none", width: 100, textAlign: "center" }}
               />
               <span style={{ fontSize: 14, color: textMuted }}>kg</span>
-              {data.weight?.[dateISO] != null && (
-                <span style={{ fontSize: 12, color: accentGreen, fontWeight: 600 }}>{"✓"} {data.weight[dateISO]} kg</span>
-              )}
             </div>
           </div>
 
@@ -4151,24 +4130,33 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
                 Indice : {hTotal} — {hooperLabel(hTotal)}
               </div>
             )}
-            {hSaved && <div style={{ fontSize: 11, color: accentGreen, marginBottom: 8 }}>Enregistré ✓</div>}
-            <button onClick={handleHSave} disabled={!hCanSave}
-              style={{
-                background: hCanSave ? accentGreen : sectionBg,
-                border: "none", borderRadius: 6,
-                color: hCanSave ? "#fff" : textMuted,
-                padding: "8px 20px",
-                cursor: hCanSave ? "pointer" : "default",
-                fontSize: 12, fontFamily: "inherit", fontWeight: 600,
-                opacity: hCanSave ? 1 : 0.45,
-                boxShadow: hCanSave ? "none" : "inset 0 1px 3px rgba(0,0,0,0.25)",
-                transform: hCanSave ? "none" : "translateY(1px)",
-              }}>
-              Enregistrer
-            </button>
           </div>
 
         </div>
+
+        {/* ── Sticky save button ── */}
+        <div style={{ position: "sticky", bottom: 0, background: bg, borderTop: `1px solid ${border}`, padding: "14px 18px" }}>
+          <button
+            onClick={handleSaveAll}
+            disabled={!anyDirty}
+            style={{
+              width: "100%",
+              background: anyDirty ? accentGreen : sectionBg,
+              border: "none", borderRadius: 8,
+              color: anyDirty ? "#fff" : textMuted,
+              padding: "12px 20px",
+              cursor: anyDirty ? "pointer" : "default",
+              fontSize: 13, fontFamily: "inherit", fontWeight: 700,
+              opacity: anyDirty ? 1 : 0.45,
+              boxShadow: anyDirty ? `0 2px 12px ${accentGreen}44` : "inset 0 1px 3px rgba(0,0,0,0.25)",
+              transform: anyDirty ? "none" : "translateY(1px)",
+              transition: "all 0.15s",
+            }}
+          >
+            Enregistrer
+          </button>
+        </div>
+
       </div>
     </div>
   );
