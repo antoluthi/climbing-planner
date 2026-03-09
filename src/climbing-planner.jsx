@@ -2068,7 +2068,7 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
                         }}
                         onClick={e => { e.stopPropagation(); onSessionClick && onSessionClick(date, si); }}
                       >
-                        <span style={{ ...styles.monthSessionLabel, color: getChargeColor(s.charge) }}>
+                        <span style={{ ...styles.monthSessionLabel, color: getChargeColor(s.charge, isDark) }}>
                           {s.name.length > 18 ? s.name.slice(0, 18) + "…" : s.name}
                         </span>
                       </div>
