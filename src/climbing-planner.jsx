@@ -101,7 +101,7 @@ function getCustomCyclesForDate(customCycles, date) {
 
 function getDayLogWarning(data, dateISO, dateObj) {
   const today = new Date().toISOString().slice(0, 10);
-  if (dateISO > today) return { hasWarning: false, hooperMissing: false, creatineMissing: false };
+  if (dateISO > today) return { hasWarning: false, hooperMissing: false, creatineMissing: false, isFuture: true };
   const hooperMissing = !(data.hooper || []).some(h => h.date === dateISO);
   const creatineCycles = (data.customCycles || []).filter(c =>
     c.name?.toLowerCase().includes("créatine") || c.name?.toLowerCase().includes("creatine")
@@ -1916,20 +1916,6 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
           <span style={styles.dayDate}>{dateLabel}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <button
-            onClick={e => { e.stopPropagation(); onOpenLog?.(); }}
-            title={logWarning?.hasWarning ? "Données manquantes" : "Journal du jour"}
-            style={{
-              background: logWarning?.hasWarning ? "#ef4444" : "transparent",
-              border: logWarning?.hasWarning ? "none" : `1px solid ${isDark ? "#2a2f2a" : "#c8c3bb"}`,
-              borderRadius: "50%", width: 18, height: 18, cursor: "pointer", padding: 0, flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: logWarning?.hasWarning ? 11 : 9,
-              color: logWarning?.hasWarning ? "#fff" : (isDark ? "#3a3f3a" : "#b0aba3"),
-              fontWeight: 800, lineHeight: 1, fontFamily: "inherit",
-              boxShadow: logWarning?.hasWarning ? "0 0 0 2px #ef444433" : "none",
-            }}
-          >{logWarning?.hasWarning ? "!" : "≡"}</button>
           {hasCreatine && (
             <span style={{ fontSize: 7, color: isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", lineHeight: 1 }} title="Créatine">▲</span>
           )}
@@ -1941,6 +1927,38 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
         </div>
       </div>
 
+      {/* ── Journal bar ── */}
+      {(() => {
+        const warn = logWarning?.hasWarning;
+        const future = logWarning?.isFuture;
+        const btnStyle = warn
+          ? (isToday
+              ? { background: "#ef444418", border: "2px solid #ef4444", color: "#ef4444", fontWeight: 700 }
+              : { background: "#f9731618", border: "2px solid #f97316", color: "#f97316", fontWeight: 700 })
+          : future
+            ? { background: "transparent", border: `1px solid ${isDark ? "#1e221e" : "#e5e0d8"}`, color: isDark ? "#252a25" : "#ccc8c0", fontWeight: 400 }
+            : isToday
+              ? { background: isDark ? "#1a2a1a" : "#eaf5ea", border: `1px solid ${isDark ? "#2a4a2a" : "#9ecb9e"}`, color: isDark ? "#4ade80" : "#2a7d4f", fontWeight: 600 }
+              : { background: "transparent", border: `1px solid ${isDark ? "#252a25" : "#d8d3ca"}`, color: isDark ? "#333833" : "#c0bbb2", fontWeight: 400 };
+        return (
+          <button
+            onClick={() => onOpenLog?.()}
+            style={{
+              width: "100%", cursor: "pointer", fontFamily: "inherit",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              padding: isMobile ? "6px 2px" : "7px 10px",
+              fontSize: isMobile ? 10 : 11, borderRadius: 6, lineHeight: 1, marginBottom: 6,
+              ...btnStyle,
+            }}
+          >
+            <span style={{ fontSize: warn ? 13 : 11 }}>{warn ? "⚠" : "≡"}</span>
+            {!isMobile && (
+              <span>{warn ? (isToday ? "Compléter le journal" : "Journal incomplet") : (isToday ? "Journal du jour ✓" : "Journal")}</span>
+            )}
+            {isMobile && <span>{warn ? "!" : "≡"}</span>}
+          </button>
+        );
+      })()}
       <div style={styles.sessionCards}>
         {sessions.map((s, i) => (
           <div
