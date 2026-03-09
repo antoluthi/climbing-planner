@@ -3999,6 +3999,7 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
   const hCanSave = hAllFilled && (!existingH || hFormDirty);
 
   // Unified save
+  const [savedAnim, setSavedAnim] = useState(false);
   const anyDirty = noteDirty || weightDirty || hCanSave;
   const handleSaveAll = () => {
     if (!anyDirty) return;
@@ -4011,7 +4012,8 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
     if (hCanSave) {
       onAddHooper({ date: dateISO, time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), ...hForm, total: hTotal });
     }
-    onClose();
+    setSavedAnim(true);
+    setTimeout(() => onClose(), 700);
   };
 
   const bg = isDark ? "#161b17" : "#f5f0e8";
@@ -4139,22 +4141,23 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
         <div style={{ position: "sticky", bottom: 0, background: bg, borderTop: `1px solid ${border}`, padding: "14px 18px" }}>
           <button
             onClick={handleSaveAll}
-            disabled={!anyDirty}
+            disabled={!anyDirty || savedAnim}
             style={{
               width: "100%",
-              background: anyDirty ? accentGreen : sectionBg,
+              background: savedAnim ? (isDark ? "#166534" : "#15803d") : anyDirty ? accentGreen : sectionBg,
               border: "none", borderRadius: 8,
-              color: anyDirty ? "#fff" : textMuted,
+              color: savedAnim ? "#86efac" : anyDirty ? "#fff" : textMuted,
               padding: "12px 20px",
-              cursor: anyDirty ? "pointer" : "default",
-              fontSize: 13, fontFamily: "inherit", fontWeight: 700,
-              opacity: anyDirty ? 1 : 0.45,
-              boxShadow: anyDirty ? `0 2px 12px ${accentGreen}44` : "inset 0 1px 3px rgba(0,0,0,0.25)",
-              transform: anyDirty ? "none" : "translateY(1px)",
-              transition: "all 0.15s",
+              cursor: anyDirty && !savedAnim ? "pointer" : "default",
+              fontSize: savedAnim ? 14 : 13, fontFamily: "inherit", fontWeight: 700,
+              opacity: anyDirty || savedAnim ? 1 : 0.45,
+              boxShadow: savedAnim ? `0 0 0 2px ${accentGreen}88` : anyDirty ? `0 2px 12px ${accentGreen}44` : "inset 0 1px 3px rgba(0,0,0,0.25)",
+              transform: savedAnim ? "scale(1.02)" : anyDirty ? "none" : "translateY(1px)",
+              transition: "all 0.25s cubic-bezier(0.34,1.56,0.64,1)",
+              letterSpacing: savedAnim ? "0.04em" : "0",
             }}
           >
-            Enregistrer
+            {savedAnim ? "Enregistré ✓" : "Enregistrer"}
           </button>
         </div>
 
