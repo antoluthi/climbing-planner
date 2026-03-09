@@ -3951,8 +3951,11 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
     setNoteText(data.notes?.[dateISO] || "");
     setNoteSaved(data.notes?.[dateISO] || "");
   }, [dateISO]);
-  const handleNoteBlur = () => {
-    if (noteText !== noteSaved) { onSaveNote(dateISO, noteText); setNoteSaved(noteText); }
+  const noteDirty = noteText !== noteSaved;
+  const handleNoteSave = () => {
+    if (!noteDirty) return;
+    onSaveNote(dateISO, noteText);
+    setNoteSaved(noteText);
   };
 
   // Weight
@@ -4059,8 +4062,22 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
               placeholder="Comment tu te sens ? Observations..."
               value={noteText}
               onChange={e => setNoteText(e.target.value)}
-              onBlur={handleNoteBlur}
             />
+            <button onClick={handleNoteSave} disabled={!noteDirty}
+              style={{
+                marginTop: 8,
+                background: noteDirty ? accentGreen : sectionBg,
+                border: "none", borderRadius: 6,
+                color: noteDirty ? "#fff" : textMuted,
+                padding: "8px 20px",
+                cursor: noteDirty ? "pointer" : "default",
+                fontSize: 12, fontFamily: "inherit", fontWeight: 600,
+                opacity: noteDirty ? 1 : 0.45,
+                boxShadow: noteDirty ? "none" : "inset 0 1px 3px rgba(0,0,0,0.25)",
+                transform: noteDirty ? "none" : "translateY(1px)",
+              }}>
+              Enregistrer
+            </button>
           </div>
 
           {/* Poids */}
