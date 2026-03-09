@@ -4022,7 +4022,7 @@ export default function ClimbingPlanner() {
   );
 
   // Profile avatar button (shows photo or default icon, goes to profile page)
-  const profilePhoto = typeof window !== "undefined" ? localStorage.getItem("climbing_planner_photo") : "";
+  const profilePhoto = data.profile?.avatarDataUrl || "";
   const profileBtn = (
     <button
       style={{ ...styles.profileBtn, ...(viewMode === "profil" ? { borderColor: isDark ? "#4ade80" : "#2a7d4f", background: isDark ? "#263228" : "#d4e8db" } : {}) }}
