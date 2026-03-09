@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useContext, createContext, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 
@@ -2849,7 +2849,7 @@ function SleepSection({ sleepData, onImport, range }) {
   const [importMsg, setImportMsg] = useState("");
 
   const sorted = [...(sleepData || [])].sort((a, b) => a.date.localeCompare(b.date));
-  const days = range === "an" ? 365 : range === "mois" ? 91 : 45;
+  const days = range === "an" ? 365 : range === "mois" ? 91 : range === "jour" ? 14 : 45;
   const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   const filtered = sorted.filter(d => d.date >= cutoff);
 
@@ -3125,7 +3125,7 @@ function HooperSection({ hoopers, onAdd, range }) {
         };
       });
     }
-    const days = range === "mois" ? 91 : 30;
+    const days = range === "mois" ? 91 : range === "jour" ? 14 : 30;
     const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
     return sorted.filter(h => h.date >= cutoff).map(h => ({
       date: h.date.slice(5).replace("-", "/"),
@@ -3593,6 +3593,23 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
 function getChartData(data, range, refDate) {
   const today = refDate || new Date();
 
+  if (range === "jour") {
+    const monday = getMondayOf(today);
+    const key = weekKey(monday);
+    const days = data.weeks[key] || [];
+    const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+    return Array.from({ length: 7 }, (_, i) => {
+      const daySessions = (days[i] || []).filter(Boolean);
+      const charge = daySessions.reduce((s, se) => s + se.charge, 0);
+      const done = daySessions.filter(s => s.feedback?.done === true);
+      const rpeVals = done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe);
+      const avgRpe = rpeVals.length ? Math.round((rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length) * 10) / 10 : null;
+      const d = addDays(monday, i);
+      const isToday = d.toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
+      return { label: dayNames[i], charge, avgRpe, planned: daySessions.length, done: done.length, isToday };
+    });
+  }
+
   if (range === "an") {
     // Last 12 months grouped by month
     return Array.from({ length: 12 }, (_, i) => {
@@ -3643,12 +3660,12 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
   today.setHours(0, 0, 0, 0);
 
   const handleStatsPrev = () => {
-    if (range === "sem") setStatsRefDate(d => addDays(d, -7));
+    if (range === "jour" || range === "sem") setStatsRefDate(d => addDays(d, -7));
     else if (range === "mois") setStatsRefDate(d => new Date(d.getFullYear(), d.getMonth() - 1, d.getDate()));
     else setStatsRefDate(d => new Date(d.getFullYear() - 1, d.getMonth(), d.getDate()));
   };
   const handleStatsNext = () => {
-    if (range === "sem") setStatsRefDate(d => addDays(d, 7));
+    if (range === "jour" || range === "sem") setStatsRefDate(d => addDays(d, 7));
     else if (range === "mois") setStatsRefDate(d => new Date(d.getFullYear(), d.getMonth() + 1, d.getDate()));
     else setStatsRefDate(d => new Date(d.getFullYear() + 1, d.getMonth(), d.getDate()));
   };
@@ -3656,7 +3673,7 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
   // Is the statsRefDate within the current period?
   const isCurrentPeriod = (() => {
     const ref = new Date(statsRefDate); ref.setHours(0, 0, 0, 0);
-    if (range === "sem") {
+    if (range === "jour" || range === "sem") {
       const refMonday = getMondayOf(ref); const todayMonday = getMondayOf(today);
       return refMonday.getTime() >= todayMonday.getTime();
     }
@@ -3667,6 +3684,10 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
   // Label for the current period
   const statsPeriodLabel = (() => {
     const ref = statsRefDate;
+    if (range === "jour") {
+      const monday = getMondayOf(ref);
+      return `${formatDate(monday)} — ${formatDate(addDays(monday, 6))}`;
+    }
     if (range === "sem") {
       const nWeeks = 8;
       const endMonday = getMondayOf(ref);
@@ -3692,7 +3713,7 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
 
   const tooltipStyle = { background: styles.dashTooltipBg, border: "none", borderRadius: 6, color: styles.dashTooltipText, fontSize: 11 };
 
-  const rangeLabel = { sem: "8 semaines", mois: "3 mois", an: "12 mois" }[range];
+  const rangeLabel = { jour: "cette semaine", sem: "8 semaines", mois: "3 mois", an: "12 mois" }[range];
 
   const RangeBtn = ({ r, label }) => (
     <button onClick={() => { setRange(r); setStatsRefDate(new Date()); }}
@@ -3706,6 +3727,7 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
       {/* Range selector row */}
       <div style={{ display: "flex", alignItems: "center", marginBottom: 10, gap: 4 }}>
         <div style={{ ...styles.dashTitle, marginBottom: 0, flex: 1 }}>Statistiques</div>
+        <RangeBtn r="jour" label="Jours" />
         <RangeBtn r="sem" label="Sem" />
         <RangeBtn r="mois" label="Mois" />
         <RangeBtn r="an" label="An" />
@@ -3737,10 +3759,14 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
           <BarChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
             <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
-              interval={range === "an" ? 0 : "preserveStartEnd"} />
+              interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
             <YAxis tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
-            <Bar dataKey="charge" name="Charge" fill={isDark ? "#4ade80" : "#2a7d4f"} radius={[3, 3, 0, 0]} maxBarSize={36} />
+            <Bar dataKey="charge" name="Charge" fill={isDark ? "#4ade80" : "#2a7d4f"} radius={[3, 3, 0, 0]} maxBarSize={36}>
+              {range === "jour" && chartData.map((entry, i) => (
+                <Cell key={i} fill={entry.isToday ? (isDark ? "#facc15" : "#ca8a04") : (isDark ? "#4ade80" : "#2a7d4f")} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -3751,7 +3777,7 @@ function Dashboard({ data, onUpdateSleep, onAddHooper, onSaveNote, onToggleCreat
           <LineChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
             <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
-              interval={range === "an" ? 0 : "preserveStartEnd"} />
+              interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
             <YAxis domain={[0, 10]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={tooltipStyle} />
             <Line type="monotone" dataKey="avgRpe" name="RPE" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} connectNulls={false} />
