@@ -1055,32 +1055,70 @@ function useCommunitySessionsSync(session) {
 
 // ─── SESSIONS CATALOG HOOK ────────────────────────────────────────────────────
 
-function useSessionsCatalog() {
+function useSessionsCatalog(userId) {
   const [catalog, setCatalog] = useState([]);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
 
-  useEffect(() => {
+  const fetchCatalog = useCallback(async () => {
     if (!supabase) return;
-    supabase
+    const { data, error } = await supabase
       .from("sessions_catalog")
-      .select("id, type, name, charge, min_recovery, estimated_time, description")
+      .select("id, type, name, charge, min_recovery, estimated_time, description, extra, user_id")
       .eq("is_active", true)
       .order("sort_order", { ascending: true })
-      .order("id", { ascending: true })
-      .then(({ data, error }) => {
-        if (error || !data) return;
-        setCatalog(data.map(r => ({
-          id: r.id,
-          type: r.type,
-          name: r.name,
-          charge: r.charge,
-          minRecovery: r.min_recovery ?? undefined,
-          estimatedTime: r.estimated_time ?? undefined,
-          description: r.description ?? undefined,
-        })));
-      });
+      .order("id", { ascending: true });
+    if (error || !data) return;
+    setCatalog(data.map(r => ({
+      id: r.id,
+      type: r.type,
+      name: r.name,
+      charge: r.charge,
+      minRecovery: r.min_recovery ?? undefined,
+      estimatedTime: r.estimated_time ?? undefined,
+      description: r.description ?? undefined,
+      isCustom: r.user_id != null,
+      ...(r.extra || {}),
+    })));
   }, []);
 
-  return catalog;
+  useEffect(() => { fetchCatalog(); }, [fetchCatalog]);
+
+  const saveUserSession = useCallback(async (session) => {
+    const uid = userIdRef.current;
+    if (!supabase || !uid) return null;
+    const extra = {};
+    if (session.warmup) extra.warmup = session.warmup;
+    if (session.main) extra.main = session.main;
+    if (session.cooldown) extra.cooldown = session.cooldown;
+    if (session.location) extra.location = session.location;
+    const row = {
+      user_id: uid,
+      type: session.type,
+      name: session.name,
+      charge: session.charge,
+      min_recovery: session.minRecovery ?? null,
+      estimated_time: session.estimatedTime ?? null,
+      extra: Object.keys(extra).length ? extra : null,
+      is_active: true,
+      sort_order: 999,
+    };
+    if (session.isCustom && typeof session.id === "number") {
+      await supabase.from("sessions_catalog").update(row).eq("id", session.id).eq("user_id", uid);
+    } else {
+      await supabase.from("sessions_catalog").insert(row);
+    }
+    fetchCatalog();
+  }, [fetchCatalog]);
+
+  const deleteUserSession = useCallback(async (id) => {
+    const uid = userIdRef.current;
+    if (!supabase || !uid) return;
+    await supabase.from("sessions_catalog").delete().eq("id", id).eq("user_id", uid);
+    fetchCatalog();
+  }, [fetchCatalog]);
+
+  return { catalog, saveUserSession, deleteUserSession };
 }
 
 // ─── AUTH PANEL ───────────────────────────────────────────────────────────────
@@ -4684,7 +4722,7 @@ export default function ClimbingPlanner() {
 
   const { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow } = useSupabaseSync();
   const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
-  const catalogSessions = useSessionsCatalog();
+  const { catalog, saveUserSession, deleteUserSession } = useSessionsCatalog(session?.user?.id);
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -4715,6 +4753,19 @@ export default function ClimbingPlanner() {
   useEffect(() => {
     if (!session) setCloudLoaded(false);
   }, [session]);
+
+  // ── Migration one-shot : customSessions locaux → sessions_catalog DB ──
+  const migrationDoneRef = useRef(false);
+  useEffect(() => {
+    if (migrationDoneRef.current) return;
+    if (!session?.user?.id) return;
+    const customs = data?.customSessions;
+    if (!customs || customs.length === 0) return;
+    migrationDoneRef.current = true;
+    Promise.all(customs.map(s => saveUserSession(s))).then(() => {
+      setData(d => ({ ...d, customSessions: [] }));
+    });
+  }, [session?.user?.id, data?.customSessions?.length, saveUserSession]);
 
   const pullFromCloud = async () => {
     const cloudData = await loadFromCloud();
@@ -4839,12 +4890,9 @@ export default function ClimbingPlanner() {
       customSessionForm.onSave(customSession);
       return;
     }
+    // Save to DB catalog (fire-and-forget)
+    saveUserSession(customSession);
     setData(d => {
-      const existing = d.customSessions || [];
-      const idx = existing.findIndex(s => s.id === customSession.id);
-      const updated = idx >= 0
-        ? existing.map(s => s.id === customSession.id ? customSession : s)
-        : [...existing, customSession];
       let weeks = d.weeks;
       // If targetDayIndex is set, also place in the planner day
       if (targetDayIndex !== undefined && targetDayIndex !== null) {
@@ -4873,9 +4921,8 @@ export default function ClimbingPlanner() {
           }
         }
       }
-      return { ...d, customSessions: updated, weeks };
+      return { ...d, weeks };
     });
-    // Sync vers la communauté si connecté
     if (session?.user?.id) {
       pushToCommunity(customSession, session.user.id);
     }
@@ -4885,9 +4932,8 @@ export default function ClimbingPlanner() {
   // ── Handler SessionBuilder ──
   const saveBuiltSession = (builtSession) => {
     const dayIndex = sessionBuilderDay;
+    saveUserSession(builtSession);
     setData(d => {
-      const existing = d.customSessions || [];
-      const updated = [...existing, builtSession];
       let weeks = d.weeks;
       if (dayIndex !== null && dayIndex !== undefined) {
         const mon = getMondayOf(currentDate);
@@ -4896,9 +4942,8 @@ export default function ClimbingPlanner() {
         ws[dayIndex] = [...(ws[dayIndex] || []), { ...builtSession, feedback: null }];
         weeks = { ...d.weeks, [key]: ws };
       }
-      return { ...d, customSessions: updated, weeks };
+      return { ...d, weeks };
     });
-    // Sync vers la communauté si connecté
     if (session?.user?.id) {
       pushToCommunity(builtSession, session.user.id);
     }
@@ -5219,7 +5264,7 @@ export default function ClimbingPlanner() {
           onSave={saveBuiltSession}
           onClose={() => setSessionBuilderDay(null)}
           communitySessions={communitySessions}
-          allSessions={[...catalogSessions, ...(data.customSessions || [])]}
+          allSessions={catalog}
           onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
         />
       )}
@@ -5227,8 +5272,8 @@ export default function ClimbingPlanner() {
         <SessionPicker
           onSelect={s => { addSession(picker.dayIndex, s); setPicker(null); }}
           onClose={() => setPicker(null)}
-          customSessions={data.customSessions || []}
-          sessions={catalogSessions}
+          customSessions={catalog.filter(s => s.isCustom)}
+          sessions={catalog.filter(s => !s.isCustom)}
           onCreateCustom={() => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
         />
       )}
