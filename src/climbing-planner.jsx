@@ -3007,13 +3007,13 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
       {/* Top bar */}
       <div style={styles.timelineTopBar}>
         <span style={styles.timelineTitle}>Planification</span>
-        <button style={styles.timelineEditBtn} onClick={onEdit}>Modifier</button>
+        {onEdit && <button style={styles.timelineEditBtn} onClick={onEdit}>Modifier</button>}
       </div>
 
       {/* Empty state */}
       {mesocycles.length === 0 && (
         <div style={{ color: isDark ? "#5a6060" : "#9a9890", fontSize: 13, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>
-          Aucun mésocycle défini. Cliquez sur Modifier pour commencer.
+          {onEdit ? "Aucun mésocycle défini. Cliquez sur Modifier pour commencer." : "Aucun mésocycle défini."}
         </div>
       )}
 
@@ -3194,19 +3194,19 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
 
 // ─── CYCLES VIEW ─────────────────────────────────────────────────────────────
 
-function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro, customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle, locked, onSetLocked }) {
+function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro, customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle, locked, onSetLocked, canEdit }) {
   const { styles, isDark } = useThemeCtx();
   const [pendingDelete, setPendingDelete] = useState(null);
   const [showCustomCycleForm, setShowCustomCycleForm] = useState(false);
   const [editingCustomCycle, setEditingCustomCycle] = useState(null);
 
-  // ── Timeline mode ──
-  if (locked) {
+  // ── Timeline mode (locked, or athlete who can't edit) ──
+  if (locked || canEdit === false) {
     return (
       <CyclesTimeline
         mesocycles={mesocycles}
         customCycles={customCycles || []}
-        onEdit={() => onSetLocked(false)}
+        onEdit={canEdit === false ? null : () => onSetLocked(false)}
       />
     );
   }
@@ -4189,6 +4189,44 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
             )}
           </div>
         </div>
+      </div>
+
+      {/* ── Rôle (Coach / Athlète) ── */}
+      <div style={styles.profileSection}>
+        <div style={styles.profileSectionTitle}>Rôle</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[{ value: null, label: "Athlète solo" }, { value: "coach", label: "Coach" }, { value: "athlete", label: "Athlète suivi" }].map(opt => {
+            const active = (profile.role ?? null) === opt.value;
+            return (
+              <button
+                key={String(opt.value)}
+                onClick={() => onUpdateProfile({ ...profile, role: opt.value })}
+                style={{
+                  background: active ? (isDark ? "#263228" : "#d4e8db") : "none",
+                  border: `1px solid ${active ? accent + "88" : btnBorder}`,
+                  color: active ? accent : mutedColor,
+                  padding: "7px 16px",
+                  borderRadius: 5,
+                  cursor: "pointer",
+                  fontSize: 11,
+                  fontFamily: "inherit",
+                  fontWeight: active ? 600 : 400,
+                  letterSpacing: "0.04em",
+                }}
+              >{opt.label}</button>
+            );
+          })}
+        </div>
+        {profile.role === "athlete" && (
+          <div style={{ marginTop: 8, fontSize: 11, color: mutedColor, fontStyle: "italic" }}>
+            En mode Athlète suivi, vos cycles sont en lecture seule. Votre coach les modifie pour vous.
+          </div>
+        )}
+        {profile.role === "coach" && (
+          <div style={{ marginTop: 8, fontSize: 11, color: mutedColor, fontStyle: "italic" }}>
+            En mode Coach, vous pouvez créer et modifier les cycles de vos athlètes.
+          </div>
+        )}
       </div>
 
       {/* ── Connexion ── */}
@@ -5239,6 +5277,7 @@ export default function ClimbingPlanner() {
           onDeleteCustomCycle={deleteCustomCycle}
           locked={!!data.cyclesLocked}
           onSetLocked={val => setData(d => ({ ...d, cyclesLocked: val }))}
+          canEdit={(data.profile?.role ?? null) !== "athlete"}
         />
       )}
 
