@@ -742,7 +742,7 @@ function makeStyles(isDark) {
     cycleDateEnd: { fontSize: 10, color: t.textMuted, whiteSpace: "nowrap", flexShrink: 0 },
     cycleMicroDate: { fontSize: 10, color: t.textDim, whiteSpace: "nowrap", flexShrink: 0, minWidth: 52 },
     // ── Custom session form ──
-    customFormOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "blur(4px)" },
+    customFormOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 250, backdropFilter: "blur(4px)" },
     customForm: { background: t.modalBg, border: `1px solid ${t.border2}`, borderRadius: 10, width: "min(680px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)" },
     customFormBody: { overflowY: "auto", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, flex: 1 },
     customFormRow: { display: "flex", gap: 10, alignItems: "center" },
@@ -929,7 +929,7 @@ function SyncButtons({ data, onImport, compact, syncStatus, session, onUpload, o
 
   const syncIcon = syncStatus === "saving" ? "⟳"
     : syncStatus === "saved" ? "✓"
-    : syncStatus === "offline" ? "⚡"
+    : syncStatus === "offline" ? "—"
     : null;
   const syncColor = syncStatus === "saved" ? "#4ade80"
     : syncStatus === "offline" ? "#f97316"
@@ -946,12 +946,12 @@ function SyncButtons({ data, onImport, compact, syncStatus, session, onUpload, o
       )}
       {session && onUpload && (
         <button style={{ ...btnStyle, color: "#4ade80" }} onClick={onUpload} title="Envoyer mes données vers le cloud (écraser)">
-          ☁↑
+          ↑
         </button>
       )}
       {session && onPull && (
         <button style={{ ...btnStyle, color: "#60a5fa" }} onClick={onPull} title="Charger les données depuis le cloud (écraser local)">
-          ☁↓
+          ↓
         </button>
       )}
       {!compact && (
@@ -1188,7 +1188,7 @@ function AuthPanel({ session, onAuthChange, fullWidth }) {
             style={{ ...styles.authBtn, fontSize: 10, padding: "3px 8px", opacity: 0.75 }}
             onClick={() => go("setpw")}
             title="Définir un mot de passe pour se connecter sans magic link"
-          >🔑 Définir MDP</button>
+          >Définir MDP</button>
           <button style={styles.authLogoutBtn} onClick={handleLogout}>Déconnexion</button>
         </div>
       </div>
@@ -1199,7 +1199,7 @@ function AuthPanel({ session, onAuthChange, fullWidth }) {
   if (mode === "magiclink") return (
     <div style={barStyle}>
       {sent ? (
-        <span style={styles.authSentMsg}>📧 Lien envoyé — vérifiez vos mails</span>
+        <span style={styles.authSentMsg}>Lien envoyé — vérifiez vos mails</span>
       ) : (
         <>
           <input
@@ -1416,10 +1416,10 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={styles.customFormLabel}>Charge d'entraînement</span>
               <button style={styles.calcBtn} onClick={() => { setCalcOpen(o => !o); setInfoOpen(false); }}>
-                🧮 Calculateur
+                Calculateur
               </button>
               <button style={{ ...styles.calcBtn, background: "none" }} onClick={() => { setInfoOpen(o => !o); setCalcOpen(false); }}>
-                ℹ Infos
+                Infos
               </button>
             </div>
             <div style={styles.customFormChargeRow}>
@@ -1592,7 +1592,7 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
                 </button>
               ))}
               <button style={{ ...styles.customFormSectionTab, marginLeft: "auto", ...(preview ? styles.customFormSectionTabActive : {}) }} onClick={() => setPreview(p => !p)}>
-                {preview ? "✎ Éditer" : "👁 Aperçu"}
+                {preview ? "Éditer" : "Aperçu"}
               </button>
             </div>
             {preview ? (
@@ -1626,20 +1626,25 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
 // ─── BLOCK TYPE CONFIG ────────────────────────────────────────────────────────
 
 const BLOCK_TYPES = {
-  "Échauffement":    { icon: "🔥", color: "#f97316", defaultCharge: 5,  defaultDuration: 15 },
-  "Grimpe":          { icon: "🧗", color: "#4ade80", defaultCharge: 24, defaultDuration: 90 },
-  "Exercices":       { icon: "💪", color: "#60a5fa", defaultCharge: 12, defaultDuration: 20 },
-  "Suspension":      { icon: "🤲", color: "#a78bfa", defaultCharge: 0,  defaultDuration: 15 },
-  "Retour au calme": { icon: "🧘", color: "#94a3b8", defaultCharge: 3,  defaultDuration: 10 },
+  "Échauffement":    { icon: "", color: "#f97316", defaultCharge: 5,  defaultDuration: 15 },
+  "Grimpe":          { icon: "", color: "#4ade80", defaultCharge: 24, defaultDuration: 90 },
+  "Exercices":       { icon: "", color: "#60a5fa", defaultCharge: 12, defaultDuration: 20 },
+  "Suspension":      { icon: "", color: "#a78bfa", defaultCharge: 0,  defaultDuration: 15 },
+  "Retour au calme": { icon: "", color: "#94a3b8", defaultCharge: 3,  defaultDuration: 10 },
 };
 
 // ─── COMPOSANT: Éditeur de bloc ───────────────────────────────────────────────
 
-function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, allSessions }) {
+function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, allSessions, onCreateCustom }) {
   const { styles, isDark } = useThemeCtx();
   const cfg = BLOCK_TYPES[block.type] || BLOCK_TYPES["Grimpe"];
   const [open, setOpen] = useState(true);
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [nbMouvements, setNbMouvements] = useState("");
+  const [calcZone, setCalcZone] = useState(3);
+  const [calcComplexity, setCalcComplexity] = useState(3);
 
+  const hasCharge = block.type === "Grimpe" || block.type === "Exercices";
   const grimpePresets = allSessions.filter(s => s.type === "Grimpe");
   const exercicePresets = allSessions.filter(s => s.type === "Exercice");
 
@@ -1661,7 +1666,6 @@ function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMove
     }}>
       {/* Header du bloc */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", cursor: "pointer" }} onClick={() => setOpen(o => !o)}>
-        <span style={{ fontSize: 13 }}>{cfg.icon}</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, flex: 1 }}>{block.type}</span>
         {block.type === "Grimpe" && block.presetName && (
           <span style={{ fontSize: 10, color: isDark ? "#8a9090" : "#6b7060", fontStyle: "italic" }}>{block.presetName}</span>
@@ -1669,7 +1673,7 @@ function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMove
         {block.type === "Exercices" && block.name && (
           <span style={{ fontSize: 10, color: isDark ? "#8a9090" : "#6b7060", fontStyle: "italic" }}>{block.name}</span>
         )}
-        {block.type !== "Suspension" && (
+        {hasCharge && (
           <span style={{ fontSize: 10, color: getChargeColor(block.charge || 0), fontWeight: 700 }}>⚡{block.charge || 0}</span>
         )}
         <span style={{ fontSize: 10, color: isDark ? "#555" : "#aaa" }}>{open ? "▲" : "▼"}</span>
@@ -1688,20 +1692,25 @@ function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMove
           {block.type === "Grimpe" && (
             <div>
               <div style={labelStyle}>Modèle de grimpe (optionnel)</div>
-              <select
-                style={{ ...inputStyle, width: "100%" }}
-                value={block.presetId ?? ""}
-                onChange={e => {
-                  const preset = grimpePresets.find(s => String(s.id) === e.target.value);
-                  if (preset) onUpdate({ presetId: preset.id, presetName: preset.name, charge: preset.charge });
-                  else onUpdate({ presetId: null, presetName: null });
-                }}
-              >
-                <option value="">— Libre (sans modèle) —</option>
-                {grimpePresets.map(s => (
-                  <option key={s.id} value={s.id}>{s.name} (⚡{s.charge})</option>
-                ))}
-              </select>
+              <div style={{ display: "flex", gap: 6 }}>
+                <select
+                  style={{ ...inputStyle, flex: 1 }}
+                  value={block.presetId ?? ""}
+                  onChange={e => {
+                    const preset = grimpePresets.find(s => String(s.id) === e.target.value);
+                    if (preset) onUpdate({ presetId: preset.id, presetName: preset.name, charge: preset.charge });
+                    else onUpdate({ presetId: null, presetName: null });
+                  }}
+                >
+                  <option value="">— Libre (sans modèle) —</option>
+                  {grimpePresets.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} (⚡{s.charge})</option>
+                  ))}
+                </select>
+                {onCreateCustom && (
+                  <button style={styles.calcBtn} onClick={() => onCreateCustom("Grimpe")}>＋ Créer</button>
+                )}
+              </div>
             </div>
           )}
 
@@ -1709,19 +1718,25 @@ function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMove
           {block.type === "Exercices" && (
             <div>
               <div style={labelStyle}>Exercice</div>
-              <select
-                style={{ ...inputStyle, width: "100%" }}
-                value={block.exerciseId ?? ""}
-                onChange={e => {
-                  const ex = exercicePresets.find(s => String(s.id) === e.target.value);
-                  if (ex) onUpdate({ exerciseId: ex.id, name: ex.name, charge: ex.charge });
-                }}
-              >
-                <option value="">— Choisir un exercice —</option>
-                {exercicePresets.map(s => (
-                  <option key={s.id} value={s.id}>{s.name} (⚡{s.charge})</option>
-                ))}
-              </select>
+              <div style={{ display: "flex", gap: 6 }}>
+                <select
+                  style={{ ...inputStyle, flex: 1 }}
+                  value={block.exerciseId ?? ""}
+                  onChange={e => {
+                    const ex = exercicePresets.find(s => String(s.id) === e.target.value);
+                    if (ex) onUpdate({ exerciseId: ex.id, name: ex.name, charge: ex.charge });
+                    else onUpdate({ exerciseId: null, name: null });
+                  }}
+                >
+                  <option value="">— Choisir un exercice —</option>
+                  {exercicePresets.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} (⚡{s.charge})</option>
+                  ))}
+                </select>
+                {onCreateCustom && (
+                  <button style={styles.calcBtn} onClick={() => onCreateCustom("Exercice")}>＋ Créer</button>
+                )}
+              </div>
             </div>
           )}
 
@@ -1732,22 +1747,82 @@ function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMove
             </div>
           )}
 
-          {/* Champs communs (sauf Suspension) */}
-          {block.type !== "Suspension" && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {/* Charge */}
-              <div style={{ flex: "1 1 80px" }}>
-                <div style={labelStyle}>Charge ⚡</div>
-                <input type="number" min="0" max="100" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+          {/* Charge + calculateur (Grimpe et Exercices seulement) */}
+          {hasCharge && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span style={labelStyle}>Charge ⚡</span>
+                <button style={styles.calcBtn} onClick={() => setCalcOpen(o => !o)}>
+                  {calcOpen ? "Fermer calc." : "Calculateur"}
+                </button>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: getChargeColor(block.charge || 0), minWidth: 28 }}>{block.charge || 0}</span>
+                <input type="range" min="0" max="216" style={styles.customFormSlider}
+                  value={block.charge ?? 0} onChange={e => onUpdate({ charge: +e.target.value })} />
+                <input type="number" min="0" max="216" style={{ ...inputStyle, width: 52, textAlign: "center" }}
                   value={block.charge ?? ""} onChange={e => onUpdate({ charge: +e.target.value })} />
               </div>
-              {/* Durée */}
+
+              {calcOpen && (() => {
+                const volZone = getNbMouvementsZone(+nbMouvements);
+                const volLabel = VOLUME_ZONES[volZone - 1].label;
+                const computed = nbMouvements ? volZone * calcZone * calcComplexity : null;
+                return (
+                  <div style={{ ...styles.calcPanel, marginTop: 6 }}>
+                    <div style={styles.calcRow}>
+                      <div style={styles.calcField}>
+                        <span style={styles.calcLabel}>Nb de mouvements</span>
+                        <input style={styles.calcInput} type="number" min="1" placeholder="ex: 40"
+                          value={nbMouvements} onChange={e => setNbMouvements(e.target.value)} />
+                        {nbMouvements && (
+                          <span style={styles.calcVolumeHint}>
+                            → Zone {volZone} · {volLabel} ({VOLUME_ZONES[volZone - 1].range})
+                          </span>
+                        )}
+                      </div>
+                      <div style={styles.calcField}>
+                        <span style={styles.calcLabel}>Zone d'intensité</span>
+                        <select style={styles.calcSelect} value={calcZone} onChange={e => setCalcZone(+e.target.value)}>
+                          {INTENSITY_ZONES.map(z => (
+                            <option key={z.index} value={z.index}>{z.index} – {z.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={styles.calcField}>
+                        <span style={styles.calcLabel}>Complexité</span>
+                        <select style={styles.calcSelect} value={calcComplexity} onChange={e => setCalcComplexity(+e.target.value)}>
+                          {COMPLEXITY_ZONES.map(z => (
+                            <option key={z.index} value={z.index}>{z.index} – {z.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {computed !== null && (
+                      <div style={styles.calcResultRow}>
+                        <span style={{ ...styles.calcResultVal, color: getChargeColor(computed) }}>{computed}</span>
+                        <span style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7060" }}>
+                          = Vol.{volZone} × Int.{calcZone} × Compl.{calcComplexity}
+                        </span>
+                        <button style={styles.calcApplyBtn} onClick={() => { onUpdate({ charge: computed }); setCalcOpen(false); setNbMouvements(""); }}>
+                          Appliquer →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Durée + Lieu (sauf Suspension) */}
+          {block.type !== "Suspension" && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 80px" }}>
                 <div style={labelStyle}>Durée (min)</div>
                 <input type="number" min="0" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
                   value={block.duration ?? ""} onChange={e => onUpdate({ duration: +e.target.value })} />
               </div>
-              {/* Lieu (pas pour Exercices) */}
               {block.type !== "Exercices" && (
                 <div style={{ flex: "2 1 120px" }}>
                   <div style={labelStyle}>Lieu</div>
@@ -1778,7 +1853,7 @@ function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMove
 
 // ─── MODAL: Créer / construire une séance ─────────────────────────────────────
 
-function SessionBuilder({ onSave, onClose, communitySessions, allSessions }) {
+function SessionBuilder({ onSave, onClose, communitySessions, allSessions, onCreateCustom }) {
   const { styles, isDark } = useThemeCtx();
   const [title, setTitle] = useState("");
   const [estimatedTime, setEstimatedTime] = useState("");
@@ -1790,7 +1865,7 @@ function SessionBuilder({ onSave, onClose, communitySessions, allSessions }) {
   const [addingType, setAddingType] = useState(false);
   const [communityOpen, setCommunityOpen] = useState(false);
 
-  const totalCharge = blocks.reduce((s, b) => s + (b.charge || 0), 0);
+  const totalCharge = blocks.filter(b => b.type === "Grimpe" || b.type === "Exercices").reduce((s, b) => s + (b.charge || 0), 0);
 
   const addBlock = (type) => {
     const cfg = BLOCK_TYPES[type];
@@ -1860,7 +1935,7 @@ function SessionBuilder({ onSave, onClose, communitySessions, allSessions }) {
                 style={{ ...styles.createCustomBtn, marginBottom: 0 }}
                 onClick={() => setCommunityOpen(o => !o)}
               >
-                🌐 Charger un modèle communauté {communityOpen ? "▲" : "▼"}
+                Charger un modèle communauté {communityOpen ? "▲" : "▼"}
               </button>
               {communityOpen && (
                 <div style={{ marginTop: 6, maxHeight: 160, overflowY: "auto", border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`, borderRadius: 6 }}>
@@ -1924,6 +1999,7 @@ function SessionBuilder({ onSave, onClose, communitySessions, allSessions }) {
                 onMoveUp={() => moveBlock(bl.id, -1)}
                 onMoveDown={() => moveBlock(bl.id, 1)}
                 allSessions={allSessions}
+                onCreateCustom={onCreateCustom}
               />
             ))}
 
@@ -1950,7 +2026,7 @@ function SessionBuilder({ onSave, onClose, communitySessions, allSessions }) {
                       }}
                       onClick={() => addBlock(type)}
                     >
-                      {cfg.icon} {type}
+                      {type}
                     </button>
                   );
                 })}
@@ -2040,7 +2116,7 @@ function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom }) {
                       <span style={styles.sessionItemName}>{s.name}</span>
                       {(s.estimatedTime || s.location) && (
                         <span style={{ fontSize: 10, color: styles.dashText }}>
-                          {s.estimatedTime ? `⏱${s.estimatedTime}min` : ""}{s.location ? `  📍${s.location}` : ""}
+                          {s.estimatedTime ? `${s.estimatedTime}min` : ""}{s.location ? `  ${s.location}` : ""}
                         </span>
                       )}
                     </div>
@@ -2137,7 +2213,7 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
           </button>
           <div style={{ marginLeft: "auto", display: "flex", gap: 2, padding: "0 8px", alignItems: "center" }}>
             {onEdit && (
-              <button style={{ ...styles.actionBtn, fontSize: 14, opacity: 0.65 }} onClick={onEdit} title="Modifier la séance">⚙</button>
+              <button style={{ ...styles.actionBtn, fontSize: 11, opacity: 0.65 }} onClick={onEdit} title="Modifier la séance">Modifier</button>
             )}
             <button style={styles.closeBtn} onClick={onClose}>✕</button>
           </div>
@@ -2155,9 +2231,9 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
             <span style={{ ...styles.chargePill, background: getChargeColor(session.charge) + "33", color: getChargeColor(session.charge), border: `1px solid ${getChargeColor(session.charge)}55` }}>
               ⚡{session.charge}
             </span>
-            {session.estimatedTime && <span style={styles.detailMetaChip}>⏱ {session.estimatedTime} min</span>}
-            {session.location      && <span style={styles.detailMetaChip}>📍 {session.location}</span>}
-            {session.minRecovery   && <span style={styles.detailMetaChip}>⏳ {session.minRecovery}h récup</span>}
+            {session.estimatedTime && <span style={styles.detailMetaChip}>{session.estimatedTime} min</span>}
+            {session.location      && <span style={styles.detailMetaChip}>{session.location}</span>}
+            {session.minRecovery   && <span style={styles.detailMetaChip}>{session.minRecovery}h récup</span>}
             {mesoLabel && <span style={{ ...styles.sessionCardMeso, background: mesoColor + "22", color: mesoColor, border: `1px solid ${mesoColor}55` }}>{mesoLabel}</span>}
             {weekMeta?.microcycle && <span style={styles.detailMetaChip}>{weekMeta.microcycle}</span>}
           </div>
@@ -2389,15 +2465,15 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
               {/* Badges ancienne séance */}
               {!s.blocks && s.isCustom && (
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
-                  <span style={styles.customBadge}>✎ perso</span>
-                  {s.estimatedTime && <span style={{ ...styles.customBadge, background: "none", borderColor: "transparent", color: styles.dashText }}>⏱{s.estimatedTime}min</span>}
+                  <span style={styles.customBadge}>perso</span>
+                  {s.estimatedTime && <span style={{ ...styles.customBadge, background: "none", borderColor: "transparent", color: styles.dashText }}>{s.estimatedTime}min</span>}
                   {meso && <span style={{ ...styles.sessionCardMeso, background: mesoColor + "22", color: mesoColor, border: `1px solid ${mesoColor}55` }}>{meso}</span>}
                 </div>
               )}
               <div style={styles.sessionCardFooter}>
                 <span style={{ ...styles.sessionCardCharge, color: getChargeColor(s.charge) }}>⚡{s.charge}</span>
-                {s.estimatedTime && !s.blocks && <span style={{ fontSize: 9, color: isDark ? "#606860" : "#9a9080" }}>⏱{s.estimatedTime}min</span>}
-                {s.blocks && s.estimatedTime && <span style={{ fontSize: 9, color: isDark ? "#606860" : "#9a9080" }}>⏱{s.estimatedTime}min</span>}
+                {s.estimatedTime && !s.blocks && <span style={{ fontSize: 9, color: isDark ? "#606860" : "#9a9080" }}>{s.estimatedTime}min</span>}
+                {s.blocks && s.estimatedTime && <span style={{ fontSize: 9, color: isDark ? "#606860" : "#9a9080" }}>{s.estimatedTime}min</span>}
                 {s.feedback && (
                   <span style={styles.feedbackDot} title="Feedback enregistré">
                     {s.feedback.done ? "✓" : "✗"}
@@ -2896,13 +2972,13 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
       {/* Top bar */}
       <div style={styles.timelineTopBar}>
         <span style={styles.timelineTitle}>Planification</span>
-        <button style={styles.timelineEditBtn} onClick={onEdit}>⚙ Modifier</button>
+        <button style={styles.timelineEditBtn} onClick={onEdit}>Modifier</button>
       </div>
 
       {/* Empty state */}
       {mesocycles.length === 0 && (
         <div style={{ color: isDark ? "#5a6060" : "#9a9890", fontSize: 13, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>
-          Aucun mésocycle défini. Cliquez sur ⚙ Modifier pour commencer.
+          Aucun mésocycle défini. Cliquez sur Modifier pour commencer.
         </div>
       )}
 
@@ -3247,7 +3323,7 @@ function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMi
                 <span style={styles.customCycleDate}>{dateInfo}</span>
                 {cc.description && <span style={{ ...styles.customCycleDate, fontStyle: "italic", marginTop: 1 }}>{cc.description}</span>}
               </div>
-              <button style={styles.cycleDeleteBtn} onClick={() => { setEditingCustomCycle(cc); setShowCustomCycleForm(false); }} title="Modifier">✎</button>
+              <button style={styles.cycleDeleteBtn} onClick={() => { setEditingCustomCycle(cc); setShowCustomCycleForm(false); }} title="Modifier">Mod.</button>
               <button style={styles.cycleDeleteBtn} onClick={() => setPendingDelete({ type: "customCycle", id: cc.id, label: cc.name })} title="Supprimer">✕</button>
             </div>
           );
@@ -3712,7 +3788,7 @@ function HooperSection({ hoopers, onAdd, range }) {
           onClick={() => open ? setOpen(false) : openForm(!todayEntry ? false : true)}
           style={styles.sleepImportBtn}
         >
-          {open ? "✕ Fermer" : todayEntry ? "✎ Modifier" : "+ Remplir"}
+          {open ? "✕ Fermer" : todayEntry ? "Modifier" : "+ Remplir"}
         </button>
       </div>
 
@@ -3917,7 +3993,7 @@ function PhotoCropModal({ onSave, onClose }) {
 
         {!imgSrc ? (
           <div style={{ textAlign: "center", padding: "32px 0" }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📷</div>
+            <div style={{ fontSize: 14, marginBottom: 12, color: isDark ? "#555" : "#aaa" }}>Photo</div>
             <button
               style={{ background: "none", border: `1px solid ${accent}55`, color: accent, padding: "8px 20px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}
               onClick={() => fileRef.current?.click()}
@@ -4034,7 +4110,7 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
             <div style={{ ...styles.profileAvatar, borderColor: accent + "55" }} onClick={() => setShowCrop(true)}>
               {photoUrl
                 ? <img src={photoUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
-                : <span style={{ fontSize: 40, color: mutedColor }}>👤</span>
+                : <span style={{ fontSize: 28, color: mutedColor }}>?</span>
               }
             </div>
             <span style={styles.profileAvatarHint} onClick={() => setShowCrop(true)}>
@@ -4097,7 +4173,7 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
             onClick={toggleTheme}
             style={{ background: "none", border: `1px solid ${btnBorder}`, color: mutedColor, padding: "6px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", letterSpacing: "0.06em" }}
           >
-            {isDark ? "☀ Mode clair" : "● Mode sombre"}
+            {isDark ? "Mode clair" : "Mode sombre"}
           </button>
         </div>
       </div>
@@ -4114,13 +4190,13 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
               <button
                 style={{ background: "none", border: `1px solid ${btnBorder}`, color: accent, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
                 onClick={onUpload} title="Envoyer mes données vers le cloud (écraser)"
-              >☁ ↑ Envoyer vers le cloud</button>
+              >↑ Envoyer vers le cloud</button>
             )}
             {onPull && (
               <button
                 style={{ background: "none", border: `1px solid ${btnBorder}`, color: isDark ? "#60a5fa" : "#2563eb", padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
                 onClick={onPull} title="Charger les données depuis le cloud (écraser local)"
-              >☁ ↓ Charger depuis le cloud</button>
+              >↓ Charger depuis le cloud</button>
             )}
           </div>
         )}
@@ -4879,7 +4955,7 @@ export default function ClimbingPlanner() {
     >
       {profilePhoto
         ? <img src={profilePhoto} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
-        : <span style={{ fontSize: 13 }}>👤</span>
+        : <span style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7f70" }}>—</span>
       }
     </button>
   );
@@ -4887,7 +4963,7 @@ export default function ClimbingPlanner() {
   // Small sync status indicator for header
   const syncDot = syncStatus === "saving" ? <span style={{ fontSize: 11, color: "#888" }} title="Synchronisation…">⟳</span>
     : syncStatus === "saved" ? <span style={{ fontSize: 11, color: isDark ? "#4ade80" : "#2a7d4f" }} title="Synchronisé">✓</span>
-    : syncStatus === "offline" ? <span style={{ fontSize: 11, color: "#f97316" }} title="Hors ligne">⚡</span>
+    : syncStatus === "offline" ? <span style={{ fontSize: 11, color: "#f97316" }} title="Hors ligne">—</span>
     : null;
 
   return (
@@ -4900,7 +4976,7 @@ export default function ClimbingPlanner() {
         <div style={styles.headerMobile}>
           <div style={styles.headerMobileRow1}>
             <div style={styles.headerLeft}>
-              <span style={styles.logo}>⛰</span>
+              <span style={styles.logo}>P</span>
               <div style={styles.appTitle}>PLANIF ESCALADE</div>
             </div>
             <div style={styles.headerMobileRight}>
@@ -4943,7 +5019,7 @@ export default function ClimbingPlanner() {
         /* ── HEADER DESKTOP ── */
         <div style={styles.header}>
           <div style={styles.headerLeft}>
-            <span style={styles.logo}>⛰</span>
+            <span style={styles.logo}>P</span>
             <div>
               <div style={styles.appTitle}>PLANIF ESCALADE</div>
               <div style={styles.appSub}>
@@ -5146,6 +5222,7 @@ export default function ClimbingPlanner() {
           onClose={() => setSessionBuilderDay(null)}
           communitySessions={communitySessions}
           allSessions={[...SESSIONS, ...(data.customSessions || [])]}
+          onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
         />
       )}
       {picker && (
