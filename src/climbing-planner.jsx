@@ -17,40 +17,6 @@ const supabase = import.meta.env.VITE_SUPABASE_URL
 
 // ─── DATA ────────────────────────────────────────────────────────────────────
 
-const SESSIONS = [
-  { id: 1, type: "Exercice", name: "Récup active", charge: 0 },
-  { id: 2, type: "Exercice", name: "Renfo antagoniste bas du corps", charge: 3 },
-  { id: 3, type: "Exercice", name: "Renfo antagoniste haut du corps", charge: 3 },
-  { id: 4, type: "Exercice", name: "Abdos au sol", charge: 6 },
-  { id: 5, type: "Exercice", name: "Travail de dalle équilibre", charge: 6 },
-  { id: 6, type: "Exercice", name: "Anneaux / TRX (force)", charge: 8 },
-  { id: 7, type: "Exercice", name: "Force-endurance doigts", charge: 12 },
-  { id: 8, type: "Exercice", name: "Gainage suspendu (force-endurance)", charge: 12 },
-  { id: 9, type: "Exercice", name: "Gullich (force-endurance)", charge: 12 },
-  { id: 10, type: "Exercice", name: "Tirage prise (force-endurance)", charge: 12 },
-  { id: 11, type: "Exercice", name: "Gainage suspendu (force)", charge: 20 },
-  { id: 12, type: "Exercice", name: "Gullich (force)", charge: 20 },
-  { id: 13, type: "Exercice", name: "Tirage prise lestée (force)", charge: 20 },
-  { id: 14, type: "Exercice", name: "Force max biceps", charge: 25 },
-  { id: 15, type: "Exercice", name: "Force doigts", charge: 25 },
-  { id: 16, type: "Grimpe", name: "Récup active / mobilité", charge: 0 },
-  { id: 17, type: "Grimpe", name: "Bloc libre plaisir 2h max", charge: 16 },
-  { id: 18, type: "Grimpe", name: "Voies qualitatif (4-5 essais)", charge: 16 },
-  { id: 19, type: "Grimpe", name: "Journée en bloc extérieurs", charge: 18 },
-  { id: 20, type: "Grimpe", name: "Endurance au seuil (doublettes etc)", charge: 20 },
-  { id: 21, type: "Grimpe", name: "Journée en falaise diff", charge: 20 },
-  { id: 22, type: "Grimpe", name: "Empilement de bloc / fartlek", charge: 24 },
-  { id: 23, type: "Grimpe", name: "Travail de blocs très durs", charge: 24 },
-  { id: 24, type: "Grimpe", name: "Grande voie (250-300m)", charge: 24 },
-  { id: 25, type: "Grimpe", name: "Panneau : endurance de force / rési longue", charge: 24 },
-  { id: 26, type: "Grimpe", name: "Muscu dans le geste / PPO (F-E)", charge: 27 },
-  { id: 27, type: "Grimpe", name: "Panneau : force-endurance / rési courte", charge: 27 },
-  { id: 28, type: "Grimpe", name: "Travail de coordination complexe", charge: 30 },
-  { id: 29, type: "Grimpe", name: "Bloc sur panneau / Moon / Kilter", charge: 36 },
-  { id: 30, type: "Grimpe", name: "Pletnev biceps", charge: 40 },
-  { id: 31, type: "Grimpe", name: "Simulation compète", charge: 40 },
-  { id: 32, type: "Grimpe", name: "Week-end de compétition", charge: 54 },
-];
 
 const MESOCYCLES = [
   { label: "Mise en condition", color: "#4ade80" },
@@ -1090,7 +1056,7 @@ function useCommunitySessionsSync(session) {
 // ─── SESSIONS CATALOG HOOK ────────────────────────────────────────────────────
 
 function useSessionsCatalog() {
-  const [catalog, setCatalog] = useState(SESSIONS); // fallback immédiat sur les constantes
+  const [catalog, setCatalog] = useState([]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -1101,7 +1067,7 @@ function useSessionsCatalog() {
       .order("sort_order", { ascending: true })
       .order("id", { ascending: true })
       .then(({ data, error }) => {
-        if (error || !data || data.length === 0) return; // garde le fallback
+        if (error || !data) return;
         setCatalog(data.map(r => ({
           id: r.id,
           type: r.type,
@@ -2093,7 +2059,7 @@ function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom, sess
   const { styles } = useThemeCtx();
   const [filter, setFilter] = useState("Tous");
   const [search, setSearch] = useState("");
-  const catalogSessions = sessions || SESSIONS;
+  const catalogSessions = sessions || [];
 
   const filtered = catalogSessions.filter(s => {
     const matchType = filter === "Tous" || s.type === filter;
