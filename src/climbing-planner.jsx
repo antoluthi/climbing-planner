@@ -966,32 +966,51 @@ function useSupabaseSync() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Build the flat columns synced alongside the JSONB blob
+  // Build the flat columns synced alongside the JSONB blob.
+  // status is NOT included — it is admin-only (set once at onboarding or via DB).
   const buildRow = useCallback((planData, userId) => ({
-    user_id: userId,
-    data: planData,
+    user_id:    userId,
+    data:       planData,
     first_name: planData?.profile?.firstName ?? null,
     last_name:  planData?.profile?.lastName  ?? null,
-    status:     planData?.profile?.role      ?? null,
   }), []);
 
   const loadFromCloud = useCallback(async () => {
     if (!supabase) return null;
-    const { data, error } = await supabase
+    // Try to read extra columns; fall back gracefully if they don't exist yet.
+    let row = null;
+    const { data: full, error: fullErr } = await supabase
       .from("climbing_plans")
       .select("data, first_name, last_name, status")
       .maybeSingle();
-    if (error) return null;
-    if (!data) return null;
-    // status column is the source of truth for role
-    const blob = data.data ?? {};
+    if (!fullErr) {
+      row = full;
+    } else {
+      // Columns likely not yet added — fall back to JSONB only
+      const { data: slim } = await supabase
+        .from("climbing_plans")
+        .select("data")
+        .maybeSingle();
+      row = slim;
+    }
+    if (!row) return null;
+    const blob = row.data ?? {};
     const profile = {
       ...(blob.profile ?? {}),
-      ...(data.first_name != null ? { firstName: data.first_name } : {}),
-      ...(data.last_name  != null ? { lastName:  data.last_name  } : {}),
-      ...("status" in data        ? { role:       data.status     } : {}),
+      ...(row.first_name != null ? { firstName: row.first_name } : {}),
+      ...(row.last_name  != null ? { lastName:  row.last_name  } : {}),
+      // status column is authoritative for role (overrides blob value)
+      ...("status" in (row ?? {}) ? { role: row.status } : {}),
     };
     return { ...blob, profile };
+  }, []);
+
+  // Write status to its own column — called only from onboarding.
+  const writeStatus = useCallback(async (userId, role) => {
+    if (!supabase || !userId) return;
+    await supabase
+      .from("climbing_plans")
+      .upsert({ user_id: userId, status: role }, { onConflict: "user_id" });
   }, []);
 
   const saveToCloud = useCallback((planData, userId) => {
@@ -1026,7 +1045,7 @@ function useSupabaseSync() {
     }
   }, [buildRow]);
 
-  return { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow };
+  return { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus };
 }
 
 // ─── COMMUNITY SESSIONS HOOK ──────────────────────────────────────────────────
@@ -4873,7 +4892,7 @@ export default function ClimbingPlanner() {
     return !d;
   });
 
-  const { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow } = useSupabaseSync();
+  const { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus } = useSupabaseSync();
   const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
   const { catalog, saveUserSession, deleteUserSession } = useSessionsCatalog(session?.user?.id);
 
@@ -4886,26 +4905,41 @@ export default function ClimbingPlanner() {
   const weekMeta = data.weekMeta[wKey] || { mesocycle: "", microcycle: "", note: "" };
 
   // Phase 1 : localStorage (sync, immédiat)
-  // Phase 2 : cloud au premier login
+  // Phase 2 : cloud au premier login (données complètes)
   useEffect(() => {
     if (!session || cloudLoaded) return;
     loadFromCloud().then(cloudData => {
       setCloudLoaded(true);
       if (cloudData) {
-        // Cloud has data → merge: prefer cloud but keep local weeks not in cloud
         setData(cloudData);
         saveData(cloudData);
       } else {
-        // Cloud empty (data created before login) → push local data up immediately
+        // Cloud empty → push local data up immediately
         uploadNow(data, session.user.id);
       }
     });
   }, [session, cloudLoaded, loadFromCloud, uploadNow]);
 
-  // Réinitialiser cloudLoaded si l'utilisateur change de session
+  // Phase 2b : re-lire le status depuis la DB à chaque changement de session
+  // (sans écraser toutes les données locales)
   useEffect(() => {
-    if (!session) setCloudLoaded(false);
-  }, [session]);
+    if (!session) { setCloudLoaded(false); return; }
+    if (!cloudLoaded) return; // la Phase 2 s'en charge
+    supabase && supabase
+      .from("climbing_plans")
+      .select("status, first_name, last_name")
+      .maybeSingle()
+      .then(({ data: row }) => {
+        if (!row) return;
+        setData(d => {
+          const p = { ...(d.profile ?? {}) };
+          if ("status" in row)         p.role      = row.status;
+          if (row.first_name != null)  p.firstName = row.first_name;
+          if (row.last_name  != null)  p.lastName  = row.last_name;
+          return { ...d, profile: p };
+        });
+      });
+  }, [session, cloudLoaded]);
 
   // ── Migration one-shot : customSessions locaux → sessions_catalog DB ──
   const migrationDoneRef = useRef(false);
@@ -5465,8 +5499,8 @@ export default function ClimbingPlanner() {
       {session && cloudLoaded && !("role" in (data.profile || {})) && (
         <RoleOnboardingModal
           onSelect={role => {
-            const newProfile = { ...(data.profile || {}), role };
-            setData(d => ({ ...d, profile: newProfile }));
+            setData(d => ({ ...d, profile: { ...(d.profile || {}), role } }));
+            writeStatus(session.user.id, role);
           }}
         />
       )}
