@@ -1087,6 +1087,36 @@ function useCommunitySessionsSync(session) {
   return { communitySessions, loading, pushToCommunity, deleteFromCommunity, fetchCommunity };
 }
 
+// ─── SESSIONS CATALOG HOOK ────────────────────────────────────────────────────
+
+function useSessionsCatalog() {
+  const [catalog, setCatalog] = useState(SESSIONS); // fallback immédiat sur les constantes
+
+  useEffect(() => {
+    if (!supabase) return;
+    supabase
+      .from("sessions_catalog")
+      .select("id, type, name, charge, min_recovery, estimated_time, description")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true })
+      .then(({ data, error }) => {
+        if (error || !data || data.length === 0) return; // garde le fallback
+        setCatalog(data.map(r => ({
+          id: r.id,
+          type: r.type,
+          name: r.name,
+          charge: r.charge,
+          minRecovery: r.min_recovery ?? undefined,
+          estimatedTime: r.estimated_time ?? undefined,
+          description: r.description ?? undefined,
+        })));
+      });
+  }, []);
+
+  return catalog;
+}
+
 // ─── AUTH PANEL ───────────────────────────────────────────────────────────────
 
 function AuthPanel({ session, onAuthChange, fullWidth }) {
@@ -2059,12 +2089,13 @@ function SessionBuilder({ onSave, onClose, communitySessions, allSessions, onCre
 
 // ─── MODAL: Ajouter une séance ────────────────────────────────────────────────
 
-function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom }) {
+function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom, sessions }) {
   const { styles } = useThemeCtx();
   const [filter, setFilter] = useState("Tous");
   const [search, setSearch] = useState("");
+  const catalogSessions = sessions || SESSIONS;
 
-  const filtered = SESSIONS.filter(s => {
+  const filtered = catalogSessions.filter(s => {
     const matchType = filter === "Tous" || s.type === filter;
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
     return matchType && matchSearch;
@@ -4687,6 +4718,7 @@ export default function ClimbingPlanner() {
 
   const { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow } = useSupabaseSync();
   const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
+  const catalogSessions = useSessionsCatalog();
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -5221,7 +5253,7 @@ export default function ClimbingPlanner() {
           onSave={saveBuiltSession}
           onClose={() => setSessionBuilderDay(null)}
           communitySessions={communitySessions}
-          allSessions={[...SESSIONS, ...(data.customSessions || [])]}
+          allSessions={[...catalogSessions, ...(data.customSessions || [])]}
           onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
         />
       )}
@@ -5230,6 +5262,7 @@ export default function ClimbingPlanner() {
           onSelect={s => { addSession(picker.dayIndex, s); setPicker(null); }}
           onClose={() => setPicker(null)}
           customSessions={data.customSessions || []}
+          sessions={catalogSessions}
           onCreateCustom={() => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
         />
       )}
