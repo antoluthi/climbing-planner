@@ -93,6 +93,5 @@ INSERT INTO sessions_catalog (id, type, name, charge, sort_order) VALUES
   (32, 'Grimpe',   'Week-end de compétition',                   54, 320)
 ON CONFLICT (id) DO NOTHING;
 
--- Séquence pour les prochains INSERT sans id manuel
-SELECT setval('sessions_catalog_id_seq', 100, false);
--- (les ids 1-32 sont réservés aux sessions de base ; commence à 100 pour les nouvelles)
+-- Pour les prochains INSERT, utilise un id >= 100 (1-32 réservés aux sessions de base)
+-- Exemple : INSERT INTO sessions_catalog (id, type, name, charge, sort_order) VALUES (100, 'Grimpe', 'Nouvelle séance', 28, 325);
