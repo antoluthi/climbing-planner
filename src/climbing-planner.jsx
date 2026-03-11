@@ -966,14 +966,32 @@ function useSupabaseSync() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Build the flat columns synced alongside the JSONB blob
+  const buildRow = useCallback((planData, userId) => ({
+    user_id: userId,
+    data: planData,
+    first_name: planData?.profile?.firstName ?? null,
+    last_name:  planData?.profile?.lastName  ?? null,
+    status:     planData?.profile?.role      ?? null,
+  }), []);
+
   const loadFromCloud = useCallback(async () => {
     if (!supabase) return null;
     const { data, error } = await supabase
       .from("climbing_plans")
-      .select("data")
+      .select("data, first_name, last_name, status")
       .maybeSingle();
     if (error) return null;
-    return data?.data ?? null;
+    if (!data) return null;
+    // status column is the source of truth for role
+    const blob = data.data ?? {};
+    const profile = {
+      ...(blob.profile ?? {}),
+      ...(data.first_name != null ? { firstName: data.first_name } : {}),
+      ...(data.last_name  != null ? { lastName:  data.last_name  } : {}),
+      ...("status" in data        ? { role:       data.status     } : {}),
+    };
+    return { ...blob, profile };
   }, []);
 
   const saveToCloud = useCallback((planData, userId) => {
@@ -984,14 +1002,14 @@ function useSupabaseSync() {
       try {
         const { error } = await supabase
           .from("climbing_plans")
-          .upsert({ user_id: userId, data: planData }, { onConflict: "user_id" });
+          .upsert(buildRow(planData, userId), { onConflict: "user_id" });
         setSyncStatus(error ? "offline" : "saved");
         setTimeout(() => setSyncStatus("idle"), 2000);
       } catch {
         setSyncStatus("offline");
       }
     }, 1500);
-  }, []);
+  }, [buildRow]);
 
   // Immediate upload (no debounce) — used for force-sync & first-login push
   const uploadNow = useCallback(async (planData, userId) => {
@@ -1000,13 +1018,13 @@ function useSupabaseSync() {
     try {
       const { error } = await supabase
         .from("climbing_plans")
-        .upsert({ user_id: userId, data: planData }, { onConflict: "user_id" });
+        .upsert(buildRow(planData, userId), { onConflict: "user_id" });
       setSyncStatus(error ? "offline" : "saved");
       setTimeout(() => setSyncStatus("idle"), 2500);
     } catch {
       setSyncStatus("offline");
     }
-  }, []);
+  }, [buildRow]);
 
   return { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow };
 }
