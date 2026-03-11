@@ -2236,7 +2236,7 @@ function SessionBuilder({ onSave, onClose, communitySessions, allSessions, onCre
 
 // ─── MODAL: Ajouter une séance ────────────────────────────────────────────────
 
-function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom, sessions }) {
+function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom, sessions, createLabel }) {
   const { styles } = useThemeCtx();
   const [filter, setFilter] = useState("Tous");
   const [search, setSearch] = useState("");
@@ -2322,10 +2322,10 @@ function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom, sess
             <div style={styles.emptySearch}>Aucune séance trouvée</div>
           )}
         </div>
-        {/* Create custom session button */}
+        {/* Create / library button */}
         <div style={{ padding: "10px 12px", borderTop: `1px solid ${styles.dashGrid}` }}>
           <button style={styles.createCustomBtn} onClick={onCreateCustom}>
-            ＋ Créer une séance / exercice personnalisé
+            {createLabel ?? "＋ Créer une séance / exercice personnalisé"}
           </button>
         </div>
       </div>
@@ -4870,6 +4870,181 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
   );
 }
 
+// ─── COACH : BIBLIOTHÈQUE DE SÉANCES ─────────────────────────────────────────
+
+function CoachLibraryView({ catalog, onNew, onEdit, onDelete }) {
+  const { styles, isDark } = useThemeCtx();
+  const [search, setSearch]   = useState("");
+  const [filter, setFilter]   = useState("Tous");
+  const [confirmId, setConfirmId] = useState(null); // id à supprimer
+
+  const bg       = isDark ? "#141a16" : "#f3f7f4";
+  const surface  = isDark ? "#1a2320" : "#ffffff";
+  const border   = isDark ? "#263228" : "#daeade";
+  const text     = isDark ? "#d8e8d0" : "#1a2e1f";
+  const muted    = isDark ? "#6a8870" : "#6b8c72";
+  const accent   = "#4caf72";
+  const danger   = isDark ? "#f87171" : "#dc2626";
+
+  const mySessions = catalog.filter(s => s.isCustom);
+  const filtered   = mySessions.filter(s => {
+    const matchType   = filter === "Tous" || s.type === filter;
+    const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
+    return matchType && matchSearch;
+  });
+
+  const byType = {};
+  filtered.forEach(s => { (byType[s.type] = byType[s.type] || []).push(s); });
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", background: bg, padding: "20px 16px" }}>
+      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+
+        {/* ── Titre + bouton ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: text, letterSpacing: "0.02em" }}>
+              Ma bibliothèque
+            </div>
+            <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>
+              {mySessions.length} séance{mySessions.length !== 1 ? "s" : ""}
+            </div>
+          </div>
+          <button
+            onClick={onNew}
+            style={{
+              background: accent, border: "none", borderRadius: 7,
+              color: "#fff", padding: "9px 18px",
+              cursor: "pointer", fontSize: 12, fontFamily: "inherit",
+              fontWeight: 700, letterSpacing: "0.04em",
+              boxShadow: `0 2px 10px ${accent}44`,
+            }}
+          >
+            ＋ Nouvelle séance
+          </button>
+        </div>
+
+        {/* ── Barre de recherche + filtres ── */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+          <input
+            style={{
+              flex: 1, minWidth: 160,
+              background: surface, border: `1px solid ${border}`,
+              borderRadius: 6, padding: "7px 12px",
+              color: text, fontSize: 12, fontFamily: "inherit", outline: "none",
+            }}
+            placeholder="Rechercher…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          <div style={{ display: "flex", gap: 4 }}>
+            {["Tous", "Grimpe", "Exercice"].map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                style={{
+                  background: filter === f ? (isDark ? "#263228" : "#d4e8db") : "none",
+                  border: `1px solid ${filter === f ? accent + "88" : border}`,
+                  color: filter === f ? accent : muted,
+                  padding: "6px 12px", borderRadius: 5,
+                  cursor: "pointer", fontSize: 11, fontFamily: "inherit",
+                  fontWeight: filter === f ? 600 : 400,
+                }}
+              >{f}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Liste ── */}
+        {mySessions.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: muted }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: text }}>Bibliothèque vide</div>
+            <div style={{ fontSize: 12 }}>Créez vos premières séances pour les affecter à vos athlètes.</div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px 20px", color: muted, fontSize: 12 }}>
+            Aucun résultat pour cette recherche.
+          </div>
+        ) : (
+          Object.entries(byType).map(([type, sessions]) => (
+            <div key={type} style={{ marginBottom: 24 }}>
+              <div style={{
+                fontSize: 9, fontWeight: 700, letterSpacing: "0.12em",
+                textTransform: "uppercase", color: muted,
+                marginBottom: 8, paddingBottom: 5,
+                borderBottom: `1px solid ${border}`,
+              }}>{type}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {sessions.map(s => (
+                  <div
+                    key={s.id}
+                    style={{
+                      background: surface,
+                      border: `1px solid ${border}`,
+                      borderLeft: `3px solid ${getChargeColor(s.charge)}`,
+                      borderRadius: 7, padding: "11px 14px",
+                      display: "flex", alignItems: "center", gap: 10,
+                    }}
+                  >
+                    {/* Infos */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {s.name}
+                      </div>
+                      <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10 }}>
+                        {s.estimatedTime && <span>{s.estimatedTime} min</span>}
+                        {s.location && <span>📍 {s.location}</span>}
+                        {s.minRecovery && <span>↺ {s.minRecovery}h récup</span>}
+                      </div>
+                    </div>
+
+                    {/* Charge pill */}
+                    <span style={{
+                      fontSize: 12, fontWeight: 700,
+                      padding: "3px 9px", borderRadius: 4, flexShrink: 0,
+                      background: getChargeColor(s.charge) + "28",
+                      color: getChargeColor(s.charge),
+                      border: `1px solid ${getChargeColor(s.charge)}55`,
+                    }}>⚡{s.charge}</span>
+
+                    {/* Actions */}
+                    {confirmId === s.id ? (
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <button
+                          onClick={() => { onDelete(s.id); setConfirmId(null); }}
+                          style={{ background: danger, border: "none", borderRadius: 5, color: "#fff", padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
+                        >Supprimer</button>
+                        <button
+                          onClick={() => setConfirmId(null)}
+                          style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+                        >Annuler</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                        <button
+                          onClick={() => onEdit(s)}
+                          title="Modifier"
+                          style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}
+                        >✎</button>
+                        <button
+                          onClick={() => setConfirmId(s.id)}
+                          title="Supprimer"
+                          style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: danger + "bb", padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}
+                        >✕</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
 
 export default function ClimbingPlanner() {
@@ -5110,7 +5285,8 @@ export default function ClimbingPlanner() {
       }
       return { ...d, weeks };
     });
-    if (session?.user?.id) {
+    // Push to community only when placing a session on the calendar (not from library)
+    if (session?.user?.id && targetDayIndex != null) {
       pushToCommunity(customSession, session.user.id);
     }
     setCustomSessionForm(null);
@@ -5138,6 +5314,7 @@ export default function ClimbingPlanner() {
   };
 
   const isCalendarMode = ["week", "month", "year"].includes(viewMode);
+  const isCoach = data.profile?.role === "coach";
 
   const calSubToggle = (
     <div style={{ display: "flex", gap: 2 }}>
@@ -5163,6 +5340,7 @@ export default function ClimbingPlanner() {
         { mode: "calendar", label: "Calendrier" },
         { mode: "dash", label: "Stats" },
         { mode: "cycles", label: "Cycles" },
+        ...(isCoach ? [{ mode: "library", label: "Séances" }] : []),
       ].map(({ mode, label }) => (
         <button
           key={mode}
@@ -5430,6 +5608,16 @@ export default function ClimbingPlanner() {
         />
       )}
 
+      {/* ── Bibliothèque coach ── */}
+      {viewMode === "library" && (
+        <CoachLibraryView
+          catalog={catalog}
+          onNew={() => setCustomSessionForm({ targetDay: undefined })}
+          onEdit={s => setCustomSessionForm({ initial: s, targetDay: undefined })}
+          onDelete={id => deleteUserSession(id)}
+        />
+      )}
+
       {/* ── Profil ── */}
       {viewMode === "profil" && (
         <ProfileView
@@ -5461,8 +5649,11 @@ export default function ClimbingPlanner() {
           onSelect={s => { addSession(picker.dayIndex, s); setPicker(null); }}
           onClose={() => setPicker(null)}
           customSessions={catalog.filter(s => s.isCustom)}
-          sessions={catalog.filter(s => !s.isCustom)}
-          onCreateCustom={() => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
+          sessions={isCoach ? [] : catalog.filter(s => !s.isCustom)}
+          onCreateCustom={isCoach
+            ? () => { setViewMode("library"); setPicker(null); }
+            : () => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
+          createLabel={isCoach ? "Gérer ma bibliothèque →" : undefined}
         />
       )}
       {customSessionForm !== null && (
