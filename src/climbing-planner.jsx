@@ -4381,19 +4381,37 @@ export default function ClimbingPlanner() {
     setCustomSessionForm(null);
   };
 
-  const viewToggle = (
-    <div style={{ ...styles.viewToggle, flexWrap: "wrap" }}>
+  const isCalendarMode = ["week", "month", "year"].includes(viewMode);
+
+  const calSubToggle = (
+    <div style={{ display: "flex", gap: 2 }}>
       {[
         { mode: "week", label: "Sem" },
         { mode: "month", label: "Mois" },
         { mode: "year", label: "An" },
+      ].map(({ mode, label }) => (
+        <button
+          key={mode}
+          style={{ ...styles.viewToggleBtn, ...(viewMode === mode ? styles.viewToggleBtnActive : {}), padding: "2px 8px", fontSize: 9 }}
+          onClick={() => setViewMode(mode)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  const viewToggle = (
+    <div style={{ ...styles.viewToggle, flexWrap: "wrap" }}>
+      {[
+        { mode: "calendar", label: "Calendrier" },
         { mode: "dash", label: "Stats" },
         { mode: "cycles", label: "Cycles" },
       ].map(({ mode, label }) => (
         <button
           key={mode}
-          style={{ ...styles.viewToggleBtn, ...(viewMode === mode ? styles.viewToggleBtnActive : {}) }}
-          onClick={() => setViewMode(mode)}
+          style={{ ...styles.viewToggleBtn, ...((mode === "calendar" ? isCalendarMode : viewMode === mode) ? styles.viewToggleBtnActive : {}) }}
+          onClick={() => setViewMode(mode === "calendar" ? "week" : mode)}
         >
           {label}
         </button>
@@ -4451,19 +4469,24 @@ export default function ClimbingPlanner() {
               {profileBtn}
             </div>
           </div>
-          {viewMode !== "dash" && viewMode !== "cycles" && viewMode !== "profil" && (
-            <div style={styles.weekNavMobile}>
-              <button style={styles.navBtn} onClick={handlePrev}>←</button>
-              <div
-                style={{ ...styles.weekLabel, cursor: isCurrentPeriod ? "default" : "pointer" }}
-                onClick={isCurrentPeriod ? undefined : handleDateGoToCurrent}
-                title={isCurrentPeriod ? undefined : viewMode === "week" ? "Aller à la semaine en cours" : viewMode === "month" ? "Aller au mois en cours" : "Aller à l'année en cours"}
-              >
-                <div style={styles.weekRange}>{periodLabel}</div>
-                {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
+          {isCalendarMode && (
+            <>
+              <div style={{ display: "flex", justifyContent: "center", padding: "4px 16px 0", borderTop: `1px solid ${styles.subtleBorder}` }}>
+                {calSubToggle}
               </div>
-              <button style={styles.navBtn} onClick={handleNext}>→</button>
-            </div>
+              <div style={styles.weekNavMobile}>
+                <button style={styles.navBtn} onClick={handlePrev}>←</button>
+                <div
+                  style={{ ...styles.weekLabel, cursor: isCurrentPeriod ? "default" : "pointer" }}
+                  onClick={isCurrentPeriod ? undefined : handleDateGoToCurrent}
+                  title={isCurrentPeriod ? undefined : viewMode === "week" ? "Aller à la semaine en cours" : viewMode === "month" ? "Aller au mois en cours" : "Aller à l'année en cours"}
+                >
+                  <div style={styles.weekRange}>{periodLabel}</div>
+                  {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
+                </div>
+                <button style={styles.navBtn} onClick={handleNext}>→</button>
+              </div>
+            </>
           )}
         </div>
       ) : (
@@ -4474,22 +4497,25 @@ export default function ClimbingPlanner() {
             <div>
               <div style={styles.appTitle}>PLANIF ESCALADE</div>
               <div style={styles.appSub}>
-                {viewMode === "week" ? "Vue semaine" : viewMode === "month" ? "Vue mois" : viewMode === "year" ? "Vue année" : viewMode === "dash" ? "Statistiques" : viewMode === "cycles" ? "Cycles" : "Profil"} · Bloc
+                {viewMode === "week" ? "Calendrier — semaine" : viewMode === "month" ? "Calendrier — mois" : viewMode === "year" ? "Calendrier — année" : viewMode === "dash" ? "Statistiques" : viewMode === "cycles" ? "Cycles" : "Profil"} · Bloc
               </div>
             </div>
           </div>
-          {viewMode !== "dash" && viewMode !== "cycles" && viewMode !== "profil" && (
-            <div style={styles.weekNav}>
-              <button style={styles.navBtn} onClick={handlePrev}>←</button>
-              <div
-                style={{ ...styles.weekLabel, cursor: isCurrentPeriod ? "default" : "pointer" }}
-                onClick={isCurrentPeriod ? undefined : handleDateGoToCurrent}
-                title={isCurrentPeriod ? undefined : viewMode === "week" ? "Aller à la semaine en cours" : viewMode === "month" ? "Aller au mois en cours" : "Aller à l'année en cours"}
-              >
-                <div style={styles.weekRange}>{periodLabel}</div>
-                {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
+          {isCalendarMode && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              {calSubToggle}
+              <div style={styles.weekNav}>
+                <button style={styles.navBtn} onClick={handlePrev}>←</button>
+                <div
+                  style={{ ...styles.weekLabel, cursor: isCurrentPeriod ? "default" : "pointer" }}
+                  onClick={isCurrentPeriod ? undefined : handleDateGoToCurrent}
+                  title={isCurrentPeriod ? undefined : viewMode === "week" ? "Aller à la semaine en cours" : viewMode === "month" ? "Aller au mois en cours" : "Aller à l'année en cours"}
+                >
+                  <div style={styles.weekRange}>{periodLabel}</div>
+                  {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
+                </div>
+                <button style={styles.navBtn} onClick={handleNext}>→</button>
               </div>
-              <button style={styles.navBtn} onClick={handleNext}>→</button>
             </div>
           )}
           <div style={styles.headerRight}>
