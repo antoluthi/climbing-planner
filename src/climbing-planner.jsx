@@ -33,23 +33,23 @@ const SESSIONS = [
   { id: 13, type: "Exercice", name: "Tirage prise lestée (force)", charge: 20 },
   { id: 14, type: "Exercice", name: "Force max biceps", charge: 25 },
   { id: 15, type: "Exercice", name: "Force doigts", charge: 25 },
-  { id: 16, type: "Séance", name: "Récup active / mobilité", charge: 0 },
-  { id: 17, type: "Séance", name: "Bloc libre plaisir 2h max", charge: 16 },
-  { id: 18, type: "Séance", name: "Voies qualitatif (4-5 essais)", charge: 16 },
-  { id: 19, type: "Séance", name: "Journée en bloc extérieurs", charge: 18 },
-  { id: 20, type: "Séance", name: "Endurance au seuil (doublettes etc)", charge: 20 },
-  { id: 21, type: "Séance", name: "Journée en falaise diff", charge: 20 },
-  { id: 22, type: "Séance", name: "Empilement de bloc / fartlek", charge: 24 },
-  { id: 23, type: "Séance", name: "Travail de blocs très durs", charge: 24 },
-  { id: 24, type: "Séance", name: "Grande voie (250-300m)", charge: 24 },
-  { id: 25, type: "Séance", name: "Panneau : endurance de force / rési longue", charge: 24 },
-  { id: 26, type: "Séance", name: "Muscu dans le geste / PPO (F-E)", charge: 27 },
-  { id: 27, type: "Séance", name: "Panneau : force-endurance / rési courte", charge: 27 },
-  { id: 28, type: "Séance", name: "Travail de coordination complexe", charge: 30 },
-  { id: 29, type: "Séance", name: "Bloc sur panneau / Moon / Kilter", charge: 36 },
-  { id: 30, type: "Séance", name: "Pletnev biceps", charge: 40 },
-  { id: 31, type: "Séance", name: "Simulation compète", charge: 40 },
-  { id: 32, type: "Séance", name: "Week-end de compétition", charge: 54 },
+  { id: 16, type: "Grimpe", name: "Récup active / mobilité", charge: 0 },
+  { id: 17, type: "Grimpe", name: "Bloc libre plaisir 2h max", charge: 16 },
+  { id: 18, type: "Grimpe", name: "Voies qualitatif (4-5 essais)", charge: 16 },
+  { id: 19, type: "Grimpe", name: "Journée en bloc extérieurs", charge: 18 },
+  { id: 20, type: "Grimpe", name: "Endurance au seuil (doublettes etc)", charge: 20 },
+  { id: 21, type: "Grimpe", name: "Journée en falaise diff", charge: 20 },
+  { id: 22, type: "Grimpe", name: "Empilement de bloc / fartlek", charge: 24 },
+  { id: 23, type: "Grimpe", name: "Travail de blocs très durs", charge: 24 },
+  { id: 24, type: "Grimpe", name: "Grande voie (250-300m)", charge: 24 },
+  { id: 25, type: "Grimpe", name: "Panneau : endurance de force / rési longue", charge: 24 },
+  { id: 26, type: "Grimpe", name: "Muscu dans le geste / PPO (F-E)", charge: 27 },
+  { id: 27, type: "Grimpe", name: "Panneau : force-endurance / rési courte", charge: 27 },
+  { id: 28, type: "Grimpe", name: "Travail de coordination complexe", charge: 30 },
+  { id: 29, type: "Grimpe", name: "Bloc sur panneau / Moon / Kilter", charge: 36 },
+  { id: 30, type: "Grimpe", name: "Pletnev biceps", charge: 40 },
+  { id: 31, type: "Grimpe", name: "Simulation compète", charge: 40 },
+  { id: 32, type: "Grimpe", name: "Week-end de compétition", charge: 54 },
 ];
 
 const MESOCYCLES = [
@@ -1045,6 +1045,48 @@ function useSupabaseSync() {
   return { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow };
 }
 
+// ─── COMMUNITY SESSIONS HOOK ──────────────────────────────────────────────────
+
+function useCommunitySessionsSync(session) {
+  const [communitySessions, setCommunitySessions] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchCommunity = useCallback(async () => {
+    if (!supabase || !session) { setCommunitySessions([]); return; }
+    setLoading(true);
+    const { data } = await supabase
+      .from("community_sessions")
+      .select("session, user_id")
+      .order("updated_at", { ascending: false });
+    if (data) setCommunitySessions(data.map(r => ({ ...r.session, _communityUserId: r.user_id })));
+    setLoading(false);
+  }, [session]);
+
+  useEffect(() => { fetchCommunity(); }, [fetchCommunity]);
+
+  const pushToCommunity = useCallback(async (customSession, userId) => {
+    if (!supabase || !userId) return;
+    await supabase.from("community_sessions").upsert({
+      user_id: userId,
+      session_id: String(customSession.id),
+      session: customSession,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,session_id" });
+    await fetchCommunity();
+  }, [fetchCommunity]);
+
+  const deleteFromCommunity = useCallback(async (sessionId, userId) => {
+    if (!supabase || !userId) return;
+    await supabase.from("community_sessions")
+      .delete()
+      .eq("user_id", userId)
+      .eq("session_id", String(sessionId));
+    await fetchCommunity();
+  }, [fetchCommunity]);
+
+  return { communitySessions, loading, pushToCommunity, deleteFromCommunity, fetchCommunity };
+}
+
 // ─── AUTH PANEL ───────────────────────────────────────────────────────────────
 
 function AuthPanel({ session, onAuthChange, fullWidth }) {
@@ -1299,7 +1341,7 @@ function renderInline(text, styles) {
 function CustomSessionModal({ initial, data, onSave, onClose }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const [name, setName] = useState(initial?.name ?? "");
-  const [type, setType] = useState(initial?.type ?? "Séance");
+  const [type, setType] = useState(initial?.type ?? "Grimpe");
   const [charge, setCharge] = useState(initial?.charge ?? 24);
   const [estimatedTime, setEstimatedTime] = useState(initial?.estimatedTime ?? "");
   const [location, setLocation] = useState(initial?.location ?? "");
@@ -1349,7 +1391,7 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
           {/* Nom + type */}
           <div style={styles.customFormRow}>
             <select style={styles.customFormSelect} value={type} onChange={e => setType(e.target.value)}>
-              <option>Séance</option>
+              <option>Grimpe</option>
               <option>Exercice</option>
             </select>
             <input style={{ ...styles.customFormInput, flex: 1 }} placeholder="Nom de la séance…" value={name} onChange={e => setName(e.target.value)} />
@@ -1581,6 +1623,364 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
   );
 }
 
+// ─── BLOCK TYPE CONFIG ────────────────────────────────────────────────────────
+
+const BLOCK_TYPES = {
+  "Échauffement":    { icon: "🔥", color: "#f97316", defaultCharge: 5,  defaultDuration: 15 },
+  "Grimpe":          { icon: "🧗", color: "#4ade80", defaultCharge: 24, defaultDuration: 90 },
+  "Exercices":       { icon: "💪", color: "#60a5fa", defaultCharge: 12, defaultDuration: 20 },
+  "Suspension":      { icon: "🤲", color: "#a78bfa", defaultCharge: 0,  defaultDuration: 15 },
+  "Retour au calme": { icon: "🧘", color: "#94a3b8", defaultCharge: 3,  defaultDuration: 10 },
+};
+
+// ─── COMPOSANT: Éditeur de bloc ───────────────────────────────────────────────
+
+function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, allSessions }) {
+  const { styles, isDark } = useThemeCtx();
+  const cfg = BLOCK_TYPES[block.type] || BLOCK_TYPES["Grimpe"];
+  const [open, setOpen] = useState(true);
+
+  const grimpePresets = allSessions.filter(s => s.type === "Grimpe");
+  const exercicePresets = allSessions.filter(s => s.type === "Exercice");
+
+  const inputStyle = {
+    background: isDark ? "#181d1a" : "#f5f0e8",
+    border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
+    borderRadius: 4, color: isDark ? "#d8d4ce" : "#2a2218",
+    fontSize: 11, fontFamily: "inherit", padding: "3px 6px", outline: "none",
+  };
+  const labelStyle = { fontSize: 9, color: isDark ? "#606860" : "#9a9080", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 2 };
+
+  return (
+    <div style={{
+      border: `1px solid ${cfg.color}44`,
+      borderLeft: `3px solid ${cfg.color}`,
+      borderRadius: 6,
+      background: isDark ? `${cfg.color}08` : `${cfg.color}06`,
+      marginBottom: 6,
+    }}>
+      {/* Header du bloc */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", cursor: "pointer" }} onClick={() => setOpen(o => !o)}>
+        <span style={{ fontSize: 13 }}>{cfg.icon}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, flex: 1 }}>{block.type}</span>
+        {block.type === "Grimpe" && block.presetName && (
+          <span style={{ fontSize: 10, color: isDark ? "#8a9090" : "#6b7060", fontStyle: "italic" }}>{block.presetName}</span>
+        )}
+        {block.type === "Exercices" && block.name && (
+          <span style={{ fontSize: 10, color: isDark ? "#8a9090" : "#6b7060", fontStyle: "italic" }}>{block.name}</span>
+        )}
+        {block.type !== "Suspension" && (
+          <span style={{ fontSize: 10, color: getChargeColor(block.charge || 0), fontWeight: 700 }}>⚡{block.charge || 0}</span>
+        )}
+        <span style={{ fontSize: 10, color: isDark ? "#555" : "#aaa" }}>{open ? "▲" : "▼"}</span>
+        <div style={{ display: "flex", gap: 2 }} onClick={e => e.stopPropagation()}>
+          <button style={{ background: "none", border: "none", cursor: canMoveUp ? "pointer" : "default", opacity: canMoveUp ? 0.7 : 0.2, fontSize: 11, color: isDark ? "#aaa" : "#666", padding: "0 2px" }} onClick={onMoveUp} disabled={!canMoveUp}>↑</button>
+          <button style={{ background: "none", border: "none", cursor: canMoveDown ? "pointer" : "default", opacity: canMoveDown ? 0.7 : 0.2, fontSize: 11, color: isDark ? "#aaa" : "#666", padding: "0 2px" }} onClick={onMoveDown} disabled={!canMoveDown}>↓</button>
+          <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: isDark ? "#f87171" : "#dc2626", padding: "0 4px" }} onClick={onRemove}>✕</button>
+        </div>
+      </div>
+
+      {/* Corps du bloc */}
+      {open && (
+        <div style={{ padding: "0 10px 10px", display: "flex", flexDirection: "column", gap: 8 }}>
+
+          {/* Preset picker pour Grimpe */}
+          {block.type === "Grimpe" && (
+            <div>
+              <div style={labelStyle}>Modèle de grimpe (optionnel)</div>
+              <select
+                style={{ ...inputStyle, width: "100%" }}
+                value={block.presetId ?? ""}
+                onChange={e => {
+                  const preset = grimpePresets.find(s => String(s.id) === e.target.value);
+                  if (preset) onUpdate({ presetId: preset.id, presetName: preset.name, charge: preset.charge });
+                  else onUpdate({ presetId: null, presetName: null });
+                }}
+              >
+                <option value="">— Libre (sans modèle) —</option>
+                {grimpePresets.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} (⚡{s.charge})</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Exercice picker */}
+          {block.type === "Exercices" && (
+            <div>
+              <div style={labelStyle}>Exercice</div>
+              <select
+                style={{ ...inputStyle, width: "100%" }}
+                value={block.exerciseId ?? ""}
+                onChange={e => {
+                  const ex = exercicePresets.find(s => String(s.id) === e.target.value);
+                  if (ex) onUpdate({ exerciseId: ex.id, name: ex.name, charge: ex.charge });
+                }}
+              >
+                <option value="">— Choisir un exercice —</option>
+                {exercicePresets.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} (⚡{s.charge})</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Suspension : vide pour l'instant */}
+          {block.type === "Suspension" && (
+            <div style={{ fontSize: 10, color: isDark ? "#606860" : "#9a9080", fontStyle: "italic" }}>
+              Module Suspension — à compléter prochainement
+            </div>
+          )}
+
+          {/* Champs communs (sauf Suspension) */}
+          {block.type !== "Suspension" && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {/* Charge */}
+              <div style={{ flex: "1 1 80px" }}>
+                <div style={labelStyle}>Charge ⚡</div>
+                <input type="number" min="0" max="100" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+                  value={block.charge ?? ""} onChange={e => onUpdate({ charge: +e.target.value })} />
+              </div>
+              {/* Durée */}
+              <div style={{ flex: "1 1 80px" }}>
+                <div style={labelStyle}>Durée (min)</div>
+                <input type="number" min="0" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+                  value={block.duration ?? ""} onChange={e => onUpdate({ duration: +e.target.value })} />
+              </div>
+              {/* Lieu (pas pour Exercices) */}
+              {block.type !== "Exercices" && (
+                <div style={{ flex: "2 1 120px" }}>
+                  <div style={labelStyle}>Lieu</div>
+                  <input style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+                    placeholder="Salle, falaise…" value={block.location ?? ""}
+                    onChange={e => onUpdate({ location: e.target.value })} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Notes (sauf Suspension) */}
+          {block.type !== "Suspension" && (
+            <div>
+              <div style={labelStyle}>Notes</div>
+              <textarea style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical", minHeight: 48, lineHeight: 1.4 }}
+                placeholder="Description, objectifs, consignes…"
+                value={block.notes ?? ""}
+                onChange={e => onUpdate({ notes: e.target.value })}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MODAL: Créer / construire une séance ─────────────────────────────────────
+
+function SessionBuilder({ onSave, onClose, communitySessions, allSessions }) {
+  const { styles, isDark } = useThemeCtx();
+  const [title, setTitle] = useState("");
+  const [estimatedTime, setEstimatedTime] = useState("");
+  const [note, setNote] = useState("");
+  const [blocks, setBlocks] = useState(() => [
+    { id: generateId(), type: "Échauffement", charge: 5, duration: 15, location: "", notes: "" },
+    { id: generateId(), type: "Retour au calme", charge: 3, duration: 10, location: "", notes: "" },
+  ]);
+  const [addingType, setAddingType] = useState(false);
+  const [communityOpen, setCommunityOpen] = useState(false);
+
+  const totalCharge = blocks.reduce((s, b) => s + (b.charge || 0), 0);
+
+  const addBlock = (type) => {
+    const cfg = BLOCK_TYPES[type];
+    const newBlock = { id: generateId(), type, charge: cfg.defaultCharge, duration: cfg.defaultDuration, location: "", notes: "" };
+    // Insert before the last block (Retour au calme) if it exists, otherwise at end
+    const insertIdx = blocks.length > 0 && blocks[blocks.length - 1].type === "Retour au calme"
+      ? blocks.length - 1
+      : blocks.length;
+    setBlocks(b => [...b.slice(0, insertIdx), newBlock, ...b.slice(insertIdx)]);
+    setAddingType(false);
+  };
+
+  const updateBlock = (id, changes) => setBlocks(b => b.map(bl => bl.id === id ? { ...bl, ...changes } : bl));
+  const removeBlock = (id) => setBlocks(b => b.filter(bl => bl.id !== id));
+  const moveBlock = (id, dir) => setBlocks(b => {
+    const i = b.findIndex(bl => bl.id === id);
+    if (i + dir < 0 || i + dir >= b.length) return b;
+    const arr = [...b];
+    [arr[i], arr[i + dir]] = [arr[i + dir], arr[i]];
+    return arr;
+  });
+
+  const loadFromCommunity = (cs) => {
+    if (cs.title) setTitle(cs.title);
+    else if (cs.name) setTitle(cs.name);
+    if (cs.estimatedTime) setEstimatedTime(String(cs.estimatedTime));
+    if (cs.note) setNote(cs.note);
+    if (cs.blocks) setBlocks(cs.blocks.map(b => ({ ...b, id: generateId() })));
+    setCommunityOpen(false);
+  };
+
+  const handleSave = () => {
+    if (!title.trim()) return;
+    onSave({
+      id: generateId(),
+      title: title.trim(),
+      name: title.trim(),
+      estimatedTime: estimatedTime ? +estimatedTime : null,
+      note: note.trim() || null,
+      charge: totalCharge,
+      blocks,
+      isCustom: true,
+      type: "Grimpe",
+    });
+  };
+
+  const overlayStyle = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 };
+  const modalStyle = { ...styles.modal, maxWidth: 520, width: "100%", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" };
+  const inputStyle = { ...styles.customFormInput, width: "100%", boxSizing: "border-box" };
+  const labelStyle = { fontSize: 9, color: isDark ? "#606860" : "#9a9080", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 2 };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={modalStyle}>
+        {/* Header */}
+        <div style={styles.modalHeader}>
+          <span style={styles.modalTitle}>Nouvelle séance</span>
+          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+        </div>
+
+        <div style={{ overflowY: "auto", flex: 1, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+
+          {/* Modèle communauté */}
+          {communitySessions.length > 0 && (
+            <div>
+              <button
+                style={{ ...styles.createCustomBtn, marginBottom: 0 }}
+                onClick={() => setCommunityOpen(o => !o)}
+              >
+                🌐 Charger un modèle communauté {communityOpen ? "▲" : "▼"}
+              </button>
+              {communityOpen && (
+                <div style={{ marginTop: 6, maxHeight: 160, overflowY: "auto", border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`, borderRadius: 6 }}>
+                  {communitySessions.map((cs, i) => (
+                    <div
+                      key={i}
+                      style={{ ...styles.sessionItem, cursor: "pointer" }}
+                      onClick={() => loadFromCommunity(cs)}
+                    >
+                      <div style={styles.sessionItemLeft}>
+                        <span style={{ fontSize: 10, fontWeight: 700 }}>{cs.title || cs.name}</span>
+                        {cs.blocks && <span style={{ fontSize: 9, color: isDark ? "#606860" : "#9a9080", marginLeft: 6 }}>{cs.blocks.length} blocs</span>}
+                      </div>
+                      <span style={{ ...styles.chargePill, background: getChargeColor(cs.charge) + "33", color: getChargeColor(cs.charge), border: `1px solid ${getChargeColor(cs.charge)}55` }}>⚡{cs.charge}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Infos de la séance */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", background: isDark ? "#141918" : "#f5f0e8", borderRadius: 8, border: `1px solid ${isDark ? "#222927" : "#ccc6b8"}` }}>
+            <div>
+              <div style={labelStyle}>Titre de la séance *</div>
+              <input
+                style={inputStyle}
+                placeholder="Ex: Bloc panneau force, Falaise Buoux…"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: "1 1 100px" }}>
+                <div style={labelStyle}>Durée estimée (min)</div>
+                <input type="number" min="0" style={{ ...inputStyle }} placeholder="90" value={estimatedTime} onChange={e => setEstimatedTime(e.target.value)} />
+              </div>
+              <div style={{ flex: "3 1 200px" }}>
+                <div style={labelStyle}>Note rapide</div>
+                <input style={inputStyle} placeholder="Objectif, contexte…" value={note} onChange={e => setNote(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          {/* Blocs */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: isDark ? "#9ca3af" : "#6b7280", letterSpacing: "0.07em", textTransform: "uppercase" }}>Blocs de séance</span>
+              <span style={{ fontSize: 11, color: getChargeColor(totalCharge), fontWeight: 700 }}>⚡{totalCharge} total</span>
+            </div>
+
+            {blocks.map((bl, i) => (
+              <BlockEditor
+                key={bl.id}
+                block={bl}
+                onUpdate={changes => updateBlock(bl.id, changes)}
+                onRemove={() => removeBlock(bl.id)}
+                canMoveUp={i > 0}
+                canMoveDown={i < blocks.length - 1}
+                onMoveUp={() => moveBlock(bl.id, -1)}
+                onMoveDown={() => moveBlock(bl.id, 1)}
+                allSessions={allSessions}
+              />
+            ))}
+
+            {/* Bouton ajouter bloc */}
+            {!addingType ? (
+              <button
+                style={{ ...styles.createCustomBtn, width: "100%", textAlign: "center" }}
+                onClick={() => setAddingType(true)}
+              >
+                ＋ Ajouter un bloc
+              </button>
+            ) : (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {["Grimpe", "Exercices", "Suspension"].map(type => {
+                  const cfg = BLOCK_TYPES[type];
+                  return (
+                    <button
+                      key={type}
+                      style={{
+                        flex: "1 1 80px", padding: "7px 10px",
+                        background: cfg.color + "18", border: `1px solid ${cfg.color}55`,
+                        borderRadius: 6, color: cfg.color, cursor: "pointer",
+                        fontFamily: "inherit", fontSize: 11, fontWeight: 700,
+                      }}
+                      onClick={() => addBlock(type)}
+                    >
+                      {cfg.icon} {type}
+                    </button>
+                  );
+                })}
+                <button
+                  style={{ padding: "7px 10px", background: "none", border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`, borderRadius: 6, color: isDark ? "#666" : "#aaa", cursor: "pointer", fontFamily: "inherit", fontSize: 11 }}
+                  onClick={() => setAddingType(false)}
+                >
+                  Annuler
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "10px 16px", borderTop: `1px solid ${isDark ? "#222927" : "#ccc6b8"}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button style={styles.cancelBtn} onClick={onClose}>Annuler</button>
+          <button
+            style={{ ...styles.saveBtn, opacity: title.trim() ? 1 : 0.4, cursor: title.trim() ? "pointer" : "not-allowed" }}
+            onClick={handleSave}
+            disabled={!title.trim()}
+          >
+            Enregistrer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MODAL: Ajouter une séance ────────────────────────────────────────────────
 
 function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom }) {
@@ -1616,7 +2016,7 @@ function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom }) {
             autoFocus
           />
           <div style={styles.filterTabs}>
-            {["Tous", "Séance", "Exercice"].map(f => (
+            {["Tous", "Grimpe", "Exercice"].map(f => (
               <button
                 key={f}
                 style={{ ...styles.filterTab, ...(filter === f ? styles.filterTabActive : {}) }}
@@ -1635,7 +2035,7 @@ function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom }) {
               {filteredCustom.map(s => (
                 <div key={s.id} style={{ ...styles.sessionItem, borderLeft: `2px solid ${getChargeColor(s.charge)}` }} onClick={() => onSelect(s)}>
                   <div style={styles.sessionItemLeft}>
-                    <span style={{ ...styles.sessionTypeBadge, background: s.type === "Séance" ? styles.seanceBadgeBg : styles.exerciceBadgeBg }}>{s.type}</span>
+                    <span style={{ ...styles.sessionTypeBadge, background: s.type === "Grimpe" ? styles.seanceBadgeBg : styles.exerciceBadgeBg }}>{s.type}</span>
                     <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       <span style={styles.sessionItemName}>{s.name}</span>
                       {(s.estimatedTime || s.location) && (
@@ -1654,7 +2054,7 @@ function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom }) {
           {filtered.map(s => (
             <div key={s.id} style={styles.sessionItem} onClick={() => onSelect(s)}>
               <div style={styles.sessionItemLeft}>
-                <span style={{ ...styles.sessionTypeBadge, background: s.type === "Séance" ? styles.seanceBadgeBg : styles.exerciceBadgeBg }}>
+                <span style={{ ...styles.sessionTypeBadge, background: s.type === "Grimpe" ? styles.seanceBadgeBg : styles.exerciceBadgeBg }}>
                   {s.type}
                 </span>
                 <span style={styles.sessionItemName}>{s.name}</span>
@@ -1967,8 +2367,27 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
           >
             <div style={{ ...styles.sessionCardAccent, background: getChargeColor(s.charge) }} />
             <div style={styles.sessionCardContent}>
-              <span style={styles.sessionCardName}>{s.name}</span>
-              {s.isCustom && (
+              <span style={styles.sessionCardName}>{s.title || s.name}</span>
+              {/* Blocs de la séance (nouveau format) */}
+              {s.blocks && s.blocks.length > 0 && (
+                <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>
+                  {s.blocks.map((bl, bi) => {
+                    const cfg = BLOCK_TYPES[bl.type];
+                    if (!cfg) return null;
+                    return (
+                      <span key={bi} title={bl.type + (bl.name ? ` — ${bl.name}` : "")} style={{
+                        fontSize: 9, padding: "1px 5px", borderRadius: 10,
+                        background: cfg.color + "22", color: cfg.color,
+                        border: `1px solid ${cfg.color}44`, lineHeight: 1.6,
+                      }}>
+                        {cfg.icon} {bl.type === "Exercices" && bl.name ? bl.name.split(" ").slice(0, 2).join(" ") : bl.type}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Badges ancienne séance */}
+              {!s.blocks && s.isCustom && (
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
                   <span style={styles.customBadge}>✎ perso</span>
                   {s.estimatedTime && <span style={{ ...styles.customBadge, background: "none", borderColor: "transparent", color: styles.dashText }}>⏱{s.estimatedTime}min</span>}
@@ -1977,6 +2396,8 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
               )}
               <div style={styles.sessionCardFooter}>
                 <span style={{ ...styles.sessionCardCharge, color: getChargeColor(s.charge) }}>⚡{s.charge}</span>
+                {s.estimatedTime && !s.blocks && <span style={{ fontSize: 9, color: isDark ? "#606860" : "#9a9080" }}>⏱{s.estimatedTime}min</span>}
+                {s.blocks && s.estimatedTime && <span style={{ fontSize: 9, color: isDark ? "#606860" : "#9a9080" }}>⏱{s.estimatedTime}min</span>}
                 {s.feedback && (
                   <span style={styles.feedbackDot} title="Feedback enregistré">
                     {s.feedback.done ? "✓" : "✗"}
@@ -4173,6 +4594,7 @@ export default function ClimbingPlanner() {
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState("week");
+  const [sessionBuilderDay, setSessionBuilderDay] = useState(null); // null | dayIndex
   const [picker, setPicker] = useState(null);
   const [metaEditing, setMetaEditing] = useState(false);
   const [tempMeta, setTempMeta] = useState({});
@@ -4188,6 +4610,7 @@ export default function ClimbingPlanner() {
   });
 
   const { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow } = useSupabaseSync();
+  const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -4378,7 +4801,34 @@ export default function ClimbingPlanner() {
       }
       return { ...d, customSessions: updated, weeks };
     });
+    // Sync vers la communauté si connecté
+    if (session?.user?.id) {
+      pushToCommunity(customSession, session.user.id);
+    }
     setCustomSessionForm(null);
+  };
+
+  // ── Handler SessionBuilder ──
+  const saveBuiltSession = (builtSession) => {
+    const dayIndex = sessionBuilderDay;
+    setData(d => {
+      const existing = d.customSessions || [];
+      const updated = [...existing, builtSession];
+      let weeks = d.weeks;
+      if (dayIndex !== null && dayIndex !== undefined) {
+        const mon = getMondayOf(currentDate);
+        const key = weekKey(mon);
+        const ws = d.weeks[key] ? [...d.weeks[key]] : Array(7).fill(null).map(() => []);
+        ws[dayIndex] = [...(ws[dayIndex] || []), { ...builtSession, feedback: null }];
+        weeks = { ...d.weeks, [key]: ws };
+      }
+      return { ...d, customSessions: updated, weeks };
+    });
+    // Sync vers la communauté si connecté
+    if (session?.user?.id) {
+      pushToCommunity(builtSession, session.user.id);
+    }
+    setSessionBuilderDay(null);
   };
 
   const isCalendarMode = ["week", "month", "year"].includes(viewMode);
@@ -4573,7 +5023,7 @@ export default function ClimbingPlanner() {
                   sessions={weekSessions[i] || []}
                   isToday={isToday}
                   weekMeta={weekMeta}
-                  onAddSession={() => setPicker({ dayIndex: i })}
+                  onAddSession={() => setSessionBuilderDay(i)}
                   onOpenSession={(si) => openSessionModal(wKey, i, si)}
                   onRemove={(si) => removeSession(i, si)}
                   isMobile={isMobile}
@@ -4690,6 +5140,14 @@ export default function ClimbingPlanner() {
       )}
 
       {/* ── Modals ── */}
+      {sessionBuilderDay !== null && (
+        <SessionBuilder
+          onSave={saveBuiltSession}
+          onClose={() => setSessionBuilderDay(null)}
+          communitySessions={communitySessions}
+          allSessions={[...SESSIONS, ...(data.customSessions || [])]}
+        />
+      )}
       {picker && (
         <SessionPicker
           onSelect={s => { addSession(picker.dayIndex, s); setPicker(null); }}
