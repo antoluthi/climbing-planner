@@ -6284,7 +6284,8 @@ export default function ClimbingPlanner() {
         notes:           feedback.notes  || null,
         block_feedbacks: feedback.blockFeedbacks?.length ? feedback.blockFeedbacks : null,
         updated_at:      new Date().toISOString(),
-      }, { onConflict: "user_id,session_name,feedback_date" });
+      }, { onConflict: "user_id,session_name,feedback_date" })
+        .then(({ error }) => { if (error) console.error("[session_feedbacks] upsert error:", error); });
     }
 
     setSessionModal(null);
