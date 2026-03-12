@@ -6293,7 +6293,7 @@ export default function ClimbingPlanner() {
                   sessions={weekSessions[i] || []}
                   isToday={isToday}
                   weekMeta={weekMeta}
-                  onAddSession={() => setSessionBuilderDay(i)}
+                  onAddSession={() => setPicker({ dayIndex: i })}
                   onOpenSession={(si) => openSessionModal(wKey, i, si)}
                   onRemove={(si) => removeSession(i, si)}
                   isMobile={isMobile}
