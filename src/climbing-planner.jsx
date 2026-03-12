@@ -2396,6 +2396,161 @@ function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom, sess
   );
 }
 
+/// ─── MODAL: HISTORIQUE FEEDBACKS COACH ───────────────────────────────────────
+
+function FeedbackHistoryModal({ type, id, name, onClose }) {
+  const { isDark } = useThemeCtx();
+  const [feedbacks, setFeedbacks] = useState(null); // null = loading
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!supabase || id == null) { setFeedbacks([]); return; }
+    const load = async () => {
+      const { data, error: err } = await supabase
+        .from("session_feedbacks")
+        .select("*")
+        .order("feedback_date", { ascending: false });
+      if (err) { setError(err.message); setFeedbacks([]); return; }
+      const all = data || [];
+      if (type === "session") {
+        setFeedbacks(all.filter(fb => fb.session_id === id || fb.session_name === name));
+      } else {
+        setFeedbacks(all.filter(fb =>
+          Array.isArray(fb.block_feedbacks) &&
+          fb.block_feedbacks.some(bf => bf.blockId === id && bf.text?.trim())
+        ));
+      }
+    };
+    load();
+  }, [type, id, name]);
+
+  const surface = isDark ? "#1c2820" : "#ffffff";
+  const bg      = isDark ? "#141a16" : "#f3f7f4";
+  const border  = isDark ? "#263228" : "#daeade";
+  const text    = isDark ? "#d8e8d0" : "#1a2e1f";
+  const muted   = isDark ? "#6a8870" : "#6b8c72";
+  const accent  = "#4caf72";
+
+  const fmtDate = (ds) => {
+    if (!ds) return "";
+    return new Date(ds).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ background: surface, borderRadius: 12, border: `1px solid ${border}`, width: "100%", maxWidth: 540, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.35)" }}>
+
+        {/* Header */}
+        <div style={{ padding: "14px 18px 12px", borderBottom: `1px solid ${border}`, display: "flex", alignItems: "flex-start", gap: 10, flexShrink: 0 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>
+              {type === "session" ? "Retours athlètes — Séance" : "Retours athlètes — Bloc"}
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: text }}>{name}</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: muted, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 4, flexShrink: 0 }}>✕</button>
+        </div>
+
+        {/* List */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
+          {feedbacks === null ? (
+            <div style={{ padding: "40px 0", textAlign: "center", color: muted, fontSize: 12 }}>Chargement…</div>
+          ) : error ? (
+            <div style={{ padding: "20px 0", textAlign: "center", color: isDark ? "#f87171" : "#dc2626", fontSize: 12 }}>{error}</div>
+          ) : feedbacks.length === 0 ? (
+            <div style={{ padding: "48px 20px", textAlign: "center", color: muted }}>
+              <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.4 }}>💬</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 4 }}>Aucun retour pour l'instant</div>
+              <div style={{ fontSize: 12 }}>
+                {type === "session" ? "Les athlètes n'ont pas encore donné de feedback sur cette séance." : "Aucun athlète n'a encore commenté ce bloc."}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {feedbacks.map((fb, i) => {
+                const blockFb = type === "block"
+                  ? (fb.block_feedbacks || []).find(bf => bf.blockId === id)
+                  : null;
+                return (
+                  <div key={i} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden" }}>
+                    {/* Athlete + date row */}
+                    <div style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${border}` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 30, height: 30, borderRadius: "50%", background: accent + "28", color: accent, fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {(fb.athlete_name || "?")[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: text }}>{fb.athlete_name || "Athlète inconnu"}</div>
+                          <div style={{ fontSize: 10, color: muted }}>{fmtDate(fb.feedback_date)}</div>
+                        </div>
+                      </div>
+                      {fb.done !== null && fb.done !== undefined && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 4, background: fb.done ? "#4ade8020" : "#f8717120", color: fb.done ? "#4ade80" : "#f87171", border: `1px solid ${fb.done ? "#4ade8044" : "#f8717144"}` }}>
+                          {fb.done ? "✓ Réalisée" : "✗ Non réalisée"}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Feedback body */}
+                    <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                      {/* RPE + quality */}
+                      {(fb.rpe != null || fb.quality != null) && (
+                        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                          {fb.rpe != null && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                              <span style={{ fontSize: 10, color: muted }}>RPE</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: getChargeColor(fb.rpe * 3) }}>{fb.rpe}/10</span>
+                            </div>
+                          )}
+                          {fb.quality != null && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                              <span style={{ fontSize: 10, color: muted }}>Qualité</span>
+                              <span style={{ fontSize: 12, color: "#fbbf24", letterSpacing: 1 }}>{"★".repeat(fb.quality)}{"☆".repeat(5 - fb.quality)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {/* General notes (session view) */}
+                      {type === "session" && fb.notes?.trim() && (
+                        <div>
+                          <div style={{ fontSize: 10, color: muted, marginBottom: 3 }}>Notes générales</div>
+                          <div style={{ fontSize: 12, color: text, lineHeight: 1.5, background: surface, padding: "6px 10px", borderRadius: 5, border: `1px solid ${border}` }}>{fb.notes}</div>
+                        </div>
+                      )}
+                      {/* Per-block feedbacks (session view) */}
+                      {type === "session" && (fb.block_feedbacks || []).filter(bf => bf.text?.trim()).map((bf, bi) => {
+                        const bCfg = BLOCK_TYPES[bf.blockType] || {};
+                        return (
+                          <div key={bi} style={{ borderLeft: `3px solid ${bCfg.color || accent}99`, paddingLeft: 10 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: bCfg.color || accent, marginBottom: 3 }}>{bf.blockName}</div>
+                            <div style={{ fontSize: 12, color: text, lineHeight: 1.5 }}>{bf.text}</div>
+                          </div>
+                        );
+                      })}
+                      {/* Block-specific feedback (block view) */}
+                      {type === "block" && blockFb && (
+                        <div>
+                          <div style={{ fontSize: 10, color: muted, marginBottom: 3 }}>Retour sur ce bloc</div>
+                          <div style={{ fontSize: 12, color: text, lineHeight: 1.5 }}>{blockFb.text}</div>
+                          {fb.notes?.trim() && (
+                            <div style={{ fontSize: 11, color: muted, marginTop: 6, fontStyle: "italic" }}>
+                              Note générale : {fb.notes}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MODAL: SESSION UNIFIÉE (Séance + Ressenti) ───────────────────────────────
 
 function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) {
@@ -2410,10 +2565,11 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
   const defaultContent = hasWarmup ? "warmup" : hasMain ? "main" : hasCooldown ? "cooldown" : "main";
   const [contentTab, setContentTab] = useState(defaultContent);
 
-  const [done,    setDone]    = useState(session.feedback?.done    ?? false);
-  const [rpe,     setRpe]     = useState(session.feedback?.rpe     ?? 5);
-  const [quality, setQuality] = useState(session.feedback?.quality ?? null);
-  const [notes,   setNotes]   = useState(session.feedback?.notes   ?? "");
+  const [done,           setDone]           = useState(session.feedback?.done           ?? false);
+  const [rpe,            setRpe]            = useState(session.feedback?.rpe            ?? 5);
+  const [quality,        setQuality]        = useState(session.feedback?.quality        ?? null);
+  const [notes,          setNotes]          = useState(session.feedback?.notes          ?? "");
+  const [blockFeedbacks, setBlockFeedbacks] = useState(session.feedback?.blockFeedbacks ?? []);
 
   const mesoLabel = weekMeta?.mesocycle || session.dateMeta?.mesocycle;
   const mesoColor = getMesoColor(mesocycles, mesoLabel);
@@ -2608,16 +2764,51 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
 
                   {/* Notes */}
                   <div>
-                    <div style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7f70", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6 }}>Notes</div>
-                    <textarea style={{ ...styles.textarea, minHeight: 80 }}
+                    <div style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7f70", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6 }}>Notes générales</div>
+                    <textarea style={{ ...styles.textarea, minHeight: 70 }}
                       placeholder="Sensations, observations, ajustements…"
                       value={notes} onChange={e => setNotes(e.target.value)} rows={3}
                     />
                   </div>
+
+                  {/* Block feedbacks */}
+                  {hasBlocks && (
+                    <div>
+                      <div style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7f70", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>Retour par bloc <span style={{ fontWeight: 400, opacity: 0.6, textTransform: "none", letterSpacing: 0 }}>(optionnel)</span></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {session.blocks.map((bl, i) => {
+                          const cfg   = BLOCK_TYPES[bl.blockType] || {};
+                          const color = cfg.color || "#888";
+                          const existing = blockFeedbacks.find(bf => bf.blockId === bl.id);
+                          return (
+                            <div key={i} style={{ borderLeft: `3px solid ${color}66`, paddingLeft: 10 }}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color, marginBottom: 5 }}>
+                                <span style={{ opacity: 0.7, fontWeight: 400, fontSize: 10, marginRight: 5 }}>{bl.blockType}</span>{bl.name}
+                              </div>
+                              <textarea
+                                style={{ ...styles.textarea, minHeight: 48, fontSize: 12 }}
+                                placeholder="Adaptation, ressenti spécifique… (laisser vide si rien à dire)"
+                                value={existing?.text || ""}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setBlockFeedbacks(prev => {
+                                    const without = prev.filter(bf => bf.blockId !== bl.id);
+                                    if (val.trim()) return [...without, { blockId: bl.id, blockName: bl.name, blockType: bl.blockType, text: val }];
+                                    return without;
+                                  });
+                                }}
+                                rows={2}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
-              <button style={styles.saveBtn} onClick={() => onSave({ done, rpe: done ? rpe : null, quality: done ? quality : null, notes })}>
+              <button style={styles.saveBtn} onClick={() => onSave({ done, rpe: done ? rpe : null, quality: done ? quality : null, notes, blockFeedbacks: done ? blockFeedbacks : [] })}>
                 Enregistrer le ressenti
               </button>
             </div>
@@ -5680,11 +5871,12 @@ function BlockFormModal({ initial, onSave, onClose }) {
 // ── Vue bibliothèque coach ────────────────────────────────────────────────────
 function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock, onEditBlock, onDeleteBlock }) {
   const { isDark } = useThemeCtx();
-  const [subTab,     setSubTab]     = useState("sessions"); // "sessions" | "blocks"
-  const [search,     setSearch]     = useState("");
-  const [filter,     setFilter]     = useState("Tous");
-  const [confirmId,  setConfirmId]  = useState(null);
-  const [blockForm,  setBlockForm]  = useState(null); // null | { initial? }
+  const [subTab,          setSubTab]          = useState("sessions"); // "sessions" | "blocks"
+  const [search,          setSearch]          = useState("");
+  const [filter,          setFilter]          = useState("Tous");
+  const [confirmId,       setConfirmId]       = useState(null);
+  const [blockForm,       setBlockForm]       = useState(null); // null | { initial? }
+  const [feedbackHistory, setFeedbackHistory] = useState(null); // null | { type, id, name }
 
   const bg      = isDark ? "#141a16" : "#f3f7f4";
   const surface = isDark ? "#1a2320" : "#ffffff";
@@ -5695,13 +5887,16 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
   const danger  = isDark ? "#f87171" : "#dc2626";
 
   // ── Shared item row ──
-  const ItemActions = ({ id, onEdit: doEdit, onDel }) => confirmId === id ? (
+  const ItemActions = ({ id, onEdit: doEdit, onDel, onHistory }) => confirmId === id ? (
     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
       <button onClick={() => { onDel(id); setConfirmId(null); }} style={{ background: danger, border: "none", borderRadius: 5, color: "#fff", padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}>Supprimer</button>
       <button onClick={() => setConfirmId(null)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Annuler</button>
     </div>
   ) : (
     <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+      {onHistory && (
+        <button onClick={onHistory} title="Retours athlètes" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: accent, padding: "5px 8px", cursor: "pointer", fontSize: 11, lineHeight: 1, fontFamily: "inherit", letterSpacing: "0.02em" }}>💬</button>
+      )}
       <button onClick={doEdit} title="Modifier" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>✎</button>
       <button onClick={() => setConfirmId(id)} title="Supprimer" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: danger + "bb", padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>✕</button>
     </div>
@@ -5819,7 +6014,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
                         </div>
                       </div>
                       <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 9px", borderRadius: 4, flexShrink: 0, background: getChargeColor(s.charge) + "28", color: getChargeColor(s.charge), border: `1px solid ${getChargeColor(s.charge)}55` }}>⚡{s.charge}</span>
-                      <ItemActions id={s.id} onEdit={() => onEdit(s)} onDel={onDelete} />
+                      <ItemActions id={s.id} onEdit={() => onEdit(s)} onDel={onDelete} onHistory={() => setFeedbackHistory({ type: "session", id: s.id, name: s.name })} />
                     </div>
                   ))}
                 </div>
@@ -5857,7 +6052,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
                             {b.description && <span style={{ maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.description}</span>}
                           </div>
                         </div>
-                        <ItemActions id={b.id} onEdit={() => setBlockForm({ initial: b })} onDel={onDeleteBlock} />
+                        <ItemActions id={b.id} onEdit={() => setBlockForm({ initial: b })} onDel={onDeleteBlock} onHistory={() => setFeedbackHistory({ type: "block", id: b.id, name: b.name })} />
                       </div>
                     ))}
                   </div>
@@ -5874,6 +6069,16 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
           initial={blockForm.initial}
           onSave={b => { (blockForm.initial ? onEditBlock : onNewBlock)(b); setBlockForm(null); }}
           onClose={() => setBlockForm(null)}
+        />
+      )}
+
+      {/* ── Modal historique feedbacks ── */}
+      {feedbackHistory && (
+        <FeedbackHistoryModal
+          type={feedbackHistory.type}
+          id={feedbackHistory.id}
+          name={feedbackHistory.name}
+          onClose={() => setFeedbackHistory(null)}
         />
       )}
     </div>
@@ -6046,6 +6251,8 @@ export default function ClimbingPlanner() {
   const saveSessionFeedback = (feedback) => {
     if (!sessionModal) return;
     const { weekKey: smKey, dayIndex, sessionIndex } = sessionModal;
+
+    // Save locally
     setData(d => ({
       ...d,
       weeks: {
@@ -6055,6 +6262,31 @@ export default function ClimbingPlanner() {
         ),
       },
     }));
+
+    // Upsert to Supabase so coach can read it
+    if (supabase && session?.user?.id) {
+      const smSession = (data.weeks[smKey] || [])[dayIndex]?.[sessionIndex];
+      const monday = new Date(smKey);
+      const fDate = new Date(monday);
+      fDate.setDate(monday.getDate() + dayIndex);
+      const feedbackDate = fDate.toISOString().split("T")[0];
+      const athleteName = [data.profile?.firstName, data.profile?.lastName].filter(Boolean).join(" ") || null;
+      supabase.from("session_feedbacks").upsert({
+        user_id:         session.user.id,
+        athlete_name:    athleteName,
+        session_id:      smSession?.id ?? null,
+        session_name:    smSession?.name ?? "",
+        feedback_date:   feedbackDate,
+        week_key:        smKey,
+        done:            feedback.done,
+        rpe:             feedback.rpe   ?? null,
+        quality:         feedback.quality ?? null,
+        notes:           feedback.notes  || null,
+        block_feedbacks: feedback.blockFeedbacks?.length ? feedback.blockFeedbacks : null,
+        updated_at:      new Date().toISOString(),
+      }, { onConflict: "user_id,session_name,feedback_date" });
+    }
+
     setSessionModal(null);
   };
 
