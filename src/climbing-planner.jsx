@@ -2401,10 +2401,11 @@ function SessionPicker({ onSelect, onClose, customSessions, onCreateCustom, sess
 function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const [tab, setTab] = useState("session");
-  const hasWarmup = !!session.warmup?.trim();
-  const hasMain   = !!session.main?.trim();
+  const hasBlocks   = session.blocks?.length > 0;
+  const hasWarmup   = !!session.warmup?.trim();
+  const hasMain     = !!session.main?.trim();
   const hasCooldown = !!session.cooldown?.trim();
-  const hasContent = hasWarmup || hasMain || hasCooldown;
+  const hasContent  = hasWarmup || hasMain || hasCooldown;
 
   const defaultContent = hasWarmup ? "warmup" : hasMain ? "main" : hasCooldown ? "cooldown" : "main";
   const [contentTab, setContentTab] = useState(defaultContent);
@@ -2479,14 +2480,69 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
             {weekMeta?.microcycle && <span style={styles.detailMetaChip}>{weekMeta.microcycle}</span>}
           </div>
           {dayLabel && (
-            <div style={{ fontSize: 10, color: isDark ? "#707870" : "#8a7f70", marginTop: 5, letterSpacing: "0.05em" }}>{dayLabel}</div>
+            <div style={{ fontSize: 10, color: isDark ? "#707870" : "#8a7f70", marginTop: 5, letterSpacing: "0.05em" }}>
+              {dayLabel}
+              {session.startTime && (
+                <span style={{ marginLeft: 8, color: isDark ? "#4caf72" : "#2a7d4f", fontWeight: 600 }}>
+                  {session.startTime}{session.endTime ? ` – ${session.endTime}` : ""}
+                </span>
+              )}
+            </div>
+          )}
+          {session.coachNote && (
+            <div style={{ marginTop: 10, padding: "8px 12px", background: isDark ? "#1a2e22" : "#e8f5ee", borderRadius: 6, borderLeft: `3px solid ${isDark ? "#4caf72" : "#2a7d4f"}` }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: isDark ? "#4caf72" : "#2a7d4f", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 }}>Mot de l'entraîneur</div>
+              <div style={{ fontSize: 12, color: isDark ? "#c8e0c0" : "#1a3a28", lineHeight: 1.5 }}>{session.coachNote}</div>
+            </div>
           )}
         </div>
 
         {/* ── Content ── */}
         <div style={{ flex: 1, overflowY: "auto" }}>
           {tab === "session" ? (
-            hasContent ? (
+            hasBlocks ? (
+              /* ── Blocs composant la séance ── */
+              <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                {session.blocks.map((bl, i) => {
+                  const cfg = BLOCK_TYPES[bl.blockType] || {};
+                  const color = cfg.color || "#888";
+                  return (
+                    <div key={i} style={{ borderRadius: 8, border: `1px solid ${isDark ? "#2a332d" : "#d8e8d0"}`, borderLeft: `4px solid ${color}`, background: isDark ? "#181f1b" : "#f7faf8", overflow: "hidden" }}>
+                      {/* Bloc header */}
+                      <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.07em" }}>{bl.blockType}</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: isDark ? "#e0e8d8" : "#1a2a1f" }}>{bl.name}</span>
+                          </div>
+                          <div style={{ display: "flex", gap: 8, marginTop: 4, alignItems: "center" }}>
+                            {bl.duration && (
+                              <span style={{ fontSize: 10, color: isDark ? "#7a9a80" : "#5a7a60" }}>{bl.duration} min</span>
+                            )}
+                            {cfg.hasCharge && bl.charge > 0 && (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: getChargeColor(bl.charge), background: getChargeColor(bl.charge) + "22", padding: "1px 6px", borderRadius: 4 }}>
+                                ⚡ {bl.charge}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: color + "22", border: `2px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 12, color, fontWeight: 700 }}>
+                          {i + 1}
+                        </div>
+                      </div>
+                      {/* Description */}
+                      {bl.description?.trim() && (
+                        <div style={{ padding: "0 14px 12px", borderTop: `1px solid ${isDark ? "#222c24" : "#e0ead8"}` }}>
+                          <div style={{ paddingTop: 8 }}>
+                            <RichText text={bl.description} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : hasContent ? (
               <>
                 {/* Content sub-tabs */}
                 <div style={{ display: "flex", borderBottom: `1px solid ${isDark ? "#252b27" : "#ccc6b8"}`, padding: "0 8px", background: isDark ? "#191e1b" : "#f0ebe2" }}>
