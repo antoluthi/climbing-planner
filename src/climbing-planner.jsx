@@ -1150,13 +1150,67 @@ function useSessionsCatalog(userId) {
   }, [fetchCatalog]);
 
   const deleteUserSession = useCallback(async (id) => {
-    const uid = userIdRef.current;
-    if (!supabase || !uid) return;
-    await supabase.from("sessions_catalog").delete().eq("id", id).eq("user_id", uid);
+    if (!supabase) return;
+    await supabase.from("sessions_catalog").delete().eq("id", id);
     fetchCatalog();
   }, [fetchCatalog]);
 
   return { catalog, saveUserSession, deleteUserSession };
+}
+
+// ─── HOOK : blocs de séance (table session_blocks) ────────────────────────────
+function useSessionBlocks(userId) {
+  const [blocks, setBlocks] = useState([]);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
+
+  const fetchBlocks = useCallback(async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from("session_blocks")
+      .select("id, block_type, name, duration, charge, description")
+      .eq("is_active", true)
+      .order("block_type", { ascending: true })
+      .order("name",       { ascending: true });
+    if (error || !data) return;
+    setBlocks(data.map(r => ({
+      id: r.id,
+      blockType: r.block_type,
+      name: r.name,
+      duration: r.duration ?? undefined,
+      charge: r.charge ?? 0,
+      description: r.description ?? "",
+    })));
+  }, []);
+
+  useEffect(() => { fetchBlocks(); }, [fetchBlocks, userId]);
+
+  const saveBlock = useCallback(async (block) => {
+    const uid = userIdRef.current;
+    if (!supabase || !uid) return;
+    const row = {
+      block_type: block.blockType,
+      name: block.name,
+      duration: block.duration ?? null,
+      charge: block.charge ?? 0,
+      description: block.description || null,
+      is_active: true,
+    };
+    if (block.id && typeof block.id === "number") {
+      await supabase.from("session_blocks").update(row).eq("id", block.id);
+    } else {
+      await supabase.from("session_blocks").insert({ ...row, created_by: uid });
+    }
+    fetchBlocks();
+  }, [fetchBlocks]);
+
+  const deleteBlock = useCallback(async (id) => {
+    if (!supabase) return;
+    await supabase.from("session_blocks").delete().eq("id", id);
+    fetchBlocks();
+  }, [fetchBlocks]);
+
+  return { blocks, saveBlock, deleteBlock };
 }
 
 // ─── AUTH PANEL ───────────────────────────────────────────────────────────────
@@ -2529,6 +2583,208 @@ function ConfirmModal({ title, sub, onConfirm, onClose }) {
   );
 }
 
+// ─── COACH PICKER MODAL ───────────────────────────────────────────────────────
+
+function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
+  const { isDark } = useThemeCtx();
+  const [tab,        setTab]        = useState("sessions");
+  const [search,     setSearch]     = useState("");
+  const [typeFilter, setTypeFilter] = useState("Tous");
+  const [selected,   setSelected]   = useState(null); // { type, item }
+  const [startTime,  setStartTime]  = useState("09:00");
+
+  const surface = isDark ? "#1c2820" : "#ffffff";
+  const bg2     = isDark ? "#141a16" : "#f3f7f4";
+  const border  = isDark ? "#263228" : "#daeade";
+  const text    = isDark ? "#d8e8d0" : "#1a2e1f";
+  const muted   = isDark ? "#6a8870" : "#6b8c72";
+  const accent  = "#4caf72";
+
+  const isSessionTab = tab === "sessions";
+
+  const filteredSessions = sessions.filter(s =>
+    (typeFilter === "Tous" || s.type === typeFilter) &&
+    s.name.toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredBlocks = blocks.filter(b =>
+    (typeFilter === "Tous" || b.blockType === typeFilter) &&
+    b.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const sessionTypes  = [...new Set(sessions.map(s => s.type).filter(Boolean))];
+  const filterOptions = isSessionTab
+    ? ["Tous", ...sessionTypes]
+    : ["Tous", ...Object.keys(BLOCK_TYPES)];
+
+  const getEndTime = (start, duration) => {
+    if (!start || !duration) return null;
+    const [h, m] = start.split(":").map(Number);
+    const total = h * 60 + m + Number(duration);
+    return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  };
+
+  const handleAdd = () => {
+    if (!selected) return;
+    const duration = selected.type === "session"
+      ? selected.item.estimatedTime
+      : selected.item.duration;
+    onSelect({
+      ...selected.item,
+      startTime,
+      endTime: getEndTime(startTime, duration) ?? undefined,
+      isBlock: selected.type === "block",
+    });
+  };
+
+  const inputBase = { background: bg2, border: `1px solid ${border}`, borderRadius: 6, padding: "7px 11px", color: text, fontSize: 12, fontFamily: "inherit", outline: "none" };
+
+  const ItemRow = ({ item, type }) => {
+    const isSel = selected?.item.id === item.id && selected?.type === type;
+    const cfg   = type === "block" ? (BLOCK_TYPES[item.blockType] || {}) : null;
+    const color = type === "block" ? (cfg?.color || "#888") : getChargeColor(item.charge);
+    const dur   = type === "session" ? item.estimatedTime : item.duration;
+    return (
+      <div
+        onClick={() => setSelected({ type, item })}
+        style={{
+          padding: "10px 14px", cursor: "pointer",
+          background: isSel ? (isDark ? "#1b3026" : "#e2f5e8") : "transparent",
+          borderLeft: `3px solid ${isSel ? accent : "transparent"}`,
+          borderBottom: `1px solid ${border}`,
+          display: "flex", alignItems: "center", gap: 10,
+        }}
+      >
+        {cfg && <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{cfg.icon}</span>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: isSel ? 600 : 400, color: text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {item.name}
+          </div>
+          <div style={{ fontSize: 10, color: muted, display: "flex", gap: 8, marginTop: 2 }}>
+            {type === "session" && item.type && <span>{item.type}</span>}
+            {type === "block"   && <span style={{ color }}>{item.blockType}</span>}
+            {dur && <span>⏱ {dur} min</span>}
+            {type === "session" && <span style={{ color: getChargeColor(item.charge) }}>⚡{item.charge}</span>}
+            {type === "block" && cfg?.hasCharge && item.charge > 0 && <span style={{ color: getChargeColor(item.charge) }}>⚡{item.charge}</span>}
+          </div>
+        </div>
+        {type === "session" && (
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: color + "28", color, border: `1px solid ${color}55`, flexShrink: 0 }}>
+            ⚡{item.charge}
+          </span>
+        )}
+        {isSel && <span style={{ color: accent, fontSize: 16, flexShrink: 0 }}>✓</span>}
+      </div>
+    );
+  };
+
+  const selDuration = selected
+    ? (selected.type === "session" ? selected.item.estimatedTime : selected.item.duration)
+    : null;
+  const endTime = selected ? getEndTime(startTime, selDuration) : null;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: surface, borderRadius: 12, width: "100%", maxWidth: 420, maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px #0009", overflow: "hidden" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${border}` }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Ajouter au calendrier</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: muted, fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* Sub-tabs */}
+        <div style={{ display: "flex", borderBottom: `1px solid ${border}` }}>
+          {[{ key: "sessions", label: "📋 Séances" }, { key: "blocks", label: "🧩 Blocs" }].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => { setTab(key); setSearch(""); setTypeFilter("Tous"); setSelected(null); }}
+              style={{
+                flex: 1, padding: "10px 0", border: "none", background: "none", cursor: "pointer",
+                fontFamily: "inherit", fontSize: 12, fontWeight: tab === key ? 700 : 400,
+                color: tab === key ? accent : muted,
+                borderBottom: `2px solid ${tab === key ? accent : "transparent"}`,
+                marginBottom: -1,
+              }}
+            >{label}</button>
+          ))}
+        </div>
+
+        {/* Search + filter */}
+        <div style={{ padding: "10px 12px", borderBottom: `1px solid ${border}`, display: "flex", flexDirection: "column", gap: 7 }}>
+          <input
+            style={{ ...inputBase, width: "100%", boxSizing: "border-box" }}
+            placeholder="Rechercher…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            autoFocus
+          />
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {filterOptions.map(f => (
+              <button
+                key={f}
+                onClick={() => setTypeFilter(f)}
+                style={{
+                  padding: "3px 9px", borderRadius: 4, cursor: "pointer", fontSize: 10,
+                  fontFamily: "inherit",
+                  border: `1px solid ${typeFilter === f ? accent + "88" : border}`,
+                  background: typeFilter === f ? (isDark ? "#263228" : "#d4e8db") : "none",
+                  color: typeFilter === f ? accent : muted,
+                }}
+              >
+                {isSessionTab ? f : (BLOCK_TYPES[f] ? `${BLOCK_TYPES[f].icon} ${f}` : f)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* List */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {isSessionTab
+            ? (filteredSessions.length === 0
+                ? <div style={{ padding: "30px", textAlign: "center", color: muted, fontSize: 12 }}>Aucune séance</div>
+                : filteredSessions.map(s => <ItemRow key={s.id} item={s} type="session" />))
+            : (filteredBlocks.length === 0
+                ? <div style={{ padding: "30px", textAlign: "center", color: muted, fontSize: 12 }}>Aucun bloc</div>
+                : filteredBlocks.map(b => <ItemRow key={b.id} item={b} type="block" />))
+          }
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "12px 16px", borderTop: `1px solid ${border}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {selected ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: muted, marginBottom: 3 }}>Heure de départ</div>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={e => setStartTime(e.target.value)}
+                    style={{ ...inputBase, padding: "5px 9px", fontSize: 13 }}
+                  />
+                </div>
+                {endTime && selDuration && (
+                  <div style={{ fontSize: 10, color: muted, marginTop: 13 }}>
+                    → {endTime}<br />
+                    <span style={{ color: accent }}>{selDuration} min</span>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handleAdd}
+                style={{ background: accent, border: "none", borderRadius: 7, color: "#fff", padding: "9px 20px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 700, boxShadow: `0 2px 8px ${accent}44`, flexShrink: 0 }}
+              >Ajouter</button>
+            </>
+          ) : (
+            <div style={{ color: muted, fontSize: 12, flex: 1 }}>Sélectionnez une séance ou un bloc…</div>
+          )}
+          <button onClick={onClose} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 7, color: muted, padding: "8px 14px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>Annuler</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── COMPOSANT JOUR ───────────────────────────────────────────────────────────
 
 function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine, note, onSaveNote, logWarning, onOpenLog }) {
@@ -2623,6 +2879,11 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
           >
             <div style={{ ...styles.sessionCardAccent, background: getChargeColor(s.charge) }} />
             <div style={styles.sessionCardContent}>
+              {s.startTime && (
+                <span style={{ fontSize: 9, color: isDark ? "#5a7860" : "#7a9a80", fontWeight: 600, marginBottom: 1, display: "block" }}>
+                  {s.startTime}{s.endTime ? ` – ${s.endTime}` : ""}
+                </span>
+              )}
               <span style={styles.sessionCardName}>{s.title || s.name}</span>
               {/* Blocs de la séance (nouveau format) */}
               {s.blocks && s.blocks.length > 0 && (
@@ -5029,9 +5290,9 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
     </div>
   );
 
-  // ── Séances tab ──
-  const mySessions = catalog.filter(s => s.isCustom);
-  const filteredSessions = mySessions.filter(s => {
+  // ── Séances tab — toutes les séances (communautaires) ──
+  const allSessions = catalog; // plus de filtre isCustom
+  const filteredSessions = allSessions.filter(s => {
     const matchType   = filter === "Tous" || s.type === filter;
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
     return matchType && matchSearch;
@@ -5078,7 +5339,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
             </div>
             <div style={{ fontSize: 11, color: muted, marginTop: 1 }}>
               {isSessionTab
-                ? `${mySessions.length} séance${mySessions.length !== 1 ? "s" : ""}`
+                ? `${allSessions.length} séance${allSessions.length !== 1 ? "s" : ""}`
                 : `${(blocks || []).length} bloc${(blocks || []).length !== 1 ? "s" : ""}`}
             </div>
           </div>
@@ -5117,7 +5378,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
 
         {/* ══ SÉANCES ══ */}
         {isSessionTab && (
-          mySessions.length === 0 ? (
+          allSessions.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: muted }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: text }}>Aucune séance</div>
@@ -5228,6 +5489,7 @@ export default function ClimbingPlanner() {
   const { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus } = useSupabaseSync();
   const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
   const { catalog, saveUserSession, deleteUserSession } = useSessionsCatalog(session?.user?.id);
+  const { blocks: dbBlocks, saveBlock, deleteBlock } = useSessionBlocks(session?.user?.id);
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -5403,11 +5665,10 @@ export default function ClimbingPlanner() {
   const updateCustomCycle = (id, cc) => updateCustomCycles(list => list.map(x => x.id === id ? { ...x, ...cc } : x));
   const deleteCustomCycle = id => updateCustomCycles(list => list.filter(x => x.id !== id));
 
-  // ── Session blocks CRUD (stored in data.sessionBlocks) ──
-  const updateSessionBlocks = updater => setData(d => ({ ...d, sessionBlocks: updater(d.sessionBlocks || []) }));
-  const addSessionBlock    = b => updateSessionBlocks(list => [...list, b]);
-  const editSessionBlock   = b => updateSessionBlocks(list => list.map(x => x.id === b.id ? b : x));
-  const deleteSessionBlock = id => updateSessionBlocks(list => list.filter(x => x.id !== id));
+  // ── Session blocks CRUD (table session_blocks en DB) ──
+  const addSessionBlock    = b  => saveBlock(b);
+  const editSessionBlock   = b  => saveBlock(b);
+  const deleteSessionBlock = id => deleteBlock(id);
 
   // ── Custom session handlers ──
   const saveCustomSession = (customSession, targetDayIndex) => {
@@ -5779,7 +6040,7 @@ export default function ClimbingPlanner() {
           onNew={() => setCustomSessionForm({ targetDay: undefined })}
           onEdit={s => setCustomSessionForm({ initial: s, targetDay: undefined })}
           onDelete={id => deleteUserSession(id)}
-          blocks={data.sessionBlocks || []}
+          blocks={dbBlocks}
           onNewBlock={addSessionBlock}
           onEditBlock={editSessionBlock}
           onDeleteBlock={deleteSessionBlock}
@@ -5812,16 +6073,21 @@ export default function ClimbingPlanner() {
           onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
         />
       )}
-      {picker && (
+      {picker && isCoach && (
+        <CoachPickerModal
+          sessions={catalog}
+          blocks={dbBlocks}
+          onSelect={s => { addSession(picker.dayIndex, s); setPicker(null); }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {picker && !isCoach && (
         <SessionPicker
           onSelect={s => { addSession(picker.dayIndex, s); setPicker(null); }}
           onClose={() => setPicker(null)}
           customSessions={catalog.filter(s => s.isCustom)}
-          sessions={isCoach ? [] : catalog.filter(s => !s.isCustom)}
-          onCreateCustom={isCoach
-            ? () => { setViewMode("library"); setPicker(null); }
-            : () => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
-          createLabel={isCoach ? "Gérer ma bibliothèque →" : undefined}
+          sessions={catalog.filter(s => !s.isCustom)}
+          onCreateCustom={() => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
         />
       )}
       {customSessionForm !== null && (
