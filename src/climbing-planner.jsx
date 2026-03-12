@@ -1142,10 +1142,17 @@ function useSessionsCatalog(userId) {
       is_active: true,
       sort_order: 999,
     };
+    let dbError;
     if (session.isCustom && typeof session.id === "number") {
-      await supabase.from("sessions_catalog").update(row).eq("id", session.id);
+      const { error } = await supabase.from("sessions_catalog").update(row).eq("id", session.id);
+      dbError = error;
     } else {
-      await supabase.from("sessions_catalog").insert(row);
+      const { error } = await supabase.from("sessions_catalog").insert(row);
+      dbError = error;
+    }
+    if (dbError) {
+      console.error("[sessions_catalog] erreur DB:", dbError.code, dbError.message, dbError.details, "\nrow envoyé:", row);
+      return null;
     }
     fetchCatalog();
   }, [fetchCatalog]);
