@@ -1119,7 +1119,8 @@ function useSessionsCatalog(userId) {
     })));
   }, []);
 
-  useEffect(() => { fetchCatalog(); }, [fetchCatalog]);
+  // Re-fetch when userId changes (e.g. Supabase auth session restored asynchronously)
+  useEffect(() => { fetchCatalog(); }, [fetchCatalog, userId]);
 
   const saveUserSession = useCallback(async (session) => {
     const uid = userIdRef.current;
