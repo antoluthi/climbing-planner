@@ -6264,6 +6264,7 @@ export default function ClimbingPlanner() {
     }));
 
     // Upsert to Supabase so coach can read it
+    console.log("[feedback] supabase:", !!supabase, "| userId:", session?.user?.id, "| smKey:", smKey, "| dayIndex:", dayIndex, "| sessionIndex:", sessionIndex);
     if (supabase && session?.user?.id) {
       const smSession = (data.weeks[smKey] || [])[dayIndex]?.[sessionIndex];
       const monday = new Date(smKey);
