@@ -1126,10 +1126,11 @@ function useSessionsCatalog(userId) {
     const uid = userIdRef.current;
     if (!supabase || !uid) return null;
     const extra = {};
-    if (session.warmup) extra.warmup = session.warmup;
-    if (session.main) extra.main = session.main;
+    if (session.warmup)   extra.warmup   = session.warmup;
+    if (session.main)     extra.main     = session.main;
     if (session.cooldown) extra.cooldown = session.cooldown;
     if (session.location) extra.location = session.location;
+    if (session.blocks?.length) extra.blocks = session.blocks;  // composition de blocs
     const row = {
       user_id: uid,
       type: session.type,
@@ -1142,7 +1143,7 @@ function useSessionsCatalog(userId) {
       sort_order: 999,
     };
     if (session.isCustom && typeof session.id === "number") {
-      await supabase.from("sessions_catalog").update(row).eq("id", session.id).eq("user_id", uid);
+      await supabase.from("sessions_catalog").update(row).eq("id", session.id);
     } else {
       await supabase.from("sessions_catalog").insert(row);
     }
@@ -1451,7 +1452,6 @@ function RoleOnboardingModal({ onSelect }) {
                   transition: "all 0.15s",
                 }}
               >
-                <span style={{ fontSize: 22, lineHeight: 1 }}>{opt.icon}</span>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: isSelected ? accent : text, marginBottom: 3 }}>
                     {opt.label}
@@ -1858,12 +1858,12 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
 // ─── BLOCK TYPE CONFIG ────────────────────────────────────────────────────────
 
 const BLOCK_TYPES = {
-  "Échauffement":    { icon: "🔥", color: "#f97316", defaultCharge: 5,  defaultDuration: 15, hasCharge: false },
-  "Grimpe":          { icon: "🧗", color: "#4ade80", defaultCharge: 24, defaultDuration: 90, hasCharge: true  },
-  "Exercices":       { icon: "💪", color: "#60a5fa", defaultCharge: 12, defaultDuration: 20, hasCharge: true  },
-  "Suspension":      { icon: "🏋️", color: "#a78bfa", defaultCharge: 0,  defaultDuration: 15, hasCharge: false },
-  "Étirements":      { icon: "🧘", color: "#f0abfc", defaultCharge: 2,  defaultDuration: 10, hasCharge: false },
-  "Retour au calme": { icon: "🌿", color: "#94a3b8", defaultCharge: 3,  defaultDuration: 10, hasCharge: false },
+  "Échauffement":    { color: "#f97316", defaultCharge: 5,  defaultDuration: 15, hasCharge: false },
+  "Grimpe":          { color: "#4ade80", defaultCharge: 24, defaultDuration: 90, hasCharge: true  },
+  "Exercices":       { color: "#60a5fa", defaultCharge: 12, defaultDuration: 20, hasCharge: true  },
+  "Suspension":      { color: "#a78bfa", defaultCharge: 0,  defaultDuration: 15, hasCharge: false },
+  "Étirements":      { color: "#f0abfc", defaultCharge: 2,  defaultDuration: 10, hasCharge: false },
+  "Retour au calme": { color: "#94a3b8", defaultCharge: 3,  defaultDuration: 10, hasCharge: false },
 };
 
 // ─── COMPOSANT: Éditeur de bloc ───────────────────────────────────────────────
@@ -2654,7 +2654,7 @@ function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
           display: "flex", alignItems: "center", gap: 10,
         }}
       >
-        {cfg && <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{cfg.icon}</span>}
+        {cfg && <span style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color, flexShrink: 0, display: "inline-block" }} />}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: isSel ? 600 : 400, color: text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {item.name}
@@ -2694,7 +2694,7 @@ function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
 
         {/* Sub-tabs */}
         <div style={{ display: "flex", borderBottom: `1px solid ${border}` }}>
-          {[{ key: "sessions", label: "📋 Séances" }, { key: "blocks", label: "🧩 Blocs" }].map(({ key, label }) => (
+          {[{ key: "sessions", label: "Séances" }, { key: "blocks", label: "Blocs" }].map(({ key, label }) => (
             <button
               key={key}
               onClick={() => { setTab(key); setSearch(""); setTypeFilter("Tous"); setSelected(null); }}
@@ -2731,7 +2731,7 @@ function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
                   color: typeFilter === f ? accent : muted,
                 }}
               >
-                {isSessionTab ? f : (BLOCK_TYPES[f] ? `${BLOCK_TYPES[f].icon} ${f}` : f)}
+                {f}
               </button>
             ))}
           </div>
@@ -2897,7 +2897,7 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
                         background: cfg.color + "22", color: cfg.color,
                         border: `1px solid ${cfg.color}44`, lineHeight: 1.6,
                       }}>
-                        {cfg.icon} {bl.type === "Exercices" && bl.name ? bl.name.split(" ").slice(0, 2).join(" ") : bl.type}
+                        {bl.type === "Exercices" && bl.name ? bl.name.split(" ").slice(0, 2).join(" ") : bl.type}
                       </span>
                     );
                   })}
@@ -5133,16 +5133,241 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
   );
 }
 
+// ─── COACH : COMPOSITEUR DE SÉANCE ───────────────────────────────────────────
+
+function SessionComposerModal({ initial, availableBlocks, onSave, onClose }) {
+  const { isDark } = useThemeCtx();
+
+  // initial?.blocks = array de blocs déjà enregistrés
+  const [name,    setName]   = useState(initial?.name ?? "");
+  const [composition, setComposition] = useState(() =>
+    (initial?.blocks ?? []).map((b, i) => ({ ...b, _key: i }))
+  );
+  const [search,  setSearch]  = useState("");
+  const [filter,  setFilter]  = useState("Tous");
+
+  const surface = isDark ? "#1c2820" : "#ffffff";
+  const bg      = isDark ? "#141a16" : "#f3f7f4";
+  const border  = isDark ? "#263228" : "#daeade";
+  const text    = isDark ? "#d8e8d0" : "#1a2e1f";
+  const muted   = isDark ? "#6a8870" : "#6b8c72";
+  const accent  = "#4caf72";
+
+  const totalCharge   = composition.reduce((a, b) => a + (b.charge   || 0), 0);
+  const totalDuration = composition.reduce((a, b) => a + (b.duration || 0), 0);
+
+  const addBlock = (block) =>
+    setComposition(prev => [...prev, { ...block, _key: Date.now() + Math.random() }]);
+
+  const removeBlock = (key) =>
+    setComposition(prev => prev.filter(b => b._key !== key));
+
+  const moveBlock = (idx, dir) => {
+    setComposition(prev => {
+      if (idx + dir < 0 || idx + dir >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[idx + dir]] = [next[idx + dir], next[idx]];
+      return next;
+    });
+  };
+
+  const handleSave = () => {
+    if (!name.trim() || composition.length === 0) return;
+    const cleanBlocks = composition.map(({ _key, ...b }) => b);
+    // Dérive le type depuis le premier bloc Grimpe trouvé, sinon "Exercice"
+    const mainType = cleanBlocks.find(b => b.blockType === "Grimpe") ? "Grimpe" : "Exercice";
+    onSave({
+      ...(initial ?? {}),
+      id: initial?.id,
+      name: name.trim(),
+      type: mainType,
+      charge: totalCharge,
+      estimatedTime: totalDuration || null,
+      blocks: cleanBlocks,
+      isCustom: true,
+    });
+  };
+
+  const canSave = name.trim().length > 0 && composition.length > 0;
+
+  const filteredAvailable = availableBlocks.filter(b =>
+    (filter === "Tous" || b.blockType === filter) &&
+    b.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const inputStyle = { background: bg, border: `1px solid ${border}`, borderRadius: 6, padding: "7px 11px", color: text, fontSize: 13, fontFamily: "inherit", outline: "none" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+      <div style={{ background: surface, borderRadius: 12, width: "100%", maxWidth: 520, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 50px #0009", overflow: "hidden" }}>
+
+        {/* ── Header ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${border}` }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{initial ? "Modifier la séance" : "Nouvelle séance"}</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: muted, fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* ── Nom ── */}
+        <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${border}` }}>
+          <input
+            style={{ ...inputStyle, width: "100%", boxSizing: "border-box", fontSize: 14, fontWeight: 600 }}
+            placeholder="Nom de la séance…"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            autoFocus
+          />
+        </div>
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+          {/* ── Composition ── */}
+          <div style={{ padding: "12px 20px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                Composition — {composition.length} bloc{composition.length !== 1 ? "s" : ""}
+              </span>
+              {composition.length > 0 && (
+                <span style={{ fontSize: 11, color: muted }}>
+                  {totalDuration > 0 && <span>⏱ {totalDuration} min  </span>}
+                  {totalCharge > 0 && <span style={{ color: getChargeColor(totalCharge) }}>⚡{totalCharge}</span>}
+                </span>
+              )}
+            </div>
+
+            {composition.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "18px 0", color: muted, fontSize: 12, border: `1px dashed ${border}`, borderRadius: 8 }}>
+                Sélectionnez des blocs ci-dessous pour construire la séance
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {composition.map((b, idx) => {
+                  const cfg = BLOCK_TYPES[b.blockType] || {};
+                  return (
+                    <div key={b._key} style={{ display: "flex", alignItems: "center", gap: 8, background: bg, border: `1px solid ${border}`, borderLeft: `3px solid ${cfg.color || "#888"}`, borderRadius: 6, padding: "7px 10px" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color || "#888", flexShrink: 0, display: "inline-block" }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</div>
+                        <div style={{ fontSize: 10, color: muted }}>
+                          {b.blockType}
+                          {b.duration && <span>  ·  {b.duration} min</span>}
+                          {cfg.hasCharge && b.charge > 0 && <span style={{ color: getChargeColor(b.charge) }}>  ·  ⚡{b.charge}</span>}
+                        </div>
+                      </div>
+                      {/* Ordre */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
+                        <button onClick={() => moveBlock(idx, -1)} disabled={idx === 0} style={{ background: "none", border: "none", color: idx === 0 ? border : muted, cursor: idx === 0 ? "default" : "pointer", fontSize: 10, lineHeight: 1, padding: "1px 4px" }}>▲</button>
+                        <button onClick={() => moveBlock(idx, 1)} disabled={idx === composition.length - 1} style={{ background: "none", border: "none", color: idx === composition.length - 1 ? border : muted, cursor: idx === composition.length - 1 ? "default" : "pointer", fontSize: 10, lineHeight: 1, padding: "1px 4px" }}>▼</button>
+                      </div>
+                      <button onClick={() => removeBlock(b._key)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 4, color: isDark ? "#f87171" : "#dc2626", padding: "3px 7px", cursor: "pointer", fontSize: 12, lineHeight: 1, flexShrink: 0 }}>✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Séparateur ── */}
+          <div style={{ margin: "12px 20px 0", borderTop: `1px solid ${border}` }} />
+
+          {/* ── Bibliothèque de blocs ── */}
+          <div style={{ padding: "10px 20px 6px" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
+              Ajouter un bloc
+            </div>
+            <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
+              <input
+                style={{ ...inputStyle, flex: 1, fontSize: 12 }}
+                placeholder="Rechercher…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+              {["Tous", ...Object.keys(BLOCK_TYPES)].map(f => (
+                <button key={f} onClick={() => setFilter(f)} style={{
+                  padding: "3px 9px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit",
+                  border: `1px solid ${filter === f ? accent + "88" : border}`,
+                  background: filter === f ? (isDark ? "#263228" : "#d4e8db") : "none",
+                  color: filter === f ? accent : muted,
+                }}>
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Liste de blocs disponibles ── */}
+          <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
+            {availableBlocks.length === 0 ? (
+              <div style={{ padding: "20px", textAlign: "center", color: muted, fontSize: 12 }}>
+                Aucun bloc en bibliothèque — créez-en dans l'onglet Blocs.
+              </div>
+            ) : filteredAvailable.length === 0 ? (
+              <div style={{ padding: "16px 20px", textAlign: "center", color: muted, fontSize: 12 }}>Aucun résultat</div>
+            ) : (
+              filteredAvailable.map(b => {
+                const cfg = BLOCK_TYPES[b.blockType] || {};
+                return (
+                  <div
+                    key={b.id}
+                    onClick={() => addBlock(b)}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 20px", cursor: "pointer", borderBottom: `1px solid ${border}` }}
+                    onMouseEnter={e => e.currentTarget.style.background = isDark ? "#1a2c22" : "#f0faf4"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color || "#888", flexShrink: 0, display: "inline-block" }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</div>
+                      <div style={{ fontSize: 10, color: muted }}>
+                        {b.blockType}
+                        {b.duration && <span>  ·  {b.duration} min</span>}
+                        {cfg.hasCharge && b.charge > 0 && <span style={{ color: getChargeColor(b.charge) }}>  ·  ⚡{b.charge}</span>}
+                      </div>
+                    </div>
+                    <span style={{ color: accent, fontSize: 18, fontWeight: 300, flexShrink: 0, lineHeight: 1 }}>＋</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ── Footer ── */}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "12px 20px", borderTop: `1px solid ${border}` }}>
+          <button onClick={onClose} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 7, color: muted, padding: "9px 18px", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Annuler</button>
+          <button
+            onClick={handleSave}
+            disabled={!canSave}
+            style={{ background: canSave ? accent : (isDark ? "#1e2b22" : "#c8e6d4"), border: "none", borderRadius: 7, color: canSave ? "#fff" : muted, padding: "9px 22px", cursor: canSave ? "pointer" : "not-allowed", fontSize: 12, fontFamily: "inherit", fontWeight: 700 }}
+          >
+            {initial ? "Enregistrer" : "Créer la séance"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── COACH : BIBLIOTHÈQUE DE SÉANCES ─────────────────────────────────────────
 
 // ── Modal formulaire de bloc ──────────────────────────────────────────────────
-function BlockFormModal({ initial, onSave, onClose, isDark }) {
+function BlockFormModal({ initial, onSave, onClose }) {
+  const { styles, isDark } = useThemeCtx();
   const blockTypeKeys = Object.keys(BLOCK_TYPES);
-  const [blockType, setBlockType] = useState(initial?.blockType ?? "Grimpe");
-  const [name,      setName]      = useState(initial?.name      ?? "");
-  const [duration,  setDuration]  = useState(initial?.duration  ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultDuration);
-  const [charge,    setCharge]    = useState(initial?.charge    ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultCharge);
-  const [desc,      setDesc]      = useState(initial?.description ?? "");
+
+  const [blockType,      setBlockType]      = useState(initial?.blockType ?? "Grimpe");
+  const [name,           setName]           = useState(initial?.name      ?? "");
+  const [duration,       setDuration]       = useState(initial?.duration  ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultDuration);
+  const [charge,         setCharge]         = useState(initial?.charge    ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultCharge);
+  const [desc,           setDesc]           = useState(initial?.description ?? "");
+  const [preview,        setPreview]        = useState(false);
+
+  // Calculateur de charge
+  const [calcOpen,       setCalcOpen]       = useState(false);
+  const [infoOpen,       setInfoOpen]       = useState(false);
+  const [nbMouvements,   setNbMouvements]   = useState("");
+  const [calcZone,       setCalcZone]       = useState(3);
+  const [calcComplexity, setCalcComplexity] = useState(3);
 
   const cfg    = BLOCK_TYPES[blockType] || BLOCK_TYPES["Grimpe"];
   const bg     = isDark ? "#141a16" : "#f3f7f4";
@@ -5158,54 +5383,41 @@ function BlockFormModal({ initial, onSave, onClose, isDark }) {
       blockType,
       name: name.trim(),
       duration: duration ? +duration : null,
-      charge: BLOCK_TYPES[blockType]?.hasCharge ? +charge : 0,
+      charge: cfg.hasCharge ? +charge : 0,
       description: desc.trim() || "",
     });
   };
 
-  const inputStyle = {
-    width: "100%", boxSizing: "border-box",
-    background: surface, border: `1px solid ${border}`,
-    borderRadius: 6, padding: "8px 12px",
-    color: text, fontSize: 13, fontFamily: "inherit", outline: "none",
-  };
+  const inputStyle = { width: "100%", boxSizing: "border-box", background: bg, border: `1px solid ${border}`, borderRadius: 6, padding: "8px 12px", color: text, fontSize: 13, fontFamily: "inherit", outline: "none" };
+  const labelStyle = { fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6, display: "block" };
+
+  const volZone  = getNbMouvementsZone(+nbMouvements);
+  const computed = nbMouvements ? volZone * calcZone * calcComplexity : null;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: surface, borderRadius: 12, width: "100%", maxWidth: 420, boxShadow: "0 8px 40px #0008", overflow: "hidden" }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${border}` }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ background: surface, borderRadius: 12, width: "100%", maxWidth: 480, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 50px #0009", overflow: "hidden" }}>
+
+        {/* ── Header ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{initial ? "Modifier le bloc" : "Nouveau bloc"}</span>
           <button onClick={onClose} style={{ background: "none", border: "none", color: muted, fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
         </div>
 
-        <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Type de bloc */}
+        {/* ── Corps scrollable ── */}
+        <div style={{ overflowY: "auto", flex: 1, padding: "20px", display: "flex", flexDirection: "column", gap: 18 }}>
+
+          {/* Type */}
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>Type de bloc</div>
+            <span style={labelStyle}>Type de bloc</span>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {blockTypeKeys.map(t => {
                 const c = BLOCK_TYPES[t].color;
                 const active = blockType === t;
                 return (
-                  <button
-                    key={t}
-                    onClick={() => {
-                      setBlockType(t);
-                      if (!initial) {
-                        setDuration(BLOCK_TYPES[t].defaultDuration);
-                        setCharge(BLOCK_TYPES[t].defaultCharge);
-                      }
-                    }}
-                    style={{
-                      padding: "5px 11px", borderRadius: 5, cursor: "pointer",
-                      fontSize: 11, fontFamily: "inherit", fontWeight: active ? 700 : 400,
-                      border: `1px solid ${active ? c : border}`,
-                      background: active ? c + "28" : "none",
-                      color: active ? c : muted,
-                    }}
-                  >
-                    {BLOCK_TYPES[t].icon} {t}
+                  <button key={t} onClick={() => { setBlockType(t); if (!initial) { setDuration(BLOCK_TYPES[t].defaultDuration); setCharge(BLOCK_TYPES[t].defaultCharge); } }}
+                    style={{ padding: "5px 12px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: active ? 700 : 400, border: `1px solid ${active ? c : border}`, background: active ? c + "28" : "none", color: active ? c : muted }}>
+                    {t}
                   </button>
                 );
               })}
@@ -5214,46 +5426,161 @@ function BlockFormModal({ initial, onSave, onClose, isDark }) {
 
           {/* Nom */}
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Nom du bloc</div>
+            <span style={labelStyle}>Nom du bloc</span>
             <input style={inputStyle} placeholder="Ex : Campus board 4×5 mouvements…" value={name} onChange={e => setName(e.target.value)} autoFocus />
           </div>
 
-          {/* Durée + Charge */}
+          {/* Durée */}
           <div style={{ display: "flex", gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Durée (min)</div>
+              <span style={labelStyle}>Durée (min)</span>
               <input style={inputStyle} type="number" min="1" max="240" value={duration} onChange={e => setDuration(e.target.value)} />
             </div>
-            {cfg.hasCharge && (
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Charge (0–216)</div>
-                <input style={inputStyle} type="number" min="0" max="216" value={charge} onChange={e => setCharge(e.target.value)} />
+          </div>
+
+          {/* ── Charge (only for hasCharge types) ── */}
+          {cfg.hasCharge && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ ...labelStyle, marginBottom: 0 }}>Charge d'entraînement</span>
+                <button style={styles.calcBtn} onClick={() => { setCalcOpen(o => !o); setInfoOpen(false); }}>Calculateur</button>
+                <button style={{ ...styles.calcBtn, background: "none" }} onClick={() => { setInfoOpen(o => !o); setCalcOpen(false); }}>Infos</button>
               </div>
-            )}
-          </div>
 
-          {/* Description */}
+              <div style={styles.customFormChargeRow}>
+                <span style={{ ...styles.customFormChargeVal, color: getChargeColor(charge) }}>{charge}</span>
+                <input style={styles.customFormSlider} type="range" min="0" max="216" value={charge} onChange={e => setCharge(+e.target.value)} />
+              </div>
+
+              {/* Calculateur inline */}
+              {calcOpen && (
+                <div style={styles.calcPanel}>
+                  <div style={styles.calcRow}>
+                    <div style={styles.calcField}>
+                      <span style={styles.calcLabel}>Nb de mouvements</span>
+                      <input style={styles.calcInput} type="number" min="1" placeholder="ex: 40" value={nbMouvements} onChange={e => setNbMouvements(e.target.value)} />
+                      {nbMouvements && (
+                        <span style={styles.calcVolumeHint}>→ Zone {volZone} · {VOLUME_ZONES[volZone - 1].label} ({VOLUME_ZONES[volZone - 1].range})</span>
+                      )}
+                    </div>
+                    <div style={styles.calcField}>
+                      <span style={styles.calcLabel}>Zone d'intensité</span>
+                      <select style={styles.calcSelect} value={calcZone} onChange={e => setCalcZone(+e.target.value)}>
+                        {INTENSITY_ZONES.map(z => <option key={z.index} value={z.index}>{z.index} – {z.label}</option>)}
+                      </select>
+                    </div>
+                    <div style={styles.calcField}>
+                      <span style={styles.calcLabel}>Complexité</span>
+                      <select style={styles.calcSelect} value={calcComplexity} onChange={e => setCalcComplexity(+e.target.value)}>
+                        {COMPLEXITY_ZONES.map(z => <option key={z.index} value={z.index}>{z.index} – {z.label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  {computed !== null && (
+                    <div style={styles.calcResultRow}>
+                      <span style={{ ...styles.calcResultVal, color: getChargeColor(computed) }}>{computed}</span>
+                      <span style={{ fontSize: 11, color: muted }}>= Zone vol.{volZone} × Int.{calcZone} × Compl.{calcComplexity}</span>
+                      <button style={styles.calcApplyBtn} onClick={() => { setCharge(computed); setCalcOpen(false); }}>Appliquer →</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tables de référence */}
+              {infoOpen && (
+                <div style={styles.infoOverlay} onClick={() => setInfoOpen(false)}>
+                  <div style={styles.infoPanel} onClick={e => e.stopPropagation()}>
+                    <div style={styles.modalHeader}>
+                      <span style={styles.modalTitle}>Référence — Calcul de charge</span>
+                      <button style={styles.closeBtn} onClick={() => setInfoOpen(false)}>✕</button>
+                    </div>
+                    <div style={styles.infoPanelBody}>
+                      <div>
+                        <div style={styles.infoTableTitle}>1 · Volume (nb de mouvements → zone)</div>
+                        <table style={styles.infoTable}>
+                          <thead><tr><th style={styles.infoTh}>Zone</th><th style={styles.infoTh}>Catégorie</th><th style={styles.infoTh}>Nb mouvements</th></tr></thead>
+                          <tbody>
+                            {VOLUME_ZONES.map(z => (
+                              <tr key={z.index}>
+                                <td style={styles.infoTd}><span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span></td>
+                                <td style={styles.infoTd}>{z.label}</td>
+                                <td style={styles.infoTd}>{z.range}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div>
+                        <div style={styles.infoTableTitle}>2 · Intensité</div>
+                        <table style={styles.infoTable}>
+                          <thead><tr><th style={styles.infoTh}>Zone</th><th style={styles.infoTh}>Intensité</th><th style={styles.infoTh}>Description</th></tr></thead>
+                          <tbody>
+                            {INTENSITY_ZONES.map(z => (
+                              <tr key={z.index}>
+                                <td style={styles.infoTd}><span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span></td>
+                                <td style={styles.infoTd}>{z.label}</td>
+                                <td style={styles.infoTd}>{z.desc}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div>
+                        <div style={styles.infoTableTitle}>3 · Complexité</div>
+                        <table style={styles.infoTable}>
+                          <thead><tr><th style={styles.infoTh}>Zone</th><th style={styles.infoTh}>Complexité</th><th style={styles.infoTh}>Description</th></tr></thead>
+                          <tbody>
+                            {COMPLEXITY_ZONES.map(z => (
+                              <tr key={z.index}>
+                                <td style={styles.infoTd}><span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span></td>
+                                <td style={styles.infoTd}>{z.label}</td>
+                                <td style={styles.infoTd}>{z.desc}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{ fontSize: 11, color: muted, fontStyle: "italic" }}>Formule : Charge = Zone volume × Zone intensité × Index complexité (max 216)</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Consignes (markdown) ── */}
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Description / consignes</div>
-            <textarea
-              style={{ ...inputStyle, minHeight: 90, resize: "vertical", lineHeight: 1.5 }}
-              placeholder="Protocole, répétitions, intensité cible…"
-              value={desc}
-              onChange={e => setDesc(e.target.value)}
-            />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>Consignes</span>
+              <button onClick={() => setPreview(p => !p)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 4, color: preview ? text : muted, padding: "3px 10px", cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>
+                {preview ? "Éditer" : "Aperçu"}
+              </button>
+            </div>
+            {preview ? (
+              <div style={{ ...inputStyle, minHeight: 120, padding: "10px 12px", lineHeight: 1.6 }}>
+                <RichText text={desc} />
+              </div>
+            ) : (
+              <textarea
+                style={{ ...inputStyle, minHeight: 120, resize: "vertical", lineHeight: 1.6 }}
+                placeholder={"Protocole, répétitions, intensité cible…\n\n* puce\n**gras**\n[ ] checkbox\n[x] checkbox coché"}
+                value={desc}
+                onChange={e => setDesc(e.target.value)}
+              />
+            )}
+            <div style={{ fontSize: 10, color: muted, marginTop: 5 }}>
+              Syntaxe : <code style={{ opacity: 0.8 }}>* puce</code> · <code style={{ opacity: 0.8 }}>**gras**</code> · <code style={{ opacity: 0.8 }}>[ ] checkbox</code> · <code style={{ opacity: 0.8 }}>`code`</code>
+            </div>
           </div>
+        </div>
 
-          {/* Boutons */}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button onClick={onClose} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, color: muted, padding: "8px 16px", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Annuler</button>
-            <button
-              onClick={handleSave}
-              disabled={!name.trim()}
-              style={{ background: cfg.color, border: "none", borderRadius: 6, color: "#fff", padding: "8px 20px", cursor: name.trim() ? "pointer" : "not-allowed", opacity: name.trim() ? 1 : 0.5, fontSize: 12, fontFamily: "inherit", fontWeight: 700 }}
-            >
-              {initial ? "Enregistrer" : "Créer le bloc"}
-            </button>
-          </div>
+        {/* ── Footer ── */}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "12px 20px", borderTop: `1px solid ${border}`, flexShrink: 0 }}>
+          <button onClick={onClose} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, color: muted, padding: "8px 16px", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Annuler</button>
+          <button onClick={handleSave} disabled={!name.trim()}
+            style={{ background: name.trim() ? cfg.color : (isDark ? "#1e2b22" : "#c8e6d4"), border: "none", borderRadius: 6, color: name.trim() ? "#fff" : muted, padding: "8px 20px", cursor: name.trim() ? "pointer" : "not-allowed", fontSize: 12, fontFamily: "inherit", fontWeight: 700 }}>
+            {initial ? "Enregistrer" : "Créer le bloc"}
+          </button>
         </div>
       </div>
     </div>
@@ -5317,7 +5644,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
 
         {/* ── Sub-tabs ── */}
         <div style={{ display: "flex", gap: 0, marginBottom: 22, background: surface, border: `1px solid ${border}`, borderRadius: 8, padding: 3 }}>
-          {[{ key: "sessions", label: "📋 Séances" }, { key: "blocks", label: "🧩 Blocs" }].map(({ key, label }) => (
+          {[{ key: "sessions", label: "Séances" }, { key: "blocks", label: "Blocs" }].map(({ key, label }) => (
             <button
               key={key}
               onClick={() => { setSubTab(key); setSearch(""); setFilter("Tous"); setConfirmId(null); }}
@@ -5380,7 +5707,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
         {isSessionTab && (
           allSessions.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: muted }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: text }}>Aucune séance</div>
               <div style={{ fontSize: 12 }}>Créez vos premières séances pour les retrouver dans le calendrier.</div>
             </div>
@@ -5397,7 +5724,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
                         <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</div>
                         <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10 }}>
                           {s.estimatedTime && <span>{s.estimatedTime} min</span>}
-                          {s.location     && <span>📍 {s.location}</span>}
+                          {s.location     && <span>{s.location}</span>}
                           {s.minRecovery  && <span>↺ {s.minRecovery}h récup</span>}
                         </div>
                       </div>
@@ -5415,7 +5742,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
         {!isSessionTab && (
           (blocks || []).length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: muted }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>🧩</div>
+
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: text }}>Aucun bloc</div>
               <div style={{ fontSize: 12 }}>Créez des blocs réutilisables (exercices, protocoles) à assembler dans vos séances.</div>
             </div>
@@ -5427,7 +5754,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
               return (
                 <div key={btype} style={{ marginBottom: 24 }}>
                   <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: cfg.color || muted, marginBottom: 8, paddingBottom: 5, borderBottom: `1px solid ${border}` }}>
-                    {cfg.icon} {btype}
+                    {btype}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {blist.map(b => (
@@ -5454,7 +5781,6 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
       {/* ── Modal bloc ── */}
       {blockForm !== null && (
         <BlockFormModal
-          isDark={isDark}
           initial={blockForm.initial}
           onSave={b => { (blockForm.initial ? onEditBlock : onNewBlock)(b); setBlockForm(null); }}
           onClose={() => setBlockForm(null)}
@@ -5475,7 +5801,8 @@ export default function ClimbingPlanner() {
   const [picker, setPicker] = useState(null);
   const [metaEditing, setMetaEditing] = useState(false);
   const [tempMeta, setTempMeta] = useState({});
-  const [customSessionForm, setCustomSessionForm] = useState(null); // null | { initial?: session, targetDay?: number }
+  const [customSessionForm,   setCustomSessionForm]   = useState(null); // null | { initial?, targetDay? }
+  const [sessionComposerForm, setSessionComposerForm] = useState(null); // null | { initial? }  — coach only
   const [sessionModal, setSessionModal] = useState(null); // null | { weekKey, dayIndex, sessionIndex }
   const [isDark, setIsDark] = useState(() => localStorage.getItem("climbing_theme") !== "light");
   const [logDate, setLogDate] = useState(null); // ISO string of day log modal
@@ -6037,8 +6364,8 @@ export default function ClimbingPlanner() {
       {viewMode === "library" && (
         <CoachLibraryView
           catalog={catalog}
-          onNew={() => setCustomSessionForm({ targetDay: undefined })}
-          onEdit={s => setCustomSessionForm({ initial: s, targetDay: undefined })}
+          onNew={() => setSessionComposerForm({})}
+          onEdit={s => setSessionComposerForm({ initial: s })}
           onDelete={id => deleteUserSession(id)}
           blocks={dbBlocks}
           onNewBlock={addSessionBlock}
@@ -6096,6 +6423,14 @@ export default function ClimbingPlanner() {
           data={data}
           onSave={cs => saveCustomSession(cs, customSessionForm.targetDay)}
           onClose={() => setCustomSessionForm(null)}
+        />
+      )}
+      {sessionComposerForm !== null && (
+        <SessionComposerModal
+          initial={sessionComposerForm.initial}
+          availableBlocks={dbBlocks}
+          onSave={s => { saveCustomSession(s, undefined); setSessionComposerForm(null); }}
+          onClose={() => setSessionComposerForm(null)}
         />
       )}
       {logDate && (
