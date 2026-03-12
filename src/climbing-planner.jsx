@@ -1804,11 +1804,12 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
 // ─── BLOCK TYPE CONFIG ────────────────────────────────────────────────────────
 
 const BLOCK_TYPES = {
-  "Échauffement":    { icon: "", color: "#f97316", defaultCharge: 5,  defaultDuration: 15 },
-  "Grimpe":          { icon: "", color: "#4ade80", defaultCharge: 24, defaultDuration: 90 },
-  "Exercices":       { icon: "", color: "#60a5fa", defaultCharge: 12, defaultDuration: 20 },
-  "Suspension":      { icon: "", color: "#a78bfa", defaultCharge: 0,  defaultDuration: 15 },
-  "Retour au calme": { icon: "", color: "#94a3b8", defaultCharge: 3,  defaultDuration: 10 },
+  "Échauffement":    { icon: "🔥", color: "#f97316", defaultCharge: 5,  defaultDuration: 15, hasCharge: false },
+  "Grimpe":          { icon: "🧗", color: "#4ade80", defaultCharge: 24, defaultDuration: 90, hasCharge: true  },
+  "Exercices":       { icon: "💪", color: "#60a5fa", defaultCharge: 12, defaultDuration: 20, hasCharge: true  },
+  "Suspension":      { icon: "🏋️", color: "#a78bfa", defaultCharge: 0,  defaultDuration: 15, hasCharge: false },
+  "Étirements":      { icon: "🧘", color: "#f0abfc", defaultCharge: 2,  defaultDuration: 10, hasCharge: false },
+  "Retour au calme": { icon: "🌿", color: "#94a3b8", defaultCharge: 3,  defaultDuration: 10, hasCharge: false },
 };
 
 // ─── COMPOSANT: Éditeur de bloc ───────────────────────────────────────────────
@@ -4873,175 +4874,331 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
 
 // ─── COACH : BIBLIOTHÈQUE DE SÉANCES ─────────────────────────────────────────
 
-function CoachLibraryView({ catalog, onNew, onEdit, onDelete }) {
-  const { styles, isDark } = useThemeCtx();
-  const [search, setSearch]   = useState("");
-  const [filter, setFilter]   = useState("Tous");
-  const [confirmId, setConfirmId] = useState(null); // id à supprimer
+// ── Modal formulaire de bloc ──────────────────────────────────────────────────
+function BlockFormModal({ initial, onSave, onClose, isDark }) {
+  const blockTypeKeys = Object.keys(BLOCK_TYPES);
+  const [blockType, setBlockType] = useState(initial?.blockType ?? "Grimpe");
+  const [name,      setName]      = useState(initial?.name      ?? "");
+  const [duration,  setDuration]  = useState(initial?.duration  ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultDuration);
+  const [charge,    setCharge]    = useState(initial?.charge    ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultCharge);
+  const [desc,      setDesc]      = useState(initial?.description ?? "");
 
-  const bg       = isDark ? "#141a16" : "#f3f7f4";
-  const surface  = isDark ? "#1a2320" : "#ffffff";
-  const border   = isDark ? "#263228" : "#daeade";
-  const text     = isDark ? "#d8e8d0" : "#1a2e1f";
-  const muted    = isDark ? "#6a8870" : "#6b8c72";
-  const accent   = "#4caf72";
-  const danger   = isDark ? "#f87171" : "#dc2626";
+  const cfg    = BLOCK_TYPES[blockType] || BLOCK_TYPES["Grimpe"];
+  const bg     = isDark ? "#141a16" : "#f3f7f4";
+  const surface= isDark ? "#1c2820" : "#ffffff";
+  const border = isDark ? "#263228" : "#daeade";
+  const text   = isDark ? "#d8e8d0" : "#1a2e1f";
+  const muted  = isDark ? "#6a8870" : "#6b8c72";
 
+  const handleSave = () => {
+    if (!name.trim()) return;
+    onSave({
+      id: initial?.id ?? ("blk_" + Math.random().toString(36).slice(2) + Date.now()),
+      blockType,
+      name: name.trim(),
+      duration: duration ? +duration : null,
+      charge: BLOCK_TYPES[blockType]?.hasCharge ? +charge : 0,
+      description: desc.trim() || "",
+    });
+  };
+
+  const inputStyle = {
+    width: "100%", boxSizing: "border-box",
+    background: surface, border: `1px solid ${border}`,
+    borderRadius: 6, padding: "8px 12px",
+    color: text, fontSize: 13, fontFamily: "inherit", outline: "none",
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ background: surface, borderRadius: 12, width: "100%", maxWidth: 420, boxShadow: "0 8px 40px #0008", overflow: "hidden" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${border}` }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{initial ? "Modifier le bloc" : "Nouveau bloc"}</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: muted, fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
+        </div>
+
+        <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Type de bloc */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>Type de bloc</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {blockTypeKeys.map(t => {
+                const c = BLOCK_TYPES[t].color;
+                const active = blockType === t;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => {
+                      setBlockType(t);
+                      if (!initial) {
+                        setDuration(BLOCK_TYPES[t].defaultDuration);
+                        setCharge(BLOCK_TYPES[t].defaultCharge);
+                      }
+                    }}
+                    style={{
+                      padding: "5px 11px", borderRadius: 5, cursor: "pointer",
+                      fontSize: 11, fontFamily: "inherit", fontWeight: active ? 700 : 400,
+                      border: `1px solid ${active ? c : border}`,
+                      background: active ? c + "28" : "none",
+                      color: active ? c : muted,
+                    }}
+                  >
+                    {BLOCK_TYPES[t].icon} {t}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Nom */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Nom du bloc</div>
+            <input style={inputStyle} placeholder="Ex : Campus board 4×5 mouvements…" value={name} onChange={e => setName(e.target.value)} autoFocus />
+          </div>
+
+          {/* Durée + Charge */}
+          <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Durée (min)</div>
+              <input style={inputStyle} type="number" min="1" max="240" value={duration} onChange={e => setDuration(e.target.value)} />
+            </div>
+            {cfg.hasCharge && (
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Charge (0–216)</div>
+                <input style={inputStyle} type="number" min="0" max="216" value={charge} onChange={e => setCharge(e.target.value)} />
+              </div>
+            )}
+          </div>
+
+          {/* Description */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Description / consignes</div>
+            <textarea
+              style={{ ...inputStyle, minHeight: 90, resize: "vertical", lineHeight: 1.5 }}
+              placeholder="Protocole, répétitions, intensité cible…"
+              value={desc}
+              onChange={e => setDesc(e.target.value)}
+            />
+          </div>
+
+          {/* Boutons */}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button onClick={onClose} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, color: muted, padding: "8px 16px", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Annuler</button>
+            <button
+              onClick={handleSave}
+              disabled={!name.trim()}
+              style={{ background: cfg.color, border: "none", borderRadius: 6, color: "#fff", padding: "8px 20px", cursor: name.trim() ? "pointer" : "not-allowed", opacity: name.trim() ? 1 : 0.5, fontSize: 12, fontFamily: "inherit", fontWeight: 700 }}
+            >
+              {initial ? "Enregistrer" : "Créer le bloc"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Vue bibliothèque coach ────────────────────────────────────────────────────
+function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock, onEditBlock, onDeleteBlock }) {
+  const { isDark } = useThemeCtx();
+  const [subTab,     setSubTab]     = useState("sessions"); // "sessions" | "blocks"
+  const [search,     setSearch]     = useState("");
+  const [filter,     setFilter]     = useState("Tous");
+  const [confirmId,  setConfirmId]  = useState(null);
+  const [blockForm,  setBlockForm]  = useState(null); // null | { initial? }
+
+  const bg      = isDark ? "#141a16" : "#f3f7f4";
+  const surface = isDark ? "#1a2320" : "#ffffff";
+  const border  = isDark ? "#263228" : "#daeade";
+  const text    = isDark ? "#d8e8d0" : "#1a2e1f";
+  const muted   = isDark ? "#6a8870" : "#6b8c72";
+  const accent  = "#4caf72";
+  const danger  = isDark ? "#f87171" : "#dc2626";
+
+  // ── Shared item row ──
+  const ItemActions = ({ id, onEdit: doEdit, onDel }) => confirmId === id ? (
+    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+      <button onClick={() => { onDel(id); setConfirmId(null); }} style={{ background: danger, border: "none", borderRadius: 5, color: "#fff", padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}>Supprimer</button>
+      <button onClick={() => setConfirmId(null)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Annuler</button>
+    </div>
+  ) : (
+    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+      <button onClick={doEdit} title="Modifier" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>✎</button>
+      <button onClick={() => setConfirmId(id)} title="Supprimer" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: danger + "bb", padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>✕</button>
+    </div>
+  );
+
+  // ── Séances tab ──
   const mySessions = catalog.filter(s => s.isCustom);
-  const filtered   = mySessions.filter(s => {
+  const filteredSessions = mySessions.filter(s => {
     const matchType   = filter === "Tous" || s.type === filter;
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
     return matchType && matchSearch;
   });
-
   const byType = {};
-  filtered.forEach(s => { (byType[s.type] = byType[s.type] || []).push(s); });
+  filteredSessions.forEach(s => { (byType[s.type] = byType[s.type] || []).push(s); });
+
+  // ── Blocs tab ──
+  const filteredBlocks = (blocks || []).filter(b =>
+    (filter === "Tous" || b.blockType === filter) &&
+    b.name.toLowerCase().includes(search.toLowerCase())
+  );
+  const byBlockType = {};
+  filteredBlocks.forEach(b => { (byBlockType[b.blockType] = byBlockType[b.blockType] || []).push(b); });
+
+  const isSessionTab = subTab === "sessions";
+  const filterOptions = isSessionTab ? ["Tous", "Grimpe", "Exercice"] : ["Tous", ...Object.keys(BLOCK_TYPES)];
 
   return (
     <div style={{ flex: 1, overflowY: "auto", background: bg, padding: "20px 16px" }}>
-      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+      <div style={{ maxWidth: 660, margin: "0 auto" }}>
 
-        {/* ── Titre + bouton ── */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        {/* ── Sub-tabs ── */}
+        <div style={{ display: "flex", gap: 0, marginBottom: 22, background: surface, border: `1px solid ${border}`, borderRadius: 8, padding: 3 }}>
+          {[{ key: "sessions", label: "📋 Séances" }, { key: "blocks", label: "🧩 Blocs" }].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => { setSubTab(key); setSearch(""); setFilter("Tous"); setConfirmId(null); }}
+              style={{
+                flex: 1, padding: "8px 0", border: "none", borderRadius: 6, cursor: "pointer",
+                fontFamily: "inherit", fontSize: 12, fontWeight: 600,
+                background: subTab === key ? (isDark ? "#263228" : "#d4e8db") : "none",
+                color: subTab === key ? accent : muted,
+              }}
+            >{label}</button>
+          ))}
+        </div>
+
+        {/* ── Header : titre + bouton ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: text, letterSpacing: "0.02em" }}>
-              Ma bibliothèque
+            <div style={{ fontSize: 15, fontWeight: 700, color: text }}>
+              {isSessionTab ? "Mes séances" : "Mes blocs"}
             </div>
-            <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>
-              {mySessions.length} séance{mySessions.length !== 1 ? "s" : ""}
+            <div style={{ fontSize: 11, color: muted, marginTop: 1 }}>
+              {isSessionTab
+                ? `${mySessions.length} séance${mySessions.length !== 1 ? "s" : ""}`
+                : `${(blocks || []).length} bloc${(blocks || []).length !== 1 ? "s" : ""}`}
             </div>
           </div>
           <button
-            onClick={onNew}
-            style={{
-              background: accent, border: "none", borderRadius: 7,
-              color: "#fff", padding: "9px 18px",
-              cursor: "pointer", fontSize: 12, fontFamily: "inherit",
-              fontWeight: 700, letterSpacing: "0.04em",
-              boxShadow: `0 2px 10px ${accent}44`,
-            }}
+            onClick={isSessionTab ? onNew : () => setBlockForm({})}
+            style={{ background: accent, border: "none", borderRadius: 7, color: "#fff", padding: "9px 16px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 700, letterSpacing: "0.03em", boxShadow: `0 2px 10px ${accent}44` }}
           >
-            ＋ Nouvelle séance
+            ＋ {isSessionTab ? "Nouvelle séance" : "Nouveau bloc"}
           </button>
         </div>
 
-        {/* ── Barre de recherche + filtres ── */}
+        {/* ── Recherche + filtres ── */}
         <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
           <input
-            style={{
-              flex: 1, minWidth: 160,
-              background: surface, border: `1px solid ${border}`,
-              borderRadius: 6, padding: "7px 12px",
-              color: text, fontSize: 12, fontFamily: "inherit", outline: "none",
-            }}
+            style={{ flex: 1, minWidth: 160, background: surface, border: `1px solid ${border}`, borderRadius: 6, padding: "7px 12px", color: text, fontSize: 12, fontFamily: "inherit", outline: "none" }}
             placeholder="Rechercher…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          <div style={{ display: "flex", gap: 4 }}>
-            {["Tous", "Grimpe", "Exercice"].map(f => (
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {filterOptions.map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
                 style={{
+                  padding: "5px 10px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit",
+                  fontWeight: filter === f ? 600 : 400,
                   background: filter === f ? (isDark ? "#263228" : "#d4e8db") : "none",
                   border: `1px solid ${filter === f ? accent + "88" : border}`,
                   color: filter === f ? accent : muted,
-                  padding: "6px 12px", borderRadius: 5,
-                  cursor: "pointer", fontSize: 11, fontFamily: "inherit",
-                  fontWeight: filter === f ? 600 : 400,
                 }}
               >{f}</button>
             ))}
           </div>
         </div>
 
-        {/* ── Liste ── */}
-        {mySessions.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: muted }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: text }}>Bibliothèque vide</div>
-            <div style={{ fontSize: 12 }}>Créez vos premières séances pour les affecter à vos athlètes.</div>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px 20px", color: muted, fontSize: 12 }}>
-            Aucun résultat pour cette recherche.
-          </div>
-        ) : (
-          Object.entries(byType).map(([type, sessions]) => (
-            <div key={type} style={{ marginBottom: 24 }}>
-              <div style={{
-                fontSize: 9, fontWeight: 700, letterSpacing: "0.12em",
-                textTransform: "uppercase", color: muted,
-                marginBottom: 8, paddingBottom: 5,
-                borderBottom: `1px solid ${border}`,
-              }}>{type}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {sessions.map(s => (
-                  <div
-                    key={s.id}
-                    style={{
-                      background: surface,
-                      border: `1px solid ${border}`,
-                      borderLeft: `3px solid ${getChargeColor(s.charge)}`,
-                      borderRadius: 7, padding: "11px 14px",
-                      display: "flex", alignItems: "center", gap: 10,
-                    }}
-                  >
-                    {/* Infos */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {s.name}
-                      </div>
-                      <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10 }}>
-                        {s.estimatedTime && <span>{s.estimatedTime} min</span>}
-                        {s.location && <span>📍 {s.location}</span>}
-                        {s.minRecovery && <span>↺ {s.minRecovery}h récup</span>}
-                      </div>
-                    </div>
-
-                    {/* Charge pill */}
-                    <span style={{
-                      fontSize: 12, fontWeight: 700,
-                      padding: "3px 9px", borderRadius: 4, flexShrink: 0,
-                      background: getChargeColor(s.charge) + "28",
-                      color: getChargeColor(s.charge),
-                      border: `1px solid ${getChargeColor(s.charge)}55`,
-                    }}>⚡{s.charge}</span>
-
-                    {/* Actions */}
-                    {confirmId === s.id ? (
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        <button
-                          onClick={() => { onDelete(s.id); setConfirmId(null); }}
-                          style={{ background: danger, border: "none", borderRadius: 5, color: "#fff", padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
-                        >Supprimer</button>
-                        <button
-                          onClick={() => setConfirmId(null)}
-                          style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
-                        >Annuler</button>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                        <button
-                          onClick={() => onEdit(s)}
-                          title="Modifier"
-                          style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}
-                        >✎</button>
-                        <button
-                          onClick={() => setConfirmId(s.id)}
-                          title="Supprimer"
-                          style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: danger + "bb", padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}
-                        >✕</button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+        {/* ══ SÉANCES ══ */}
+        {isSessionTab && (
+          mySessions.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px 20px", color: muted }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: text }}>Aucune séance</div>
+              <div style={{ fontSize: 12 }}>Créez vos premières séances pour les retrouver dans le calendrier.</div>
             </div>
-          ))
+          ) : filteredSessions.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 20px", color: muted, fontSize: 12 }}>Aucun résultat.</div>
+          ) : (
+            Object.entries(byType).map(([type, sessions]) => (
+              <div key={type} style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 8, paddingBottom: 5, borderBottom: `1px solid ${border}` }}>{type}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {sessions.map(s => (
+                    <div key={s.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${getChargeColor(s.charge)}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</div>
+                        <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10 }}>
+                          {s.estimatedTime && <span>{s.estimatedTime} min</span>}
+                          {s.location     && <span>📍 {s.location}</span>}
+                          {s.minRecovery  && <span>↺ {s.minRecovery}h récup</span>}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 9px", borderRadius: 4, flexShrink: 0, background: getChargeColor(s.charge) + "28", color: getChargeColor(s.charge), border: `1px solid ${getChargeColor(s.charge)}55` }}>⚡{s.charge}</span>
+                      <ItemActions id={s.id} onEdit={() => onEdit(s)} onDel={onDelete} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )
+        )}
+
+        {/* ══ BLOCS ══ */}
+        {!isSessionTab && (
+          (blocks || []).length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px 20px", color: muted }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>🧩</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: text }}>Aucun bloc</div>
+              <div style={{ fontSize: 12 }}>Créez des blocs réutilisables (exercices, protocoles) à assembler dans vos séances.</div>
+            </div>
+          ) : filteredBlocks.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 20px", color: muted, fontSize: 12 }}>Aucun résultat.</div>
+          ) : (
+            Object.entries(byBlockType).map(([btype, blist]) => {
+              const cfg = BLOCK_TYPES[btype] || {};
+              return (
+                <div key={btype} style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: cfg.color || muted, marginBottom: 8, paddingBottom: 5, borderBottom: `1px solid ${border}` }}>
+                    {cfg.icon} {btype}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {blist.map(b => (
+                      <div key={b.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${cfg.color || "#888"}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</div>
+                          <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10 }}>
+                            {b.duration    && <span>⏱ {b.duration} min</span>}
+                            {cfg.hasCharge && b.charge > 0 && <span style={{ color: getChargeColor(b.charge) }}>⚡{b.charge}</span>}
+                            {b.description && <span style={{ maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.description}</span>}
+                          </div>
+                        </div>
+                        <ItemActions id={b.id} onEdit={() => setBlockForm({ initial: b })} onDel={onDeleteBlock} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )
         )}
       </div>
+
+      {/* ── Modal bloc ── */}
+      {blockForm !== null && (
+        <BlockFormModal
+          isDark={isDark}
+          initial={blockForm.initial}
+          onSave={b => { (blockForm.initial ? onEditBlock : onNewBlock)(b); setBlockForm(null); }}
+          onClose={() => setBlockForm(null)}
+        />
+      )}
     </div>
   );
 }
@@ -5245,6 +5402,12 @@ export default function ClimbingPlanner() {
   const addCustomCycle = cc => updateCustomCycles(list => [...list, cc]);
   const updateCustomCycle = (id, cc) => updateCustomCycles(list => list.map(x => x.id === id ? { ...x, ...cc } : x));
   const deleteCustomCycle = id => updateCustomCycles(list => list.filter(x => x.id !== id));
+
+  // ── Session blocks CRUD (stored in data.sessionBlocks) ──
+  const updateSessionBlocks = updater => setData(d => ({ ...d, sessionBlocks: updater(d.sessionBlocks || []) }));
+  const addSessionBlock    = b => updateSessionBlocks(list => [...list, b]);
+  const editSessionBlock   = b => updateSessionBlocks(list => list.map(x => x.id === b.id ? b : x));
+  const deleteSessionBlock = id => updateSessionBlocks(list => list.filter(x => x.id !== id));
 
   // ── Custom session handlers ──
   const saveCustomSession = (customSession, targetDayIndex) => {
@@ -5616,6 +5779,10 @@ export default function ClimbingPlanner() {
           onNew={() => setCustomSessionForm({ targetDay: undefined })}
           onEdit={s => setCustomSessionForm({ initial: s, targetDay: undefined })}
           onDelete={id => deleteUserSession(id)}
+          blocks={data.sessionBlocks || []}
+          onNewBlock={addSessionBlock}
+          onEditBlock={editSessionBlock}
+          onDeleteBlock={deleteSessionBlock}
         />
       )}
 
