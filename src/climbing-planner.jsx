@@ -2599,6 +2599,7 @@ function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
   const [typeFilter, setTypeFilter] = useState("Tous");
   const [selected,   setSelected]   = useState(null); // { type, item }
   const [startTime,  setStartTime]  = useState("09:00");
+  const [coachNote,  setCoachNote]  = useState("");
 
   const surface = isDark ? "#1c2820" : "#ffffff";
   const bg2     = isDark ? "#141a16" : "#f3f7f4";
@@ -2640,6 +2641,7 @@ function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
       startTime,
       endTime: getEndTime(startTime, duration) ?? undefined,
       isBlock: selected.type === "block",
+      ...(coachNote.trim() ? { coachNote: coachNote.trim() } : {}),
     });
   };
 
@@ -2757,10 +2759,11 @@ function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "12px 16px", borderTop: `1px solid ${border}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ padding: "12px 16px", borderTop: `1px solid ${border}`, display: "flex", flexDirection: "column", gap: 10 }}>
           {selected ? (
             <>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+              {/* Heure + durée */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div>
                   <div style={{ fontSize: 10, color: muted, marginBottom: 3 }}>Heure de départ</div>
                   <input
@@ -2777,15 +2780,34 @@ function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
                   </div>
                 )}
               </div>
-              <button
-                onClick={handleAdd}
-                style={{ background: accent, border: "none", borderRadius: 7, color: "#fff", padding: "9px 20px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 700, boxShadow: `0 2px 8px ${accent}44`, flexShrink: 0 }}
-              >Ajouter</button>
+              {/* Mot de l'entraîneur (séances seulement) */}
+              {selected.type === "session" && (
+                <div>
+                  <div style={{ fontSize: 10, color: muted, marginBottom: 3 }}>Mot de l'entraîneur (optionnel)</div>
+                  <textarea
+                    value={coachNote}
+                    onChange={e => setCoachNote(e.target.value)}
+                    placeholder="Message pour les athlètes…"
+                    rows={2}
+                    style={{ ...inputBase, width: "100%", boxSizing: "border-box", resize: "vertical", lineHeight: 1.5 }}
+                  />
+                </div>
+              )}
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button onClick={onClose} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 7, color: muted, padding: "8px 14px", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Annuler</button>
+                <button
+                  onClick={handleAdd}
+                  style={{ background: accent, border: "none", borderRadius: 7, color: "#fff", padding: "9px 20px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 700, boxShadow: `0 2px 8px ${accent}44` }}
+                >Ajouter</button>
+              </div>
             </>
           ) : (
-            <div style={{ color: muted, fontSize: 12, flex: 1 }}>Sélectionnez une séance ou un bloc…</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ color: muted, fontSize: 12 }}>Sélectionnez une séance ou un bloc…</div>
+              <button onClick={onClose} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 7, color: muted, padding: "8px 14px", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Annuler</button>
+            </div>
           )}
-          <button onClick={onClose} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 7, color: muted, padding: "8px 14px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>Annuler</button>
         </div>
       </div>
     </div>
@@ -2916,6 +2938,11 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
                   <span style={styles.customBadge}>perso</span>
                   {s.estimatedTime && <span style={{ ...styles.customBadge, background: "none", borderColor: "transparent", color: styles.dashText }}>{s.estimatedTime}min</span>}
                   {meso && <span style={{ ...styles.sessionCardMeso, background: mesoColor + "22", color: mesoColor, border: `1px solid ${mesoColor}55` }}>{meso}</span>}
+                </div>
+              )}
+              {s.coachNote && (
+                <div style={{ fontSize: 9, color: isDark ? "#a0b8a0" : "#4a7060", fontStyle: "italic", marginTop: 3, lineHeight: 1.4, borderLeft: `2px solid ${isDark ? "#3a6040" : "#a0c8a8"}`, paddingLeft: 5 }}>
+                  {s.coachNote}
                 </div>
               )}
               <div style={styles.sessionCardFooter}>
