@@ -25,7 +25,29 @@ DROP TABLE IF EXISTS public.climbing_plans     CASCADE;
 DROP FUNCTION IF EXISTS public.search_athletes(text);
 
 
--- ─── 2. TABLE climbing_plans ─────────────────────────────────────────────────
+-- ─── 2. TABLE coach_athletes ─────────────────────────────────────────────────
+-- Créée en premier car climbing_plans y fait référence dans ses policies
+
+CREATE TABLE public.coach_athletes (
+  id          BIGSERIAL   PRIMARY KEY,
+  coach_id    UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  athlete_id  UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (coach_id, athlete_id)
+);
+
+ALTER TABLE public.coach_athletes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "coach_manages_own_athletes"
+  ON public.coach_athletes FOR ALL
+  USING      (auth.uid() = coach_id)
+  WITH CHECK (auth.uid() = coach_id);
+
+GRANT ALL ON TABLE public.coach_athletes TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.coach_athletes_id_seq TO authenticated;
+
+
+-- ─── 3. TABLE climbing_plans ─────────────────────────────────────────────────
 -- Une ligne par utilisateur. Contient TOUT : planning, cycles, notes, profil.
 
 CREATE TABLE public.climbing_plans (
@@ -43,7 +65,6 @@ CREATE TABLE public.climbing_plans (
 
 ALTER TABLE public.climbing_plans ENABLE ROW LEVEL SECURITY;
 
--- Policies climbing_plans
 CREATE POLICY "own_row"
   ON public.climbing_plans FOR ALL
   USING      (auth.uid() = user_id)
@@ -74,27 +95,6 @@ CREATE POLICY "coach_update_athletes"
   );
 
 GRANT ALL ON TABLE public.climbing_plans TO authenticated;
-
-
--- ─── 3. TABLE coach_athletes ─────────────────────────────────────────────────
-
-CREATE TABLE public.coach_athletes (
-  id          BIGSERIAL   PRIMARY KEY,
-  coach_id    UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  athlete_id  UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (coach_id, athlete_id)
-);
-
-ALTER TABLE public.coach_athletes ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "coach_manages_own_athletes"
-  ON public.coach_athletes FOR ALL
-  USING      (auth.uid() = coach_id)
-  WITH CHECK (auth.uid() = coach_id);
-
-GRANT ALL ON TABLE public.coach_athletes TO authenticated;
-GRANT USAGE, SELECT ON SEQUENCE public.coach_athletes_id_seq TO authenticated;
 
 
 -- ─── 4. TABLE sessions_catalog ───────────────────────────────────────────────
