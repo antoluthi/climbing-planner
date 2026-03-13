@@ -77,7 +77,14 @@ CREATE POLICY "Coaches update athletes"
     )
   );
 
--- ─── 3. RPC search_athletes ───────────────────────────────────────────────────
+-- ─── 3. Grants (sans ça, le rôle authenticated reçoit 403 partout) ──────────
+
+GRANT ALL ON TABLE public.coach_athletes TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE coach_athletes_id_seq TO authenticated;
+
+GRANT ALL ON TABLE public.climbing_plans TO authenticated;
+
+-- ─── 4. RPC search_athletes ───────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION search_athletes(search_term text)
 RETURNS TABLE (user_id uuid, first_name text, last_name text)
