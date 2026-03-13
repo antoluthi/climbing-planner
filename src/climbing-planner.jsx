@@ -5059,8 +5059,27 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
               {(profile.role == null)    && "Vous gérez votre planning en autonomie."}
             </span>
           </div>
-          <div style={{ marginTop: 6, fontSize: 10, color: mutedColor, opacity: 0.7 }}>
-            Pour modifier votre rôle, contactez votre administrateur.
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10, color: mutedColor, opacity: 0.7 }}>
+              Pour modifier votre rôle, contactez votre administrateur.
+            </span>
+            {session && supabase && (
+              <button
+                onClick={async () => {
+                  const { data: row } = await supabase
+                    .from("climbing_plans")
+                    .select("status")
+                    .eq("user_id", session.user.id)
+                    .maybeSingle();
+                  if (row && "status" in row) {
+                    onUpdateProfile({ ...profile, role: row.status });
+                  }
+                }}
+                style={{ background: "none", border: `1px solid ${btnBorder}`, borderRadius: 5, color: mutedColor, padding: "3px 10px", cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}
+              >
+                ↺ Re-sync depuis la DB
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -6330,6 +6349,7 @@ export default function ClimbingPlanner() {
     supabase
       .from("climbing_plans")
       .select("status, first_name, last_name")
+      .eq("user_id", session.user.id)
       .maybeSingle()
       .then(({ data: row }) => {
         if (row) {
@@ -6975,7 +6995,7 @@ export default function ClimbingPlanner() {
           onClose={() => setPicker(null)}
         />
       )}
-      {picker && !isCoach && (
+      {picker && !hasCoachFeatures && (
         <SessionPicker
           onSelect={s => { addSession(picker.dayIndex, s); setPicker(null); }}
           onClose={() => setPicker(null)}
