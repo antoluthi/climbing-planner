@@ -33,3 +33,7 @@ CREATE POLICY "Users manage own feedbacks"
 CREATE POLICY "Authenticated users read all feedbacks"
   ON session_feedbacks FOR SELECT
   USING (auth.role() = 'authenticated');
+
+-- Grant table access (required or authenticated role gets 403 even with valid JWT)
+GRANT ALL ON TABLE public.session_feedbacks TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE session_feedbacks_id_seq TO authenticated;
