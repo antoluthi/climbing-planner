@@ -205,6 +205,8 @@ function loadData() {
         localStorage.removeItem("climbing_planner_photo");
       }
     }
+    // Role is always read from Supabase — never persisted locally
+    if (result.profile) delete result.profile.role;
     return result;
   } catch {
     return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], cyclesLocked: false };
@@ -308,7 +310,9 @@ function parseGarminSleepCSV(text) {
 }
 
 function saveData(data) {
-  localStorage.setItem("climbing_planner_v1", JSON.stringify(data));
+  // Never persist role — always authoritative from Supabase status column
+  const { role: _role, ...profileWithoutRole } = data.profile ?? {};
+  localStorage.setItem("climbing_planner_v1", JSON.stringify({ ...data, profile: profileWithoutRole }));
 }
 
 // ─── HELPERS ACCÈS PAR DATE ───────────────────────────────────────────────────
@@ -941,6 +945,7 @@ function SyncButtons({ data, onImport, compact, syncStatus, session, onUpload, o
 
 function useSupabaseSync() {
   const [session, setSession] = useState(null);
+  const [authChecked, setAuthChecked] = useState(!supabase); // true immediately if no Supabase
   const [syncStatus, setSyncStatus] = useState("idle"); // "idle"|"saving"|"saved"|"offline"
   const saveTimerRef = useRef(null);
 
@@ -954,6 +959,7 @@ function useSupabaseSync() {
       } else {
         setSession(session);
       }
+      setAuthChecked(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
@@ -1045,7 +1051,7 @@ function useSupabaseSync() {
     }
   }, [buildRow]);
 
-  return { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus };
+  return { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus };
 }
 
 // ─── COMMUNITY SESSIONS HOOK ──────────────────────────────────────────────────
@@ -6304,7 +6310,7 @@ export default function ClimbingPlanner() {
     return !d;
   });
 
-  const { session, setSession, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus } = useSupabaseSync();
+  const { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus } = useSupabaseSync();
   const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
   const { catalog, saveUserSession, deleteUserSession } = useSessionsCatalog(session?.user?.id);
   const { blocks: dbBlocks, saveBlock, deleteBlock } = useSessionBlocks(session?.user?.id);
@@ -6686,6 +6692,28 @@ export default function ClimbingPlanner() {
     : syncStatus === "saved" ? <span style={{ fontSize: 11, color: isDark ? "#4ade80" : "#2a7d4f" }} title="Synchronisé">✓</span>
     : syncStatus === "offline" ? <span style={{ fontSize: 11, color: "#f97316" }} title="Hors ligne">—</span>
     : null;
+
+  // ── Auth gate ────────────────────────────────────────────────────────────────
+  const accent = isDark ? "#4ade80" : "#16a34a";
+  if (!authChecked) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: isDark ? "#0f0f0f" : "#f0f0f0" }}>
+        <div style={{ color: accent, fontSize: 28, fontWeight: 300, letterSpacing: "0.1em" }}>…</div>
+      </div>
+    );
+  }
+  if (supabase && !session) {
+    return (
+      <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: [] }}>
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 20, background: styles.app.background }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: accent, letterSpacing: "0.06em" }}>🧗 Climbing Planner</div>
+          <div style={{ background: isDark ? "#1c1c1c" : "#fff", borderRadius: 12, padding: "28px 24px", boxShadow: "0 4px 24px rgba(0,0,0,0.18)", minWidth: 300 }}>
+            <AuthPanel session={null} onAuthChange={setSession} fullWidth />
+          </div>
+        </div>
+      </ThemeContext.Provider>
+    );
+  }
 
   return (
     <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: data.mesocycles || [] }}>
