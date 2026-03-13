@@ -1,4 +1,4 @@
-# Planif Escalade 🧗
+# Planif Escalade
 
 Application web de planification d'entraînement escalade — PWA, multi-appareils.
 

@@ -101,7 +101,7 @@ COMPONENTS :
 | `null` | Athlète solo — accès complet à son propre planning |
 | `"athlete"` | Athlète suivi — cycles en lecture seule (`canEdit = false`) |
 | `"coach"` | Coach — accès à la bibliothèque de séances + vue des athlètes |
-| `"auto"` | Athlète autonome (expérimental, réglable en DB uniquement) — même accès que coach |
+| `"auto"` | Athlète autonome — expérimental, réglable en DB uniquement — même accès que coach |
 
 - Le rôle est choisi une seule fois via `RoleOnboardingModal` (1er login, quand `!("role" in profile)`)
 - `isCoach = role === "coach"`, `isAuto = role === "auto"`, `hasCoachFeatures = isCoach || isAuto`
