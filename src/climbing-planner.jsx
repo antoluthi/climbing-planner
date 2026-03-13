@@ -1221,6 +1221,62 @@ function useSessionBlocks(userId) {
   return { blocks, saveBlock, deleteBlock };
 }
 
+// ─── HOOK : relations coach-athlète ──────────────────────────────────────────
+
+function useCoachAthletes(userId) {
+  const [athletes, setAthletes] = useState([]);
+
+  const fetchAthletes = useCallback(async () => {
+    if (!supabase || !userId) { setAthletes([]); return; }
+    const { data: relations } = await supabase
+      .from("coach_athletes")
+      .select("id, athlete_id")
+      .eq("coach_id", userId);
+    if (!relations?.length) { setAthletes([]); return; }
+    const { data: plans } = await supabase
+      .from("climbing_plans")
+      .select("user_id, first_name, last_name")
+      .in("user_id", relations.map(r => r.athlete_id));
+    const nameMap = Object.fromEntries((plans || []).map(p => [p.user_id, p]));
+    setAthletes(relations.map(r => ({
+      relationId: r.id,
+      userId:     r.athlete_id,
+      firstName:  nameMap[r.athlete_id]?.first_name || "?",
+      lastName:   nameMap[r.athlete_id]?.last_name  || "",
+    })));
+  }, [userId]);
+
+  useEffect(() => { fetchAthletes(); }, [fetchAthletes]);
+
+  const searchAthletes = useCallback(async (term) => {
+    if (!supabase || !term.trim()) return [];
+    const { data } = await supabase.rpc("search_athletes", { search_term: term.trim() });
+    return (data || []).map(r => ({
+      userId:    r.user_id,
+      firstName: r.first_name || "",
+      lastName:  r.last_name  || "",
+    }));
+  }, []);
+
+  const addAthlete = useCallback(async (athleteUserId) => {
+    if (!supabase || !userId) return;
+    await supabase.from("coach_athletes").upsert(
+      { coach_id: userId, athlete_id: athleteUserId },
+      { onConflict: "coach_id,athlete_id" }
+    );
+    fetchAthletes();
+  }, [userId, fetchAthletes]);
+
+  const removeAthlete = useCallback(async (relationId) => {
+    if (!supabase) return;
+    await supabase.from("coach_athletes").delete().eq("id", relationId);
+    fetchAthletes();
+  }, [fetchAthletes]);
+
+  return { athletes, searchAthletes, addAthlete, removeAthlete };
+}
+
+
 // ─── AUTH PANEL ───────────────────────────────────────────────────────────────
 
 function AuthPanel({ session, onAuthChange, fullWidth }) {
@@ -4758,9 +4814,119 @@ function PhotoCropModal({ onSave, onClose }) {
   );
 }
 
+// ─── COACH ATHLETES SECTION (inside ProfileView) ─────────────────────────────
+
+function CoachAthletesSection({ athletes, onSearch, onAdd, onRemove, viewingAthlete, onToggle, isDark, styles, accent, mutedColor, textColor, btnBorder }) {
+  const [query,   setQuery]   = useState("");
+  const [results, setResults] = useState(null);   // null = pas encore cherché
+  const [loading, setLoading] = useState(false);
+
+  const bg      = isDark ? "#141a16" : "#f3f7f4";
+  const surface = isDark ? "#1c2820" : "#ffffff";
+  const border  = isDark ? "#263228" : "#daeade";
+
+  const handleSearch = async () => {
+    if (!query.trim()) return;
+    setLoading(true);
+    const res = await onSearch(query);
+    setResults(res);
+    setLoading(false);
+  };
+
+  const alreadyAdded = (userId) => athletes.some(a => a.userId === userId);
+
+  return (
+    <div style={styles.profileSection}>
+      <div style={styles.profileSectionTitle}>Mes athlètes</div>
+
+      {/* Liste des athlètes actuels */}
+      {athletes.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+          {athletes.map(a => {
+            const isViewing = viewingAthlete?.userId === a.userId;
+            return (
+              <div key={a.relationId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: isViewing ? (isDark ? "#1f3327" : "#e4f5ea") : surface, border: `1px solid ${isViewing ? accent + "88" : border}`, borderRadius: 7, transition: "all 0.15s" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: isViewing ? accent : textColor }}>
+                    {a.firstName} {a.lastName}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onToggle(isViewing ? null : a)}
+                  style={{ background: isViewing ? accent : "none", border: `1px solid ${isViewing ? accent : border}`, borderRadius: 5, color: isViewing ? "#fff" : mutedColor, padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600, whiteSpace: "nowrap" }}
+                >
+                  {isViewing ? "✓ En vue" : "Voir"}
+                </button>
+                <button
+                  onClick={() => onRemove(a.relationId)}
+                  title="Retirer cet athlète"
+                  style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: isDark ? "#f87171" : "#dc2626", padding: "4px 8px", cursor: "pointer", fontSize: 12, lineHeight: 1 }}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: mutedColor, fontStyle: "italic", marginBottom: 14 }}>
+          Aucun athlète suivi pour l'instant.
+        </div>
+      )}
+
+      {/* Recherche */}
+      <div style={{ fontSize: 11, color: mutedColor, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>Ajouter un athlète</div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          style={{ flex: 1, background: bg, border: `1px solid ${border}`, borderRadius: 6, padding: "7px 11px", color: textColor, fontSize: 13, fontFamily: "inherit", outline: "none" }}
+          placeholder="Rechercher par prénom ou nom…"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setResults(null); }}
+          onKeyDown={e => e.key === "Enter" && handleSearch()}
+        />
+        <button
+          onClick={handleSearch}
+          disabled={!query.trim() || loading}
+          style={{ background: accent, border: "none", borderRadius: 6, color: "#fff", padding: "7px 14px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 700, opacity: (!query.trim() || loading) ? 0.5 : 1 }}
+        >
+          {loading ? "…" : "Chercher"}
+        </button>
+      </div>
+
+      {/* Résultats de recherche */}
+      {results !== null && (
+        <div style={{ marginTop: 8, border: `1px solid ${border}`, borderRadius: 7, overflow: "hidden" }}>
+          {results.length === 0 ? (
+            <div style={{ padding: "14px 12px", fontSize: 12, color: mutedColor, fontStyle: "italic", textAlign: "center" }}>
+              Aucun athlète trouvé pour "{query}"
+            </div>
+          ) : results.map((r, i) => (
+            <div key={r.userId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderTop: i > 0 ? `1px solid ${border}` : "none", background: surface }}>
+              <div style={{ flex: 1, fontSize: 13, color: textColor, fontWeight: 500 }}>
+                {r.firstName} {r.lastName}
+              </div>
+              {alreadyAdded(r.userId) ? (
+                <span style={{ fontSize: 11, color: accent, fontWeight: 600 }}>Déjà ajouté</span>
+              ) : (
+                <button
+                  onClick={() => { onAdd(r.userId); setResults(null); setQuery(""); }}
+                  style={{ background: isDark ? "#263228" : "#d4e8db", border: `1px solid ${accent}66`, borderRadius: 5, color: accent, padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 700 }}
+                >
+                  ＋ Ajouter
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
 
-function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus, onUpload, onPull, onImport, toggleTheme, isDark }) {
+function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus, onUpload, onPull, onImport, toggleTheme, isDark,
+  athletes, onSearchAthletes, onAddAthlete, onRemoveAthlete, viewingAthlete, onToggleViewAthlete }) {
   const { styles } = useThemeCtx();
   const profile = data.profile || {};
 
@@ -4882,29 +5048,39 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
       {"role" in profile && (
         <div style={styles.profileSection}>
           <div style={styles.profileSectionTitle}>Rôle</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{
-              background: isDark ? "#263228" : "#d4e8db",
-              border: `1px solid ${accent}88`,
-              color: accent,
-              padding: "7px 16px",
-              borderRadius: 5,
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: "0.04em",
-            }}>
-              {profile.role === "coach" ? "Coach" : profile.role === "athlete" ? "Athlète suivi" : "Athlète solo"}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ background: isDark ? "#263228" : "#d4e8db", border: `1px solid ${accent}88`, color: accent, padding: "7px 16px", borderRadius: 5, fontSize: 11, fontWeight: 600, letterSpacing: "0.04em" }}>
+              {profile.role === "coach" ? "Coach" : profile.role === "athlete" ? "Athlète suivi" : profile.role === "auto" ? "Athlète autonome ✦" : "Athlète solo"}
             </span>
             <span style={{ fontSize: 11, color: mutedColor, fontStyle: "italic" }}>
               {profile.role === "athlete" && "Vos cycles sont en lecture seule. Votre coach les modifie pour vous."}
-              {profile.role === "coach" && "Vous pouvez créer et modifier les cycles de vos athlètes."}
-              {(profile.role == null) && "Vous gérez votre planning en autonomie."}
+              {profile.role === "coach"  && "Vous pouvez créer et modifier les cycles de vos athlètes."}
+              {profile.role === "auto"   && "Mode autonome — accès complet coach + athlète."}
+              {(profile.role == null)    && "Vous gérez votre planning en autonomie."}
             </span>
           </div>
           <div style={{ marginTop: 6, fontSize: 10, color: mutedColor, opacity: 0.7 }}>
             Pour modifier votre rôle, contactez votre administrateur.
           </div>
         </div>
+      )}
+
+      {/* ── Mes athlètes (coach / auto uniquement) ── */}
+      {(profile.role === "coach" || profile.role === "auto") && onSearchAthletes && (
+        <CoachAthletesSection
+          athletes={athletes || []}
+          onSearch={onSearchAthletes}
+          onAdd={onAddAthlete}
+          onRemove={onRemoveAthlete}
+          viewingAthlete={viewingAthlete}
+          onToggle={onToggleViewAthlete}
+          isDark={isDark}
+          styles={styles}
+          accent={accent}
+          mutedColor={mutedColor}
+          textColor={textColor}
+          btnBorder={btnBorder}
+        />
       )}
 
       {/* ── Connexion ── */}
@@ -6112,6 +6288,11 @@ export default function ClimbingPlanner() {
   const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
   const { catalog, saveUserSession, deleteUserSession } = useSessionsCatalog(session?.user?.id);
   const { blocks: dbBlocks, saveBlock, deleteBlock } = useSessionBlocks(session?.user?.id);
+  const { athletes, searchAthletes, addAthlete, removeAthlete } = useCoachAthletes(session?.user?.id);
+
+  // ── Vue athlète (coach regarde les données d'un athlète) ──
+  const coachDataRef   = useRef(null); // sauvegarde des données du coach pendant la vue athlète
+  const [viewingAthlete, setViewingAthlete] = useState(null); // null | { userId, firstName, lastName }
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -6177,9 +6358,36 @@ export default function ClimbingPlanner() {
   };
 
   useEffect(() => {
-    saveData(data);
-    saveToCloud(data, session?.user?.id);
+    if (viewingAthlete) {
+      // Vue athlète : sauvegarde sur la ligne Supabase de l'athlète, jamais en localStorage
+      saveToCloud(data, viewingAthlete.userId);
+    } else {
+      saveData(data);
+      saveToCloud(data, session?.user?.id);
+    }
   }, [data]);
+
+  const switchToAthlete = async (athlete) => {
+    if (!supabase) return;
+    coachDataRef.current = data; // sauvegarde données coach
+    const { data: row } = await supabase
+      .from("climbing_plans")
+      .select("data")
+      .eq("user_id", athlete.userId)
+      .maybeSingle();
+    const athleteData = row?.data ?? { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], cyclesLocked: false };
+    setViewingAthlete(athlete);
+    setData(athleteData);
+    setViewMode("week");
+  };
+
+  const switchBackToCoach = () => {
+    if (coachDataRef.current) {
+      setData(coachDataRef.current);
+      coachDataRef.current = null;
+    }
+    setViewingAthlete(null);
+  };
 
   // ── Navigation ──
   const handleDateGoToCurrent = () => {
@@ -6390,7 +6598,9 @@ export default function ClimbingPlanner() {
   };
 
   const isCalendarMode = ["week", "month", "year"].includes(viewMode);
-  const isCoach = data.profile?.role === "coach";
+  const isCoach        = data.profile?.role === "coach";
+  const isAuto         = data.profile?.role === "auto";
+  const hasCoachFeatures = isCoach || isAuto;
 
   const calSubToggle = (
     <div style={{ display: "flex", gap: 2 }}>
@@ -6416,7 +6626,7 @@ export default function ClimbingPlanner() {
         { mode: "calendar", label: "Calendrier" },
         { mode: "dash", label: "Stats" },
         { mode: "cycles", label: "Cycles" },
-        ...(isCoach ? [{ mode: "library", label: "Séances" }] : []),
+        ...(hasCoachFeatures ? [{ mode: "library", label: "Séances" }] : []),
       ].map(({ mode, label }) => (
         <button
           key={mode}
@@ -6542,6 +6752,26 @@ export default function ClimbingPlanner() {
                 </span>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Bandeau vue athlète ── */}
+      {viewingAthlete && (
+        <div style={{ background: isDark ? "#1a2e22" : "#e4f5ea", borderBottom: `1px solid ${isDark ? "#2a4a34" : "#b0d8bc"}`, padding: "7px 18px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: isDark ? "#4caf72" : "#1a6b3a", fontWeight: 700, letterSpacing: "0.05em" }}>
+            VUE ATHLÈTE
+          </span>
+          <span style={{ fontSize: 12, color: isDark ? "#a8d8b0" : "#1a4a2a", fontWeight: 600 }}>
+            {viewingAthlete.firstName} {viewingAthlete.lastName}
+          </span>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+            <button
+              onClick={switchBackToCoach}
+              style={{ background: isDark ? "#263228" : "#d4e8db", border: `1px solid ${isDark ? "#3a5a40" : "#a0c8aa"}`, borderRadius: 5, color: isDark ? "#4caf72" : "#1a6b3a", padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
+            >
+              ← Retour à ma vue
+            </button>
           </div>
         </div>
       )}
@@ -6711,6 +6941,12 @@ export default function ClimbingPlanner() {
           onImport={setData}
           toggleTheme={toggleTheme}
           isDark={isDark}
+          athletes={athletes}
+          onSearchAthletes={searchAthletes}
+          onAddAthlete={addAthlete}
+          onRemoveAthlete={removeAthlete}
+          viewingAthlete={viewingAthlete}
+          onToggleViewAthlete={a => a ? switchToAthlete(a) : switchBackToCoach()}
         />
       )}
 
@@ -6724,7 +6960,7 @@ export default function ClimbingPlanner() {
           onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
         />
       )}
-      {picker && isCoach && (
+      {picker && hasCoachFeatures && (
         <CoachPickerModal
           sessions={catalog}
           blocks={dbBlocks}
