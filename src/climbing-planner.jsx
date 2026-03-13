@@ -6266,6 +6266,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
 export default function ClimbingPlanner() {
   const [data, setData] = useState(loadData);
   const [cloudLoaded, setCloudLoaded] = useState(false);
+  const [roleResolved, setRoleResolved] = useState(false); // true après Phase 2b (status DB lu)
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState("week");
   const [sessionBuilderDay, setSessionBuilderDay] = useState(null); // null | dayIndex
@@ -6320,23 +6321,29 @@ export default function ClimbingPlanner() {
 
   // Phase 2b : re-lire le status depuis la DB à chaque changement de session
   // (sans écraser toutes les données locales)
+  // roleResolved passe à true seulement APRÈS cette lecture — évite la race condition
+  // avec RoleOnboardingModal qui sinon s'affiche avant que le status DB soit connu.
   useEffect(() => {
-    if (!session) { setCloudLoaded(false); return; }
+    if (!session) { setCloudLoaded(false); setRoleResolved(false); return; }
     if (!cloudLoaded) return; // la Phase 2 s'en charge
-    supabase && supabase
+    if (!supabase) { setRoleResolved(true); return; }
+    supabase
       .from("climbing_plans")
       .select("status, first_name, last_name")
       .maybeSingle()
       .then(({ data: row }) => {
-        if (!row) return;
-        setData(d => {
-          const p = { ...(d.profile ?? {}) };
-          if ("status" in row)         p.role      = row.status;
-          if (row.first_name != null)  p.firstName = row.first_name;
-          if (row.last_name  != null)  p.lastName  = row.last_name;
-          return { ...d, profile: p };
-        });
-      });
+        if (row) {
+          setData(d => {
+            const p = { ...(d.profile ?? {}) };
+            if ("status" in row)         p.role      = row.status;
+            if (row.first_name != null)  p.firstName = row.first_name;
+            if (row.last_name  != null)  p.lastName  = row.last_name;
+            return { ...d, profile: p };
+          });
+        }
+        setRoleResolved(true); // toujours marquer résolu, même si row est null (nouveau user)
+      })
+      .catch(() => setRoleResolved(true)); // en cas d'erreur réseau, laisser passer le modal
   }, [session, cloudLoaded]);
 
   // ── Migration one-shot : customSessions locaux → sessions_catalog DB ──
@@ -7016,7 +7023,7 @@ export default function ClimbingPlanner() {
         />
       )}
       {/* ── Role Onboarding ── */}
-      {session && cloudLoaded && !("role" in (data.profile || {})) && (
+      {session && cloudLoaded && roleResolved && !("role" in (data.profile || {})) && (
         <RoleOnboardingModal
           onSelect={role => {
             setData(d => ({ ...d, profile: { ...(d.profile || {}), role } }));

@@ -1,4 +1,4 @@
-# Planif Escalade 🧗
+# Planif Escalade
 
 Application web de planification d'entraînement escalade — PWA, multi-appareils.
 
@@ -11,8 +11,10 @@ Application web de planification d'entraînement escalade — PWA, multi-apparei
 - **Statistiques** — charge d'entraînement, sommeil, indice Hooper
 - **Notes journalières + suivi créatine**
 - **Profil** — avatar (recadrage/zoom), thème dark/light
-- **Sync multi-appareils** via Supabase (magic link email, pas de mot de passe)
+- **Sync multi-appareils** via Supabase (magic link email + password)
 - **PWA** — installable sur mobile et desktop, fonctionne offline
+- **Système coach-athlète** — le coach voit et modifie les données de ses athlètes directement dans l'app
+- **Bibliothèque de séances** (coach) — création et réutilisation de séances personnalisées
 
 ## Stack
 
