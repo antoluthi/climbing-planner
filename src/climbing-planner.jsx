@@ -2773,7 +2773,15 @@ function FeedbackHistoryModal({ type, id, name, onClose }) {
 function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const [tab, setTab] = useState("session");
-  const hasBlocks   = session.blocks?.length > 0;
+
+  // Quand un bloc est ajouté directement depuis CoachPickerModal (isBlock: true),
+  // il est stocké comme objet brut sans tableau blocks[].
+  // On synthétise un tableau pour que le rendu soit uniforme.
+  const effectiveBlocks = session.isBlock && !session.blocks?.length
+    ? [{ id: session.id, blockType: session.blockType, name: session.name, duration: session.duration, charge: session.charge, description: session.description, config: session.config ?? null }]
+    : (session.blocks ?? []);
+
+  const hasBlocks   = effectiveBlocks.length > 0;
   const hasWarmup   = !!session.warmup?.trim();
   const hasMain     = !!session.main?.trim();
   const hasCooldown = !!session.cooldown?.trim();
@@ -2876,7 +2884,7 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
             hasBlocks ? (
               /* ── Blocs composant la séance ── */
               <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-                {session.blocks.map((bl, i) => {
+                {effectiveBlocks.map((bl, i) => {
                   const cfg = BLOCK_TYPES[bl.blockType] || {};
                   const color = cfg.color || "#888";
                   return (
@@ -2996,7 +3004,7 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
                     <div>
                       <div style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7f70", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>Retour par bloc <span style={{ fontWeight: 400, opacity: 0.6, textTransform: "none", letterSpacing: 0 }}>(optionnel)</span></div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {session.blocks.map((bl, i) => {
+                        {effectiveBlocks.map((bl, i) => {
                           const cfg   = BLOCK_TYPES[bl.blockType] || {};
                           const color = cfg.color || "#888";
                           const existing = blockFeedbacks.find(bf => bf.blockId === bl.id);
