@@ -5527,84 +5527,77 @@ function Dashboard({ data, onUpdateSleep }) {
 
   const chartData = getChartData(data, range, statsRefDate);
 
-  // Weight chart data filtered by current range/period
+  // Weight chart data — scaffolded for the full period (null where no measure)
   const weightChartData = (() => {
-    const entries = Object.entries(data.weight || {})
-      .filter(([, v]) => v != null)
-      .sort(([a], [b]) => a.localeCompare(b));
+    const weightMap = data.weight || {};
     if (range === "jour") {
       const monday = getMondayOf(statsRefDate);
       const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
       return Array.from({ length: 7 }, (_, i) => {
-        const d = addDays(monday, i);
-        const dateStr = d.toISOString().slice(0, 10);
-        const match = entries.find(([date]) => date === dateStr);
-        return match ? { label: dayNames[i], kg: match[1] } : null;
-      }).filter(Boolean);
+        const dateStr = addDays(monday, i).toISOString().slice(0, 10);
+        return { label: dayNames[i], kg: weightMap[dateStr] ?? null };
+      });
     }
     if (range === "an") {
-      const byMonth = {};
-      entries.forEach(([date, kg]) => {
-        const d = new Date(date + "T12:00:00");
-        const k = `${d.getFullYear()}-${d.getMonth()}`;
-        if (!byMonth[k]) byMonth[k] = { vals: [], year: d.getFullYear(), month: d.getMonth() };
-        byMonth[k].vals.push(kg);
+      return Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(statsRefDate.getFullYear(), statsRefDate.getMonth() - (11 - i), 1);
+        const y = d.getFullYear(), m = d.getMonth();
+        const vals = Object.entries(weightMap)
+          .filter(([date, v]) => { if (v == null) return false; const dd = new Date(date + "T12:00:00"); return dd.getFullYear() === y && dd.getMonth() === m; })
+          .map(([, v]) => v);
+        return {
+          label: d.toLocaleDateString("fr-FR", { month: "short" }),
+          kg: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null,
+        };
       });
-      return Object.values(byMonth)
-        .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
-        .slice(-12)
-        .map(({ vals, year, month }) => ({
-          label: new Date(year, month, 1).toLocaleDateString("fr-FR", { month: "short" }),
-          kg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10,
-        }));
     }
     const nWeeks = range === "mois" ? 13 : 8;
-    const endMonday = getMondayOf(statsRefDate);
-    const start = getMondayOf(addDays(endMonday, -(7 * (nWeeks - 1)))).toISOString().slice(0, 10);
-    const end = addDays(endMonday, 6).toISOString().slice(0, 10);
-    return entries.filter(([d]) => d >= start && d <= end).map(([date, kg]) => ({
-      label: new Date(date + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "numeric" }),
-      kg,
-    }));
+    return Array.from({ length: nWeeks }, (_, i) => {
+      const monday = getMondayOf(addDays(statsRefDate, -(7 * (nWeeks - 1 - i))));
+      const start = monday.toISOString().slice(0, 10);
+      const end = addDays(monday, 6).toISOString().slice(0, 10);
+      const vals = Object.entries(weightMap)
+        .filter(([date, v]) => v != null && date >= start && date <= end)
+        .map(([, v]) => v);
+      const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
+      return { label, kg: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null };
+    });
   })();
 
-  // Hooper chart data filtered by current range/period
+  // Hooper chart data — scaffolded for the full period (null where no measure)
   const hooperChartData = (() => {
-    const sorted = [...(data.hooper || [])].sort((a, b) => a.date.localeCompare(b.date));
+    const hooperList = data.hooper || [];
     if (range === "jour") {
       const monday = getMondayOf(statsRefDate);
       const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
       return Array.from({ length: 7 }, (_, i) => {
-        const d = addDays(monday, i);
-        const dateStr = d.toISOString().slice(0, 10);
-        const match = sorted.find(h => h.date === dateStr);
-        return match ? { label: dayNames[i], total: match.total } : null;
-      }).filter(Boolean);
+        const dateStr = addDays(monday, i).toISOString().slice(0, 10);
+        const entry = hooperList.find(h => h.date === dateStr);
+        return { label: dayNames[i], total: entry?.total ?? null };
+      });
     }
     if (range === "an") {
-      const byMonth = {};
-      sorted.forEach(h => {
-        const d = new Date(h.date + "T12:00:00");
-        const k = `${d.getFullYear()}-${d.getMonth()}`;
-        if (!byMonth[k]) byMonth[k] = { vals: [], year: d.getFullYear(), month: d.getMonth() };
-        byMonth[k].vals.push(h.total);
+      return Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(statsRefDate.getFullYear(), statsRefDate.getMonth() - (11 - i), 1);
+        const y = d.getFullYear(), m = d.getMonth();
+        const vals = hooperList
+          .filter(h => { const hd = new Date(h.date + "T12:00:00"); return hd.getFullYear() === y && hd.getMonth() === m; })
+          .map(h => h.total);
+        return {
+          label: d.toLocaleDateString("fr-FR", { month: "short" }),
+          total: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null,
+        };
       });
-      return Object.values(byMonth)
-        .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
-        .slice(-12)
-        .map(({ vals, year, month }) => ({
-          label: new Date(year, month, 1).toLocaleDateString("fr-FR", { month: "short" }),
-          total: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
-        }));
     }
     const nWeeks = range === "mois" ? 13 : 8;
-    const endMonday = getMondayOf(statsRefDate);
-    const start = getMondayOf(addDays(endMonday, -(7 * (nWeeks - 1)))).toISOString().slice(0, 10);
-    const end = addDays(endMonday, 6).toISOString().slice(0, 10);
-    return sorted.filter(h => h.date >= start && h.date <= end).map(h => ({
-      label: h.date.slice(5).replace("-", "/"),
-      total: h.total,
-    }));
+    return Array.from({ length: nWeeks }, (_, i) => {
+      const monday = getMondayOf(addDays(statsRefDate, -(7 * (nWeeks - 1 - i))));
+      const start = monday.toISOString().slice(0, 10);
+      const end = addDays(monday, 6).toISOString().slice(0, 10);
+      const vals = hooperList.filter(h => h.date >= start && h.date <= end).map(h => h.total);
+      const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
+      return { label, total: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null };
+    });
   })();
 
   const totalCharge4w = getChartData(data, "sem").slice(4).reduce((s, w) => s + w.charge, 0);
@@ -5691,9 +5684,7 @@ function Dashboard({ data, onUpdateSleep }) {
         </ResponsiveContainer>
       </div>
 
-      <SleepSection sleepData={data.sleep || []} onImport={onUpdateSleep} range={range} />
-
-      {weightChartData.length >= 2 && (
+      {weightChartData.some(d => d.kg != null) && (
         <div style={styles.dashSection}>
           <div style={styles.dashSectionTitle}>Poids — {rangeLabel}</div>
           <ResponsiveContainer width="100%" height={160}>
@@ -5702,33 +5693,38 @@ function Dashboard({ data, onUpdateSleep }) {
               <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
                 interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
               <YAxis domain={["auto", "auto"]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v} kg`, "Poids"]} />
+              <Tooltip contentStyle={tooltipStyle} formatter={v => v != null ? [`${v} kg`, "Poids"] : null} />
               <Line type="monotone" dataKey="kg" name="Poids" stroke={isDark ? "#60a5fa" : "#2563eb"}
-                strokeWidth={2} dot={{ r: 3, fill: isDark ? "#60a5fa" : "#2563eb" }} connectNulls />
+                strokeWidth={2} dot={{ r: 3, fill: isDark ? "#60a5fa" : "#2563eb" }} connectNulls={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {hooperChartData.length > 0 && (
+      {hooperChartData.some(d => d.total != null) && (
         <div style={styles.dashSection}>
           <div style={styles.dashSectionTitle}>Indice Hooper — {rangeLabel}</div>
           <ResponsiveContainer width="100%" height={160}>
-            <LineChart data={hooperChartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+            <BarChart data={hooperChartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }} barCategoryGap="15%">
               <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
               <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
                 interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
-              <YAxis domain={[4, 28]} ticks={[4, 10, 14, 17, 20, 28]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} formatter={v => [v, "Hooper"]} />
+              <YAxis domain={[0, 28]} ticks={[0, 7, 14, 17, 20, 28]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => v != null ? [v + ` — ${hooperLabel(v)}`, "Hooper"] : null} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
               <ReferenceLine y={14} stroke={isDark ? "#4ade8033" : "#2a7d4f33"} strokeDasharray="4 4" />
               <ReferenceLine y={17} stroke="#f9731633" strokeDasharray="4 4" />
               <ReferenceLine y={20} stroke="#f8717133" strokeDasharray="4 4" />
-              <Line type="monotone" dataKey="total" name="Hooper" stroke={isDark ? "#4ade80" : "#2a7d4f"}
-                strokeWidth={2} dot={{ r: 3, fill: isDark ? "#4ade80" : "#2a7d4f" }} connectNulls />
-            </LineChart>
+              <Bar dataKey="total" name="Hooper" radius={[3, 3, 0, 0]} maxBarSize={36}>
+                {hooperChartData.map((entry, i) => (
+                  <Cell key={i} fill={entry.total != null ? hooperColor(entry.total, isDark) : "transparent"} />
+                ))}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         </div>
       )}
+
+      <SleepSection sleepData={data.sleep || []} onImport={onUpdateSleep} range={range} />
     </div>
   );
 }
