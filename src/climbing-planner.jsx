@@ -7388,9 +7388,95 @@ export default function ClimbingPlanner() {
   const updateCustomCycle = (id, cc) => updateCustomCycles(list => list.map(x => x.id === id ? { ...x, ...cc } : x));
   const deleteCustomCycle = id => updateCustomCycles(list => list.filter(x => x.id !== id));
 
+  // ── Helpers : sync planning futur quand catalogue/blocs changent ──
+
+  // Met à jour toutes les séances futures (>= semaine actuelle) dont l'id correspond à updatedSession
+  const syncPlannedSessions = (updatedSession) => {
+    if (!updatedSession?.id) return;
+    const todayKey = weekKey(getMondayOf(new Date()));
+    setData(d => {
+      let changed = false;
+      const newWeeks = Object.fromEntries(
+        Object.entries(d.weeks).map(([key, weekData]) => {
+          if (key < todayKey || !Array.isArray(weekData)) return [key, weekData];
+          const newWeek = weekData.map(dayArr =>
+            Array.isArray(dayArr)
+              ? dayArr.map(s => {
+                  if (s.id === updatedSession.id && !s.isBlock) {
+                    changed = true;
+                    // Préserve les champs propres à l'instance planifiée
+                    return {
+                      ...updatedSession,
+                      feedback:   s.feedback,
+                      startTime:  s.startTime,
+                      endTime:    s.endTime,
+                      coachNote:  s.coachNote,
+                      date:       s.date,
+                    };
+                  }
+                  return s;
+                })
+              : dayArr
+          );
+          return [key, newWeek];
+        })
+      );
+      return changed ? { ...d, weeks: newWeeks } : d;
+    });
+  };
+
+  // Met à jour toutes les séances futures qui sont des blocs directs (isBlock:true) dont l'id correspond
+  const syncPlannedBlocks = (updatedBlock) => {
+    if (!updatedBlock?.id) return;
+    const todayKey = weekKey(getMondayOf(new Date()));
+    setData(d => {
+      let changed = false;
+      const newWeeks = Object.fromEntries(
+        Object.entries(d.weeks).map(([key, weekData]) => {
+          if (key < todayKey || !Array.isArray(weekData)) return [key, weekData];
+          const newWeek = weekData.map(dayArr =>
+            Array.isArray(dayArr)
+              ? dayArr.map(s => {
+                  if (s.id === updatedBlock.id && s.isBlock) {
+                    changed = true;
+                    return {
+                      ...updatedBlock,
+                      isBlock:   true,
+                      feedback:  s.feedback,
+                      startTime: s.startTime,
+                      endTime:   s.endTime,
+                      coachNote: s.coachNote,
+                      date:      s.date,
+                    };
+                  }
+                  return s;
+                })
+              : dayArr
+          );
+          return [key, newWeek];
+        })
+      );
+      return changed ? { ...d, weeks: newWeeks } : d;
+    });
+  };
+
   // ── Session blocks CRUD (table session_blocks en DB) ──
   const addSessionBlock    = b  => saveBlock(b);
-  const editSessionBlock   = b  => saveBlock(b);
+  const editSessionBlock   = async (b) => {
+    await saveBlock(b);
+    // 1. Mettre à jour les séances du catalogue qui utilisent ce bloc
+    const affectedSessions = catalog.filter(s => s.blocks?.some(bl => bl.id === b.id));
+    for (const session of affectedSessions) {
+      const updatedBlocks = session.blocks.map(bl =>
+        bl.id === b.id ? { ...bl, ...b } : bl
+      );
+      const updatedSession = { ...session, blocks: updatedBlocks };
+      saveUserSession(updatedSession);
+      syncPlannedSessions(updatedSession);
+    }
+    // 2. Mettre à jour les séances futures qui sont ce bloc directement
+    syncPlannedBlocks(b);
+  };
   const deleteSessionBlock = id => deleteBlock(id);
 
   // ── Custom session handlers ──
@@ -7402,6 +7488,8 @@ export default function ClimbingPlanner() {
     }
     // Save to DB catalog (fire-and-forget)
     saveUserSession(customSession);
+    // Sync les séances futures qui référencent cette séance du catalogue
+    syncPlannedSessions(customSession);
     setData(d => {
       let weeks = d.weeks;
       // If targetDayIndex is set, also place in the planner day
@@ -7444,6 +7532,8 @@ export default function ClimbingPlanner() {
   const saveBuiltSession = (builtSession) => {
     const dayIndex = sessionBuilderDay;
     saveUserSession(builtSession);
+    // Sync les séances futures qui référencent cette séance du catalogue
+    syncPlannedSessions(builtSession);
     setData(d => {
       let weeks = d.weeks;
       if (dayIndex !== null && dayIndex !== undefined) {
