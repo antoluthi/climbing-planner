@@ -1180,12 +1180,21 @@ function useSessionBlocks(userId) {
 
   const fetchBlocks = useCallback(async () => {
     if (!supabase) return;
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("session_blocks")
       .select("id, block_type, name, duration, charge, description, config")
       .eq("is_active", true)
       .order("block_type", { ascending: true })
       .order("name",       { ascending: true });
+    // Colonne config absente (migration pas encore appliquée) → retry sans config
+    if (error?.code === "PGRST204" || (error && !data)) {
+      ({ data, error } = await supabase
+        .from("session_blocks")
+        .select("id, block_type, name, duration, charge, description")
+        .eq("is_active", true)
+        .order("block_type", { ascending: true })
+        .order("name",       { ascending: true }));
+    }
     if (error || !data) return;
     setBlocks(data.map(r => ({
       id: r.id,
@@ -1212,11 +1221,20 @@ function useSessionBlocks(userId) {
       config: block.config ?? null,
       is_active: true,
     };
-    if (block.id && typeof block.id === "number") {
-      await supabase.from("session_blocks").update(row).eq("id", block.id);
-    } else {
-      await supabase.from("session_blocks").insert({ ...row, created_by: uid });
+    const rowNoConfig = { ...row };
+    delete rowNoConfig.config;
+    const tryOp = async (rowObj) => {
+      if (block.id && typeof block.id === "number") {
+        return supabase.from("session_blocks").update(rowObj).eq("id", block.id);
+      }
+      return supabase.from("session_blocks").insert({ ...rowObj, created_by: uid });
+    };
+    let { error } = await tryOp(row);
+    // Fallback si colonne config absente (migration pas encore appliquée)
+    if (error?.code === "PGRST204") {
+      ({ error } = await tryOp(rowNoConfig));
     }
+    if (error) console.error("[saveBlock]", error.message);
     fetchBlocks();
   }, [fetchBlocks]);
 
@@ -2982,7 +3000,9 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
                           const cfg   = BLOCK_TYPES[bl.blockType] || {};
                           const color = cfg.color || "#888";
                           const existing = blockFeedbacks.find(bf => bf.blockId === bl.id);
-                          const isSusp = bl.blockType === "Suspension" && bl.config;
+                          const isSusp = bl.blockType === "Suspension";
+                          // Utilise la config du bloc si disponible, sinon les valeurs par défaut
+                          const suspCfgRef = bl.config ?? DEFAULT_SUSPENSION_CONFIG;
                           const suspData = existing?.suspensionData ?? {};
                           const patchSuspData = (patch) => {
                             setBlockFeedbacks(prev => {
@@ -3001,23 +3021,25 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
                                 <div style={{ marginBottom: 8, background: isDark ? "#1a1f1b" : "#f0ede8", borderRadius: 6, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
                                   <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.08em", textTransform: "uppercase" }}>Poids réel utilisé</div>
                                   {/* Cible coach pour référence */}
-                                  <div style={{ fontSize: 10, color: isDark ? "#6a8870" : "#8a7f70" }}>
-                                    Cible coach : {bl.config.armMode === "one"
-                                      ? `G ${bl.config.targetWeightLeft >= 0 ? "+" : ""}${bl.config.targetWeightLeft}kg / D ${bl.config.targetWeightRight >= 0 ? "+" : ""}${bl.config.targetWeightRight}kg`
-                                      : `${bl.config.targetWeight >= 0 ? "+" : ""}${bl.config.targetWeight}kg`}
-                                    {" "}· {bl.config.gripType} {bl.config.gripSize}mm · {bl.config.hangTime}s/{bl.config.restTime}s · {bl.config.sets}×{bl.config.reps}
-                                  </div>
-                                  {bl.config.armMode === "two" ? (
+                                  {bl.config && (
+                                    <div style={{ fontSize: 10, color: isDark ? "#6a8870" : "#8a7f70" }}>
+                                      Cible : {suspCfgRef.armMode === "one"
+                                        ? `G ${suspCfgRef.targetWeightLeft >= 0 ? "+" : ""}${suspCfgRef.targetWeightLeft}kg / D ${suspCfgRef.targetWeightRight >= 0 ? "+" : ""}${suspCfgRef.targetWeightRight}kg`
+                                        : `${suspCfgRef.targetWeight >= 0 ? "+" : ""}${suspCfgRef.targetWeight}kg`}
+                                      {" "}· {suspCfgRef.gripType} {suspCfgRef.gripSize}mm · {suspCfgRef.hangTime}s/{suspCfgRef.restTime}s · {suspCfgRef.sets}×{suspCfgRef.reps}
+                                    </div>
+                                  )}
+                                  {suspCfgRef.armMode === "two" ? (
                                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                                       <input
                                         type="number" step="0.5"
                                         style={{ ...styles.textarea, width: 80, minHeight: 0, padding: "5px 8px", fontSize: 13, textAlign: "center" }}
-                                        placeholder={String(bl.config.targetWeight ?? 0)}
+                                        placeholder={String(suspCfgRef.targetWeight ?? 0)}
                                         value={suspData.actualWeight ?? ""}
                                         onChange={e => patchSuspData({ actualWeight: e.target.value === "" ? null : +e.target.value })}
                                       />
                                       <span style={{ fontSize: 11, color: isDark ? "#6a8870" : "#8a7f70" }}>
-                                        kg {bl.config.supportType === "wall" ? (suspData.actualWeight < 0 ? "délestage" : "lest") : "soulevé"}
+                                        kg {suspCfgRef.supportType === "wall" ? (suspData.actualWeight < 0 ? "délestage" : "lest") : "soulevé"}
                                       </span>
                                     </div>
                                   ) : (
@@ -3028,7 +3050,7 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
                                           <input
                                             type="number" step="0.5"
                                             style={{ ...styles.textarea, width: 72, minHeight: 0, padding: "5px 8px", fontSize: 13, textAlign: "center" }}
-                                            placeholder={String(bl.config.targetWeightLeft ?? 0)}
+                                            placeholder={String(suspCfgRef.targetWeightLeft ?? 0)}
                                             value={suspData.actualWeightLeft ?? ""}
                                             onChange={e => patchSuspData({ actualWeightLeft: e.target.value === "" ? null : +e.target.value })}
                                           />
@@ -3041,7 +3063,7 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
                                           <input
                                             type="number" step="0.5"
                                             style={{ ...styles.textarea, width: 72, minHeight: 0, padding: "5px 8px", fontSize: 13, textAlign: "center" }}
-                                            placeholder={String(bl.config.targetWeightRight ?? 0)}
+                                            placeholder={String(suspCfgRef.targetWeightRight ?? 0)}
                                             value={suspData.actualWeightRight ?? ""}
                                             onChange={e => patchSuspData({ actualWeightRight: e.target.value === "" ? null : +e.target.value })}
                                           />
