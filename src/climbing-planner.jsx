@@ -1485,19 +1485,16 @@ function RoleOnboardingModal({ onSelect }) {
     {
       value: null,
       label: "Athlète solo",
-      icon: "🧗",
       desc: "Vous gérez votre planning vous-même.",
     },
     {
       value: "coach",
       label: "Coach",
-      icon: "📋",
       desc: "Vous créez et modifiez les cycles de vos athlètes.",
     },
     {
       value: "athlete",
       label: "Athlète suivi",
-      icon: "🤝",
       desc: "Votre coach gère vos cycles. Vos cycles sont en lecture seule.",
     },
   ];
@@ -2540,7 +2537,7 @@ function FeedbackHistoryModal({ type, id, name, onClose }) {
   };
 
   // Données de progression poids pour les blocs Suspension
-  const suspChartData = React.useMemo(() => {
+  const suspChartData = useMemo(() => {
     if (type !== "block" || !feedbacks?.length) return null;
     // Vérifie si au moins un feedback a des données de suspension
     const hasSuspData = feedbacks.some(fb => {
@@ -2631,7 +2628,7 @@ function FeedbackHistoryModal({ type, id, name, onClose }) {
             <div style={{ padding: "20px 0", textAlign: "center", color: isDark ? "#f87171" : "#dc2626", fontSize: 12 }}>{error}</div>
           ) : feedbacks.length === 0 ? (
             <div style={{ padding: "48px 20px", textAlign: "center", color: muted }}>
-              <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.4 }}>💬</div>
+              <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.4 }}>—</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 4 }}>Aucun retour pour l'instant</div>
               <div style={{ fontSize: 12 }}>
                 {type === "session" ? "Les athlètes n'ont pas encore donné de feedback sur cette séance." : "Aucun athlète n'a encore commenté ce bloc."}
@@ -6505,7 +6502,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
   ) : (
     <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
       {onHistory && (
-        <button onClick={onHistory} title="Retours athlètes" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: accent, padding: "5px 8px", cursor: "pointer", fontSize: 11, lineHeight: 1, fontFamily: "inherit", letterSpacing: "0.02em" }}>💬</button>
+        <button onClick={onHistory} title="Retours athlètes" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: accent, padding: "5px 8px", cursor: "pointer", fontSize: 11, lineHeight: 1, fontFamily: "inherit", letterSpacing: "0.02em" }}>Feedback</button>
       )}
       <button onClick={doEdit} title="Modifier" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>✎</button>
       <button onClick={() => setConfirmId(id)} title="Supprimer" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: danger + "bb", padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>✕</button>
@@ -7119,7 +7116,7 @@ export default function ClimbingPlanner() {
     return (
       <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: [] }}>
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 20, background: styles.app.background }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: accent, letterSpacing: "0.06em" }}>🧗 Climbing Planner</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: accent, letterSpacing: "0.06em" }}>Climbing Planner</div>
           <div style={{ background: isDark ? "#1c1c1c" : "#fff", borderRadius: 12, padding: "28px 24px", boxShadow: "0 4px 24px rgba(0,0,0,0.18)", minWidth: 300 }}>
             <AuthPanel session={null} onAuthChange={setSession} fullWidth />
           </div>
