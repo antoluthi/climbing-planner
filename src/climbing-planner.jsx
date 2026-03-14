@@ -2884,9 +2884,6 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, db
             Ressenti{hasFeedback ? " ✓" : ""}
           </button>
           <div style={{ marginLeft: "auto", display: "flex", gap: 2, padding: "0 8px", alignItems: "center" }}>
-            {onEdit && (
-              <button style={{ ...styles.actionBtn, fontSize: 11, opacity: 0.65 }} onClick={onEdit} title="Modifier la séance">Modifier</button>
-            )}
             <button style={styles.closeBtn} onClick={onClose}>✕</button>
           </div>
         </div>
