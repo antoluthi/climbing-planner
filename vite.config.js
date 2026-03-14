@@ -7,6 +7,25 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // Exclude HTML from precache so navigation always fetches fresh from network.
+        // JS/CSS assets are fingerprinted by Vite so caching them is safe.
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff,woff2}'],
+        navigateFallback: null,
+        runtimeCaching: [
+          {
+            // Always fetch the app shell (HTML) from network first.
+            // This ensures users always run the latest deployed code,
+            // preventing stale SW cache from serving old JS after a deployment.
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-cache',
+              networkTimeoutSeconds: 5,
+            },
+          },
+        ],
+      },
       manifest: {
         name: 'Climbing Planner',
         short_name: 'Planif',
