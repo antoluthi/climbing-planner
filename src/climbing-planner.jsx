@@ -6854,6 +6854,262 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
   );
 }
 
+// ─── ACCUEIL ──────────────────────────────────────────────────────────────────
+
+function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHooper }) {
+  const { isDark } = useThemeCtx();
+  const today = new Date().toISOString().slice(0, 10);
+  const todayObj = new Date(today + "T12:00:00");
+
+  // Today's sessions
+  const monday = getMondayOf(todayObj);
+  const wKey = weekKey(monday);
+  const dow = todayObj.getDay();
+  const dayIndex = dow === 0 ? 6 : dow - 1;
+  const weekSessions = data.weeks[wKey] || Array(7).fill(null).map(() => []);
+  const todaySessions = weekSessions[dayIndex] || [];
+
+  // Profile
+  const firstName = data.profile?.firstName || "";
+
+  // Hooper
+  const existingHooper = (data.hooper || []).find(h => h.date === today);
+  const [hOpen, setHOpen] = useState(false);
+  const [hForm, setHForm] = useState(
+    existingHooper
+      ? { fatigue: existingHooper.fatigue, stress: existingHooper.stress, soreness: existingHooper.soreness, sleep: existingHooper.sleep }
+      : { fatigue: null, stress: null, soreness: null, sleep: null }
+  );
+  const [hSaved, setHSaved] = useState(false);
+  const hAllFilled = hForm.fatigue && hForm.stress && hForm.soreness && hForm.sleep;
+  const hTotal = hAllFilled ? hForm.fatigue + hForm.stress + hForm.soreness + hForm.sleep : null;
+
+  const handleHooperSave = () => {
+    if (!hAllFilled) return;
+    onAddHooper({
+      id: existingHooper?.id || "h_" + Date.now().toString(36),
+      date: today,
+      time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+      ...hForm,
+      total: hTotal,
+    });
+    setHSaved(true);
+    setHOpen(false);
+    setTimeout(() => setHSaved(false), 3000);
+  };
+
+  // Creatine
+  const hasCreatine = !!data.creatine?.[today];
+
+  // Mesocycle context
+  const mesoCtx = getMesoForDate(data.mesocycles || [], todayObj);
+
+  // Colors
+  const accentGreen = isDark ? "#4ade80" : "#2a7d4f";
+  const panelBg = isDark ? "#1e231f" : "#e8e3da";
+  const textMain = isDark ? "#e8e4de" : "#2a2218";
+  const textMuted = isDark ? "#9ca3af" : "#6b7280";
+  const panelBorder = isDark ? "#2a2f2a" : "#d0cbc3";
+  const btnNum = { width: 28, height: 28, borderRadius: 4, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "inherit", transition: "all 0.12s" };
+  const sectionLabel = { fontSize: 10, fontWeight: 700, color: textMuted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 };
+
+  const dateFull = todayObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+
+  const HCRIT = [
+    { key: "fatigue",  label: "Fatigue",    sub: "épuisement général" },
+    { key: "stress",   label: "Stress",      sub: "mental / émotionnel" },
+    { key: "soreness", label: "Courbatures", sub: "douleurs musculaires" },
+    { key: "sleep",    label: "Sommeil ↓",   sub: "1 = excellent · 7 = très mauvais" },
+  ];
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "24px 16px" : "36px 40px", display: "flex", flexDirection: "column", gap: 28 }}>
+
+      {/* Greeting */}
+      <div>
+        <div style={{ fontSize: isMobile ? 28 : 38, fontWeight: 700, color: textMain, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
+          Bonjour{firstName ? `, ${firstName}` : ""}
+        </div>
+        <div style={{ fontSize: 13, color: textMuted, marginTop: 5, textTransform: "capitalize" }}>
+          {dateFull}
+        </div>
+        {mesoCtx?.meso && (
+          <div style={{ marginTop: 10, display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: mesoCtx.meso.color, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              {mesoCtx.meso.label}
+            </span>
+            {mesoCtx.micro && (
+              <>
+                <span style={{ fontSize: 10, color: mesoCtx.meso.color + "55" }}>›</span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: mesoCtx.meso.color + "cc", letterSpacing: "0.06em", background: mesoCtx.meso.color + "22", padding: "1px 7px", borderRadius: 10, border: `1px solid ${mesoCtx.meso.color}44` }}>
+                  {mesoCtx.micro.label}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Content grid */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 24, alignItems: "start" }}>
+
+        {/* Left: Programme du jour */}
+        <div>
+          <div style={sectionLabel}>Programme du jour</div>
+          {todaySessions.length === 0 ? (
+            <div style={{ fontSize: 13, color: textMuted, fontStyle: "italic", padding: "12px 0" }}>
+              Pas de séance prévue aujourd'hui
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {todaySessions.map((session, si) => (
+                <div
+                  key={si}
+                  onClick={() => onOpenSession(wKey, dayIndex, si)}
+                  style={{ background: panelBg, borderRadius: 8, padding: "12px 14px", cursor: "pointer", display: "flex", gap: 10, alignItems: "flex-start", border: `1px solid ${panelBorder}` }}
+                >
+                  <div style={{ width: 3, borderRadius: 2, background: getChargeColor(session.charge), alignSelf: "stretch", flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    {session.startTime && (
+                      <div style={{ fontSize: 11, color: accentGreen, fontWeight: 600, marginBottom: 3 }}>
+                        {session.startTime}{session.endTime ? ` – ${session.endTime}` : ""}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 14, fontWeight: 600, color: textMain }}>
+                      {session.title || session.name}
+                    </div>
+                    {session.blocks && session.blocks.length > 0 && (
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
+                        {session.blocks.map((bl, bi) => {
+                          const cfg = BLOCK_TYPES[bl.type];
+                          if (!cfg) return null;
+                          return (
+                            <span key={bi} style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: cfg.color + "22", color: cfg.color, border: `1px solid ${cfg.color}44` }}>
+                              {bl.type === "Exercices" && bl.name ? bl.name.split(" ").slice(0, 2).join(" ") : bl.type}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {session.coachNote && (
+                      <div style={{ fontSize: 10, color: isDark ? "#a0b8a0" : "#4a7060", fontStyle: "italic", marginTop: 5, lineHeight: 1.4, borderLeft: `2px solid ${isDark ? "#3a6040" : "#a0c8a8"}`, paddingLeft: 5 }}>
+                        {session.coachNote}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 10, color: getChargeColor(session.charge) }}>⚡{session.charge}</span>
+                      {session.estimatedTime && <span style={{ fontSize: 10, color: textMuted }}>{session.estimatedTime}min</span>}
+                      {session.feedback ? (
+                        <span style={{ fontSize: 10, color: session.feedback.done ? accentGreen : "#f87171", fontWeight: 600 }}>
+                          {session.feedback.done ? "✓ Fait" : "✗ Manqué"}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 10, color: textMuted, fontStyle: "italic" }}>Feedback →</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right: Infos à remplir */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={sectionLabel}>Infos du jour</div>
+
+          {/* Créatine */}
+          <div style={{ background: panelBg, borderRadius: 8, padding: "12px 14px", border: `1px solid ${panelBorder}` }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={hasCreatine}
+                onChange={() => onToggleCreatine(today)}
+                style={{ width: 16, height: 16, accentColor: accentGreen, cursor: "pointer" }}
+              />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: textMain }}>Créatine</div>
+                <div style={{ fontSize: 10, color: textMuted }}>Prise de créatine du jour</div>
+              </div>
+              {hasCreatine && <span style={{ marginLeft: "auto", fontSize: 12, color: accentGreen, fontWeight: 700 }}>✓</span>}
+            </label>
+          </div>
+
+          {/* Hooper */}
+          <div style={{ background: panelBg, borderRadius: 8, padding: "12px 14px", border: `1px solid ${panelBorder}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: hOpen ? 14 : 0 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: textMain }}>Indice Hooper</div>
+                {existingHooper && !hOpen && (
+                  <div style={{ fontSize: 11, color: hooperColor(existingHooper.total, isDark), marginTop: 2, fontWeight: 600 }}>
+                    {existingHooper.total} — {hooperLabel(existingHooper.total)}
+                    <span style={{ fontSize: 10, color: textMuted, fontWeight: 400, marginLeft: 6 }}>{existingHooper.time}</span>
+                  </div>
+                )}
+                {!existingHooper && !hOpen && (
+                  <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>À remplir</div>
+                )}
+                {hSaved && <div style={{ fontSize: 10, color: accentGreen, marginTop: 2 }}>✓ Enregistré</div>}
+              </div>
+              <button
+                onClick={() => {
+                  if (!hOpen && existingHooper) {
+                    setHForm({ fatigue: existingHooper.fatigue, stress: existingHooper.stress, soreness: existingHooper.soreness, sleep: existingHooper.sleep });
+                  }
+                  setHOpen(o => !o);
+                }}
+                style={{ background: "none", border: `1px solid ${panelBorder}`, borderRadius: 5, color: textMain, padding: "3px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+              >
+                {hOpen ? "✕ Fermer" : existingHooper ? "Modifier" : "+ Remplir"}
+              </button>
+            </div>
+
+            {hOpen && (
+              <div>
+                {HCRIT.map(({ key, label, sub }) => (
+                  <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <div style={{ width: 110, flexShrink: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: textMain }}>{label}</div>
+                      <div style={{ fontSize: 9, color: textMuted }}>{sub}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {[1, 2, 3, 4, 5, 6, 7].map(v => {
+                        const active = hForm[key] === v;
+                        const btnBg = active
+                          ? (v <= 2 ? (isDark ? "#4ade80" : "#2a7d4f") : v <= 4 ? "#f97316" : "#f87171")
+                          : (isDark ? "#2a2f2a" : "#d8d3ca");
+                        return (
+                          <button key={v} onClick={() => setHForm(f => ({ ...f, [key]: v }))}
+                            style={{ ...btnNum, background: btnBg, color: active ? "#fff" : textMain, fontWeight: active ? 600 : 400 }}>
+                            {v}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {hTotal !== null && (
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: hooperColor(hTotal, isDark) }}>
+                    Indice : {hTotal} — {hooperLabel(hTotal)}
+                  </div>
+                )}
+                <button
+                  onClick={handleHooperSave}
+                  disabled={!hAllFilled}
+                  style={{ background: hAllFilled ? accentGreen : (isDark ? "#2a2f2a" : "#d0d0c0"), border: "none", borderRadius: 6, color: hAllFilled ? (isDark ? "#0a0f0a" : "#fff") : textMuted, padding: "6px 18px", cursor: hAllFilled ? "pointer" : "default", fontSize: 12, fontFamily: "inherit", fontWeight: 600 }}
+                >
+                  Enregistrer
+                </button>
+              </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
 
 export default function ClimbingPlanner() {
@@ -6861,7 +7117,7 @@ export default function ClimbingPlanner() {
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [roleResolved, setRoleResolved] = useState(false); // true après Phase 2b (status DB lu)
   const [currentDate, setCurrentDate] = useState(() => new Date());
-  const [viewMode, setViewMode] = useState("week");
+  const [viewMode, setViewMode] = useState("accueil");
   const [sessionBuilderDay, setSessionBuilderDay] = useState(null); // null | dayIndex
   const [picker, setPicker] = useState(null);
   const [metaEditing, setMetaEditing] = useState(false);
@@ -7234,6 +7490,7 @@ export default function ClimbingPlanner() {
   const viewToggle = (
     <div style={{ ...styles.viewToggle, flexWrap: "wrap" }}>
       {[
+        { mode: "accueil", label: "Accueil" },
         { mode: "calendar", label: "Calendrier" },
         { mode: "dash", label: "Stats" },
         { mode: "cycles", label: "Cycles" },
@@ -7350,7 +7607,7 @@ export default function ClimbingPlanner() {
             <div>
               <div style={styles.appTitle}>PLANIF ESCALADE</div>
               <div style={styles.appSub}>
-                {viewMode === "week" ? "Calendrier — semaine" : viewMode === "month" ? "Calendrier — mois" : viewMode === "year" ? "Calendrier — année" : viewMode === "dash" ? "Statistiques" : viewMode === "cycles" ? "Cycles" : "Profil"} · Bloc
+                {viewMode === "accueil" ? "Accueil" : viewMode === "week" ? "Calendrier — semaine" : viewMode === "month" ? "Calendrier — mois" : viewMode === "year" ? "Calendrier — année" : viewMode === "dash" ? "Statistiques" : viewMode === "cycles" ? "Cycles" : "Profil"} · Bloc
               </div>
             </div>
           </div>
@@ -7427,6 +7684,24 @@ export default function ClimbingPlanner() {
           </div>
         );
       })()}
+
+      {/* ── Accueil ── */}
+      {viewMode === "accueil" && (
+        <AccueilView
+          data={data}
+          isMobile={isMobile}
+          onOpenSession={openSessionModal}
+          onToggleCreatine={dateISO => setData(d => {
+            const cr = { ...(d.creatine || {}) };
+            if (cr[dateISO]) delete cr[dateISO]; else cr[dateISO] = true;
+            return { ...d, creatine: cr };
+          })}
+          onAddHooper={entry => setData(d => {
+            const existing = (d.hooper || []).filter(h => h.date !== entry.date);
+            return { ...d, hooper: [...existing, entry].sort((a, b) => a.date.localeCompare(b.date)) };
+          })}
+        />
+      )}
 
       {/* ── Vue semaine ── */}
       {viewMode === "week" && (
