@@ -312,7 +312,11 @@ function parseGarminSleepCSV(text) {
 function saveData(data) {
   // Never persist role — always authoritative from Supabase status column
   const { role: _role, ...profileWithoutRole } = data.profile ?? {};
-  localStorage.setItem("climbing_planner_v1", JSON.stringify({ ...data, profile: profileWithoutRole }));
+  localStorage.setItem("climbing_planner_v1", JSON.stringify({
+    ...data,
+    profile: profileWithoutRole,
+    _savedAt: new Date().toISOString(),
+  }));
 }
 
 // ─── HELPERS ACCÈS PAR DATE ───────────────────────────────────────────────────
@@ -979,6 +983,7 @@ function useSupabaseSync() {
     data:       planData,
     first_name: planData?.profile?.firstName ?? null,
     last_name:  planData?.profile?.lastName  ?? null,
+    updated_at: new Date().toISOString(),
   }), []);
 
   const loadFromCloud = useCallback(async () => {
@@ -987,7 +992,7 @@ function useSupabaseSync() {
     let row = null;
     const { data: full, error: fullErr } = await supabase
       .from("climbing_plans")
-      .select("data, first_name, last_name, status")
+      .select("data, first_name, last_name, status, updated_at")
       .maybeSingle();
     if (!fullErr) {
       row = full;
@@ -1008,7 +1013,7 @@ function useSupabaseSync() {
       // status column is authoritative for role (overrides blob value)
       ...("status" in (row ?? {}) ? { role: row.status } : {}),
     };
-    return { ...blob, profile };
+    return { ...blob, profile, _cloudUpdatedAt: row.updated_at ?? null };
   }, []);
 
   // Write status to its own column — called only from onboarding.
@@ -6858,8 +6863,21 @@ export default function ClimbingPlanner() {
     loadFromCloud().then(cloudData => {
       setCloudLoaded(true);
       if (cloudData) {
-        setData(cloudData);
-        saveData(cloudData);
+        // Compare timestamps: if local data is more recent than cloud, keep local and push it up.
+        // This handles the race condition where a page refresh happens before the debounced cloud save fires.
+        const localRaw = localStorage.getItem("climbing_planner_v1");
+        const localSavedAt = localRaw ? (() => { try { return JSON.parse(localRaw)._savedAt ?? null; } catch { return null; } })() : null;
+        const cloudUpdatedAt = cloudData._cloudUpdatedAt;
+        const localIsNewer = localSavedAt && cloudUpdatedAt && localSavedAt > cloudUpdatedAt;
+        if (localIsNewer) {
+          // Local is ahead of cloud — push local state up without overwriting local
+          uploadNow(data, session.user.id);
+        } else {
+          // Cloud is authoritative (normal case)
+          const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
+          setData(cleanData);
+          saveData(cleanData);
+        }
       } else {
         // Cloud empty → push local data up immediately
         uploadNow(data, session.user.id);
