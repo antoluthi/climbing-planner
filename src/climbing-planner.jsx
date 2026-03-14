@@ -406,7 +406,7 @@ function makeStyles(isDark) {
     },
     headerLeft: { display: "flex", alignItems: "center", gap: 12 },
     logo: { fontSize: 28 },
-    appTitle: { fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: t.textTitle },
+    appTitle: { fontSize: 15, fontWeight: 600, letterSpacing: "0.18em", color: t.textTitle, fontFamily: "'Cormorant Garamond', Georgia, serif" },
     appSub: { fontSize: 10, color: t.textMuted, letterSpacing: "0.1em", marginTop: 2 },
     weekNav: { display: "flex", alignItems: "center", gap: 16 },
     navBtn: {
@@ -415,7 +415,7 @@ function makeStyles(isDark) {
       transition: "all 0.15s", flexShrink: 0,
     },
     weekLabel: { textAlign: "center", minWidth: 180 },
-    weekRange: { fontSize: 13, color: t.textTitle, fontWeight: 600, letterSpacing: "0.05em" },
+    weekRange: { fontSize: 16, color: t.textTitle, fontWeight: 500, letterSpacing: "0.05em", fontFamily: "'Cormorant Garamond', Georgia, serif" },
     weekCurrent: { fontSize: 10, color: t.accent, letterSpacing: "0.12em", marginTop: 3, textTransform: "uppercase" },
     headerRight: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 },
     headerRightTop: { display: "flex", alignItems: "center", gap: 8 },
@@ -620,7 +620,7 @@ function makeStyles(isDark) {
     dashCardVal: { fontSize: 24, fontWeight: 700, color: t.text, lineHeight: 1 },
     dashCardLabel: { fontSize: 10, color: t.textMuted, letterSpacing: "0.06em", textTransform: "uppercase" },
     dashSection: { marginBottom: 28 },
-    dashSectionTitle: { fontSize: 11, fontWeight: 600, color: t.navColor, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 10 },
+    dashSectionTitle: { fontSize: 14, fontWeight: 600, color: t.navColor, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 10, fontFamily: "'Cormorant Garamond', Georgia, serif" },
     dashChartBg: t.surface,
     dashGrid: t.border,
     dashText: t.textMuted,
@@ -788,7 +788,7 @@ function makeStyles(isDark) {
       overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)",
     },
     modalHeader: { padding: "16px 18px", borderBottom: `1px solid ${t.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" },
-    modalTitle: { fontSize: 13, fontWeight: 700, letterSpacing: "0.1em", color: t.textTitle },
+    modalTitle: { fontSize: 17, fontWeight: 600, letterSpacing: "0.08em", color: t.textTitle, fontFamily: "'Cormorant Garamond', Georgia, serif" },
     closeBtn: { background: "none", border: "none", color: t.textMuted, cursor: "pointer", fontSize: 16 },
     modalFilters: { padding: "12px 16px", borderBottom: `1px solid ${t.border}`, display: "flex", flexDirection: "column", gap: 8 },
     searchInput: {
@@ -6927,7 +6927,7 @@ function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHoo
 
       {/* Greeting */}
       <div>
-        <div style={{ fontSize: isMobile ? 28 : 38, fontWeight: 700, color: textMain, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
+        <div style={{ fontSize: isMobile ? 36 : 52, fontWeight: 600, color: textMain, letterSpacing: "0.01em", lineHeight: 1.1, fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
           Bonjour{firstName ? `, ${firstName}` : ""}
         </div>
         <div style={{ fontSize: 13, color: textMuted, marginTop: 5, textTransform: "capitalize" }}>
