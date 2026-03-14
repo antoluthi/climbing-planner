@@ -315,8 +315,21 @@ function saveData(data) {
   localStorage.setItem("climbing_planner_v1", JSON.stringify({
     ...data,
     profile: profileWithoutRole,
-    _savedAt: new Date().toISOString(),
+    _pendingSync: true, // cleared by markSynced() after successful cloud upsert
   }));
+}
+
+// Called after a successful Supabase upsert to mark local data as in sync.
+function markSynced() {
+  try {
+    const raw = localStorage.getItem("climbing_planner_v1");
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed._pendingSync) {
+      parsed._pendingSync = false;
+      localStorage.setItem("climbing_planner_v1", JSON.stringify(parsed));
+    }
+  } catch {}
 }
 
 // ─── HELPERS ACCÈS PAR DATE ───────────────────────────────────────────────────
@@ -1033,6 +1046,7 @@ function useSupabaseSync() {
         const { error } = await supabase
           .from("climbing_plans")
           .upsert(buildRow(planData, userId), { onConflict: "user_id" });
+        if (!error) markSynced();
         setSyncStatus(error ? "offline" : "saved");
         setTimeout(() => setSyncStatus("idle"), 2000);
       } catch {
@@ -1049,6 +1063,7 @@ function useSupabaseSync() {
       const { error } = await supabase
         .from("climbing_plans")
         .upsert(buildRow(planData, userId), { onConflict: "user_id" });
+      if (!error) markSynced();
       setSyncStatus(error ? "offline" : "saved");
       setTimeout(() => setSyncStatus("idle"), 2500);
     } catch {
@@ -6864,14 +6879,12 @@ export default function ClimbingPlanner() {
     loadFromCloud().then(cloudData => {
       setCloudLoaded(true);
       if (cloudData) {
-        // Compare timestamps: if local data is more recent than cloud, keep local and push it up.
-        // This handles the race condition where a page refresh happens before the debounced cloud save fires.
+        // _pendingSync = true means the debounced cloud save was interrupted (e.g. rapid Ctrl+R).
+        // In that case local has unsaved changes → upload local instead of loading from cloud.
         const localRaw = localStorage.getItem("climbing_planner_v1");
-        const localSavedAt = localRaw ? (() => { try { return JSON.parse(localRaw)._savedAt ?? null; } catch { return null; } })() : null;
-        const cloudUpdatedAt = cloudData._cloudUpdatedAt;
-        const localIsNewer = localSavedAt && cloudUpdatedAt && localSavedAt > cloudUpdatedAt;
-        if (localIsNewer) {
-          // Local is ahead of cloud — push local state up without overwriting local
+        const pendingSync = localRaw ? (() => { try { return JSON.parse(localRaw)._pendingSync ?? false; } catch { return false; } })() : false;
+        if (pendingSync) {
+          // Local has unsaved changes — push them up without overwriting local
           uploadNow(data, session.user.id);
         } else {
           // Cloud is authoritative (normal case)
