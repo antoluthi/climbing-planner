@@ -1182,7 +1182,7 @@ function useSessionBlocks(userId) {
     if (!supabase) return;
     const { data, error } = await supabase
       .from("session_blocks")
-      .select("id, block_type, name, duration, charge, description")
+      .select("id, block_type, name, duration, charge, description, config")
       .eq("is_active", true)
       .order("block_type", { ascending: true })
       .order("name",       { ascending: true });
@@ -1194,6 +1194,7 @@ function useSessionBlocks(userId) {
       duration: r.duration ?? undefined,
       charge: r.charge ?? 0,
       description: r.description ?? "",
+      config: r.config ?? null,
     })));
   }, []);
 
@@ -1208,6 +1209,7 @@ function useSessionBlocks(userId) {
       duration: block.duration ?? null,
       charge: block.charge ?? 0,
       description: block.description || null,
+      config: block.config ?? null,
       is_active: true,
     };
     if (block.id && typeof block.id === "number") {
@@ -1935,6 +1937,23 @@ const BLOCK_TYPES = {
   "Retour au calme": { color: "#94a3b8", defaultCharge: 3,  defaultDuration: 10, hasCharge: false },
 };
 
+const GRIP_TYPES = ["Semi-arquée", "Arquée", "Tendu", "Pincée", "Monoigt", "2 doigts", "3 doigts"];
+
+// Config par défaut pour un bloc Suspension
+const DEFAULT_SUSPENSION_CONFIG = {
+  armMode: "two",        // "two" | "one"
+  supportType: "wall",   // "wall" (Au mur, PDC±lest) | "floor" (Au sol, poulie)
+  gripSize: 20,          // mm
+  gripType: "Semi-arquée",
+  hangTime: 7,           // secondes
+  restTime: 53,          // secondes
+  sets: 6,
+  reps: 1,
+  targetWeight: 0,       // kg (armMode "two") — positif=lest, négatif=délestage
+  targetWeightLeft: 0,   // kg (armMode "one")
+  targetWeightRight: 0,  // kg (armMode "one")
+};
+
 // ─── COMPOSANT: Éditeur de bloc ───────────────────────────────────────────────
 
 function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, allSessions, onCreateCustom }) {
@@ -2479,7 +2498,7 @@ function FeedbackHistoryModal({ type, id, name, onClose }) {
       } else {
         setFeedbacks(all.filter(fb =>
           Array.isArray(fb.block_feedbacks) &&
-          fb.block_feedbacks.some(bf => bf.blockId === id && bf.text?.trim())
+          fb.block_feedbacks.some(bf => bf.blockId === id && (bf.text?.trim() || bf.suspensionData != null))
         ));
       }
     };
@@ -2497,6 +2516,43 @@ function FeedbackHistoryModal({ type, id, name, onClose }) {
     if (!ds) return "";
     return new Date(ds).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
   };
+  const fmtDateShort = (ds) => {
+    if (!ds) return "";
+    return new Date(ds).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  };
+
+  // Données de progression poids pour les blocs Suspension
+  const suspChartData = React.useMemo(() => {
+    if (type !== "block" || !feedbacks?.length) return null;
+    // Vérifie si au moins un feedback a des données de suspension
+    const hasSuspData = feedbacks.some(fb => {
+      const bf = (fb.block_feedbacks || []).find(b => b.blockId === id);
+      return bf?.suspensionData != null;
+    });
+    if (!hasSuspData) return null;
+    // Détecte le mode bras depuis le premier feedback avec suspensionData
+    const firstBf = feedbacks.map(fb => (fb.block_feedbacks || []).find(b => b.blockId === id)).find(bf => bf?.suspensionData);
+    const isOneArm = firstBf?.suspensionData?.actualWeightLeft != null || firstBf?.suspensionData?.actualWeightRight != null;
+    return {
+      isOneArm,
+      points: [...feedbacks]
+        .reverse()
+        .map(fb => {
+          const bf = (fb.block_feedbacks || []).find(b => b.blockId === id);
+          if (!bf?.suspensionData) return null;
+          const sd = bf.suspensionData;
+          return {
+            date: fmtDateShort(fb.feedback_date),
+            fullDate: fmtDate(fb.feedback_date),
+            athlete: fb.athlete_name || "?",
+            ...(isOneArm
+              ? { gauche: sd.actualWeightLeft ?? null, droite: sd.actualWeightRight ?? null }
+              : { poids: sd.actualWeight ?? null }),
+          };
+        })
+        .filter(Boolean),
+    };
+  }, [type, feedbacks, id]);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
@@ -2512,6 +2568,42 @@ function FeedbackHistoryModal({ type, id, name, onClose }) {
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: muted, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 4, flexShrink: 0 }}>✕</button>
         </div>
+
+        {/* ── Graphique évolution poids Suspension ── */}
+        {suspChartData && suspChartData.points.length > 1 && (
+          <div style={{ padding: "12px 16px 0", borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
+              Évolution du poids
+            </div>
+            <ResponsiveContainer width="100%" height={140}>
+              <LineChart data={suspChartData.points} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#263228" : "#daeade"} />
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: muted }} />
+                <YAxis tick={{ fontSize: 9, fill: muted }} unit="kg" />
+                <ReferenceLine y={0} stroke={muted} strokeDasharray="2 2" />
+                <Tooltip
+                  contentStyle={{ background: surface, border: `1px solid ${border}`, borderRadius: 6, fontSize: 11 }}
+                  labelStyle={{ color: text, fontWeight: 600, marginBottom: 4 }}
+                  formatter={(val, name) => [`${val} kg`, name]}
+                />
+                {suspChartData.isOneArm ? (
+                  <>
+                    <Line type="monotone" dataKey="gauche" stroke="#a78bfa" strokeWidth={2} dot={{ r: 3 }} name="Main gauche" connectNulls />
+                    <Line type="monotone" dataKey="droite" stroke="#f472b6" strokeWidth={2} dot={{ r: 3 }} name="Main droite" connectNulls />
+                  </>
+                ) : (
+                  <Line type="monotone" dataKey="poids" stroke="#a78bfa" strokeWidth={2} dot={{ r: 3 }} name="Poids" connectNulls />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+            {suspChartData.isOneArm && (
+              <div style={{ display: "flex", gap: 14, fontSize: 10, color: muted, paddingBottom: 8, justifyContent: "center" }}>
+                <span style={{ color: "#a78bfa" }}>●</span> Main gauche
+                <span style={{ color: "#f472b6" }}>●</span> Main droite
+              </div>
+            )}
+          </div>
+        )}
 
         {/* List */}
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
@@ -2580,22 +2672,67 @@ function FeedbackHistoryModal({ type, id, name, onClose }) {
                         </div>
                       )}
                       {/* Per-block feedbacks (session view) */}
-                      {type === "session" && (fb.block_feedbacks || []).filter(bf => bf.text?.trim()).map((bf, bi) => {
+                      {type === "session" && (fb.block_feedbacks || []).filter(bf => bf.text?.trim() || bf.suspensionData != null).map((bf, bi) => {
                         const bCfg = BLOCK_TYPES[bf.blockType] || {};
                         return (
                           <div key={bi} style={{ borderLeft: `3px solid ${bCfg.color || accent}99`, paddingLeft: 10 }}>
                             <div style={{ fontSize: 10, fontWeight: 700, color: bCfg.color || accent, marginBottom: 3 }}>{bf.blockName}</div>
-                            <div style={{ fontSize: 12, color: text, lineHeight: 1.5 }}>{bf.text}</div>
+                            {bf.suspensionData && (
+                              <div style={{ fontSize: 11, color: "#a78bfa", marginBottom: 2 }}>
+                                {bf.suspensionData.actualWeight != null
+                                  ? `Poids : ${bf.suspensionData.actualWeight >= 0 ? "+" : ""}${bf.suspensionData.actualWeight} kg`
+                                  : [
+                                      bf.suspensionData.actualWeightLeft  != null && `G: ${bf.suspensionData.actualWeightLeft >= 0 ? "+" : ""}${bf.suspensionData.actualWeightLeft}kg`,
+                                      bf.suspensionData.actualWeightRight != null && `D: ${bf.suspensionData.actualWeightRight >= 0 ? "+" : ""}${bf.suspensionData.actualWeightRight}kg`,
+                                    ].filter(Boolean).join(" / ")
+                                }
+                              </div>
+                            )}
+                            {bf.text?.trim() && <div style={{ fontSize: 12, color: text, lineHeight: 1.5 }}>{bf.text}</div>}
                           </div>
                         );
                       })}
                       {/* Block-specific feedback (block view) */}
                       {type === "block" && blockFb && (
-                        <div>
-                          <div style={{ fontSize: 10, color: muted, marginBottom: 3 }}>Retour sur ce bloc</div>
-                          <div style={{ fontSize: 12, color: text, lineHeight: 1.5 }}>{blockFb.text}</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {/* Données de suspension */}
+                          {blockFb.suspensionData && (
+                            <div style={{ background: isDark ? "#1a1f1b" : "#f0ede8", borderRadius: 6, padding: "8px 10px" }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", marginBottom: 4 }}>Poids réel</div>
+                              {blockFb.suspensionData.actualWeight != null ? (
+                                <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>
+                                  {blockFb.suspensionData.actualWeight >= 0 ? "+" : ""}{blockFb.suspensionData.actualWeight} kg
+                                </span>
+                              ) : (
+                                <div style={{ display: "flex", gap: 12 }}>
+                                  {blockFb.suspensionData.actualWeightLeft != null && (
+                                    <div>
+                                      <div style={{ fontSize: 9, color: muted }}>Gauche</div>
+                                      <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>
+                                        {blockFb.suspensionData.actualWeightLeft >= 0 ? "+" : ""}{blockFb.suspensionData.actualWeightLeft} kg
+                                      </span>
+                                    </div>
+                                  )}
+                                  {blockFb.suspensionData.actualWeightRight != null && (
+                                    <div>
+                                      <div style={{ fontSize: 9, color: muted }}>Droite</div>
+                                      <span style={{ fontSize: 13, fontWeight: 700, color: "#f472b6" }}>
+                                        {blockFb.suspensionData.actualWeightRight >= 0 ? "+" : ""}{blockFb.suspensionData.actualWeightRight} kg
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {blockFb.text?.trim() && (
+                            <div>
+                              <div style={{ fontSize: 10, color: muted, marginBottom: 3 }}>Retour sur ce bloc</div>
+                              <div style={{ fontSize: 12, color: text, lineHeight: 1.5 }}>{blockFb.text}</div>
+                            </div>
+                          )}
                           {fb.notes?.trim() && (
-                            <div style={{ fontSize: 11, color: muted, marginTop: 6, fontStyle: "italic" }}>
+                            <div style={{ fontSize: 11, color: muted, fontStyle: "italic" }}>
                               Note générale : {fb.notes}
                             </div>
                           )}
@@ -2733,7 +2870,7 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
                             <span style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.07em" }}>{bl.blockType}</span>
                             <span style={{ fontSize: 13, fontWeight: 600, color: isDark ? "#e0e8d8" : "#1a2a1f" }}>{bl.name}</span>
                           </div>
-                          <div style={{ display: "flex", gap: 8, marginTop: 4, alignItems: "center" }}>
+                          <div style={{ display: "flex", gap: 8, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
                             {bl.duration && (
                               <span style={{ fontSize: 10, color: isDark ? "#7a9a80" : "#5a7a60" }}>{bl.duration} min</span>
                             )}
@@ -2741,6 +2878,9 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
                               <span style={{ fontSize: 10, fontWeight: 700, color: getChargeColor(bl.charge), background: getChargeColor(bl.charge) + "22", padding: "1px 6px", borderRadius: 4 }}>
                                 ⚡ {bl.charge}
                               </span>
+                            )}
+                            {bl.blockType === "Suspension" && bl.config && (
+                              <SuspensionSummaryChips config={bl.config} muted={isDark ? "#7a9a80" : "#5a7a60"} />
                             )}
                           </div>
                         </div>
@@ -2842,11 +2982,76 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
                           const cfg   = BLOCK_TYPES[bl.blockType] || {};
                           const color = cfg.color || "#888";
                           const existing = blockFeedbacks.find(bf => bf.blockId === bl.id);
+                          const isSusp = bl.blockType === "Suspension" && bl.config;
+                          const suspData = existing?.suspensionData ?? {};
+                          const patchSuspData = (patch) => {
+                            setBlockFeedbacks(prev => {
+                              const without = prev.filter(bf => bf.blockId !== bl.id);
+                              const prev_sd = prev.find(bf => bf.blockId === bl.id)?.suspensionData ?? {};
+                              return [...without, { blockId: bl.id, blockName: bl.name, blockType: bl.blockType, text: existing?.text || "", suspensionData: { ...prev_sd, ...patch } }];
+                            });
+                          };
                           return (
                             <div key={i} style={{ borderLeft: `3px solid ${color}66`, paddingLeft: 10 }}>
                               <div style={{ fontSize: 11, fontWeight: 600, color, marginBottom: 5 }}>
                                 <span style={{ opacity: 0.7, fontWeight: 400, fontSize: 10, marginRight: 5 }}>{bl.blockType}</span>{bl.name}
                               </div>
+                              {/* Suspension : saisie structurée du poids réel */}
+                              {isSusp && (
+                                <div style={{ marginBottom: 8, background: isDark ? "#1a1f1b" : "#f0ede8", borderRadius: 6, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+                                  <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.08em", textTransform: "uppercase" }}>Poids réel utilisé</div>
+                                  {/* Cible coach pour référence */}
+                                  <div style={{ fontSize: 10, color: isDark ? "#6a8870" : "#8a7f70" }}>
+                                    Cible coach : {bl.config.armMode === "one"
+                                      ? `G ${bl.config.targetWeightLeft >= 0 ? "+" : ""}${bl.config.targetWeightLeft}kg / D ${bl.config.targetWeightRight >= 0 ? "+" : ""}${bl.config.targetWeightRight}kg`
+                                      : `${bl.config.targetWeight >= 0 ? "+" : ""}${bl.config.targetWeight}kg`}
+                                    {" "}· {bl.config.gripType} {bl.config.gripSize}mm · {bl.config.hangTime}s/{bl.config.restTime}s · {bl.config.sets}×{bl.config.reps}
+                                  </div>
+                                  {bl.config.armMode === "two" ? (
+                                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                      <input
+                                        type="number" step="0.5"
+                                        style={{ ...styles.textarea, width: 80, minHeight: 0, padding: "5px 8px", fontSize: 13, textAlign: "center" }}
+                                        placeholder={String(bl.config.targetWeight ?? 0)}
+                                        value={suspData.actualWeight ?? ""}
+                                        onChange={e => patchSuspData({ actualWeight: e.target.value === "" ? null : +e.target.value })}
+                                      />
+                                      <span style={{ fontSize: 11, color: isDark ? "#6a8870" : "#8a7f70" }}>
+                                        kg {bl.config.supportType === "wall" ? (suspData.actualWeight < 0 ? "délestage" : "lest") : "soulevé"}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: "flex", gap: 14 }}>
+                                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                        <div style={{ fontSize: 10, color: isDark ? "#6a8870" : "#8a7f70" }}>Main gauche</div>
+                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                          <input
+                                            type="number" step="0.5"
+                                            style={{ ...styles.textarea, width: 72, minHeight: 0, padding: "5px 8px", fontSize: 13, textAlign: "center" }}
+                                            placeholder={String(bl.config.targetWeightLeft ?? 0)}
+                                            value={suspData.actualWeightLeft ?? ""}
+                                            onChange={e => patchSuspData({ actualWeightLeft: e.target.value === "" ? null : +e.target.value })}
+                                          />
+                                          <span style={{ fontSize: 11, color: isDark ? "#6a8870" : "#8a7f70" }}>kg</span>
+                                        </div>
+                                      </div>
+                                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                        <div style={{ fontSize: 10, color: isDark ? "#6a8870" : "#8a7f70" }}>Main droite</div>
+                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                          <input
+                                            type="number" step="0.5"
+                                            style={{ ...styles.textarea, width: 72, minHeight: 0, padding: "5px 8px", fontSize: 13, textAlign: "center" }}
+                                            placeholder={String(bl.config.targetWeightRight ?? 0)}
+                                            value={suspData.actualWeightRight ?? ""}
+                                            onChange={e => patchSuspData({ actualWeightRight: e.target.value === "" ? null : +e.target.value })}
+                                          />
+                                          <span style={{ fontSize: 11, color: isDark ? "#6a8870" : "#8a7f70" }}>kg</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               <textarea
                                 style={{ ...styles.textarea, minHeight: 48, fontSize: 12 }}
                                 placeholder="Adaptation, ressenti spécifique… (laisser vide si rien à dire)"
@@ -2855,7 +3060,8 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
                                   const val = e.target.value;
                                   setBlockFeedbacks(prev => {
                                     const without = prev.filter(bf => bf.blockId !== bl.id);
-                                    if (val.trim()) return [...without, { blockId: bl.id, blockName: bl.name, blockType: bl.blockType, text: val }];
+                                    const sd = prev.find(bf => bf.blockId === bl.id)?.suspensionData;
+                                    if (val.trim() || sd) return [...without, { blockId: bl.id, blockName: bl.name, blockType: bl.blockType, text: val, ...(sd ? { suspensionData: sd } : {}) }];
                                     return without;
                                   });
                                 }}
@@ -5832,6 +6038,33 @@ function SessionComposerModal({ initial, availableBlocks, onSave, onClose }) {
 
 // ─── COACH : BIBLIOTHÈQUE DE SÉANCES ─────────────────────────────────────────
 
+// ── Résumé visuel config Suspension (chips) ───────────────────────────────────
+function SuspensionSummaryChips({ config, muted }) {
+  if (!config) return null;
+  const c = config;
+  const weightLabel = () => {
+    if (c.armMode === "one") {
+      const parts = [];
+      if (c.targetWeightLeft  != null) parts.push(`G:${c.targetWeightLeft > 0 ? "+" : ""}${c.targetWeightLeft}kg`);
+      if (c.targetWeightRight != null) parts.push(`D:${c.targetWeightRight > 0 ? "+" : ""}${c.targetWeightRight}kg`);
+      return parts.join(" / ");
+    }
+    if (c.targetWeight == null) return null;
+    const sign = c.targetWeight > 0 ? "+" : "";
+    return `${sign}${c.targetWeight}kg`;
+  };
+  const w = weightLabel();
+  return (
+    <>
+      {c.hangTime && c.restTime && <span>{c.hangTime}s / {c.restTime}s</span>}
+      {c.sets && c.reps && <span>{c.sets}×{c.reps}</span>}
+      {c.gripSize && <span>{c.gripSize}mm</span>}
+      {c.gripType && <span>{c.gripType}</span>}
+      {w && <span style={{ color: "#a78bfa" }}>{w}</span>}
+    </>
+  );
+}
+
 // ── Modal formulaire de bloc ──────────────────────────────────────────────────
 function BlockFormModal({ initial, onSave, onClose }) {
   const { styles, isDark } = useThemeCtx();
@@ -5851,6 +6084,10 @@ function BlockFormModal({ initial, onSave, onClose }) {
   const [calcZone,       setCalcZone]       = useState(3);
   const [calcComplexity, setCalcComplexity] = useState(3);
 
+  // Config Suspension
+  const [suspCfg, setSuspCfg] = useState(() => ({ ...DEFAULT_SUSPENSION_CONFIG, ...(initial?.config ?? {}) }));
+  const patchSusp = (patch) => setSuspCfg(prev => ({ ...prev, ...patch }));
+
   const cfg    = BLOCK_TYPES[blockType] || BLOCK_TYPES["Grimpe"];
   const bg     = isDark ? "#141a16" : "#f3f7f4";
   const surface= isDark ? "#1c2820" : "#ffffff";
@@ -5867,6 +6104,7 @@ function BlockFormModal({ initial, onSave, onClose }) {
       duration: duration ? +duration : null,
       charge: cfg.hasCharge ? +charge : 0,
       description: desc.trim() || "",
+      config: blockType === "Suspension" ? { ...suspCfg } : null,
     });
   };
 
@@ -5919,6 +6157,112 @@ function BlockFormModal({ initial, onSave, onClose }) {
               <input style={inputStyle} type="number" min="1" max="240" value={duration} onChange={e => setDuration(e.target.value)} />
             </div>
           </div>
+
+          {/* ── Config Suspension ── */}
+          {blockType === "Suspension" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, background: isDark ? "#141a16" : "#f3f7f4", borderRadius: 8, padding: "14px 16px", border: `1px solid ${"#a78bfa"}44` }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.12em", textTransform: "uppercase" }}>Paramètres de suspension</div>
+
+              {/* Mode de bras + Type de support */}
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <span style={labelStyle}>Mode de bras</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[["two", "Deux mains"], ["one", "Une main"]].map(([val, lbl]) => (
+                      <button key={val} onClick={() => patchSusp({ armMode: val })}
+                        style={{ flex: 1, padding: "6px 8px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: suspCfg.armMode === val ? 700 : 400, border: `1px solid ${suspCfg.armMode === val ? "#a78bfa" : border}`, background: suspCfg.armMode === val ? "#a78bfa28" : "none", color: suspCfg.armMode === val ? "#a78bfa" : muted }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <span style={labelStyle}>Type de support</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[["wall", "Au mur"], ["floor", "Au sol"]].map(([val, lbl]) => (
+                      <button key={val} onClick={() => patchSusp({ supportType: val })}
+                        style={{ flex: 1, padding: "6px 8px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: suspCfg.supportType === val ? 700 : 400, border: `1px solid ${suspCfg.supportType === val ? "#a78bfa" : border}`, background: suspCfg.supportType === val ? "#a78bfa28" : "none", color: suspCfg.supportType === val ? "#a78bfa" : muted }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 9, color: muted, marginTop: 4 }}>
+                    {suspCfg.supportType === "wall" ? "PDC ± lest (poulie de délestage)" : "Soulèvement de poids via poulie"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Taille de la prise + Type de préhension */}
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <span style={labelStyle}>Taille de la prise (mm)</span>
+                  <input style={inputStyle} type="number" min="5" max="50" step="1" value={suspCfg.gripSize} onChange={e => patchSusp({ gripSize: +e.target.value })} placeholder="20" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <span style={labelStyle}>Type de préhension</span>
+                  <select style={{ ...inputStyle, cursor: "pointer" }} value={suspCfg.gripType} onChange={e => patchSusp({ gripType: e.target.value })}>
+                    {GRIP_TYPES.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Temps suspension + Temps repos */}
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <span style={labelStyle}>Temps de suspension (sec)</span>
+                  <input style={inputStyle} type="number" min="1" max="60" value={suspCfg.hangTime} onChange={e => patchSusp({ hangTime: +e.target.value })} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <span style={labelStyle}>Temps de repos (sec)</span>
+                  <input style={inputStyle} type="number" min="1" max="300" value={suspCfg.restTime} onChange={e => patchSusp({ restTime: +e.target.value })} />
+                </div>
+              </div>
+
+              {/* Séries + Répétitions */}
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <span style={labelStyle}>Séries</span>
+                  <input style={inputStyle} type="number" min="1" max="20" value={suspCfg.sets} onChange={e => patchSusp({ sets: +e.target.value })} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <span style={labelStyle}>Répétitions</span>
+                  <input style={inputStyle} type="number" min="1" max="20" value={suspCfg.reps} onChange={e => patchSusp({ reps: +e.target.value })} />
+                </div>
+              </div>
+
+              {/* Poids ciblé */}
+              <div>
+                <span style={labelStyle}>
+                  Poids ciblé{suspCfg.supportType === "wall" ? (suspCfg.armMode === "one" ? " par bras (kg, − = délestage)" : " (kg, − = délestage)") : (suspCfg.armMode === "one" ? " par bras soulevé (kg)" : " soulevé (kg)")}
+                </span>
+                {suspCfg.armMode === "two" ? (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input style={{ ...inputStyle, width: 80 }} type="number" step="0.5" value={suspCfg.targetWeight} onChange={e => patchSusp({ targetWeight: +e.target.value })} />
+                    <span style={{ fontSize: 11, color: muted }}>kg</span>
+                    {suspCfg.supportType === "wall" && suspCfg.targetWeight < 0 && <span style={{ fontSize: 10, color: "#fbbf24" }}>délestage</span>}
+                    {suspCfg.supportType === "wall" && suspCfg.targetWeight > 0 && <span style={{ fontSize: 10, color: "#a78bfa" }}>lest</span>}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, color: muted, marginBottom: 4 }}>Main gauche</div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input style={{ ...inputStyle, width: 80 }} type="number" step="0.5" value={suspCfg.targetWeightLeft} onChange={e => patchSusp({ targetWeightLeft: +e.target.value })} />
+                        <span style={{ fontSize: 11, color: muted }}>kg</span>
+                      </div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, color: muted, marginBottom: 4 }}>Main droite</div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input style={{ ...inputStyle, width: 80 }} type="number" step="0.5" value={suspCfg.targetWeightRight} onChange={e => patchSusp({ targetWeightRight: +e.target.value })} />
+                        <span style={{ fontSize: 11, color: muted }}>kg</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ── Charge (only for hasCharge types) ── */}
           {cfg.hasCharge && (
@@ -6247,10 +6591,14 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
                       <div key={b.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${cfg.color || "#888"}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</div>
-                          <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10 }}>
+                          <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10, flexWrap: "wrap" }}>
                             {b.duration    && <span>⏱ {b.duration} min</span>}
                             {cfg.hasCharge && b.charge > 0 && <span style={{ color: getChargeColor(b.charge) }}>⚡{b.charge}</span>}
-                            {b.description && <span style={{ maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.description}</span>}
+                            {b.blockType === "Suspension" && b.config ? (
+                              <SuspensionSummaryChips config={b.config} muted={muted} />
+                            ) : b.description ? (
+                              <span style={{ maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.description}</span>
+                            ) : null}
                           </div>
                         </div>
                         <ItemActions id={b.id} onEdit={() => setBlockForm({ initial: b })} onDel={onDeleteBlock} onHistory={() => setFeedbackHistory({ type: "block", id: b.id, name: b.name })} />
