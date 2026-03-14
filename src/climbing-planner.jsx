@@ -2770,16 +2770,23 @@ function FeedbackHistoryModal({ type, id, name, onClose }) {
 
 // ─── MODAL: SESSION UNIFIÉE (Séance + Ressenti) ───────────────────────────────
 
-function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) {
+function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, dbBlocks }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const [tab, setTab] = useState("session");
 
   // Quand un bloc est ajouté directement depuis CoachPickerModal (isBlock: true),
   // il est stocké comme objet brut sans tableau blocks[].
   // On synthétise un tableau pour que le rendu soit uniforme.
-  const effectiveBlocks = session.isBlock && !session.blocks?.length
-    ? [{ id: session.id, blockType: session.blockType, name: session.name, duration: session.duration, charge: session.charge, description: session.description, config: session.config ?? null }]
-    : (session.blocks ?? []);
+  // Si bl.config est null (bloc ajouté avant migration), on cherche dans dbBlocks.
+  const enrichConfig = (bl) => ({
+    ...bl,
+    config: bl.config ?? dbBlocks?.find(b => b.id === bl.id)?.config ?? null,
+  });
+  const effectiveBlocks = (
+    session.isBlock && !session.blocks?.length
+      ? [{ id: session.id, blockType: session.blockType, name: session.name, duration: session.duration, charge: session.charge, description: session.description, config: session.config ?? null }]
+      : (session.blocks ?? [])
+  ).map(enrichConfig);
 
   const hasBlocks   = effectiveBlocks.length > 0;
   const hasWarmup   = !!session.warmup?.trim();
@@ -2905,15 +2912,16 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
                                 ⚡ {bl.charge}
                               </span>
                             )}
-                            {bl.blockType === "Suspension" && bl.config && (
-                              <SuspensionSummaryChips config={bl.config} muted={isDark ? "#7a9a80" : "#5a7a60"} />
-                            )}
                           </div>
                         </div>
                         <div style={{ width: 28, height: 28, borderRadius: "50%", background: color + "22", border: `2px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 12, color, fontWeight: 700 }}>
                           {i + 1}
                         </div>
                       </div>
+                      {/* Carte paramètres Suspension */}
+                      {bl.blockType === "Suspension" && (
+                        <SuspensionInfoCard config={bl.config} isDark={isDark} />
+                      )}
                       {/* Description */}
                       {bl.description?.trim() && (
                         <div style={{ padding: "0 14px 12px", borderTop: `1px solid ${isDark ? "#222c24" : "#e0ead8"}` }}>
@@ -3019,71 +3027,69 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave }) 
                               return [...without, { blockId: bl.id, blockName: bl.name, blockType: bl.blockType, text: existing?.text || "", suspensionData: { ...prev_sd, ...patch } }];
                             });
                           };
+                          const wInputStyle = { background: isDark ? "#141a16" : "#fff", border: `1px solid ${isDark ? "#3a4a3e" : "#c8d8c0"}`, borderRadius: 6, padding: "8px 10px", color: isDark ? "#d8e8d0" : "#1a2e1f", fontSize: 16, fontWeight: 700, textAlign: "center", width: "100%", boxSizing: "border-box", fontFamily: "inherit", outline: "none" };
+                          const wLabelStyle = { fontSize: 10, fontWeight: 700, color: isDark ? "#6a8870" : "#7a8870", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4, display: "block" };
                           return (
                             <div key={i} style={{ borderLeft: `3px solid ${color}66`, paddingLeft: 10 }}>
-                              <div style={{ fontSize: 11, fontWeight: 600, color, marginBottom: 5 }}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color, marginBottom: 8 }}>
                                 <span style={{ opacity: 0.7, fontWeight: 400, fontSize: 10, marginRight: 5 }}>{bl.blockType}</span>{bl.name}
                               </div>
                               {/* Suspension : saisie structurée du poids réel */}
                               {isSusp && (
-                                <div style={{ marginBottom: 8, background: isDark ? "#1a1f1b" : "#f0ede8", borderRadius: 6, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-                                  <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.08em", textTransform: "uppercase" }}>Poids réel utilisé</div>
-                                  {/* Cible coach pour référence */}
-                                  {bl.config && (
-                                    <div style={{ fontSize: 10, color: isDark ? "#6a8870" : "#8a7f70" }}>
+                                <div style={{ marginBottom: 10, background: isDark ? "#181c20" : "#f4f0ff", borderRadius: 8, padding: "12px 14px", border: `1px solid ${isDark ? "#2e2848" : "#d0c4f4"}`, display: "flex", flexDirection: "column", gap: 10 }}>
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.1em", textTransform: "uppercase" }}>Poids réel utilisé</span>
+                                    {/* Cible coach */}
+                                    <span style={{ fontSize: 10, color: isDark ? "#7070a0" : "#9080c0" }}>
                                       Cible : {suspCfgRef.armMode === "one"
-                                        ? `G ${suspCfgRef.targetWeightLeft >= 0 ? "+" : ""}${suspCfgRef.targetWeightLeft}kg / D ${suspCfgRef.targetWeightRight >= 0 ? "+" : ""}${suspCfgRef.targetWeightRight}kg`
-                                        : `${suspCfgRef.targetWeight >= 0 ? "+" : ""}${suspCfgRef.targetWeight}kg`}
-                                      {" "}· {suspCfgRef.gripType} {suspCfgRef.gripSize}mm · {suspCfgRef.hangTime}s/{suspCfgRef.restTime}s · {suspCfgRef.sets}×{suspCfgRef.reps}
-                                    </div>
-                                  )}
+                                        ? `G ${suspCfgRef.targetWeightLeft >= 0 ? "+" : ""}${suspCfgRef.targetWeightLeft} / D ${suspCfgRef.targetWeightRight >= 0 ? "+" : ""}${suspCfgRef.targetWeightRight} kg`
+                                        : `${suspCfgRef.targetWeight >= 0 ? "+" : ""}${suspCfgRef.targetWeight} kg`}
+                                    </span>
+                                  </div>
                                   {suspCfgRef.armMode === "two" ? (
-                                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                      <input
-                                        type="number" step="0.5"
-                                        style={{ ...styles.textarea, width: 80, minHeight: 0, padding: "5px 8px", fontSize: 13, textAlign: "center" }}
-                                        placeholder={String(suspCfgRef.targetWeight ?? 0)}
-                                        value={suspData.actualWeight ?? ""}
-                                        onChange={e => patchSuspData({ actualWeight: e.target.value === "" ? null : +e.target.value })}
-                                      />
-                                      <span style={{ fontSize: 11, color: isDark ? "#6a8870" : "#8a7f70" }}>
-                                        kg {suspCfgRef.supportType === "wall" ? (suspData.actualWeight < 0 ? "délestage" : "lest") : "soulevé"}
+                                    <div>
+                                      <span style={wLabelStyle}>
+                                        {suspCfgRef.supportType === "wall" ? "Lest (kg, négatif = délestage)" : "Poids soulevé (kg)"}
                                       </span>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <input
+                                          type="number" step="0.5"
+                                          style={wInputStyle}
+                                          placeholder={String(suspCfgRef.targetWeight ?? 0)}
+                                          value={suspData.actualWeight ?? ""}
+                                          onChange={e => patchSuspData({ actualWeight: e.target.value === "" ? null : +e.target.value })}
+                                        />
+                                        <span style={{ fontSize: 12, color: isDark ? "#6a8870" : "#7a8870", whiteSpace: "nowrap" }}>kg</span>
+                                      </div>
                                     </div>
                                   ) : (
-                                    <div style={{ display: "flex", gap: 14 }}>
-                                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                        <div style={{ fontSize: 10, color: isDark ? "#6a8870" : "#8a7f70" }}>Main gauche</div>
-                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                                          <input
-                                            type="number" step="0.5"
-                                            style={{ ...styles.textarea, width: 72, minHeight: 0, padding: "5px 8px", fontSize: 13, textAlign: "center" }}
-                                            placeholder={String(suspCfgRef.targetWeightLeft ?? 0)}
-                                            value={suspData.actualWeightLeft ?? ""}
-                                            onChange={e => patchSuspData({ actualWeightLeft: e.target.value === "" ? null : +e.target.value })}
-                                          />
-                                          <span style={{ fontSize: 11, color: isDark ? "#6a8870" : "#8a7f70" }}>kg</span>
-                                        </div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                                      <div>
+                                        <span style={wLabelStyle}>Main gauche (kg)</span>
+                                        <input
+                                          type="number" step="0.5"
+                                          style={wInputStyle}
+                                          placeholder={String(suspCfgRef.targetWeightLeft ?? 0)}
+                                          value={suspData.actualWeightLeft ?? ""}
+                                          onChange={e => patchSuspData({ actualWeightLeft: e.target.value === "" ? null : +e.target.value })}
+                                        />
                                       </div>
-                                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                        <div style={{ fontSize: 10, color: isDark ? "#6a8870" : "#8a7f70" }}>Main droite</div>
-                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                                          <input
-                                            type="number" step="0.5"
-                                            style={{ ...styles.textarea, width: 72, minHeight: 0, padding: "5px 8px", fontSize: 13, textAlign: "center" }}
-                                            placeholder={String(suspCfgRef.targetWeightRight ?? 0)}
-                                            value={suspData.actualWeightRight ?? ""}
-                                            onChange={e => patchSuspData({ actualWeightRight: e.target.value === "" ? null : +e.target.value })}
-                                          />
-                                          <span style={{ fontSize: 11, color: isDark ? "#6a8870" : "#8a7f70" }}>kg</span>
-                                        </div>
+                                      <div>
+                                        <span style={wLabelStyle}>Main droite (kg)</span>
+                                        <input
+                                          type="number" step="0.5"
+                                          style={wInputStyle}
+                                          placeholder={String(suspCfgRef.targetWeightRight ?? 0)}
+                                          value={suspData.actualWeightRight ?? ""}
+                                          onChange={e => patchSuspData({ actualWeightRight: e.target.value === "" ? null : +e.target.value })}
+                                        />
                                       </div>
                                     </div>
                                   )}
                                 </div>
                               )}
                               <textarea
-                                style={{ ...styles.textarea, minHeight: 48, fontSize: 12 }}
+                                style={{ ...styles.textarea, minHeight: isSusp ? 56 : 48, fontSize: 12, resize: "vertical" }}
                                 placeholder="Adaptation, ressenti spécifique… (laisser vide si rien à dire)"
                                 value={existing?.text || ""}
                                 onChange={e => {
@@ -6068,6 +6074,35 @@ function SessionComposerModal({ initial, availableBlocks, onSave, onClose }) {
 
 // ─── COACH : BIBLIOTHÈQUE DE SÉANCES ─────────────────────────────────────────
 
+// ── Carte info complète Suspension (onglet Séance) ────────────────────────────
+function SuspensionInfoCard({ config, isDark }) {
+  const c = config ?? DEFAULT_SUSPENSION_CONFIG;
+  const text  = isDark ? "#d0dcc8" : "#2a3828";
+  const muted = isDark ? "#7a9a80" : "#6a7a62";
+  const bg    = isDark ? "#181c20" : "#f4f0ff";
+  const bdr   = isDark ? "#2e2848" : "#d0c4f4";
+  const weightStr = c.armMode === "one"
+    ? `G: ${c.targetWeightLeft >= 0 ? "+" : ""}${c.targetWeightLeft} kg  /  D: ${c.targetWeightRight >= 0 ? "+" : ""}${c.targetWeightRight} kg`
+    : `${c.targetWeight >= 0 ? "+" : ""}${c.targetWeight} kg`;
+  return (
+    <div style={{ margin: "0 0 0 0", padding: "10px 14px", background: bg, borderTop: `1px solid ${bdr}`, display: "flex", flexDirection: "column", gap: 5 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", fontSize: 11, color: text }}>
+        <span style={{ color: "#a78bfa", fontWeight: 700 }}>
+          {c.armMode === "one" ? "Une main" : "Deux mains"}
+        </span>
+        <span style={{ color: muted }}>
+          {c.supportType === "wall" ? "Au mur (PDC ± lest)" : "Au sol (poulie)"}
+        </span>
+        <span>{c.gripSize} mm · {c.gripType}</span>
+        <span>{c.hangTime} s ↓ · {c.restTime} s pause · {c.sets} × {c.reps}</span>
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#a78bfa" }}>
+        Cible : {weightStr}
+      </div>
+    </div>
+  );
+}
+
 // ── Résumé visuel config Suspension (chips) ───────────────────────────────────
 function SuspensionSummaryChips({ config, muted }) {
   if (!config) return null;
@@ -7471,6 +7506,7 @@ export default function ClimbingPlanner() {
         return (
           <SessionModal
             session={smSession}
+            dbBlocks={dbBlocks}
             dayLabel={smDayLabel}
             weekMeta={smWeekMeta}
             onClose={() => setSessionModal(null)}
