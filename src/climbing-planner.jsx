@@ -1033,10 +1033,13 @@ function useSupabaseSync() {
       row = full;
     } else {
       // Columns likely not yet added — fall back to JSONB only
-      const { data: slim } = await supabase
+      const { data: slim, error: slimErr } = await supabase
         .from("climbing_plans")
         .select("data")
         .maybeSingle();
+      // If both queries fail (e.g. JWT expired / not yet refreshed on rapid reload),
+      // throw so the caller can skip setCloudLoaded and retry on next session change.
+      if (slimErr) throw slimErr;
       row = slim;
     }
     if (!row) return null;
@@ -6897,18 +6900,26 @@ export default function ClimbingPlanner() {
   // Phase 2 : cloud au premier login (données complètes)
   useEffect(() => {
     if (!session || cloudLoaded) return;
-    loadFromCloud().then(cloudData => {
-      setCloudLoaded(true);
-      if (cloudData) {
-        // Cloud is always authoritative — simple and no edge cases.
-        const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
-        setData(cleanData);
-        saveData(cleanData);
-      } else {
-        // Cloud empty → push local data up immediately
-        uploadNow(data, session.user.id);
-      }
-    });
+    loadFromCloud()
+      .then(cloudData => {
+        // Only mark as loaded on success (null = genuinely no row for this user).
+        // On error we do NOT set cloudLoaded so the effect retries automatically
+        // when session changes (e.g. after TOKEN_REFRESHED fires and fixes the JWT).
+        setCloudLoaded(true);
+        if (cloudData) {
+          // Cloud is always authoritative.
+          const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
+          setData(cleanData);
+          saveData(cleanData);
+        } else {
+          // Cloud has no row yet → new user, push local data up.
+          uploadNow(data, session.user.id);
+        }
+      })
+      .catch(() => {
+        // Query failed (JWT expired / not yet refreshed on rapid page reload).
+        // Skip setCloudLoaded — the effect will retry when session updates.
+      });
   }, [session, cloudLoaded, loadFromCloud, uploadNow]);
 
   // Phase 2b : re-lire le status depuis la DB à chaque changement de session
