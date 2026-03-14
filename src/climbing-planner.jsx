@@ -5527,6 +5527,86 @@ function Dashboard({ data, onUpdateSleep }) {
 
   const chartData = getChartData(data, range, statsRefDate);
 
+  // Weight chart data filtered by current range/period
+  const weightChartData = (() => {
+    const entries = Object.entries(data.weight || {})
+      .filter(([, v]) => v != null)
+      .sort(([a], [b]) => a.localeCompare(b));
+    if (range === "jour") {
+      const monday = getMondayOf(statsRefDate);
+      const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = addDays(monday, i);
+        const dateStr = d.toISOString().slice(0, 10);
+        const match = entries.find(([date]) => date === dateStr);
+        return match ? { label: dayNames[i], kg: match[1] } : null;
+      }).filter(Boolean);
+    }
+    if (range === "an") {
+      const byMonth = {};
+      entries.forEach(([date, kg]) => {
+        const d = new Date(date + "T12:00:00");
+        const k = `${d.getFullYear()}-${d.getMonth()}`;
+        if (!byMonth[k]) byMonth[k] = { vals: [], year: d.getFullYear(), month: d.getMonth() };
+        byMonth[k].vals.push(kg);
+      });
+      return Object.values(byMonth)
+        .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
+        .slice(-12)
+        .map(({ vals, year, month }) => ({
+          label: new Date(year, month, 1).toLocaleDateString("fr-FR", { month: "short" }),
+          kg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10,
+        }));
+    }
+    const nWeeks = range === "mois" ? 13 : 8;
+    const endMonday = getMondayOf(statsRefDate);
+    const start = getMondayOf(addDays(endMonday, -(7 * (nWeeks - 1)))).toISOString().slice(0, 10);
+    const end = addDays(endMonday, 6).toISOString().slice(0, 10);
+    return entries.filter(([d]) => d >= start && d <= end).map(([date, kg]) => ({
+      label: new Date(date + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "numeric" }),
+      kg,
+    }));
+  })();
+
+  // Hooper chart data filtered by current range/period
+  const hooperChartData = (() => {
+    const sorted = [...(data.hooper || [])].sort((a, b) => a.date.localeCompare(b.date));
+    if (range === "jour") {
+      const monday = getMondayOf(statsRefDate);
+      const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = addDays(monday, i);
+        const dateStr = d.toISOString().slice(0, 10);
+        const match = sorted.find(h => h.date === dateStr);
+        return match ? { label: dayNames[i], total: match.total } : null;
+      }).filter(Boolean);
+    }
+    if (range === "an") {
+      const byMonth = {};
+      sorted.forEach(h => {
+        const d = new Date(h.date + "T12:00:00");
+        const k = `${d.getFullYear()}-${d.getMonth()}`;
+        if (!byMonth[k]) byMonth[k] = { vals: [], year: d.getFullYear(), month: d.getMonth() };
+        byMonth[k].vals.push(h.total);
+      });
+      return Object.values(byMonth)
+        .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
+        .slice(-12)
+        .map(({ vals, year, month }) => ({
+          label: new Date(year, month, 1).toLocaleDateString("fr-FR", { month: "short" }),
+          total: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
+        }));
+    }
+    const nWeeks = range === "mois" ? 13 : 8;
+    const endMonday = getMondayOf(statsRefDate);
+    const start = getMondayOf(addDays(endMonday, -(7 * (nWeeks - 1)))).toISOString().slice(0, 10);
+    const end = addDays(endMonday, 6).toISOString().slice(0, 10);
+    return sorted.filter(h => h.date >= start && h.date <= end).map(h => ({
+      label: h.date.slice(5).replace("-", "/"),
+      total: h.total,
+    }));
+  })();
+
   const totalCharge4w = getChartData(data, "sem").slice(4).reduce((s, w) => s + w.charge, 0);
   const rpeVals = chartData.filter(w => w.avgRpe != null).map(w => w.avgRpe);
   const globalAvgRpe = rpeVals.length
@@ -5612,6 +5692,43 @@ function Dashboard({ data, onUpdateSleep }) {
       </div>
 
       <SleepSection sleepData={data.sleep || []} onImport={onUpdateSleep} range={range} />
+
+      {weightChartData.length >= 2 && (
+        <div style={styles.dashSection}>
+          <div style={styles.dashSectionTitle}>Poids — {rangeLabel}</div>
+          <ResponsiveContainer width="100%" height={160}>
+            <LineChart data={weightChartData} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
+                interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
+              <YAxis domain={["auto", "auto"]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={tooltipStyle} formatter={v => [`${v} kg`, "Poids"]} />
+              <Line type="monotone" dataKey="kg" name="Poids" stroke={isDark ? "#60a5fa" : "#2563eb"}
+                strokeWidth={2} dot={{ r: 3, fill: isDark ? "#60a5fa" : "#2563eb" }} connectNulls />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {hooperChartData.length > 0 && (
+        <div style={styles.dashSection}>
+          <div style={styles.dashSectionTitle}>Indice Hooper — {rangeLabel}</div>
+          <ResponsiveContainer width="100%" height={160}>
+            <LineChart data={hooperChartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
+                interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
+              <YAxis domain={[4, 28]} ticks={[4, 10, 14, 17, 20, 28]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={tooltipStyle} formatter={v => [v, "Hooper"]} />
+              <ReferenceLine y={14} stroke={isDark ? "#4ade8033" : "#2a7d4f33"} strokeDasharray="4 4" />
+              <ReferenceLine y={17} stroke="#f9731633" strokeDasharray="4 4" />
+              <ReferenceLine y={20} stroke="#f8717133" strokeDasharray="4 4" />
+              <Line type="monotone" dataKey="total" name="Hooper" stroke={isDark ? "#4ade80" : "#2a7d4f"}
+                strokeWidth={2} dot={{ r: 3, fill: isDark ? "#4ade80" : "#2a7d4f" }} connectNulls />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }
