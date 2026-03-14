@@ -947,7 +947,12 @@ function useSupabaseSync() {
   const [session, setSession] = useState(null);
   const [authChecked, setAuthChecked] = useState(!supabase); // true immediately if no Supabase
   const [syncStatus, setSyncStatus] = useState("idle"); // "idle"|"saving"|"saved"|"offline"
-  const saveTimerRef = useRef(null);
+  const saveTimerRef   = useRef(null);
+  const pendingSaveRef = useRef(null); // { planData, userId } — flushed via keepalive on pagehide
+  const sessionRef     = useRef(null); // always-fresh session token for the pagehide handler
+
+  // Keep sessionRef current without re-registering the pagehide listener on every token refresh.
+  useEffect(() => { sessionRef.current = session; }, [session]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -971,6 +976,40 @@ function useSupabaseSync() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // On page hide (refresh / navigation), flush any pending debounced save via a keepalive fetch.
+  // Unlike a normal Supabase call, fetch({ keepalive: true }) is guaranteed to complete even
+  // when the page is being unloaded — this is the browser's intended API for this exact case.
+  useEffect(() => {
+    if (!supabase) return;
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const handlePageHide = () => {
+      const pending = pendingSaveRef.current;
+      const token   = sessionRef.current?.access_token;
+      if (!pending || !token) return;
+      const row = {
+        user_id:    pending.userId,
+        data:       pending.planData,
+        first_name: pending.planData?.profile?.firstName ?? null,
+        last_name:  pending.planData?.profile?.lastName  ?? null,
+        updated_at: new Date().toISOString(),
+      };
+      fetch(`${url}/rest/v1/climbing_plans`, {
+        method:    "POST",
+        keepalive: true,
+        headers: {
+          "Content-Type":  "application/json",
+          "apikey":        key,
+          "Authorization": `Bearer ${token}`,
+          "Prefer":        "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify(row),
+      });
+    };
+    window.addEventListener("pagehide", handlePageHide);
+    return () => window.removeEventListener("pagehide", handlePageHide);
+  }, []); // refs only — no deps needed
 
   // Build the flat columns synced alongside the JSONB blob.
   // status is NOT included — it is admin-only (set once at onboarding or via DB).
@@ -1024,11 +1063,13 @@ function useSupabaseSync() {
     if (!supabase || !userId) return;
     clearTimeout(saveTimerRef.current);
     setSyncStatus("saving");
+    pendingSaveRef.current = { planData, userId }; // pagehide will flush this if debounce is cancelled
     saveTimerRef.current = setTimeout(async () => {
       try {
         const { error } = await supabase
           .from("climbing_plans")
           .upsert(buildRow(planData, userId), { onConflict: "user_id" });
+        if (!error) pendingSaveRef.current = null; // debounce completed — nothing left to flush
         setSyncStatus(error ? "offline" : "saved");
         setTimeout(() => setSyncStatus("idle"), 2000);
       } catch {
