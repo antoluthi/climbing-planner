@@ -312,24 +312,7 @@ function parseGarminSleepCSV(text) {
 function saveData(data) {
   // Never persist role — always authoritative from Supabase status column
   const { role: _role, ...profileWithoutRole } = data.profile ?? {};
-  localStorage.setItem("climbing_planner_v1", JSON.stringify({
-    ...data,
-    profile: profileWithoutRole,
-    _pendingSync: true, // cleared by markSynced() after successful cloud upsert
-  }));
-}
-
-// Called after a successful Supabase upsert to mark local data as in sync.
-function markSynced() {
-  try {
-    const raw = localStorage.getItem("climbing_planner_v1");
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (parsed._pendingSync) {
-      parsed._pendingSync = false;
-      localStorage.setItem("climbing_planner_v1", JSON.stringify(parsed));
-    }
-  } catch {}
+  localStorage.setItem("climbing_planner_v1", JSON.stringify({ ...data, profile: profileWithoutRole }));
 }
 
 // ─── HELPERS ACCÈS PAR DATE ───────────────────────────────────────────────────
@@ -1046,13 +1029,12 @@ function useSupabaseSync() {
         const { error } = await supabase
           .from("climbing_plans")
           .upsert(buildRow(planData, userId), { onConflict: "user_id" });
-        if (!error) markSynced();
         setSyncStatus(error ? "offline" : "saved");
         setTimeout(() => setSyncStatus("idle"), 2000);
       } catch {
         setSyncStatus("offline");
       }
-    }, 1500);
+    }, 500);
   }, [buildRow]);
 
   // Immediate upload (no debounce) — used for force-sync & first-login push
@@ -1063,7 +1045,6 @@ function useSupabaseSync() {
       const { error } = await supabase
         .from("climbing_plans")
         .upsert(buildRow(planData, userId), { onConflict: "user_id" });
-      if (!error) markSynced();
       setSyncStatus(error ? "offline" : "saved");
       setTimeout(() => setSyncStatus("idle"), 2500);
     } catch {
@@ -6862,7 +6843,6 @@ export default function ClimbingPlanner() {
   // ── Vue athlète (coach regarde les données d'un athlète) ──
   const coachDataRef   = useRef(null); // sauvegarde des données du coach pendant la vue athlète
   const [viewingAthlete, setViewingAthlete] = useState(null); // null | { userId, firstName, lastName }
-  const isFirstRender = useRef(true); // évite l'auto-save au premier render (corrige race condition _savedAt)
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -6879,19 +6859,10 @@ export default function ClimbingPlanner() {
     loadFromCloud().then(cloudData => {
       setCloudLoaded(true);
       if (cloudData) {
-        // _pendingSync = true means the debounced cloud save was interrupted (e.g. rapid Ctrl+R).
-        // In that case local has unsaved changes → upload local instead of loading from cloud.
-        const localRaw = localStorage.getItem("climbing_planner_v1");
-        const pendingSync = localRaw ? (() => { try { return JSON.parse(localRaw)._pendingSync ?? false; } catch { return false; } })() : false;
-        if (pendingSync) {
-          // Local has unsaved changes — push them up without overwriting local
-          uploadNow(data, session.user.id);
-        } else {
-          // Cloud is authoritative (normal case)
-          const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
-          setData(cleanData);
-          saveData(cleanData);
-        }
+        // Cloud is always authoritative — simple and no edge cases.
+        const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
+        setData(cleanData);
+        saveData(cleanData);
       } else {
         // Cloud empty → push local data up immediately
         uploadNow(data, session.user.id);
@@ -6946,9 +6917,6 @@ export default function ClimbingPlanner() {
   };
 
   useEffect(() => {
-    // Ignorer le premier render : évite d'écraser _savedAt avec "now" avant que le cloud load
-    // ait pu comparer les timestamps (ce qui ferait croire que le localStorage est plus récent).
-    if (isFirstRender.current) { isFirstRender.current = false; return; }
     if (viewingAthlete) {
       // Vue athlète : sauvegarde sur la ligne Supabase de l'athlète, jamais en localStorage
       saveToCloud(data, viewingAthlete.userId);
