@@ -6847,6 +6847,7 @@ export default function ClimbingPlanner() {
   // ── Vue athlète (coach regarde les données d'un athlète) ──
   const coachDataRef   = useRef(null); // sauvegarde des données du coach pendant la vue athlète
   const [viewingAthlete, setViewingAthlete] = useState(null); // null | { userId, firstName, lastName }
+  const isFirstRender = useRef(true); // évite l'auto-save au premier render (corrige race condition _savedAt)
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -6932,6 +6933,9 @@ export default function ClimbingPlanner() {
   };
 
   useEffect(() => {
+    // Ignorer le premier render : évite d'écraser _savedAt avec "now" avant que le cloud load
+    // ait pu comparer les timestamps (ce qui ferait croire que le localStorage est plus récent).
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
     if (viewingAthlete) {
       // Vue athlète : sauvegarde sur la ligne Supabase de l'athlète, jamais en localStorage
       saveToCloud(data, viewingAthlete.userId);
