@@ -1992,9 +1992,9 @@ const BLOCK_TYPES = {
   "Échauffement":    { color: "#f97316", defaultCharge: 5,  defaultDuration: 15, hasCharge: false },
   "Grimpe":          { color: "#4ade80", defaultCharge: 24, defaultDuration: 90, hasCharge: true  },
   "Exercices":       { color: "#60a5fa", defaultCharge: 12, defaultDuration: 20, hasCharge: true  },
-  "Suspension":      { color: "#a78bfa", defaultCharge: 0,  defaultDuration: 15, hasCharge: false },
+  "Suspension":      { color: "#a78bfa", defaultCharge: 0,  defaultDuration: 15, hasCharge: true  },
   "Étirements":      { color: "#f0abfc", defaultCharge: 2,  defaultDuration: 10, hasCharge: false },
-  "Retour au calme": { color: "#94a3b8", defaultCharge: 3,  defaultDuration: 10, hasCharge: false },
+  "Retour au calme": { color: "#94a3b8", defaultCharge: 3,  defaultDuration: 10, hasCharge: true  },
 };
 
 const GRIP_TYPES = ["Semi-arquée", "Arquée", "Tendu", "Pincée", "Monoigt", "2 doigts", "3 doigts"];
