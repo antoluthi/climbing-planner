@@ -7270,6 +7270,19 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
   );
 }
 
+// ─── GREETING BY TIME OF DAY ──────────────────────────────────────────────────
+
+function getGreeting(hour, firstName) {
+  const h = hour ?? new Date().getHours();
+  const n = firstName ? `, ${firstName}` : "";
+  if (h >= 0  && h <  5)  return `Il est tard${n}`;
+  if (h >= 5  && h <  7)  return `C'est tôt ce matin${n}`;
+  if (h >= 7  && h < 12)  return `Bonjour${n}`;
+  if (h >= 12 && h < 18)  return `Bon après-midi${n}`;
+  if (h >= 18 && h < 21)  return `Bonsoir${n}`;
+  return `Il se fait tard${n}`;
+}
+
 // ─── CONTEXTUAL GREETING PHRASE ───────────────────────────────────────────────
 
 function getContextualPhrase(todaySessions, hooperEntry, dayOfWeek, { hour, weekSessions, dayIndex, mesoCtx } = {}) {
@@ -7574,7 +7587,7 @@ function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHoo
       {/* Greeting */}
       <div>
         <div style={{ fontSize: isMobile ? 36 : 52, fontWeight: 600, color: textMain, letterSpacing: "0.01em", lineHeight: 1.1, fontFamily: "'Newsreader', Georgia, serif" }}>
-          Bonjour{firstName ? `, ${firstName}` : ""}
+          {getGreeting(new Date().getHours(), firstName)}
         </div>
         <div style={{ fontSize: 13, color: textMuted, marginTop: 5, textTransform: "capitalize" }}>
           {dateFull}
