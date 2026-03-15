@@ -7772,6 +7772,175 @@ function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHoo
   );
 }
 
+// ─── PUBLIC PLAN VIEW ─────────────────────────────────────────────────────────
+
+const ANTO_USER_ID = "80f1690e-6fd2-45fa-9b02-c7b6edf1f112";
+const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+function PublicWeekView({ data, currentDate }) {
+  const { styles, isDark } = useThemeCtx();
+  const monday = getMondayOf(currentDate);
+  const today = new Date();
+
+  return (
+    <div style={{ display: "flex", gap: 8, padding: "16px", overflowX: "auto", alignItems: "flex-start" }}>
+      {DAYS_SHORT.map((dayLabel, di) => {
+        const date = addDays(monday, di);
+        const sessions = getDaySessions(data, date);
+        const isToday = date.toDateString() === today.toDateString();
+        const accent = isDark ? "#4ade80" : "#16a34a";
+
+        return (
+          <div key={di} style={{
+            flex: 1, minWidth: 110,
+            background: isDark ? "#1f2421" : "#e8e2d8",
+            borderRadius: 10, padding: "10px 8px",
+            border: isToday ? `2px solid ${accent}` : `1px solid ${isDark ? "#252b27" : "#ccc6b8"}`,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "#9aaa9a" : "#7a7060", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              {dayLabel}
+            </div>
+            <div style={{ fontSize: 11, color: isDark ? "#555a55" : "#aaa89e", marginBottom: 8 }}>
+              {formatDate(date)}
+            </div>
+            {sessions.length === 0
+              ? <div style={{ fontSize: 10, color: isDark ? "#2e332e" : "#ccc8be" }}>—</div>
+              : sessions.map((s, si) => (
+                <div key={si} style={{
+                  background: isDark ? "#161a17" : "#f2ece0",
+                  borderRadius: 6, padding: "7px 8px", marginBottom: 5,
+                  borderLeft: `3px solid ${getChargeColor(s.charge)}`,
+                }}>
+                  {s.startTime && (
+                    <div style={{ fontSize: 9, color: isDark ? "#5a7860" : "#7a9a80", fontWeight: 600, marginBottom: 2 }}>
+                      {s.startTime}{s.endTime ? ` – ${s.endTime}` : ""}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: isDark ? "#d0ccc6" : "#2a2218", lineHeight: 1.3 }}>
+                    {s.title || s.name}
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PublicPlanView({ onBack }) {
+  const [planData, setPlanData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [viewMode, setViewMode] = useState("week");
+
+  const isDark = localStorage.getItem("climbing_theme") !== "light";
+  const styles = makeStyles(isDark);
+  const accent = isDark ? "#4ade80" : "#16a34a";
+  const mesocycles = planData?.mesocycles || [];
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    supabase
+      .from("climbing_plans")
+      .select("data")
+      .eq("user_id", ANTO_USER_ID)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) setPlanData(data.data);
+        setLoading(false);
+      });
+  }, []);
+
+  const handlePrev = () => {
+    if (viewMode === "week") setCurrentDate(d => addDays(d, -7));
+    else if (viewMode === "month") setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+    else setCurrentDate(d => new Date(d.getFullYear() - 1, d.getMonth(), 1));
+  };
+  const handleNext = () => {
+    if (viewMode === "week") setCurrentDate(d => addDays(d, 7));
+    else if (viewMode === "month") setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+    else setCurrentDate(d => new Date(d.getFullYear() + 1, d.getMonth(), 1));
+  };
+
+  const periodLabel = viewMode === "week"
+    ? (() => { const m = getMondayOf(currentDate); return `${formatDate(m)} – ${formatDate(addDays(m, 6))}`; })()
+    : viewMode === "month"
+    ? currentDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+    : String(currentDate.getFullYear());
+
+  const tabBtn = (mode, label) => (
+    <button
+      onClick={() => setViewMode(mode)}
+      style={{
+        background: viewMode === mode ? accent : "none",
+        border: `1px solid ${viewMode === mode ? accent : isDark ? "#2e342e" : "#ccc6b8"}`,
+        color: viewMode === mode ? (isDark ? "#0f1a0f" : "#fff") : isDark ? "#9aaa9a" : "#6a6258",
+        borderRadius: 6, padding: "5px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <ThemeContext.Provider value={{ styles, isDark, toggleTheme: () => {}, mesocycles }}>
+      <div style={{ ...styles.app, overflowY: "auto", minHeight: "100vh" }}>
+        {/* Header */}
+        <div style={{ ...styles.header, justifyContent: "flex-start", gap: 16 }}>
+          <button
+            onClick={onBack}
+            style={{ background: "none", border: `1px solid ${isDark ? "#2e342e" : "#ccc6b8"}`, borderRadius: 8, padding: "6px 14px", color: isDark ? "#9aaa9a" : "#6a6258", cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}
+          >
+            ← Retour
+          </button>
+          <div>
+            <div style={styles.appTitle}>PLANNING D'ANTO</div>
+            <div style={styles.appSub}>Lecture seule · Séances & horaires</div>
+          </div>
+        </div>
+
+        {/* Nav bar */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: `1px solid ${isDark ? "#252b27" : "#d8d3ca"}`, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            {tabBtn("week", "Semaine")}
+            {tabBtn("month", "Mois")}
+            {tabBtn("year", "Année")}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
+            <button style={styles.navBtn} onClick={handlePrev}>←</button>
+            <span style={{ ...styles.weekRange, minWidth: 160, textAlign: "center" }}>{periodLabel}</span>
+            <button style={styles.navBtn} onClick={handleNext}>→</button>
+          </div>
+        </div>
+
+        {/* Content */}
+        {loading ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: 60, color: accent, fontSize: 24 }}>…</div>
+        ) : !planData ? (
+          <div style={{ padding: 40, textAlign: "center", color: isDark ? "#555" : "#aaa" }}>Planning non disponible.</div>
+        ) : viewMode === "week" ? (
+          <PublicWeekView data={planData} currentDate={currentDate} />
+        ) : viewMode === "month" ? (
+          <MonthView
+            data={planData} currentDate={currentDate}
+            onSelectWeek={m => { setCurrentDate(m); setViewMode("week"); }}
+            isMobile={false} mesocycles={mesocycles}
+            onSessionClick={null} creatine={{}} customCycles={[]}
+          />
+        ) : (
+          <YearView
+            data={planData} currentDate={currentDate}
+            onSelectMonth={m => { setCurrentDate(new Date(currentDate.getFullYear(), m, 1)); setViewMode("month"); }}
+            isMobile={false} creatine={{}} customCycles={[]}
+          />
+        )}
+      </div>
+    </ThemeContext.Provider>
+  );
+}
+
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
 
 export default function ClimbingPlanner() {
@@ -7789,6 +7958,7 @@ export default function ClimbingPlanner() {
   const [sessionModal, setSessionModal] = useState(null); // null | { weekKey, dayIndex, sessionIndex }
   const [isDark, setIsDark] = useState(() => localStorage.getItem("climbing_theme") !== "light");
   const [logDate, setLogDate] = useState(null); // ISO string of day log modal
+  const [showPublicPlan, setShowPublicPlan] = useState(false);
 
   const styles = makeStyles(isDark);
   const toggleTheme = () => setIsDark(d => {
@@ -8364,6 +8534,9 @@ export default function ClimbingPlanner() {
       </div>
     );
   }
+  if (showPublicPlan) {
+    return <PublicPlanView onBack={() => setShowPublicPlan(false)} />;
+  }
   if (supabase && !session) {
     return (
       <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: [] }}>
@@ -8372,6 +8545,19 @@ export default function ClimbingPlanner() {
           <div style={{ background: isDark ? "#1c1c1c" : "#fff", borderRadius: 12, padding: "28px 24px", boxShadow: "0 4px 24px rgba(0,0,0,0.18)", minWidth: 300 }}>
             <AuthPanel session={null} onAuthChange={setSession} fullWidth />
           </div>
+          <button
+            onClick={() => setShowPublicPlan(true)}
+            style={{
+              background: "none",
+              border: `1px solid ${isDark ? "#2e3a2e" : "#b8d4b8"}`,
+              borderRadius: 10, padding: "10px 22px",
+              color: accent, cursor: "pointer",
+              fontFamily: "inherit", fontSize: 14, fontWeight: 600,
+              letterSpacing: "0.04em",
+            }}
+          >
+            👀 Planning d'Anto
+          </button>
         </div>
       </ThemeContext.Provider>
     );
