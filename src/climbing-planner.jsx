@@ -186,6 +186,13 @@ function weekKey(monday) {
   return monday.toISOString().slice(0, 10);
 }
 
+function calcEndTime(startTime, duration) {
+  if (!startTime || !duration) return null;
+  const [h, m] = startTime.split(":").map(Number);
+  const total = h * 60 + m + Number(duration);
+  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
 
 function generateId() {
@@ -196,7 +203,7 @@ function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
     const parsed = raw ? JSON.parse(raw) : {};
-    const result = { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, profile: {}, customCycles: [], cyclesLocked: false, ...parsed };
+    const result = { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [], ...parsed };
     // Migrate photo from legacy separate key → profile.avatarDataUrl
     if (!result.profile?.avatarDataUrl) {
       const legacy = localStorage.getItem("climbing_planner_photo");
@@ -209,7 +216,7 @@ function loadData() {
     if (result.profile) delete result.profile.role;
     return result;
   } catch {
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], cyclesLocked: false };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [] };
   }
 }
 
@@ -2812,9 +2819,40 @@ function FeedbackHistoryModal({ type, id, name, onClose }) {
 
 // ─── MODAL: SESSION UNIFIÉE (Séance + Ressenti) ───────────────────────────────
 
-function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, dbBlocks }) {
+function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, dbBlocks,
+  role, smWeekKey, smDayIndex, smSessionIndex,
+  onMoveSession, onUpdateStartTime, onSuggestMove, moveSuggestions,
+  onAcceptSuggestion, onRejectSuggestion }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const [tab, setTab] = useState("session");
+
+  // ── Déplacer tab state ──
+  const [newStartTime, setNewStartTime] = useState(session.startTime || "");
+  const [targetWeekKey, setTargetWeekKey] = useState(smWeekKey || "");
+  const [targetDayIndex, setTargetDayIndex] = useState(smDayIndex ?? 0);
+  const [suggestionNote, setSuggestionNote] = useState("");
+  const [timeSaved, setTimeSaved] = useState(false);
+
+  const isAthleteUser = role === "athlete";
+  const canDirectlyMove = !isAthleteUser; // coach, solo (null), auto
+
+  const targetMonday = targetWeekKey ? new Date(targetWeekKey + "T00:00:00") : null;
+  const prevWeekKey = targetMonday ? weekKey(getMondayOf(addDays(targetMonday, -7))) : smWeekKey;
+  const nextWeekKey = targetMonday ? weekKey(getMondayOf(addDays(targetMonday, 7))) : smWeekKey;
+  const weekLabel = targetMonday
+    ? `Sem. du ${targetMonday.getDate()} ${targetMonday.toLocaleDateString("fr-FR", { month: "short" })} ${targetMonday.getFullYear()}`
+    : "";
+
+  const dayChanged = targetWeekKey !== smWeekKey || targetDayIndex !== smDayIndex;
+  const timeChanged = newStartTime !== (session.startTime || "");
+
+  const pendingSuggestions = (moveSuggestions || []).filter(s => s.sessionId === session.id && s.status === "pending");
+
+  const formatSuggTarget = (toWKey, toDi) => {
+    if (!toWKey) return "";
+    const d = addDays(new Date(toWKey + "T00:00:00"), toDi);
+    return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  };
 
   // Quand un bloc est ajouté directement depuis CoachPickerModal (isBlock: true),
   // il est stocké comme objet brut sans tableau blocks[].
@@ -2882,6 +2920,12 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, db
           <button style={mainTabStyle("session")} onClick={() => setTab("session")}>Séance</button>
           <button style={mainTabStyle("ressenti")} onClick={() => setTab("ressenti")}>
             Ressenti{hasFeedback ? " ✓" : ""}
+          </button>
+          <button style={{ ...mainTabStyle("deplacer"), position: "relative" }} onClick={() => setTab("deplacer")}>
+            Déplacer
+            {pendingSuggestions.length > 0 && (
+              <span style={{ position: "absolute", top: 6, right: 2, width: 7, height: 7, borderRadius: "50%", background: "#f97316" }} />
+            )}
           </button>
           <div style={{ marginLeft: "auto", display: "flex", gap: 2, padding: "0 8px", alignItems: "center" }}>
             <button style={styles.closeBtn} onClick={onClose}>✕</button>
@@ -2994,7 +3038,7 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, db
                 Pas de contenu détaillé pour cette séance.
               </div>
             )
-          ) : (
+          ) : tab === "ressenti" ? (
             /* ── Ressenti ── */
             <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 18 }}>
               {/* Done */}
@@ -3155,7 +3199,127 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, db
                 Enregistrer le ressenti
               </button>
             </div>
-          )}
+          ) : tab === "deplacer" ? (
+            /* ── Déplacer ── */
+            (() => {
+              const inputStyle = { background: isDark ? "#141a16" : "#fff", border: `1px solid ${isDark ? "#3a4a3e" : "#c8d8c0"}`, borderRadius: 6, padding: "8px 11px", color: isDark ? "#d8e8d0" : "#1a2e1f", fontSize: 13, fontFamily: "inherit", outline: "none", width: "100%", boxSizing: "border-box" };
+              const labelStyle = { fontSize: 11, color: isDark ? "#707870" : "#8a7f70", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6, display: "block" };
+              const dayBtnStyle = (active) => ({
+                flex: 1, padding: "7px 2px", borderRadius: 6, border: `1px solid ${active ? (isDark ? "#4ade80" : "#2a7d4f") : (isDark ? "#2a3a2e" : "#d4e8db")}`,
+                background: active ? (isDark ? "#1e3a2a" : "#d4f0e0") : "none",
+                color: active ? (isDark ? "#4ade80" : "#2a7d4f") : (isDark ? "#8a9a88" : "#6b8c72"),
+                cursor: "pointer", fontSize: 11, fontWeight: active ? 700 : 400, fontFamily: "inherit",
+              });
+              return (
+                <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 18 }}>
+
+                  {/* ── Heure de départ ── */}
+                  <div>
+                    <label style={labelStyle}>Heure de départ</label>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <input type="time" value={newStartTime} onChange={e => { setNewStartTime(e.target.value); setTimeSaved(false); }}
+                        style={{ ...inputStyle, width: "auto", minWidth: 120 }} />
+                      {newStartTime && <button style={{ ...styles.viewToggleBtn, padding: "6px 12px", fontSize: 11 }}
+                        onClick={() => { setNewStartTime(""); setTimeSaved(false); }}>Effacer</button>}
+                    </div>
+                    {isAthleteUser && timeChanged && (
+                      <button style={{ ...styles.saveBtn, marginTop: 8, padding: "8px 16px", fontSize: 12 }}
+                        onClick={() => { onUpdateStartTime(newStartTime); setTimeSaved(true); }}>
+                        {timeSaved ? "✓ Heure enregistrée" : "Enregistrer l'heure"}
+                      </button>
+                    )}
+                    {!isAthleteUser && timeChanged && !dayChanged && (
+                      <button style={{ ...styles.saveBtn, marginTop: 8, padding: "8px 16px", fontSize: 12 }}
+                        onClick={() => onMoveSession(smWeekKey, smDayIndex, newStartTime)}>
+                        Enregistrer l'heure
+                      </button>
+                    )}
+                  </div>
+
+                  {/* ── Jour ── */}
+                  <div>
+                    <label style={labelStyle}>{isAthleteUser ? "Suggérer un déplacement vers" : "Déplacer vers"}</label>
+                    {/* Week nav */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <button style={styles.navBtn} onClick={() => { setTargetWeekKey(prevWeekKey); setTargetDayIndex(smDayIndex); }}>←</button>
+                      <span style={{ flex: 1, textAlign: "center", fontSize: 11, color: isDark ? "#c8d8c0" : "#2a4a30", fontWeight: 500 }}>{weekLabel}</span>
+                      <button style={styles.navBtn} onClick={() => { setTargetWeekKey(nextWeekKey); setTargetDayIndex(smDayIndex); }}>→</button>
+                    </div>
+                    {/* Day buttons */}
+                    <div style={{ display: "flex", gap: 3 }}>
+                      {DAYS.map((d, i) => {
+                        const dateD = targetMonday ? addDays(targetMonday, i) : null;
+                        const dateStr = dateD ? `${dateD.getDate()}/${dateD.getMonth() + 1}` : "";
+                        return (
+                          <button key={i} style={dayBtnStyle(targetDayIndex === i && targetWeekKey === (targetWeekKey))}
+                            onClick={() => setTargetDayIndex(i)}>
+                            <div>{d}</div>
+                            <div style={{ fontSize: 9, opacity: 0.7 }}>{dateStr}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Coach: move button */}
+                    {!isAthleteUser && dayChanged && (
+                      <button style={{ ...styles.saveBtn, marginTop: 12 }}
+                        onClick={() => onMoveSession(targetWeekKey, targetDayIndex, newStartTime || session.startTime || null)}>
+                        Déplacer la séance
+                      </button>
+                    )}
+                    {!isAthleteUser && dayChanged && (timeChanged) && (
+                      <div style={{ fontSize: 10, color: isDark ? "#5a7a62" : "#8a9e90", marginTop: 4 }}>
+                        La séance sera déplacée avec l'heure {newStartTime}.
+                      </div>
+                    )}
+
+                    {/* Athlete: suggestion form */}
+                    {isAthleteUser && dayChanged && (
+                      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                        <textarea
+                          style={{ ...styles.textarea, minHeight: 56, fontSize: 12 }}
+                          placeholder="Note pour le coach (optionnel)…"
+                          value={suggestionNote} onChange={e => setSuggestionNote(e.target.value)} rows={2}
+                        />
+                        <button style={styles.saveBtn}
+                          onClick={() => { onSuggestMove(targetWeekKey, targetDayIndex, suggestionNote); setSuggestionNote(""); setTargetWeekKey(smWeekKey); setTargetDayIndex(smDayIndex); }}>
+                          Envoyer la suggestion
+                        </button>
+                      </div>
+                    )}
+                    {isAthleteUser && !dayChanged && (
+                      <div style={{ fontSize: 11, color: isDark ? "#5a7a62" : "#8a9e90", marginTop: 8, fontStyle: "italic" }}>
+                        Sélectionne un autre jour pour envoyer une suggestion de déplacement à ton coach.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Suggestions en attente (coach uniquement) ── */}
+                  {!isAthleteUser && pendingSuggestions.length > 0 && (
+                    <div>
+                      <label style={{ ...labelStyle, color: "#f97316" }}>Suggestions de l'athlète</label>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {pendingSuggestions.map(s => (
+                          <div key={s.id} style={{ borderRadius: 8, border: `1px solid ${isDark ? "#3a2a10" : "#fbd8aa"}`, background: isDark ? "#1e1808" : "#fff8ee", padding: "10px 12px" }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#fbbf24" : "#92400e", marginBottom: 4 }}>
+                              → {formatSuggTarget(s.toWeekKey, s.toDayIndex)}
+                            </div>
+                            {s.note && <div style={{ fontSize: 11, color: isDark ? "#c8b870" : "#78540a", fontStyle: "italic", marginBottom: 8 }}>"{s.note}"</div>}
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button style={{ ...styles.saveBtn, padding: "5px 12px", fontSize: 11, flex: 1 }}
+                                onClick={() => onAcceptSuggestion(s.id)}>✓ Accepter</button>
+                              <button style={{ ...styles.doneBtn, padding: "5px 12px", fontSize: 11, flex: 1, color: isDark ? "#f87171" : "#dc2626", borderColor: isDark ? "#4a1c1c" : "#fca5a5" }}
+                                onClick={() => onRejectSuggestion(s.id)}>✗ Refuser</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          ) : null}
         </div>
       </div>
     </div>
@@ -3406,7 +3570,7 @@ function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
 
 // ─── COMPOSANT JOUR ───────────────────────────────────────────────────────────
 
-function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine, note, onSaveNote, logWarning, onOpenLog }) {
+function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine, note, onSaveNote, logWarning, onOpenLog, pendingSuggestionsIds }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
   const meso = weekMeta?.mesocycle;
@@ -3542,6 +3706,11 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
                 {s.feedback && (
                   <span style={styles.feedbackDot} title="Feedback enregistré">
                     {s.feedback.done ? "✓" : "✗"}
+                  </span>
+                )}
+                {pendingSuggestionsIds?.has(s.id) && (
+                  <span title="Suggestion de déplacement en attente" style={{ fontSize: 9, background: "#f9731622", color: "#f97316", border: "1px solid #f9731655", borderRadius: 8, padding: "1px 5px", fontWeight: 700 }}>
+                    ↔
                   </span>
                 )}
               </div>
@@ -7851,6 +8020,78 @@ export default function ClimbingPlanner() {
     setSessionModal({ weekKey: wKey, dayIndex, sessionIndex });
   };
 
+  // ── Déplacer / suggestions ──
+  const moveSession = (fromWKey, fromDi, fromSi, toWKey, toDi, newStartTime) => {
+    setData(d => {
+      const src = (d.weeks[fromWKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
+      const sess = src[fromDi]?.[fromSi];
+      if (!sess) return d;
+      const updated = { ...sess,
+        startTime: newStartTime || sess.startTime || null,
+        endTime: newStartTime ? calcEndTime(newStartTime, sess.estimatedTime) : sess.endTime ?? null,
+      };
+      src[fromDi] = src[fromDi].filter((_, j) => j !== fromSi);
+      const tgt = fromWKey === toWKey ? src : (d.weeks[toWKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
+      tgt[toDi] = [...(tgt[toDi] || []), updated];
+      const newWeeks = { ...d.weeks, [fromWKey]: src };
+      if (fromWKey !== toWKey) newWeeks[toWKey] = tgt;
+      return { ...d, weeks: newWeeks };
+    });
+    setSessionModal(null);
+  };
+
+  const updateSessionTime = (wKey, di, si, newStartTime) => {
+    setData(d => ({
+      ...d,
+      weeks: {
+        ...d.weeks,
+        [wKey]: (d.weeks[wKey] || Array(7).fill(null).map(() => [])).map((day, i) =>
+          i === di ? day.map((s, j) => j === si
+            ? { ...s, startTime: newStartTime || null, endTime: newStartTime ? calcEndTime(newStartTime, s.estimatedTime) : null }
+            : s) : day
+        ),
+      },
+    }));
+  };
+
+  const suggestMoveSession = (fromWKey, fromDi, fromSi, toWKey, toDi, note) => {
+    const sess = (data.weeks[fromWKey] || [])[fromDi]?.[fromSi];
+    if (!sess) return;
+    const suggestion = {
+      id: generateId(),
+      sessionId: sess.id,
+      sessionName: sess.name,
+      fromWeekKey: fromWKey, fromDayIndex: fromDi,
+      toWeekKey: toWKey, toDayIndex: toDi,
+      note: note.trim(),
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
+    setData(d => ({ ...d, moveSuggestions: [...(d.moveSuggestions || []), suggestion] }));
+  };
+
+  const acceptMoveSuggestion = (id) => {
+    const s = (data.moveSuggestions || []).find(x => x.id === id);
+    if (!s) return;
+    setData(d => {
+      const src = (d.weeks[s.fromWeekKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
+      const sess = src[s.fromDayIndex]?.find(x => x.id === s.sessionId);
+      if (!sess) return { ...d, moveSuggestions: d.moveSuggestions.filter(x => x.id !== id) };
+      const fromSi = src[s.fromDayIndex].findIndex(x => x.id === s.sessionId);
+      src[s.fromDayIndex] = src[s.fromDayIndex].filter((_, j) => j !== fromSi);
+      const tgt = s.fromWeekKey === s.toWeekKey ? src : (d.weeks[s.toWeekKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
+      tgt[s.toDayIndex] = [...(tgt[s.toDayIndex] || []), sess];
+      const newWeeks = { ...d.weeks, [s.fromWeekKey]: src };
+      if (s.fromWeekKey !== s.toWeekKey) newWeeks[s.toWeekKey] = tgt;
+      return { ...d, weeks: newWeeks, moveSuggestions: d.moveSuggestions.filter(x => x.id !== id) };
+    });
+    setSessionModal(null);
+  };
+
+  const rejectMoveSuggestion = (id) => {
+    setData(d => ({ ...d, moveSuggestions: (d.moveSuggestions || []).filter(x => x.id !== id) }));
+  };
+
   const saveMeta = () => {
     setData(d => ({ ...d, weekMeta: { ...d.weekMeta, [wKey]: tempMeta } }));
     setMetaEditing(false);
@@ -8038,6 +8279,9 @@ export default function ClimbingPlanner() {
   const isCoach        = data.profile?.role === "coach";
   const isAuto         = data.profile?.role === "auto";
   const hasCoachFeatures = isCoach || isAuto;
+  // When coach is viewing an athlete, the logged-in user is still a coach
+  const actualUserRole = viewingAthlete ? "coach" : (data.profile?.role ?? null);
+  const pendingSuggestionsIds = new Set((data.moveSuggestions || []).filter(s => s.status === "pending").map(s => s.sessionId));
 
   const calSubToggle = (
     <div style={{ display: "flex", gap: 2 }}>
@@ -8300,6 +8544,7 @@ export default function ClimbingPlanner() {
                   onSaveNote={text => setData(d => ({ ...d, notes: { ...(d.notes || {}), [dateISO]: text } }))}
                   logWarning={logWarning}
                   onOpenLog={() => setLogDate(dateISO)}
+                  pendingSuggestionsIds={pendingSuggestionsIds}
                 />
               );
             })}
@@ -8520,6 +8765,16 @@ export default function ClimbingPlanner() {
             dayLabel={smDayLabel}
             weekMeta={smWeekMeta}
             onClose={() => setSessionModal(null)}
+            role={actualUserRole}
+            smWeekKey={smKey}
+            smDayIndex={smDi}
+            smSessionIndex={smSi}
+            onMoveSession={(toWKey, toDi, newTime) => moveSession(smKey, smDi, smSi, toWKey, toDi, newTime)}
+            onUpdateStartTime={(newTime) => { updateSessionTime(smKey, smDi, smSi, newTime); }}
+            onSuggestMove={(toWKey, toDi, note) => suggestMoveSession(smKey, smDi, smSi, toWKey, toDi, note)}
+            moveSuggestions={data.moveSuggestions || []}
+            onAcceptSuggestion={acceptMoveSuggestion}
+            onRejectSuggestion={rejectMoveSuggestion}
             onEdit={() => {
               if (smSession.isCustom) {
                 // Edit the custom session template + all placements
