@@ -7270,6 +7270,16 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
   );
 }
 
+// ─── GREETING BY TIME OF DAY ──────────────────────────────────────────────────
+
+function getGreeting(hour) {
+  const h = hour ?? new Date().getHours();
+  if (h >= 5  && h < 12) return "Bonjour";
+  if (h >= 12 && h < 18) return "Bon après-midi";
+  if (h >= 18 && h < 22) return "Bonsoir";
+  return "Bonne nuit";
+}
+
 // ─── CONTEXTUAL GREETING PHRASE ───────────────────────────────────────────────
 
 function getContextualPhrase(todaySessions, hooperEntry, dayOfWeek, { hour, weekSessions, dayIndex, mesoCtx } = {}) {
@@ -7574,7 +7584,7 @@ function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHoo
       {/* Greeting */}
       <div>
         <div style={{ fontSize: isMobile ? 36 : 52, fontWeight: 600, color: textMain, letterSpacing: "0.01em", lineHeight: 1.1, fontFamily: "'Newsreader', Georgia, serif" }}>
-          Bonjour{firstName ? `, ${firstName}` : ""}
+          {getGreeting(new Date().getHours())}{firstName ? `, ${firstName}` : ""}
         </div>
         <div style={{ fontSize: 13, color: textMuted, marginTop: 5, textTransform: "capitalize" }}>
           {dateFull}
