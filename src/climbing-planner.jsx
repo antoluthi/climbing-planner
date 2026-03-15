@@ -5458,6 +5458,15 @@ function ActivityHeatmap({ data }) {
   const { styles, isDark } = useThemeCtx();
   const [metric, setMetric] = useState("charge"); // "charge" | "rpe" | "hooper"
   const [tooltip, setTooltip] = useState(null);
+  const containerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(entries => setContainerWidth(entries[0].contentRect.width));
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -5538,18 +5547,14 @@ function ActivityHeatmap({ data }) {
     return empty;
   };
 
-  // Month label positions
-  const monthLabels = [];
-  weeks.forEach((week, wi) => {
-    const d = week[0].date;
-    if (wi === 0 || d.getDate() <= 7) {
-      monthLabels.push({ wi, label: d.toLocaleDateString("fr-FR", { month: "short" }) });
-    }
-  });
-
   const CELL = 11;
   const GAP = 2;
   const DAY_LABELS = ["L", "", "M", "", "J", "", "D"];
+  const DAY_COL_W = 14 + 4; // day-label column width + margin
+  // Fit as many weeks as the container allows; always show the most recent ones
+  const maxWeeks = containerWidth > 0
+    ? Math.min(53, Math.max(4, Math.floor((containerWidth - DAY_COL_W) / (CELL + GAP))))
+    : 53;
 
   // Legend colors per metric
   const legendColors = {
@@ -5566,80 +5571,84 @@ function ActivityHeatmap({ data }) {
 
   const muted = isDark ? "#5a7a62" : "#8a9e90";
 
+  const visibleWeeks = weeks.slice(-maxWeeks);
+  // Recompute month labels for the visible slice
+  const visibleMonthLabels = [];
+  visibleWeeks.forEach((week, wi) => {
+    const d = week[0].date;
+    if (wi === 0 || d.getDate() <= 7) {
+      const prev = visibleMonthLabels[visibleMonthLabels.length - 1];
+      if (!prev || wi - prev.wi >= 3)
+        visibleMonthLabels.push({ wi, label: d.toLocaleDateString("fr-FR", { month: "short" }) });
+    }
+  });
+
   return (
-    <div style={styles.dashSection}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={styles.dashSectionTitle}>Activité — 12 mois</div>
-        <div style={{ display: "flex", gap: 4 }}>
-          {[["charge", "Charge"], ["rpe", "RPE"], ["hooper", "Hooper"]].map(([k, l]) => (
-            <button key={k} onClick={() => setMetric(k)}
-              style={{ ...styles.viewToggleBtn, ...(metric === k ? styles.viewToggleBtnActive : {}), padding: "3px 9px", fontSize: 10 }}>
-              {l}
-            </button>
-          ))}
-        </div>
+    <div style={styles.dashSection} ref={containerRef}>
+      {/* Title */}
+      <div style={styles.dashSectionTitle}>Activité</div>
+      {/* Metric selector — own row, below title */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+        {[["charge", "Charge"], ["rpe", "RPE"], ["hooper", "Hooper"]].map(([k, l]) => (
+          <button key={k} onClick={() => setMetric(k)}
+            style={{ ...styles.viewToggleBtn, ...(metric === k ? styles.viewToggleBtnActive : {}), padding: "3px 9px", fontSize: 10 }}>
+            {l}
+          </button>
+        ))}
       </div>
 
-      {/* Scrollable grid */}
-      <div style={{ overflowX: "auto", paddingBottom: 4 }}>
-        <div style={{ display: "flex", gap: 0, minWidth: "fit-content" }}>
-          {/* Day labels column */}
-          <div style={{ display: "flex", flexDirection: "column", gap: GAP, paddingTop: 18, marginRight: 4 }}>
-            {DAY_LABELS.map((l, i) => (
-              <div key={i} style={{ width: 10, height: CELL, fontSize: 8, color: muted, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-                {l}
-              </div>
+      {/* Grid — no overflow, sized to container */}
+      <div style={{ display: "flex", gap: 0 }}>
+        {/* Day labels column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: GAP, paddingTop: 18, marginRight: 4, flexShrink: 0 }}>
+          {DAY_LABELS.map((l, i) => (
+            <div key={i} style={{ width: 10, height: CELL, fontSize: 8, color: muted, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+              {l}
+            </div>
+          ))}
+        </div>
+
+        {/* Weeks */}
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+          {/* Month labels row */}
+          <div style={{ position: "relative", height: 16, marginBottom: 2 }}>
+            {visibleMonthLabels.map(({ wi, label }) => (
+              <span key={wi} style={{
+                position: "absolute",
+                left: wi * (CELL + GAP),
+                fontSize: 9,
+                color: muted,
+                whiteSpace: "nowrap",
+                lineHeight: "16px",
+              }}>{label}</span>
             ))}
           </div>
 
-          {/* Weeks */}
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {/* Month labels row */}
-            <div style={{ position: "relative", height: 16, marginBottom: 2 }}>
-              {monthLabels.map(({ wi, label }, i) => {
-                // Avoid overlap: only show if not too close to previous
-                const prev = monthLabels[i - 1];
-                if (prev && wi - prev.wi < 3) return null;
-                return (
-                  <span key={wi} style={{
-                    position: "absolute",
-                    left: wi * (CELL + GAP),
-                    fontSize: 9,
-                    color: muted,
-                    whiteSpace: "nowrap",
-                    lineHeight: "16px",
-                  }}>{label}</span>
-                );
-              })}
-            </div>
-
-            {/* Grid */}
-            <div style={{ display: "flex", gap: GAP }}>
-              {weeks.map((week, wi) => (
-                <div key={wi} style={{ display: "flex", flexDirection: "column", gap: GAP }}>
-                  {week.map((day, di) => (
-                    <div
-                      key={di}
-                      style={{
-                        width: CELL,
-                        height: CELL,
-                        borderRadius: 2,
-                        background: getColor(day),
-                        cursor: day.isFuture ? "default" : "pointer",
-                        flexShrink: 0,
-                      }}
-                      onMouseEnter={e => {
-                        if (day.isFuture) return;
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setTooltip({ day, x: rect.left, y: rect.top });
-                      }}
-                      onMouseLeave={() => setTooltip(null)}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
+          {/* Grid */}
+          <div style={{ display: "flex", gap: GAP }}>
+            {visibleWeeks.map((week, wi) => (
+              <div key={wi} style={{ display: "flex", flexDirection: "column", gap: GAP }}>
+                {week.map((day, di) => (
+                  <div
+                    key={di}
+                    style={{
+                      width: CELL,
+                      height: CELL,
+                      borderRadius: 2,
+                      background: getColor(day),
+                      cursor: day.isFuture ? "default" : "pointer",
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={e => {
+                      if (day.isFuture) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setTooltip({ day, x: rect.left, y: rect.top });
+                    }}
+                    onMouseLeave={() => setTooltip(null)}
+                  />
+                ))}
+              </div>
+            ))}
           </div>
         </div>
       </div>
