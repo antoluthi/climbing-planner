@@ -12,18 +12,19 @@ Contexte technique et état du projet pour les sessions Claude Code.
 
 ## Architecture de l'app
 
-Tout est dans **`src/climbing-planner.jsx`** (~4 600 lignes). Ordre des sections :
+Tout est dans **`src/climbing-planner.jsx`** (~8 100 lignes). Ordre des sections :
 
 ```
 SUPABASE CLIENT
 DATA (constantes SESSIONS, DEFAULT_MESOCYCLES)
 STORAGE (loadData, saveData, useSupabaseSync)
 HOOKS :
-  ├─ useSessionsCatalog     — CRUD sessions_catalog (bibliothèque coach)
-  ├─ useSessionBlocks       — CRUD session_blocks (blocs multi-séances)
-  └─ useCoachAthletes       — relations coach-athlète (coach_athletes)
+  ├─ useSessionsCatalog        — CRUD sessions_catalog (bibliothèque coach)
+  ├─ useSessionBlocks          — CRUD session_blocks (blocs multi-séances)
+  ├─ useCommunitySessionsSync  — sync séances communautaires (lecture seule)
+  └─ useCoachAthletes          — relations coach-athlète (coach_athletes)
 HELPERS (weekKey, addDays, getMondayOf, formatDate…)
-STYLES (getStyles → objet avec tous les styles inline, thème dark/light)
+STYLES (makeStyles → objet avec tous les styles inline, thème dark/light)
 COMPONENTS :
   ├─ PhotoCropModal          — recadrage/zoom avatar (useRef cropAreaRef, ResizeObserver, non-passive wheel/touch)
   ├─ DayColumn               — colonne d'un jour (semaine), prop hasCreatine
@@ -34,10 +35,16 @@ COMPONENTS :
   ├─ CyclesEditor            — éditeur mésocycles/microcycles
   ├─ CyclesView              — wrapper locked/unlocked
   ├─ DailyNotesSection       — notes + checkbox créatine (toujours visible, décochée par défaut)
-  ├─ Dashboard               — stats + HooperSection
+  ├─ Dashboard               — stats + HooperSection + graphiques poids & Hooper
+  ├─ DayLogModal             — modal journal quotidien (note, créatine, poids, Hooper) depuis DayColumn
+  ├─ SessionComposerModal    — composition de séances à partir de blocs
+  ├─ FeedbackHistoryModal    — historique des feedbacks athlète par bloc/séance
+  ├─ SuspensionInfoCard      — affichage config d'un bloc Suspension
+  ├─ SuspensionSummaryChips  — chips résumé config Suspension
   ├─ CoachAthletesSection    — section "Mes athlètes" dans ProfileView (coach/auto uniquement)
   ├─ ProfileView             — avatar, infos, thème, gestion athlètes
   ├─ CoachLibraryView        — bibliothèque de séances (vue "library", coach uniquement)
+  ├─ AccueilView             — page d'accueil (vue par défaut au démarrage)
   ├─ RoleOnboardingModal     — choix du rôle au 1er login
   └─ ClimbingPlanner         — composant racine, state global
 ```
@@ -135,13 +142,16 @@ Même chose dans Vercel Dashboard > Settings > Environment Variables.
 
 | viewMode | Description | Accès |
 |---|---|---|
+| `"accueil"` | Page d'accueil — **vue par défaut** au démarrage | tous |
 | `"week"` | Vue semaine (7 colonnes DayColumn) | tous |
 | `"month"` | Vue mois (grille calendrier) | tous |
 | `"year"` | Vue année (12 mois) | tous |
-| `"dash"` | Statistiques + notes + Hooper | tous |
+| `"dash"` | Statistiques + notes + Hooper + graphiques poids/Hooper | tous |
 | `"cycles"` | CyclesTimeline ou CyclesEditor | tous (lecture seule si athlete) |
 | `"profil"` | Profil utilisateur + gestion athlètes | tous |
 | `"library"` | Bibliothèque de séances | coach / auto uniquement |
+
+Navigation : les vues calendrier (week/month/year) sont regroupées sous un bouton "Calendrier" avec sous-nav.
 
 ## Navigation date
 
@@ -171,7 +181,27 @@ Même chose dans Vercel Dashboard > Settings > Environment Variables.
 
 ### Thème
 `ThemeContext` + `useThemeCtx()` — dark/light, accent vert
-`getStyles(theme, isMobile)` retourne l'objet de styles complet
+`makeStyles(isDark)` retourne l'objet de styles complet (renommé depuis `getStyles`)
+
+### Typographie
+- **Cormorant Garamond** (serif) pour les titres : `appTitle`, `weekRange`, `dashSectionTitle`, `modalTitle`
+- **Inter** pour le corps de texte
+
+### Blocs Suspension
+- Config structurée : `{ type: "suspension", config: { ... } }` avec poids, durée, série, etc.
+- `SuspensionInfoCard` : résumé visuel de la config dans `SessionModal`
+- Feedback poids + graphique évolution dans `FeedbackHistoryModal`
+- Charge rating activé pour Suspension et Retour au calme
+
+### DayLogModal
+- Modale quotidienne accessible depuis chaque colonne `DayColumn` (bouton journal)
+- Regroupe : note du jour, checkbox créatine, poids, Hooper
+- Bouton "Enregistrer" dirty-aware (désactivé si pas de changement)
+
+### Dashboard — graphiques
+- Graphique poids : scaffold période complète avec données manquantes nulles
+- Graphique Hooper : barres (BarChart) au lieu de lignes, scaffold identique
+- Sélecteur de plage Sem / Mois / An pour tous les graphiques stats
 
 ### Auto-save (useEffect sur `data`)
 ```js
@@ -185,12 +215,20 @@ useEffect(() => {
 }, [data]);
 ```
 
-## Migrations SQL à appliquer
+Règles de sync (refonte mars 2026) :
+- **Cloud autoritaire** : pas de comparaison timestamp local/cloud (supprimé, trop fragile)
+- **`_pendingSync` flag** : dirty flag dans `pendingSaveRef` pour flush via `pagehide`
+- **Skip premier render** : pas de save automatique au montage (évite d'écraser le cloud avec données locales stale)
+- **Flush `pagehide`** : `navigator.sendBeacon` avec keepalive pour sauvegarder en quittant la page
+- **Race condition JWT** : ignorée si le token a expiré entre-temps (pas de corruption cloud)
 
-Fichier : `supabase/migrations/20260313_coach_athletes.sql`
+## Migrations SQL
+
+Fichier : `supabase/migrations/20260313_coach_athletes.sql` (**appliquée en prod**)
 - Table `coach_athletes` + RLS
 - Policies additives sur `climbing_plans` pour accès coach
 - RPC `search_athletes`
+- Schéma complet avec DROP IF EXISTS + GRANT authenticated
 
 ## Commandes
 
@@ -203,7 +241,7 @@ npm run lint     # ESLint
 ## Idées futures / backlog
 
 - Sync Garmin Connect pour le sommeil (voir `garmin-sync-notes.md` — bloqué auth)
-- Import CSV sommeil Garmin (déjà existant ?)
+- Import CSV sommeil Garmin (bouton déjà présent dans stats)
 - Notifications push PWA
 - Vue "tableau de bord coach" : résumé de tous les athlètes sur une seule page
 - Invitation coach→athlète par lien (au lieu de recherche par nom)
