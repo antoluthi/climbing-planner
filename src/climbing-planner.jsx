@@ -406,7 +406,7 @@ function makeStyles(isDark) {
     },
     headerLeft: { display: "flex", alignItems: "center", gap: 12 },
     logo: { fontSize: 28 },
-    appTitle: { fontSize: 15, fontWeight: 600, letterSpacing: "0.18em", color: t.textTitle, fontFamily: "'Cormorant Garamond', Georgia, serif" },
+    appTitle: { fontSize: 15, fontWeight: 600, letterSpacing: "0.18em", color: t.textTitle, fontFamily: "'Newsreader', Georgia, serif" },
     appSub: { fontSize: 10, color: t.textMuted, letterSpacing: "0.1em", marginTop: 2 },
     weekNav: { display: "flex", alignItems: "center", gap: 16 },
     navBtn: {
@@ -415,7 +415,7 @@ function makeStyles(isDark) {
       transition: "all 0.15s", flexShrink: 0,
     },
     weekLabel: { textAlign: "center", minWidth: 180 },
-    weekRange: { fontSize: 16, color: t.textTitle, fontWeight: 500, letterSpacing: "0.05em", fontFamily: "'Cormorant Garamond', Georgia, serif" },
+    weekRange: { fontSize: 16, color: t.textTitle, fontWeight: 500, letterSpacing: "0.05em", fontFamily: "'Newsreader', Georgia, serif" },
     weekCurrent: { fontSize: 10, color: t.accent, letterSpacing: "0.12em", marginTop: 3, textTransform: "uppercase" },
     headerRight: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 },
     headerRightTop: { display: "flex", alignItems: "center", gap: 8 },
@@ -620,7 +620,7 @@ function makeStyles(isDark) {
     dashCardVal: { fontSize: 24, fontWeight: 700, color: t.text, lineHeight: 1 },
     dashCardLabel: { fontSize: 10, color: t.textMuted, letterSpacing: "0.06em", textTransform: "uppercase" },
     dashSection: { marginBottom: 28 },
-    dashSectionTitle: { fontSize: 14, fontWeight: 600, color: t.navColor, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 10, fontFamily: "'Cormorant Garamond', Georgia, serif" },
+    dashSectionTitle: { fontSize: 14, fontWeight: 600, color: t.navColor, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 10, fontFamily: "'Newsreader', Georgia, serif" },
     dashChartBg: t.surface,
     dashGrid: t.border,
     dashText: t.textMuted,
@@ -788,7 +788,7 @@ function makeStyles(isDark) {
       overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)",
     },
     modalHeader: { padding: "16px 18px", borderBottom: `1px solid ${t.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" },
-    modalTitle: { fontSize: 17, fontWeight: 600, letterSpacing: "0.08em", color: t.textTitle, fontFamily: "'Cormorant Garamond', Georgia, serif" },
+    modalTitle: { fontSize: 17, fontWeight: 600, letterSpacing: "0.08em", color: t.textTitle, fontFamily: "'Newsreader', Georgia, serif" },
     closeBtn: { background: "none", border: "none", color: t.textMuted, cursor: "pointer", fontSize: 16 },
     modalFilters: { padding: "12px 16px", borderBottom: `1px solid ${t.border}`, display: "flex", flexDirection: "column", gap: 8 },
     searchInput: {
@@ -6851,6 +6851,77 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
   );
 }
 
+// ─── CONTEXTUAL GREETING PHRASE ───────────────────────────────────────────────
+
+function getContextualPhrase(todaySessions, hooperEntry, dayOfWeek) {
+  const isRest = todaySessions.length === 0;
+  const hTotal = hooperEntry
+    ? (hooperEntry.fatigue + hooperEntry.stress + hooperEntry.soreness + hooperEntry.sleep)
+    : null;
+
+  const names = todaySessions.map(s => (s.title || s.name || "").toLowerCase()).join(" ");
+  const isForce    = /force|maximal|bloc|campus|dynami|puissan/.test(names);
+  const isEndur    = /endur|volume|vol\b|capac|ae\b|fond/.test(names);
+  const isRecup    = /récup|recup|calme|retour|active/.test(names);
+  const isTech     = /techni|dalle|travers|dégrav|mouv|précis/.test(names);
+  const isMobility = /mobil|étir|yoga|stretch|souplesse/.test(names);
+
+  // Messages prioritaires basés sur le Hooper
+  if (hTotal !== null) {
+    if (hTotal > 20) {
+      if (isRest) return "Vous en avez vraiment besoin — reposez-vous bien aujourd'hui.";
+      return "Indice Hooper élevé — adaptez l'intensité et écoutez votre corps.";
+    }
+    if (hTotal > 17) {
+      if (isRest) return "Vous êtes fatigué, ce repos tombe à pic.";
+      if (isRecup) return "La séance récup tombe bien — vous êtes modérément fatigué.";
+      return "Vous êtes un peu fatigué — gérez bien l'effort aujourd'hui.";
+    }
+    if (hTotal <= 12) {
+      if (isRest) return "Vous êtes au top — profitez de cette belle journée off !";
+      if (isForce) return "Excellente récupération et séance de force — allez chercher le max !";
+      if (isEndur) return "Vous êtes frais, parfait pour une longue séance d'endurance !";
+      return "Vous vous sentez super bien — excellente journée devant vous !";
+    }
+    if (hTotal <= 14) {
+      if (isRest) return "Bien récupéré — profitez de cette journée off.";
+      if (isForce) return "Bonne forme — allez chercher de belles performances.";
+      if (isEndur) return "Vous êtes bien récupéré, idéal pour le volume.";
+      return "Vous êtes en forme — bonne séance !";
+    }
+    // hTotal 15-17
+    if (isForce) return "Séance de force avec une légère fatigue — montez progressivement.";
+    if (isEndur) return "Gardez un effort dosé aujourd'hui, votre corps récupère encore.";
+  }
+
+  // Pas de Hooper — basé sur la journée uniquement
+  if (isRest) {
+    const restMessages = [
+      "Profitez de votre journée de repos !",
+      "L'entraînement se construit dans la récupération.",
+      "Journée off — rechargez bien les batteries.",
+      "Reposez-vous, c'est aussi de l'entraînement.",
+      "Temps libre aujourd'hui — savourez-le.",
+      "La progression passe aussi par le repos.",
+      "Une journée de repos bien méritée !",
+    ];
+    return restMessages[dayOfWeek % restMessages.length];
+  }
+  if (isForce)    return "Séance de force au programme — bien s'échauffer avant d'attaquer !";
+  if (isEndur)    return "Volume au programme — patience et régularité, vous êtes sur la bonne voie.";
+  if (isRecup)    return "Séance de récupération — allez-y en douceur, c'est l'objectif.";
+  if (isTech)     return "Séance technique — concentrez-vous sur la qualité du mouvement.";
+  if (isMobility) return "Mobilité au programme — prenez le temps d'être présent.";
+
+  const genericMessages = [
+    "Bonne séance aujourd'hui !",
+    "C'est parti pour une belle journée d'entraînement.",
+    "Allez, on y va — bonne séance !",
+    "Une séance de plus vers votre objectif.",
+  ];
+  return genericMessages[dayOfWeek % genericMessages.length];
+}
+
 // ─── ACCUEIL ──────────────────────────────────────────────────────────────────
 
 function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHooper }) {
@@ -6901,6 +6972,9 @@ function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHoo
   // Mesocycle context
   const mesoCtx = getMesoForDate(data.mesocycles || [], todayObj);
 
+  // Contextual phrase
+  const contextualPhrase = getContextualPhrase(todaySessions, existingHooper, dow);
+
   // Colors
   const accentGreen = isDark ? "#4ade80" : "#2a7d4f";
   const panelBg = isDark ? "#1e231f" : "#e8e3da";
@@ -6924,11 +6998,14 @@ function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHoo
 
       {/* Greeting */}
       <div>
-        <div style={{ fontSize: isMobile ? 36 : 52, fontWeight: 600, color: textMain, letterSpacing: "0.01em", lineHeight: 1.1, fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+        <div style={{ fontSize: isMobile ? 36 : 52, fontWeight: 600, color: textMain, letterSpacing: "0.01em", lineHeight: 1.1, fontFamily: "'Newsreader', Georgia, serif" }}>
           Bonjour{firstName ? `, ${firstName}` : ""}
         </div>
         <div style={{ fontSize: 13, color: textMuted, marginTop: 5, textTransform: "capitalize" }}>
           {dateFull}
+        </div>
+        <div style={{ fontSize: isMobile ? 14 : 15, color: textMuted, marginTop: 8, fontStyle: "italic", fontFamily: "'Newsreader', Georgia, serif", lineHeight: 1.4 }}>
+          {contextualPhrase}
         </div>
         {mesoCtx?.meso && (
           <div style={{ marginTop: 10, display: "flex", gap: 6, alignItems: "center" }}>
