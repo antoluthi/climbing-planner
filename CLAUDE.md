@@ -12,7 +12,7 @@ Contexte technique et état du projet pour les sessions Claude Code.
 
 ## Architecture de l'app
 
-Tout est dans **`src/climbing-planner.jsx`** (~8 100 lignes). Ordre des sections :
+Tout est dans **`src/climbing-planner.jsx`** (~8 900 lignes). Ordre des sections :
 
 ```
 SUPABASE CLIENT
@@ -44,7 +44,8 @@ COMPONENTS :
   ├─ CoachAthletesSection    — section "Mes athlètes" dans ProfileView (coach/auto uniquement)
   ├─ ProfileView             — avatar, infos, thème, gestion athlètes
   ├─ CoachLibraryView        — bibliothèque de séances (vue "library", coach uniquement)
-  ├─ AccueilView             — page d'accueil (vue par défaut au démarrage)
+  ├─ AccueilView             — page d'accueil (phrase contextuelle dynamique, police Newsreader)
+  ├─ PublicPlanView          — vue publique lecture-seule pour visiteurs non connectés
   ├─ RoleOnboardingModal     — choix du rôle au 1er login
   └─ ClimbingPlanner         — composant racine, state global
 ```
@@ -77,6 +78,7 @@ COMPONENTS :
   },
   customCycles: [],    // cycles personnalisés (ex: créatine, suppléments)
   cyclesLocked: false,
+  moveSuggestions: [], // [{ id, sessionId, fromDate, targetDate, targetTime, note, athleteId }]
 }
 ```
 
@@ -100,6 +102,14 @@ COMPONENTS :
 | Fonction | Description |
 |---|---|
 | `search_athletes(search_term)` | Retourne `user_id, first_name, last_name` des non-coaches. `SECURITY DEFINER` pour contourner RLS sur la recherche. |
+
+### Vue publique — Planning d'Anto
+
+Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autorisant `anon` à lire la ligne de l'utilisateur "Anto" dans `climbing_plans`.
+
+- Bouton "Planning d'Anto" visible sur l'écran de connexion (non authentifié)
+- `PublicPlanView` : navigation sem/mois/année en lecture seule, affiche uniquement noms et horaires des séances (pas de données personnelles)
+- Aucune authentification requise
 
 ## Système de rôles
 
@@ -202,6 +212,21 @@ Navigation : les vues calendrier (week/month/year) sont regroupées sous un bout
 - Graphique poids : scaffold période complète avec données manquantes nulles
 - Graphique Hooper : barres (BarChart) au lieu de lignes, scaffold identique
 - Sélecteur de plage Sem / Mois / An pour tous les graphiques stats
+- **Heatmap d'activité** (GitHub-style) : 53 semaines × 7 jours, sélecteur de métrique (Charge / RPE / Hooper), labels mois et jours, tooltip hover, légende Moins/Plus, adaptatif mobile
+
+### AccueilView — phrase contextuelle
+- Police **Newsreader** (serif élégant) pour la phrase d'accueil
+- Salutation granulaire selon l'heure (matin, après-midi, soir, nuit)
+- Phrase contextuelle dynamique : heure courante, complétion des séances du jour, contexte semaine (mésocycle, charge)
+
+### Déplacement de séances (`SessionModal` — onglet "Déplacer")
+- **Coach / solo / auto** : sélecteur de date (navigation sem ← →) + heure → déplace directement la séance
+  - "Enregistrer l'heure" si seul l'horaire change
+  - "Déplacer la séance" si une autre journée est choisie
+- **Athlète** : peut modifier l'heure directement ; pour un changement de date → envoie une suggestion au coach (semaine + jour + note optionnelle)
+  - Suggestions en attente dans `data.moveSuggestions`
+  - Coach voit un point orange sur l'onglet "Déplacer" + liste Accepter/Refuser
+  - Badge `↔` sur la `DayColumn` pour les séances avec suggestion en attente
 
 ### Auto-save (useEffect sur `data`)
 ```js
@@ -224,11 +249,10 @@ Règles de sync (refonte mars 2026) :
 
 ## Migrations SQL
 
-Fichier : `supabase/migrations/20260313_coach_athletes.sql` (**appliquée en prod**)
-- Table `coach_athletes` + RLS
-- Policies additives sur `climbing_plans` pour accès coach
-- RPC `search_athletes`
-- Schéma complet avec DROP IF EXISTS + GRANT authenticated
+| Fichier | Contenu | Statut |
+|---|---|---|
+| `supabase/migrations/20260313_coach_athletes.sql` | Table `coach_athletes` + RLS, policies coach sur `climbing_plans`, RPC `search_athletes` | ✅ appliquée |
+| `supabase/migrations/20260315_public_anto_plan.sql` | Policy RLS `anon` lecture-seule sur la ligne Anto dans `climbing_plans` | ✅ appliquée |
 
 ## Commandes
 
