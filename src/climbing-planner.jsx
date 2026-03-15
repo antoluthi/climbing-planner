@@ -6853,49 +6853,116 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
 
 // ─── CONTEXTUAL GREETING PHRASE ───────────────────────────────────────────────
 
-function getContextualPhrase(todaySessions, hooperEntry, dayOfWeek) {
-  const isRest = todaySessions.length === 0;
-  const hTotal = hooperEntry
-    ? (hooperEntry.fatigue + hooperEntry.stress + hooperEntry.soreness + hooperEntry.sleep)
-    : null;
+function getContextualPhrase(todaySessions, hooperEntry, dayOfWeek, { hour, weekSessions, dayIndex, mesoCtx } = {}) {
+  const now = hour ?? new Date().getHours();
+  const isRest     = todaySessions.length === 0;
+  const isHeavyDay = todaySessions.length >= 2;
 
-  const names = todaySessions.map(s => (s.title || s.name || "").toLowerCase()).join(" ");
+  // Session completion status
+  const doneSessions    = todaySessions.filter(s => s.feedback?.done === true);
+  const missedSessions  = todaySessions.filter(s => s.feedback?.done === false);
+  const pendingSessions = todaySessions.filter(s => !s.feedback);
+  const allDone         = todaySessions.length > 0 && doneSessions.length === todaySessions.length;
+  const someDone        = doneSessions.length > 0 && doneSessions.length < todaySessions.length;
+  const allMissed       = todaySessions.length > 0 && missedSessions.length === todaySessions.length && pendingSessions.length === 0;
+
+  // Time of day slots
+  const isMorning   = now >= 5  && now < 12;
+  const isAfternoon = now >= 12 && now < 17;
+  const isEvening   = now >= 17 && now < 22;
+  const isNight     = now >= 22 || now < 5;
+
+  // Session type detection
+  const names      = todaySessions.map(s => (s.title || s.name || "").toLowerCase()).join(" ");
   const isForce    = /force|maximal|bloc|campus|dynami|puissan/.test(names);
   const isEndur    = /endur|volume|vol\b|capac|ae\b|fond/.test(names);
   const isRecup    = /récup|recup|calme|retour|active/.test(names);
   const isTech     = /techni|dalle|travers|dégrav|mouv|précis/.test(names);
   const isMobility = /mobil|étir|yoga|stretch|souplesse/.test(names);
+  const isComp     = /compét|compe|lead|bloc.*final|qualif/.test(names);
 
-  // Messages prioritaires basés sur le Hooper
-  if (hTotal !== null) {
-    if (hTotal > 20) {
-      if (isRest) return "Vous en avez vraiment besoin — reposez-vous bien aujourd'hui.";
-      return "Indice Hooper élevé — adaptez l'intensité et écoutez votre corps.";
-    }
-    if (hTotal > 17) {
-      if (isRest) return "Vous êtes fatigué, ce repos tombe à pic.";
-      if (isRecup) return "La séance récup tombe bien — vous êtes modérément fatigué.";
-      return "Vous êtes un peu fatigué — gérez bien l'effort aujourd'hui.";
-    }
-    if (hTotal <= 12) {
-      if (isRest) return "Vous êtes au top — profitez de cette belle journée off !";
-      if (isForce) return "Excellente récupération et séance de force — allez chercher le max !";
-      if (isEndur) return "Vous êtes frais, parfait pour une longue séance d'endurance !";
-      return "Vous vous sentez super bien — excellente journée devant vous !";
-    }
-    if (hTotal <= 14) {
-      if (isRest) return "Bien récupéré — profitez de cette journée off.";
-      if (isForce) return "Bonne forme — allez chercher de belles performances.";
-      if (isEndur) return "Vous êtes bien récupéré, idéal pour le volume.";
-      return "Vous êtes en forme — bonne séance !";
-    }
-    // hTotal 15-17
-    if (isForce) return "Séance de force avec une légère fatigue — montez progressivement.";
-    if (isEndur) return "Gardez un effort dosé aujourd'hui, votre corps récupère encore.";
+  // Week context
+  const wi = typeof dayIndex === "number" ? dayIndex : (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+  const sessionsDoneThisWeek = weekSessions
+    ? weekSessions.slice(0, wi).flat().filter(s => s?.feedback?.done === true).length
+    : 0;
+  const tomorrowSessions = weekSessions && wi < 6 ? (weekSessions[wi + 1] || []) : [];
+  const tomorrowIsRest   = tomorrowSessions.length === 0 && wi < 6;
+  const isFirstDayWithSession = weekSessions
+    ? weekSessions.slice(0, wi).every(d => !d || d.length === 0)
+    : false;
+  const isLastDayWithSession = weekSessions
+    ? weekSessions.slice(wi + 1).every(d => !d || d.length === 0)
+    : false;
+
+  // Mesocycle phase (start/end)
+  const mesoPhrase = (() => {
+    if (!mesoCtx?.meso?.startDate || !mesoCtx.meso.durationWeeks) return null;
+    const start = new Date(mesoCtx.meso.startDate);
+    const totalDays = mesoCtx.meso.durationWeeks * 7;
+    const elapsed = Math.floor((new Date() - start) / 86400000);
+    const pct = elapsed / totalDays;
+    if (pct < 0.15) return `Début du ${mesoCtx.meso.label} — posez les bases.`;
+    if (pct > 0.85) return `Fin de mésocycle en vue — restez concentré jusqu'au bout.`;
+    return null;
+  })();
+
+  // Hooper index
+  const hTotal = hooperEntry
+    ? (hooperEntry.fatigue + hooperEntry.stress + hooperEntry.soreness + hooperEntry.sleep)
+    : null;
+
+  // ── PRIORITY 1 : sessions already completed today ──
+  if (allDone) {
+    const n = doneSessions.length;
+    if (isEvening || isNight) return `Séance${n > 1 ? "s" : ""} bouclée${n > 1 ? "s" : ""} — belle journée d'entraînement, profitez de votre soirée !`;
+    if (isAfternoon)          return `Déjà ${n > 1 ? `${n} séances faites` : "la séance dans les jambes"} — profitez du reste de l'après-midi !`;
+    return `Séance${n > 1 ? "s" : ""} terminée${n > 1 ? "s" : ""} avant midi — quelle matinée productive !`;
   }
 
-  // Pas de Hooper — basé sur la journée uniquement
+  // ── PRIORITY 2 : partially done (some remain) ──
+  if (someDone) {
+    const remaining = pendingSessions.length;
+    return `${doneSessions.length}/${todaySessions.length} séance${doneSessions.length > 1 ? "s" : ""} faite${doneSessions.length > 1 ? "s" : ""} — encore ${remaining} à venir, continuez sur cette lancée !`;
+  }
+
+  // ── PRIORITY 3 : all missed, nothing pending ──
+  if (allMissed) {
+    if (isNight) return "Ça n'a pas pu se faire aujourd'hui — demain, on repart de zéro.";
+    return "Séance manquée — il est encore temps de rattraper ça ou de récupérer.";
+  }
+
+  // ── PRIORITY 4 : Hooper critique (très fatigué) ──
+  if (hTotal !== null && hTotal > 20) {
+    if (isRest)  return "Vous en avez vraiment besoin — reposez-vous bien aujourd'hui.";
+    if (isRecup) return "Hooper très élevé mais la séance récup est parfaite dans ce cas.";
+    return "Indice Hooper élevé — adaptez l'intensité et écoutez votre corps.";
+  }
+
+  // ── PRIORITY 5 : compétition ──
+  if (isComp) {
+    if (hTotal !== null && hTotal <= 14) return "Vous êtes en forme pour la compétition — faites confiance à votre préparation !";
+    if (hTotal !== null && hTotal > 17)  return "Compétition aujourd'hui — gérez votre énergie, vous êtes plus fatigué que d'habitude.";
+    return "Journée de compétition — restez dans votre bulle et grimpez votre escalade.";
+  }
+
+  // ── PRIORITY 6 : contexte heure + repos ──
   if (isRest) {
+    if (isNight)     return "Nuit de récupération en vue — dormez bien, c'est là que ça se passe.";
+    if (isMorning)   {
+      if (hTotal !== null && hTotal > 17) return "Vous êtes fatigué — ce repos du matin tombe vraiment bien.";
+      if (dayOfWeek === 1) return "Lundi off — profitez pour récupérer avant la semaine.";
+      if (dayOfWeek === 0) return "Dimanche de repos — rechargez les batteries pour la semaine qui vient.";
+    }
+    if (isEvening && tomorrowSessions.length > 0)
+      return "Repos ce soir — il y a du travail demain, préparez-vous bien.";
+
+    if (hTotal !== null) {
+      if (hTotal > 17) return "Vous êtes fatigué, ce repos tombe à pic.";
+      if (hTotal <= 12) return "Vous êtes au top — profitez de cette belle journée off !";
+      return "Bien récupéré — profitez de cette journée off.";
+    }
+
     const restMessages = [
       "Profitez de votre journée de repos !",
       "L'entraînement se construit dans la récupération.",
@@ -6907,6 +6974,90 @@ function getContextualPhrase(todaySessions, hooperEntry, dayOfWeek) {
     ];
     return restMessages[dayOfWeek % restMessages.length];
   }
+
+  // ── PRIORITY 7 : nuit avec séance ──
+  if (isNight) {
+    return "Séance tardive — prenez bien le temps de vous échauffer avant d'attaquer.";
+  }
+
+  // ── PRIORITY 8 : Hooper modéré (fatigué mais gérable) ──
+  if (hTotal !== null && hTotal > 17) {
+    if (isRecup)  return "La séance récup tombe bien — vous êtes modérément fatigué.";
+    if (isForce)  return "Séance de force avec une fatigue notable — montez progressivement.";
+    if (isEndur)  return "Gardez un effort dosé aujourd'hui, votre corps récupère encore.";
+    if (isMorning) return "Vous semblez fatigué ce matin — démarrez en douceur et voyez comment vous vous sentez.";
+    return "Vous êtes un peu fatigué — gérez bien l'effort aujourd'hui.";
+  }
+
+  // ── PRIORITY 9 : journée chargée (2+ séances) ──
+  if (isHeavyDay) {
+    if (hTotal !== null && hTotal <= 12) return `Grande journée : ${todaySessions.length} séances au programme — vous êtes frais, allez-y !`;
+    if (tomorrowIsRest) return `${todaySessions.length} séances aujourd'hui et repos demain — donnez tout !`;
+    return `${todaySessions.length} séances au programme — gérez bien votre énergie sur la journée.`;
+  }
+
+  // ── PRIORITY 10 : demain c'est repos ──
+  if (tomorrowIsRest && !isRest) {
+    if (isForce) return "Séance de force et repos demain — allez chercher le maximum ce soir !";
+    return "Repos demain — profitez de cette séance pour tout donner.";
+  }
+
+  // ── PRIORITY 11 : début / fin de semaine ──
+  if (isFirstDayWithSession) {
+    if (isMorning) return "C'est parti pour la semaine — belle séance pour bien lancer ça !";
+    return "Première séance de la semaine — posez le ton dès maintenant.";
+  }
+  if (isLastDayWithSession) {
+    if (sessionsDoneThisWeek >= 3) return `Dernière séance d'une belle semaine (${sessionsDoneThisWeek} déjà faites) — finissez en force !`;
+    return "Dernière séance de la semaine — terminez bien.";
+  }
+
+  // ── PRIORITY 12 : Hooper bon ──
+  if (hTotal !== null) {
+    if (hTotal <= 12) {
+      if (isForce) return "Excellente récupération et séance de force — allez chercher le max !";
+      if (isEndur) return "Vous êtes frais, parfait pour une longue séance d'endurance !";
+      if (isMorning) return "Vous vous sentez super bien ce matin — excellente séance en vue !";
+      return "Vous vous sentez super bien — excellente journée devant vous !";
+    }
+    if (hTotal <= 14) {
+      if (isForce) return "Bonne forme — allez chercher de belles performances.";
+      if (isEndur) return "Vous êtes bien récupéré, idéal pour le volume.";
+      return "Vous êtes en forme — bonne séance !";
+    }
+    // 15-17
+    if (isForce) return "Séance de force avec une légère fatigue — montez progressivement.";
+    if (isEndur) return "Gardez un effort dosé aujourd'hui, votre corps récupère encore.";
+  }
+
+  // ── PRIORITY 13 : phase de mésocycle ──
+  if (mesoPhrase) return mesoPhrase;
+
+  // ── PRIORITY 14 : heure + type de séance ──
+  if (isMorning) {
+    if (isForce)    return "Séance de force ce matin — réveillez bien vos muscles avant d'attaquer.";
+    if (isEndur)    return "Séance d'endurance au petit matin — idéal pour commencer la journée.";
+    if (isTech)     return "Séance technique ce matin — l'esprit est frais, profitez-en pour vous concentrer.";
+    if (isMobility) return "Mobilité au programme ce matin — prenez le temps d'être présent.";
+    if (isRecup)    return "Récupération active ce matin — doux réveil pour le corps.";
+    return "Bonne séance ce matin — partez du bon pied pour la journée !";
+  }
+  if (isAfternoon) {
+    if (isForce)    return "Séance de force cette après-midi — le corps est bien réveillé, c'est le bon moment.";
+    if (isEndur)    return "Volume au programme cet après-midi — patience et régularité.";
+    if (isTech)     return "Séance technique — concentrez-vous sur la qualité du mouvement.";
+    if (isRecup)    return "Récupération en milieu de journée — allez-y en douceur.";
+    return "Bonne séance cet après-midi !";
+  }
+  if (isEvening) {
+    if (isForce)    return "Séance de force en soirée — bien s'échauffer, le corps est souvent sûr le soir.";
+    if (isEndur)    return "Endurance en soirée — dosez bien pour ne pas perturber le sommeil.";
+    if (isMobility) return "Mobilité en soirée — parfait pour décompresser et bien récupérer la nuit.";
+    if (isRecup)    return "Séance récup en fin de journée — idéal pour relâcher les tensions.";
+    return "Bonne séance ce soir — profitez bien !";
+  }
+
+  // ── FALLBACK ──
   if (isForce)    return "Séance de force au programme — bien s'échauffer avant d'attaquer !";
   if (isEndur)    return "Volume au programme — patience et régularité, vous êtes sur la bonne voie.";
   if (isRecup)    return "Séance de récupération — allez-y en douceur, c'est l'objectif.";
@@ -6973,7 +7124,12 @@ function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHoo
   const mesoCtx = getMesoForDate(data.mesocycles || [], todayObj);
 
   // Contextual phrase
-  const contextualPhrase = getContextualPhrase(todaySessions, existingHooper, dow);
+  const contextualPhrase = getContextualPhrase(todaySessions, existingHooper, dow, {
+    hour: new Date().getHours(),
+    weekSessions,
+    dayIndex,
+    mesoCtx,
+  });
 
   // Colors
   const accentGreen = isDark ? "#4ade80" : "#2a7d4f";
