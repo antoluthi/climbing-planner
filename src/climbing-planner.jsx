@@ -2836,7 +2836,7 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, db
   const isAthleteUser = role === "athlete";
   const canDirectlyMove = !isAthleteUser; // coach, solo (null), auto
 
-  const targetMonday = targetWeekKey ? new Date(targetWeekKey + "T00:00:00") : null;
+  const targetMonday = targetWeekKey ? getMondayOf(addDays(new Date(targetWeekKey + "T00:00:00"), 1)) : null;
   const prevWeekKey = targetMonday ? weekKey(getMondayOf(addDays(targetMonday, -7))) : smWeekKey;
   const nextWeekKey = targetMonday ? weekKey(getMondayOf(addDays(targetMonday, 7))) : smWeekKey;
   const weekLabel = targetMonday
