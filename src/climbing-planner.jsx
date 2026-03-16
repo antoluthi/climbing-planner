@@ -203,7 +203,7 @@ function loadData() {
   try {
     const raw = localStorage.getItem("climbing_planner_v1");
     const parsed = raw ? JSON.parse(raw) : {};
-    const result = { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [], ...parsed };
+    const result = { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {}, profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [], ...parsed };
     // Migrate photo from legacy separate key → profile.avatarDataUrl
     if (!result.profile?.avatarDataUrl) {
       const legacy = localStorage.getItem("climbing_planner_photo");
@@ -216,7 +216,7 @@ function loadData() {
     if (result.profile) delete result.profile.role;
     return result;
   } catch {
-    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [] };
+    return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {}, profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [] };
   }
 }
 
@@ -6058,6 +6058,45 @@ function Dashboard({ data, onUpdateSleep }) {
     });
   })();
 
+  const nutritionChartData = (() => {
+    const nutrMap = data.nutrition || {};
+    const sumDay = dateStr => {
+      const meals = nutrMap[dateStr] || [];
+      if (meals.length === 0) return { cal: null, prot: null };
+      return { cal: meals.reduce((s, m) => s + (m.calories || 0), 0), prot: meals.reduce((s, m) => s + (m.proteins || 0), 0) };
+    };
+    if (range === "jour") {
+      const monday = getMondayOf(statsRefDate);
+      const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+      return Array.from({ length: 7 }, (_, i) => {
+        const dateStr = addDays(monday, i).toISOString().slice(0, 10);
+        const { cal, prot } = sumDay(dateStr);
+        return { label: dayNames[i], cal, prot };
+      });
+    }
+    if (range === "an") {
+      return Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(statsRefDate.getFullYear(), statsRefDate.getMonth() - (11 - i), 1);
+        const y = d.getFullYear(), m = d.getMonth();
+        const days = Object.keys(nutrMap).filter(dt => { const dd = new Date(dt + "T12:00:00"); return dd.getFullYear() === y && dd.getMonth() === m; });
+        if (!days.length) return { label: d.toLocaleDateString("fr-FR", { month: "short" }), cal: null, prot: null };
+        const cal = Math.round(days.reduce((s, dt) => s + (nutrMap[dt] || []).reduce((a, m) => a + (m.calories || 0), 0), 0) / days.length);
+        const prot = Math.round(days.reduce((s, dt) => s + (nutrMap[dt] || []).reduce((a, m) => a + (m.proteins || 0), 0), 0) / days.length);
+        return { label: d.toLocaleDateString("fr-FR", { month: "short" }), cal: cal || null, prot: prot || null };
+      });
+    }
+    const nWeeks = range === "mois" ? 13 : 8;
+    return Array.from({ length: nWeeks }, (_, i) => {
+      const monday = getMondayOf(addDays(statsRefDate, -(7 * (nWeeks - 1 - i))));
+      const days = Array.from({ length: 7 }, (__, d) => addDays(monday, d).toISOString().slice(0, 10)).filter(dt => nutrMap[dt]);
+      const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
+      if (!days.length) return { label, cal: null, prot: null };
+      const cal = Math.round(days.reduce((s, dt) => s + (nutrMap[dt] || []).reduce((a, m) => a + (m.calories || 0), 0), 0) / days.length);
+      const prot = Math.round(days.reduce((s, dt) => s + (nutrMap[dt] || []).reduce((a, m) => a + (m.proteins || 0), 0), 0) / days.length);
+      return { label, cal: cal || null, prot: prot || null };
+    });
+  })();
+
   const totalCharge4w = getChartData(data, "sem").slice(4).reduce((s, w) => s + w.charge, 0);
   const rpeVals = chartData.filter(w => w.avgRpe != null).map(w => w.avgRpe);
   const globalAvgRpe = rpeVals.length
@@ -6180,6 +6219,29 @@ function Dashboard({ data, onUpdateSleep }) {
                   <Cell key={i} fill={entry.total != null ? hooperColor(entry.total, isDark) : "transparent"} />
                 ))}
               </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {nutritionChartData.some(d => d.cal != null || d.prot != null) && (
+        <div style={styles.dashSection}>
+          <div style={styles.dashSectionTitle}>Nutrition — {rangeLabel}</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 10, color: isDark ? "#fb923c" : "#c2410c", fontWeight: 700 }}>■ Calories (kcal)</span>
+            <span style={{ fontSize: 10, color: isDark ? "#34d399" : "#047857", fontWeight: 700 }}>■ Protéines (g)</span>
+          </div>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={nutritionChartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }} barCategoryGap="15%">
+              <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
+                interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
+              <YAxis yAxisId="cal" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis yAxisId="prot" orientation="right" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }}
+                formatter={(v, name) => v != null ? [name === "cal" ? `${v} kcal` : `${v} g`, name === "cal" ? "Calories" : "Protéines"] : null} />
+              <Bar yAxisId="cal" dataKey="cal" name="cal" fill={isDark ? "#fb923c" : "#f97316"} radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Bar yAxisId="prot" dataKey="prot" name="prot" fill={isDark ? "#34d399" : "#10b981"} radius={[3, 3, 0, 0]} maxBarSize={28} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -7507,7 +7569,7 @@ function getContextualPhrase(todaySessions, hooperEntry, dayOfWeek, { hour, week
 
 // ─── ACCUEIL ──────────────────────────────────────────────────────────────────
 
-function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHooper }) {
+function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHooper, onAddNutrition, onDeleteNutrition }) {
   const { isDark } = useThemeCtx();
   const today = new Date().toISOString().slice(0, 10);
   const todayObj = new Date(today + "T12:00:00");
@@ -7551,6 +7613,21 @@ function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHoo
 
   // Creatine
   const hasCreatine = !!data.creatine?.[today];
+
+  // Nutrition
+  const todayMeals = data.nutrition?.[today] || [];
+  const totalCalories = todayMeals.reduce((s, m) => s + (m.calories || 0), 0);
+  const totalProteins = todayMeals.reduce((s, m) => s + (m.proteins || 0), 0);
+  const [nutrOpen, setNutrOpen] = useState(false);
+  const [nutrForm, setNutrForm] = useState({ name: "", calories: "", proteins: "" });
+  const nutrValid = nutrForm.name.trim() && (nutrForm.calories !== "" || nutrForm.proteins !== "");
+  const handleAddMeal = () => {
+    if (!nutrValid) return;
+    const meal = { id: "m_" + Date.now().toString(36), name: nutrForm.name.trim(), calories: nutrForm.calories !== "" ? Math.round(Number(nutrForm.calories)) : 0, proteins: nutrForm.proteins !== "" ? Math.round(Number(nutrForm.proteins)) : 0 };
+    onAddNutrition(today, meal);
+    setNutrForm({ name: "", calories: "", proteins: "" });
+    setNutrOpen(false);
+  };
 
   // Mesocycle context
   const mesoCtx = getMesoForDate(data.mesocycles || [], todayObj);
@@ -7762,6 +7839,88 @@ function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHoo
                 >
                   Enregistrer
                 </button>
+              </div>
+            )}
+          </div>
+
+          {/* Nutrition */}
+          <div style={{ background: panelBg, borderRadius: 8, padding: "12px 14px", border: `1px solid ${panelBorder}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: nutrOpen ? 12 : 0 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: textMain }}>Nutrition</div>
+                {(totalCalories > 0 || totalProteins > 0) && !nutrOpen && (
+                  <div style={{ fontSize: 11, color: accentGreen, marginTop: 2, fontWeight: 600 }}>
+                    {totalCalories} kcal · {totalProteins} g prot
+                  </div>
+                )}
+                {totalCalories === 0 && totalProteins === 0 && !nutrOpen && (
+                  <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>Aucun repas enregistré</div>
+                )}
+              </div>
+              <button
+                onClick={() => setNutrOpen(o => !o)}
+                style={{ background: "none", border: `1px solid ${panelBorder}`, borderRadius: 5, color: textMain, padding: "3px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+              >
+                {nutrOpen ? "✕ Fermer" : "+ Ajouter"}
+              </button>
+            </div>
+
+            {nutrOpen && (
+              <div>
+                {/* Meal list */}
+                {todayMeals.length > 0 && (
+                  <div style={{ marginBottom: 10, display: "flex", flexDirection: "column", gap: 5 }}>
+                    {todayMeals.map(m => (
+                      <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: textMain }}>
+                        <span style={{ flex: 1, fontWeight: 500 }}>{m.name}</span>
+                        <span style={{ color: textMuted, fontSize: 11 }}>{m.calories} kcal · {m.proteins} g</span>
+                        <button
+                          onClick={() => onDeleteNutrition(today, m.id)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#f87171", fontSize: 13, padding: "0 2px", lineHeight: 1 }}
+                        >✕</button>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: 11, fontWeight: 700, color: accentGreen, marginTop: 4, borderTop: `1px solid ${panelBorder}`, paddingTop: 6 }}>
+                      Total : {totalCalories} kcal · {totalProteins} g protéines
+                    </div>
+                  </div>
+                )}
+
+                {/* Add meal form */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                  <input
+                    type="text"
+                    placeholder="Repas (ex : Déjeuner, Poulet riz…)"
+                    value={nutrForm.name}
+                    onChange={e => setNutrForm(f => ({ ...f, name: e.target.value }))}
+                    style={{ background: isDark ? "#161a16" : "#f0ece4", border: `1px solid ${panelBorder}`, borderRadius: 5, color: textMain, padding: "6px 10px", fontSize: 12, fontFamily: "inherit", outline: "none" }}
+                  />
+                  <div style={{ display: "flex", gap: 7 }}>
+                    <input
+                      type="number"
+                      placeholder="Calories (kcal)"
+                      min={0}
+                      value={nutrForm.calories}
+                      onChange={e => setNutrForm(f => ({ ...f, calories: e.target.value }))}
+                      style={{ flex: 1, background: isDark ? "#161a16" : "#f0ece4", border: `1px solid ${panelBorder}`, borderRadius: 5, color: textMain, padding: "6px 10px", fontSize: 12, fontFamily: "inherit", outline: "none" }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Protéines (g)"
+                      min={0}
+                      value={nutrForm.proteins}
+                      onChange={e => setNutrForm(f => ({ ...f, proteins: e.target.value }))}
+                      style={{ flex: 1, background: isDark ? "#161a16" : "#f0ece4", border: `1px solid ${panelBorder}`, borderRadius: 5, color: textMain, padding: "6px 10px", fontSize: 12, fontFamily: "inherit", outline: "none" }}
+                    />
+                  </div>
+                  <button
+                    onClick={handleAddMeal}
+                    disabled={!nutrValid}
+                    style={{ background: nutrValid ? accentGreen : (isDark ? "#2a2f2a" : "#d0d0c0"), border: "none", borderRadius: 6, color: nutrValid ? (isDark ? "#0a0f0a" : "#fff") : textMuted, padding: "6px 18px", cursor: nutrValid ? "pointer" : "default", fontSize: 12, fontFamily: "inherit", fontWeight: 600, alignSelf: "flex-start" }}
+                  >
+                    Ajouter
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -8168,7 +8327,7 @@ export default function ClimbingPlanner() {
       .select("data")
       .eq("user_id", athlete.userId)
       .maybeSingle();
-    const athleteData = row?.data ?? { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, profile: {}, customCycles: [], cyclesLocked: false };
+    const athleteData = row?.data ?? { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {}, profile: {}, customCycles: [], cyclesLocked: false };
     setViewingAthlete(athlete);
     setData(athleteData);
     setViewMode("week");
@@ -8806,6 +8965,16 @@ export default function ClimbingPlanner() {
           onAddHooper={entry => setData(d => {
             const existing = (d.hooper || []).filter(h => h.date !== entry.date);
             return { ...d, hooper: [...existing, entry].sort((a, b) => a.date.localeCompare(b.date)) };
+          })}
+          onAddNutrition={(dateISO, meal) => setData(d => {
+            const dayMeals = [...(d.nutrition?.[dateISO] || []), meal];
+            return { ...d, nutrition: { ...(d.nutrition || {}), [dateISO]: dayMeals } };
+          })}
+          onDeleteNutrition={(dateISO, mealId) => setData(d => {
+            const dayMeals = (d.nutrition?.[dateISO] || []).filter(m => m.id !== mealId);
+            const nutrition = { ...(d.nutrition || {}) };
+            if (dayMeals.length === 0) delete nutrition[dateISO]; else nutrition[dateISO] = dayMeals;
+            return { ...d, nutrition };
           })}
         />
       )}
