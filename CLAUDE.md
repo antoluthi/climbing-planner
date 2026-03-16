@@ -148,6 +148,12 @@ VITE_SUPABASE_ANON_KEY=<clé anon>
 ```
 Même chose dans Vercel Dashboard > Settings > Environment Variables.
 
+**Variable supplémentaire à ajouter dans Vercel uniquement** (utilisée par les fonctions serverless CalDAV/iCal, pas dans le frontend) :
+```
+SUPABASE_SERVICE_ROLE_KEY=<service role key>
+```
+Sans cette variable, les endpoints `/api/caldav/*` et `/api/calendar/*` retournent 503.
+
 ## Vues disponibles
 
 | viewMode | Description | Accès |
