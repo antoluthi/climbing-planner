@@ -2,7 +2,7 @@
 // Generates an iCal feed from the user's climbing plan stored in Supabase.
 // The :token is a random UUID stored in data.profile.calendarToken (synced via upsert).
 
-const { createClient } = require("@supabase/supabase-js");
+import { createClient } from "@supabase/supabase-js";
 
 function getMondayOf(date) {
   const d = new Date(date);
@@ -156,7 +156,7 @@ function generateICS(planData, displayName) {
   return lines.map(foldLine).join("\r\n") + "\r\n";
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const { token } = req.query;
 
   if (!token || token.length < 8) {
