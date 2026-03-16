@@ -157,7 +157,9 @@ function generateICS(planData, displayName) {
 }
 
 export default async function handler(req, res) {
-  const { token } = req.query;
+  let { token } = req.query;
+  // Strip .ics extension if present (Vercel includes it in the path param)
+  if (token) token = token.replace(/\.ics$/i, "");
 
   if (!token || token.length < 8) {
     res.status(400).send("Invalid token");
