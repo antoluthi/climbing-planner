@@ -5616,7 +5616,102 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
         </div>
       </div>
 
+      {/* ── Abonnement calendrier ── */}
+      {session && (
+        <CalendarSyncSection
+          profile={profile}
+          onUpdateProfile={onUpdateProfile}
+          isDark={isDark}
+          accent={accent}
+          mutedColor={mutedColor}
+          textColor={textColor}
+          surfaceBg={surfaceBg}
+          borderColor={borderColor}
+          btnBorder={btnBorder}
+          styles={styles}
+        />
+      )}
+
       {showCrop && <PhotoCropModal onSave={handleSavePhoto} onClose={() => setShowCrop(false)} />}
+    </div>
+  );
+}
+
+// ─── CALENDAR SYNC SECTION ─────────────────────────────────────────────────────
+
+function CalendarSyncSection({ profile, onUpdateProfile, isDark, accent, mutedColor, textColor, surfaceBg, borderColor, btnBorder, styles }) {
+  const [copied, setCopied] = useState(false);
+
+  const token = profile.calendarToken || null;
+  const calUrl = token
+    ? `${window.location.origin}/api/calendar/${token}.ics`
+    : null;
+
+  const generateToken = () => {
+    const newToken = crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2) + Date.now().toString(36);
+    onUpdateProfile({ ...profile, calendarToken: newToken });
+  };
+
+  const handleCopy = () => {
+    if (!calUrl) return;
+    navigator.clipboard.writeText(calUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleRevoke = () => {
+    if (!window.confirm("Révoquer le lien ? L'ancien lien ne fonctionnera plus.")) return;
+    const { calendarToken: _removed, ...rest } = profile;
+    onUpdateProfile({ ...rest, calendarToken: null });
+  };
+
+  return (
+    <div style={styles.profileSection}>
+      <div style={styles.profileSectionTitle}>Abonnement calendrier</div>
+      <div style={{ fontSize: 12, color: mutedColor, marginBottom: 10, lineHeight: 1.5 }}>
+        Abonnez-vous à votre planning depuis Google Calendar, Apple Calendar ou Outlook.
+        Le calendrier se met à jour automatiquement (toutes les ~24h).
+      </div>
+
+      {!token ? (
+        <button
+          onClick={generateToken}
+          style={{ background: accent, border: "none", color: "#0a1a0f", padding: "8px 18px", borderRadius: 5, cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 600 }}
+        >
+          Générer le lien d&apos;abonnement
+        </button>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+            <input
+              readOnly
+              value={calUrl}
+              style={{ flex: 1, minWidth: 200, background: isDark ? "#161c19" : "#ddd7cc", border: `1px solid ${borderColor}`, borderRadius: 5, color: mutedColor, padding: "7px 10px", fontSize: 11, fontFamily: "monospace", outline: "none" }}
+              onFocus={e => e.target.select()}
+            />
+            <button
+              onClick={handleCopy}
+              style={{ background: copied ? accent : "none", border: `1px solid ${copied ? accent : btnBorder}`, color: copied ? "#0a1a0f" : accent, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: copied ? 600 : 400, transition: "all 0.2s" }}
+            >
+              {copied ? "✓ Copié !" : "Copier"}
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ fontSize: 10, color: mutedColor, flex: 1 }}>
+              Dans Google Calendar : <span style={{ color: textColor }}>Autres agendas → Via URL → coller le lien</span>
+            </div>
+            <button
+              onClick={handleRevoke}
+              style={{ background: "none", border: `1px solid ${btnBorder}`, color: mutedColor, padding: "5px 10px", borderRadius: 5, cursor: "pointer", fontSize: 10, fontFamily: "inherit", opacity: 0.7 }}
+            >
+              Révoquer
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
