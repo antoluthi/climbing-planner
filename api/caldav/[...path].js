@@ -330,11 +330,19 @@ ${entries}
 
 export default async function handler(req, res) {
   const { path: pathParts } = req.query;
-  const parts = Array.isArray(pathParts)
-    ? pathParts
-    : pathParts
-    ? [pathParts]
-    : [];
+  let parts = (
+    Array.isArray(pathParts) ? pathParts : pathParts ? [pathParts] : []
+  ).filter(Boolean);
+
+  // Fallback: parse path segments from req.url in case the catch-all query
+  // param wasn't populated (e.g. Vercel rewrite edge cases with trailing slash).
+  if (parts.length === 0 && req.url) {
+    const rawPath = req.url.split("?")[0];
+    const prefix = "/api/caldav/";
+    if (rawPath.startsWith(prefix)) {
+      parts = rawPath.slice(prefix.length).split("/").filter(Boolean);
+    }
+  }
 
   const token = parts[0];
   if (!token || token.length < 8) {

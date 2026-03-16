@@ -9,8 +9,8 @@
   ],
   "rewrites": [
     {
-      "source": "/api/caldav/(.*)/",
-      "destination": "/api/caldav/$1"
+      "source": "/api/caldav/:slug+/",
+      "destination": "/api/caldav/:slug+"
     }
   ],
   "redirects": [
