@@ -5673,12 +5673,12 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
 // ─── CALENDAR SYNC SECTION ─────────────────────────────────────────────────────
 
 function CalendarSyncSection({ profile, onUpdateProfile, isDark, accent, mutedColor, textColor, surfaceBg, borderColor, btnBorder, styles }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedCaldav, setCopiedCaldav] = useState(false);
+  const [copiedIcal, setCopiedIcal] = useState(false);
 
   const token = profile.calendarToken || null;
-  const calUrl = token
-    ? `${window.location.origin}/api/calendar/${token}.ics`
-    : null;
+  const caldavUrl = token ? `${window.location.origin}/api/caldav/${token}/` : null;
+  const icalUrl = token ? `${window.location.origin}/api/calendar/${token}.ics` : null;
 
   const generateToken = () => {
     const newToken = crypto.randomUUID
@@ -5687,9 +5687,9 @@ function CalendarSyncSection({ profile, onUpdateProfile, isDark, accent, mutedCo
     onUpdateProfile({ ...profile, calendarToken: newToken });
   };
 
-  const handleCopy = () => {
-    if (!calUrl) return;
-    navigator.clipboard.writeText(calUrl).then(() => {
+  const handleCopy = (url, setCopied) => {
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -5701,12 +5701,15 @@ function CalendarSyncSection({ profile, onUpdateProfile, isDark, accent, mutedCo
     onUpdateProfile({ ...rest, calendarToken: null });
   };
 
+  const inputStyle = { flex: 1, minWidth: 160, background: isDark ? "#161c19" : "#ddd7cc", border: `1px solid ${borderColor}`, borderRadius: 5, color: mutedColor, padding: "7px 10px", fontSize: 11, fontFamily: "monospace", outline: "none" };
+  const copyBtnStyle = (copied) => ({ background: copied ? accent : "none", border: `1px solid ${copied ? accent : btnBorder}`, color: copied ? "#0a1a0f" : accent, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: copied ? 600 : 400, transition: "all 0.2s", whiteSpace: "nowrap" });
+
   return (
     <div style={styles.profileSection}>
-      <div style={styles.profileSectionTitle}>Abonnement calendrier</div>
+      <div style={styles.profileSectionTitle}>Synchronisation calendrier (CalDAV)</div>
       <div style={{ fontSize: 12, color: mutedColor, marginBottom: 10, lineHeight: 1.5 }}>
-        Abonnez-vous à votre planning depuis Google Calendar, Apple Calendar ou Outlook.
-        Le calendrier se met à jour automatiquement (toutes les ~24h).
+        Connectez votre planning comme un compte CalDAV natif dans Apple Calendar, Thunderbird ou DAVx⁵ (Android).
+        La synchronisation est en lecture seule.
       </div>
 
       {!token ? (
@@ -5714,35 +5717,46 @@ function CalendarSyncSection({ profile, onUpdateProfile, isDark, accent, mutedCo
           onClick={generateToken}
           style={{ background: accent, border: "none", color: "#0a1a0f", padding: "8px 18px", borderRadius: 5, cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 600 }}
         >
-          Générer le lien d&apos;abonnement
+          Générer les liens de synchronisation
         </button>
       ) : (
         <>
+          {/* CalDAV URL */}
+          <div style={{ fontSize: 11, color: textColor, marginBottom: 4, fontWeight: 600 }}>URL CalDAV</div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+            <input readOnly value={caldavUrl} style={inputStyle} onFocus={e => e.target.select()} />
+            <button onClick={() => handleCopy(caldavUrl, setCopiedCaldav)} style={copyBtnStyle(copiedCaldav)}>
+              {copiedCaldav ? "✓ Copié !" : "Copier"}
+            </button>
+          </div>
+
+          {/* Instructions CalDAV */}
+          <div style={{ fontSize: 10, color: mutedColor, marginBottom: 12, lineHeight: 1.6, background: isDark ? "#0d1510" : "#e8e2d8", borderRadius: 5, padding: "8px 10px" }}>
+            <div style={{ marginBottom: 3 }}><span style={{ color: textColor }}>Apple Calendar / iOS</span> — Réglages → Calendrier → Comptes → Ajouter → Autre → Compte CalDAV → coller l&apos;URL</div>
+            <div style={{ marginBottom: 3 }}><span style={{ color: textColor }}>Thunderbird</span> — Nouveau Calendrier → Sur le réseau → Format : CalDAV → coller l&apos;URL</div>
+            <div><span style={{ color: textColor }}>DAVx⁵ (Android)</span> — Ajouter compte → Connexion manuelle → URL CalDAV → coller l&apos;URL</div>
+          </div>
+
+          {/* iCal URL fallback for Google Calendar */}
+          <div style={{ fontSize: 11, color: mutedColor, marginBottom: 4 }}>
+            URL iCal <span style={{ fontSize: 10 }}>(pour Google Calendar uniquement — ne supporte pas CalDAV externe)</span>
+          </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
-            <input
-              readOnly
-              value={calUrl}
-              style={{ flex: 1, minWidth: 200, background: isDark ? "#161c19" : "#ddd7cc", border: `1px solid ${borderColor}`, borderRadius: 5, color: mutedColor, padding: "7px 10px", fontSize: 11, fontFamily: "monospace", outline: "none" }}
-              onFocus={e => e.target.select()}
-            />
-            <button
-              onClick={handleCopy}
-              style={{ background: copied ? accent : "none", border: `1px solid ${copied ? accent : btnBorder}`, color: copied ? "#0a1a0f" : accent, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: copied ? 600 : 400, transition: "all 0.2s" }}
-            >
-              {copied ? "✓ Copié !" : "Copier"}
+            <input readOnly value={icalUrl} style={{ ...inputStyle, color: isDark ? "#556a5e" : "#888" }} onFocus={e => e.target.select()} />
+            <button onClick={() => handleCopy(icalUrl, setCopiedIcal)} style={copyBtnStyle(copiedIcal)}>
+              {copiedIcal ? "✓ Copié !" : "Copier"}
             </button>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <div style={{ fontSize: 10, color: mutedColor, flex: 1 }}>
-              Dans Google Calendar : <span style={{ color: textColor }}>Autres agendas → Via URL → coller le lien</span>
-            </div>
-            <button
-              onClick={handleRevoke}
-              style={{ background: "none", border: `1px solid ${btnBorder}`, color: mutedColor, padding: "5px 10px", borderRadius: 5, cursor: "pointer", fontSize: 10, fontFamily: "inherit", opacity: 0.7 }}
-            >
-              Révoquer
-            </button>
+          <div style={{ fontSize: 10, color: mutedColor, marginBottom: 10 }}>
+            Google Calendar : Autres agendas → Via URL → coller le lien iCal (mise à jour ~24h)
           </div>
+
+          <button
+            onClick={handleRevoke}
+            style={{ background: "none", border: `1px solid ${btnBorder}`, color: mutedColor, padding: "5px 10px", borderRadius: 5, cursor: "pointer", fontSize: 10, fontFamily: "inherit", opacity: 0.7 }}
+          >
+            Révoquer les liens
+          </button>
         </>
       )}
     </div>

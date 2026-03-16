@@ -1,0 +1,22 @@
+{
+  "headers": [
+    {
+      "source": "/api/caldav/(.*)",
+      "headers": [
+        { "key": "DAV", "value": "1, 3, calendar-access" }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/.well-known/caldav",
+      "destination": "/profil",
+      "permanent": false
+    },
+    {
+      "source": "/.well-known/carddav",
+      "destination": "/profil",
+      "permanent": false
+    }
+  ]
+}
