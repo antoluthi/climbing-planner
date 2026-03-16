@@ -7,12 +7,13 @@
       ]
     }
   ],
-  "redirects": [
+  "rewrites": [
     {
-      "source": "/api/caldav/:path*/",
-      "destination": "/api/caldav/:path*",
-      "permanent": false
-    },
+      "source": "/api/caldav/(.*)/",
+      "destination": "/api/caldav/$1"
+    }
+  ],
+  "redirects": [
     {
       "source": "/.well-known/caldav",
       "destination": "/profil",
