@@ -5738,7 +5738,7 @@ function ActivityHeatmap({ data }) {
   // Build per-day data from sessions
   const dayData = {};
   Object.entries(data.weeks || {}).forEach(([key, days]) => {
-    const monday = new Date(key + "T00:00:00");
+    const monday = new Date(key + "T12:00:00");
     (days || []).forEach((daySessions, idx) => {
       const d = addDays(monday, idx);
       const dateStr = d.toISOString().slice(0, 10);
