@@ -41,6 +41,38 @@ function toICSDateTime(date) {
   );
 }
 
+// Format a JS Date as UTC ICS datetime (for DTSTAMP — always UTC)
+function toICSDateTimeUTC(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return (
+    date.getUTCFullYear() +
+    pad(date.getUTCMonth() + 1) +
+    pad(date.getUTCDate()) +
+    "T" +
+    pad(date.getUTCHours()) +
+    pad(date.getUTCMinutes()) +
+    "00Z"
+  );
+}
+
+// Fold ICS lines longer than 75 octets (RFC 5545 §3.1)
+function foldLine(line) {
+  const MAX = 75;
+  if (line.length <= MAX) return line;
+  let result = "";
+  let pos = 0;
+  while (pos < line.length) {
+    if (pos === 0) {
+      result += line.slice(0, MAX);
+      pos = MAX;
+    } else {
+      result += "\r\n " + line.slice(pos, pos + MAX - 1);
+      pos += MAX - 1;
+    }
+  }
+  return result;
+}
+
 // Format a JS Date as ICS all-day date (YYYYMMDD)
 function toICSDate(date) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -49,6 +81,7 @@ function toICSDate(date) {
 
 function generateICS(planData, displayName) {
   const calName = `Planning Escalade${displayName ? " — " + displayName : ""}`;
+  const now = toICSDateTimeUTC(new Date());
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -83,6 +116,7 @@ function generateICS(planData, displayName) {
 
         lines.push("BEGIN:VEVENT");
         lines.push(`UID:${uid}`);
+        lines.push(`DTSTAMP:${now}`);
 
         if (session.startTime) {
           const [h, m] = session.startTime.split(":").map(Number);
@@ -119,7 +153,7 @@ function generateICS(planData, displayName) {
   }
 
   lines.push("END:VCALENDAR");
-  return lines.join("\r\n");
+  return lines.map(foldLine).join("\r\n") + "\r\n";
 }
 
 module.exports = async function handler(req, res) {
