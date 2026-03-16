@@ -19,6 +19,25 @@ function addDays(date, n) {
   return d;
 }
 
+// Mirror of the frontend migrateWeekKeys: correct keys that were stored as
+// UTC midnight of the local Monday (off-by-one for UTC+ users).
+// A Sunday key (getDay() === 0 at noon UTC) is the tell-tale sign.
+function migrateWeekKeys(weeks) {
+  if (!weeks) return weeks;
+  const result = { ...weeks };
+  Object.keys(result).forEach(k => {
+    const d = new Date(k + "T12:00:00Z"); // noon UTC → unambiguous date
+    if (d.getUTCDay() === 0) { // Sunday = stored as UTC midnight of local Monday
+      const corrected = addDays(d, 1);
+      const pad = n => String(n).padStart(2, "0");
+      const key2 = `${corrected.getUTCFullYear()}-${pad(corrected.getUTCMonth() + 1)}-${pad(corrected.getUTCDate())}`;
+      if (!result[key2]) result[key2] = result[k];
+      delete result[k];
+    }
+  });
+  return result;
+}
+
 function escapeICS(str) {
   return (str || "")
     .replace(/\\/g, "\\\\")
@@ -27,16 +46,17 @@ function escapeICS(str) {
     .replace(/\n/g, "\\n");
 }
 
-// Format a JS Date as ICS floating datetime (no TZ suffix — interpreted in user's local TZ)
+// Format a JS Date as ICS floating datetime (no TZ suffix — interpreted in user's local TZ).
+// We use UTC getters because on the server all dates are constructed in UTC.
 function toICSDateTime(date) {
   const pad = (n) => String(n).padStart(2, "0");
   return (
-    date.getFullYear() +
-    pad(date.getMonth() + 1) +
-    pad(date.getDate()) +
+    date.getUTCFullYear() +
+    pad(date.getUTCMonth() + 1) +
+    pad(date.getUTCDate()) +
     "T" +
-    pad(date.getHours()) +
-    pad(date.getMinutes()) +
+    pad(date.getUTCHours()) +
+    pad(date.getUTCMinutes()) +
     "00"
   );
 }
@@ -73,10 +93,10 @@ function foldLine(line) {
   return result;
 }
 
-// Format a JS Date as ICS all-day date (YYYYMMDD)
+// Format a JS Date as ICS all-day date (YYYYMMDD). Uses UTC getters.
 function toICSDate(date) {
   const pad = (n) => String(n).padStart(2, "0");
-  return date.getFullYear() + pad(date.getMonth() + 1) + pad(date.getDate());
+  return date.getUTCFullYear() + pad(date.getUTCMonth() + 1) + pad(date.getUTCDate());
 }
 
 function generateICS(planData, displayName) {
@@ -92,12 +112,13 @@ function generateICS(planData, displayName) {
     "METHOD:PUBLISH",
   ];
 
-  const weeks = planData?.weeks || {};
+  const weeks = migrateWeekKeys(planData?.weeks || {});
 
   for (const [mondayISO, days] of Object.entries(weeks)) {
     if (!Array.isArray(days)) continue;
-    // mondayISO is "YYYY-MM-DD" (the Monday of the week)
-    const monday = new Date(mondayISO + "T00:00:00");
+    // mondayISO is "YYYY-MM-DD" (the Monday of the week, local date)
+    // Use noon UTC to avoid any DST/timezone ambiguity on the server
+    const monday = new Date(mondayISO + "T12:00:00Z");
 
     days.forEach((daySessions, dayIndex) => {
       if (!Array.isArray(daySessions)) return;
@@ -121,14 +142,14 @@ function generateICS(planData, displayName) {
         if (session.startTime) {
           const [h, m] = session.startTime.split(":").map(Number);
           const startDate = new Date(date);
-          startDate.setHours(h, m, 0, 0);
+          startDate.setUTCHours(h, m, 0, 0);
           lines.push(`DTSTART:${toICSDateTime(startDate)}`);
 
           let endDate;
           if (session.endTime) {
             const [eh, em] = session.endTime.split(":").map(Number);
             endDate = new Date(date);
-            endDate.setHours(eh, em, 0, 0);
+            endDate.setUTCHours(eh, em, 0, 0);
             // If end <= start (crosses midnight), add a day
             if (endDate <= startDate) endDate = addDays(endDate, 1);
           } else if (session.duration) {

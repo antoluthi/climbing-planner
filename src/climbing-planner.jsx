@@ -66,7 +66,7 @@ function getCustomCyclesForDate(customCycles, date) {
 }
 
 function getDayLogWarning(data, dateISO, dateObj) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr(new Date());
   if (dateISO > today) return { hasWarning: false, hooperMissing: false, creatineMissing: false, isFuture: true };
   const hooperMissing = !(data.hooper || []).some(h => h.date === dateISO);
   const creatineCycles = (data.customCycles || []).filter(c =>
@@ -183,7 +183,39 @@ function formatDate(date) {
 }
 
 function weekKey(monday) {
-  return monday.toISOString().slice(0, 10);
+  // Use local date parts to avoid UTC-offset shifting midnight to the previous day
+  const y = monday.getFullYear();
+  const m = String(monday.getMonth() + 1).padStart(2, "0");
+  const d = String(monday.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Return YYYY-MM-DD using local date parts (avoids UTC shift at midnight in UTC+ zones)
+function localDateStr(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Migrate week keys that were stored as UTC ISO strings (off-by-one for UTC+ zones).
+// A valid Monday key parsed at noon local should have getDay() === 1.
+// If it gives 0 (Sunday), the key is one day behind the real Monday → shift +1.
+function migrateWeekKeys(data) {
+  const weeks = data?.weeks;
+  if (!weeks) return data;
+  const oldKeys = Object.keys(weeks).filter(k => {
+    const d = new Date(k + "T12:00:00");
+    return d.getDay() === 0; // Sunday = was stored as UTC midnight of local Monday
+  });
+  if (oldKeys.length === 0) return data;
+  const newWeeks = { ...weeks };
+  oldKeys.forEach(k => {
+    const corrected = localDateStr(addDays(new Date(k + "T12:00:00"), 1));
+    if (!newWeeks[corrected]) newWeeks[corrected] = newWeeks[k];
+    delete newWeeks[k];
+  });
+  return { ...data, weeks: newWeeks };
 }
 
 function calcEndTime(startTime, duration) {
@@ -214,7 +246,7 @@ function loadData() {
     }
     // Role is always read from Supabase — never persisted locally
     if (result.profile) delete result.profile.role;
-    return result;
+    return migrateWeekKeys(result);
   } catch {
     return { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {}, profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [] };
   }
@@ -1058,7 +1090,8 @@ function useSupabaseSync() {
       // status column is authoritative for role (overrides blob value)
       ...("status" in (row ?? {}) ? { role: row.status } : {}),
     };
-    return { ...blob, profile, _cloudUpdatedAt: row.updated_at ?? null };
+    const migrated = migrateWeekKeys({ ...blob, profile });
+    return { ...migrated, _cloudUpdatedAt: row.updated_at ?? null };
   }, []);
 
   // Write status to its own column — called only from onboarding.
@@ -4747,7 +4780,7 @@ function SleepSection({ sleepData, onImport, range }) {
 
 function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine }) {
   const { styles, isDark } = useThemeCtx();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr(new Date());
   const [text, setText] = useState(notes[today] || "");
 
   // Sync if today's note changes externally
@@ -4824,7 +4857,7 @@ function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine }) {
 
 function WeightSection({ weightData, onSave }) {
   const { styles, isDark } = useThemeCtx();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr(new Date());
   const [input, setInput] = useState(
     weightData[today] != null ? String(weightData[today]) : ""
   );
@@ -4943,7 +4976,7 @@ function HooperSection({ hoopers, onAdd, range }) {
   const [form, setForm] = useState({ fatigue: null, stress: null, soreness: null, sleep: null });
   const [saved, setSaved] = useState(false);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr(new Date());
   const todayEntry = (hoopers || []).find(h => h.date === today);
   const allFilled = form.fatigue && form.stress && form.soreness && form.sleep;
   const total = allFilled ? form.fatigue + form.stress + form.soreness + form.sleep : null;
@@ -5763,7 +5796,7 @@ function ActivityHeatmap({ data }) {
   const weeks = Array.from({ length: WEEKS }, (_, w) => {
     return Array.from({ length: 7 }, (_, d) => {
       const date = addDays(startMonday, w * 7 + d);
-      const dateStr = date.toISOString().slice(0, 10);
+      const dateStr = localDateStr(date);
       const entry = dayData[dateStr] || { charge: 0, avgRpe: null, sessionCount: 0, hooper: null };
       return { date, dateStr, isFuture: date > today, ...entry };
     });
@@ -5980,7 +6013,7 @@ function getChartData(data, range, refDate) {
       const rpeVals = done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe);
       const avgRpe = rpeVals.length ? Math.round((rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length) * 10) / 10 : null;
       const d = addDays(monday, i);
-      const isToday = d.toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
+      const isToday = localDateStr(d) === localDateStr(new Date());
       return { label: dayNames[i], charge, avgRpe, planned: daySessions.length, done: done.length, isToday };
     });
   }
@@ -6087,7 +6120,7 @@ function Dashboard({ data, onUpdateSleep }) {
       const monday = getMondayOf(statsRefDate);
       const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
       return Array.from({ length: 7 }, (_, i) => {
-        const dateStr = addDays(monday, i).toISOString().slice(0, 10);
+        const dateStr = localDateStr(addDays(monday, i));
         return { label: dayNames[i], kg: weightMap[dateStr] ?? null };
       });
     }
@@ -6107,8 +6140,8 @@ function Dashboard({ data, onUpdateSleep }) {
     const nWeeks = range === "mois" ? 13 : 8;
     return Array.from({ length: nWeeks }, (_, i) => {
       const monday = getMondayOf(addDays(statsRefDate, -(7 * (nWeeks - 1 - i))));
-      const start = monday.toISOString().slice(0, 10);
-      const end = addDays(monday, 6).toISOString().slice(0, 10);
+      const start = weekKey(monday);
+      const end = localDateStr(addDays(monday, 6));
       const vals = Object.entries(weightMap)
         .filter(([date, v]) => v != null && date >= start && date <= end)
         .map(([, v]) => v);
@@ -6124,7 +6157,7 @@ function Dashboard({ data, onUpdateSleep }) {
       const monday = getMondayOf(statsRefDate);
       const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
       return Array.from({ length: 7 }, (_, i) => {
-        const dateStr = addDays(monday, i).toISOString().slice(0, 10);
+        const dateStr = localDateStr(addDays(monday, i));
         const entry = hooperList.find(h => h.date === dateStr);
         return { label: dayNames[i], total: entry?.total ?? null };
       });
@@ -6145,8 +6178,8 @@ function Dashboard({ data, onUpdateSleep }) {
     const nWeeks = range === "mois" ? 13 : 8;
     return Array.from({ length: nWeeks }, (_, i) => {
       const monday = getMondayOf(addDays(statsRefDate, -(7 * (nWeeks - 1 - i))));
-      const start = monday.toISOString().slice(0, 10);
-      const end = addDays(monday, 6).toISOString().slice(0, 10);
+      const start = weekKey(monday);
+      const end = localDateStr(addDays(monday, 6));
       const vals = hooperList.filter(h => h.date >= start && h.date <= end).map(h => h.total);
       const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
       return { label, total: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null };
@@ -6164,7 +6197,7 @@ function Dashboard({ data, onUpdateSleep }) {
       const monday = getMondayOf(statsRefDate);
       const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
       return Array.from({ length: 7 }, (_, i) => {
-        const dateStr = addDays(monday, i).toISOString().slice(0, 10);
+        const dateStr = localDateStr(addDays(monday, i));
         const { cal, prot } = sumDay(dateStr);
         return { label: dayNames[i], cal, prot };
       });
@@ -6183,7 +6216,7 @@ function Dashboard({ data, onUpdateSleep }) {
     const nWeeks = range === "mois" ? 13 : 8;
     return Array.from({ length: nWeeks }, (_, i) => {
       const monday = getMondayOf(addDays(statsRefDate, -(7 * (nWeeks - 1 - i))));
-      const days = Array.from({ length: 7 }, (__, d) => addDays(monday, d).toISOString().slice(0, 10)).filter(dt => nutrMap[dt]);
+      const days = Array.from({ length: 7 }, (__, d) => localDateStr(addDays(monday, d))).filter(dt => nutrMap[dt]);
       const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
       if (!days.length) return { label, cal: null, prot: null };
       const cal = Math.round(days.reduce((s, dt) => s + (nutrMap[dt] || []).reduce((a, m) => a + (m.calories || 0), 0), 0) / days.length);
@@ -6351,7 +6384,7 @@ function Dashboard({ data, onUpdateSleep }) {
 
 function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine, onSaveWeight, onAddHooper }) {
   const { isDark } = useThemeCtx();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr(new Date());
   const [dateISO, setDateISO] = useState(initialDate);
   const dateObj = new Date(dateISO + "T12:00:00");
   const isToday = dateISO === today;
@@ -7666,7 +7699,7 @@ function getContextualPhrase(todaySessions, hooperEntry, dayOfWeek, { hour, week
 
 function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHooper, onAddNutrition, onDeleteNutrition }) {
   const { isDark } = useThemeCtx();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr(new Date());
   const todayObj = new Date(today + "T12:00:00");
 
   // Today's sessions
