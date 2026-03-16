@@ -9,6 +9,11 @@
   ],
   "redirects": [
     {
+      "source": "/api/caldav/:path*/",
+      "destination": "/api/caldav/:path*",
+      "permanent": false
+    },
+    {
       "source": "/.well-known/caldav",
       "destination": "/profil",
       "permanent": false

@@ -5674,11 +5674,9 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
 
 function CalendarSyncSection({ profile, onUpdateProfile, isDark, accent, mutedColor, textColor, surfaceBg, borderColor, btnBorder, styles }) {
   const [copiedCaldav, setCopiedCaldav] = useState(false);
-  const [copiedIcal, setCopiedIcal] = useState(false);
 
   const token = profile.calendarToken || null;
   const caldavUrl = token ? `${window.location.origin}/api/caldav/${token}/` : null;
-  const icalUrl = token ? `${window.location.origin}/api/calendar/${token}.ics` : null;
 
   const generateToken = () => {
     const newToken = crypto.randomUUID
@@ -5735,20 +5733,6 @@ function CalendarSyncSection({ profile, onUpdateProfile, isDark, accent, mutedCo
             <div style={{ marginBottom: 3 }}><span style={{ color: textColor }}>Apple Calendar / iOS</span> — Réglages → Calendrier → Comptes → Ajouter → Autre → Compte CalDAV → coller l&apos;URL</div>
             <div style={{ marginBottom: 3 }}><span style={{ color: textColor }}>Thunderbird</span> — Nouveau Calendrier → Sur le réseau → Format : CalDAV → coller l&apos;URL</div>
             <div><span style={{ color: textColor }}>DAVx⁵ (Android)</span> — Ajouter compte → Connexion manuelle → URL CalDAV → coller l&apos;URL</div>
-          </div>
-
-          {/* iCal URL fallback for Google Calendar */}
-          <div style={{ fontSize: 11, color: mutedColor, marginBottom: 4 }}>
-            URL iCal <span style={{ fontSize: 10 }}>(pour Google Calendar uniquement — ne supporte pas CalDAV externe)</span>
-          </div>
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
-            <input readOnly value={icalUrl} style={{ ...inputStyle, color: isDark ? "#556a5e" : "#888" }} onFocus={e => e.target.select()} />
-            <button onClick={() => handleCopy(icalUrl, setCopiedIcal)} style={copyBtnStyle(copiedIcal)}>
-              {copiedIcal ? "✓ Copié !" : "Copier"}
-            </button>
-          </div>
-          <div style={{ fontSize: 10, color: mutedColor, marginBottom: 10 }}>
-            Google Calendar : Autres agendas → Via URL → coller le lien iCal (mise à jour ~24h)
           </div>
 
           <button
