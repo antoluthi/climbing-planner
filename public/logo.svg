@@ -1,0 +1,12 @@
+<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .hex  { fill: #8a7055; }
+    .dot  { fill: #5c4030; }
+    @media (prefers-color-scheme: dark) {
+      .hex  { fill: #4ade80; }
+      .dot  { fill: #22c55e; }
+    }
+  </style>
+  <path class="hex" d="M20 6L32 12V28L20 34L8 28V12L20 6Z" />
+  <circle class="dot" cx="20" cy="20" r="4" />
+</svg>

@@ -444,7 +444,7 @@ function makeStyles(isDark) {
       position: "relative", zIndex: 1, background: t.headerGrad,
     },
     headerLeft: { display: "flex", alignItems: "center", gap: 12 },
-    logo: { fontSize: 28 },
+    logo: { display: "flex", alignItems: "center" },
     appTitle: { fontSize: 15, fontWeight: 600, letterSpacing: "0.18em", color: t.textTitle, fontFamily: "'Newsreader', Georgia, serif" },
     appSub: { fontSize: 10, color: t.textMuted, letterSpacing: "0.1em", marginTop: 2 },
     weekNav: { display: "flex", alignItems: "center", gap: 16 },
@@ -897,6 +897,19 @@ function useWindowWidth() {
     return () => window.removeEventListener("resize", handler);
   }, []);
   return width;
+}
+
+// ─── LOGO ─────────────────────────────────────────────────────────────────────
+
+function ClimbingPlannerLogo({ isDark, size = 36 }) {
+  const hexFill   = isDark ? "#4ade80" : "#8a7055";
+  const circleFill = isDark ? "#22c55e" : "#5c4030";
+  return (
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: size, height: size, flexShrink: 0 }}>
+      <path d="M20 6L32 12V28L20 34L8 28V12L20 6Z" fill={hexFill} />
+      <circle cx="20" cy="20" r="4" fill={circleFill} />
+    </svg>
+  );
 }
 
 // ─── EXPORT / IMPORT ─────────────────────────────────────────────────────────
@@ -8980,7 +8993,7 @@ export default function ClimbingPlanner() {
         <div style={styles.headerMobile}>
           <div style={styles.headerMobileRow1}>
             <div style={styles.headerLeft}>
-              <span style={styles.logo}>P</span>
+              <ClimbingPlannerLogo isDark={isDark} size={36} />
               <div style={styles.appTitle}>PLANIF ESCALADE</div>
             </div>
             <div style={styles.headerMobileRight}>
@@ -9023,7 +9036,7 @@ export default function ClimbingPlanner() {
         /* ── HEADER DESKTOP ── */
         <div style={styles.header}>
           <div style={styles.headerLeft}>
-            <span style={styles.logo}>P</span>
+            <ClimbingPlannerLogo isDark={isDark} size={36} />
             <div>
               <div style={styles.appTitle}>PLANIF ESCALADE</div>
               <div style={styles.appSub}>
