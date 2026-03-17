@@ -8201,7 +8201,7 @@ function PublicPlanView({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState("week");
-  const [isDark, setIsDark] = useState(() => localStorage.getItem("climbing_theme") !== "light");
+  const [isDark, setIsDark] = useState(() => localStorage.getItem("climbing_theme") === "dark");
 
   const toggleThemePub = () => setIsDark(d => {
     localStorage.setItem("climbing_theme", d ? "light" : "dark");
@@ -8335,7 +8335,7 @@ export default function ClimbingPlanner() {
   const [customSessionForm,   setCustomSessionForm]   = useState(null); // null | { initial?, targetDay? }
   const [sessionComposerForm, setSessionComposerForm] = useState(null); // null | { initial? }  — coach only
   const [sessionModal, setSessionModal] = useState(null); // null | { weekKey, dayIndex, sessionIndex }
-  const [isDark, setIsDark] = useState(() => localStorage.getItem("climbing_theme") !== "light");
+  const [isDark, setIsDark] = useState(() => localStorage.getItem("climbing_theme") === "dark");
   const [logDate, setLogDate] = useState(null); // ISO string of day log modal
   const [showPublicPlan, setShowPublicPlan] = useState(false);
 
@@ -8394,7 +8394,7 @@ export default function ClimbingPlanner() {
   // roleResolved passe à true seulement APRÈS cette lecture — évite la race condition
   // avec RoleOnboardingModal qui sinon s'affiche avant que le status DB soit connu.
   useEffect(() => {
-    if (!session) { setCloudLoaded(false); setRoleResolved(false); return; }
+    if (!session) { setCloudLoaded(false); setRoleResolved(false); setViewMode("accueil"); return; }
     if (!cloudLoaded) return; // la Phase 2 s'en charge
     if (!supabase) { setRoleResolved(true); return; }
     supabase
@@ -8927,12 +8927,22 @@ export default function ClimbingPlanner() {
           <button
             onClick={() => setShowPublicPlan(true)}
             style={{
-              background: "none",
-              border: `1px solid ${isDark ? "#2e3a2e" : "#b8d4b8"}`,
-              borderRadius: 10, padding: "10px 22px",
-              color: accent, cursor: "pointer",
-              fontFamily: "inherit", fontSize: 14, fontWeight: 600,
-              letterSpacing: "0.04em",
+              background: isDark
+                ? "linear-gradient(135deg, #1e1209 0%, #2d1c0e 100%)"
+                : "linear-gradient(135deg, #fdf6ef 0%, #f5e8d8 100%)",
+              border: `1.5px solid ${isDark ? "#a0601a" : "#c2773a"}`,
+              borderRadius: 10,
+              padding: "13px 32px",
+              color: isDark ? "#d4924a" : "#7a3e0a",
+              cursor: "pointer",
+              fontFamily: "'Newsreader', Georgia, serif",
+              fontSize: 16,
+              fontStyle: "italic",
+              fontWeight: 500,
+              letterSpacing: "0.06em",
+              boxShadow: isDark
+                ? "0 2px 14px rgba(160, 96, 26, 0.22), inset 0 1px 0 rgba(255,200,140,0.07)"
+                : "0 2px 14px rgba(194, 119, 58, 0.18), inset 0 1px 0 rgba(255,255,255,0.8)",
             }}
           >
             Planning d'Anto
