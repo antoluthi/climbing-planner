@@ -5949,7 +5949,7 @@ function ActivityHeatmap({ data }) {
       </div>
 
       {/* Legend */}
-      <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 8, justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 8, justifyContent: "flex-start", flexWrap: "wrap" }}>
         <span style={{ fontSize: 9, color: muted, marginRight: 2 }}>Moins</span>
         {legendColors[metric].map((c, i) => (
           <div key={i} style={{ width: CELL, height: CELL, borderRadius: 2, background: c, flexShrink: 0 }} />
