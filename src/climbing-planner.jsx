@@ -19,7 +19,7 @@ const supabase = import.meta.env.VITE_SUPABASE_URL
 
 
 const MESOCYCLES = [
-  { label: "Mise en condition", color: "#4ade80" },
+  { label: "Mise en condition", color: "#c8906a" },
   { label: "Base orientée", color: "#60a5fa" },
   { label: "Pré-comp", color: "#f97316" },
   { label: "Comp / Objectif", color: "#f43f5e" },
@@ -37,7 +37,7 @@ const DEFAULT_MESOCYCLES = MESOCYCLES.map((m, i) => ({
 }));
 
 const CUSTOM_CYCLE_COLORS = [
-  "#4ade80", "#22d3ee", "#f59e0b", "#f87171",
+  "#c8906a", "#22d3ee", "#f59e0b", "#f87171",
   "#a78bfa", "#fb923c", "#34d399", "#60a5fa",
   "#e879f9", "#facc15", "#94a3b8", "#ff6b9d",
 ];
@@ -402,15 +402,15 @@ function makeStyles(isDark) {
     textMuted:       D ? "#707870"   : "#8a7f70",
     textDim:         D ? "#7a8480"   : "#7a7060",
     textCard:        D ? "#b0a898"   : "#4a3f32",
-    accent:          D ? "#4ade80"   : "#2a7d4f",
-    accentBg:        D ? "#263228"   : "#d4e8db",
-    accentBorder:    D ? "#4ade8066" : "#2a7d4f66",
-    accentFaint:     D ? "#4ade8044" : "#2a7d4f44",
-    accentSolid:     D ? "#4ade8055" : "#2a7d4f55",
+    accent:          D ? "#c8906a"   : "#8b4c20",
+    accentBg:        D ? "#2a1a10"   : "#ecddd4",
+    accentBorder:    D ? "#c8906a66" : "#8b4c2066",
+    accentFaint:     D ? "#c8906a44" : "#8b4c2044",
+    accentSolid:     D ? "#c8906a55" : "#8b4c2055",
     btnBorder:       D ? "#2e3430"   : "#bfb9aa",
     navColor:        D ? "#909898"   : "#7a7060",
     gridGap:         D ? "#1f2421"   : "#d0c9bf",
-    todayBg:         D ? "#1a2a1e"   : "#ddeee5",
+    todayBg:         D ? "#221510"   : "#ecddd4",
     metabarBg:       D ? "#161b18"   : "#ece6dc",
     subtleBorder:    D ? "#222927"   : "#ccc6b8",
     modalBg:         D ? "#191e1b"   : "#ede8de",
@@ -902,8 +902,8 @@ function useWindowWidth() {
 // ─── LOGO ─────────────────────────────────────────────────────────────────────
 
 function ClimbingPlannerLogo({ isDark, size = 36 }) {
-  const hexFill   = isDark ? "#4ade80" : "#8a7055";
-  const circleFill = isDark ? "#22c55e" : "#5c4030";
+  const hexFill   = isDark ? "#c8906a" : "#8a7055";
+  const circleFill = isDark ? "#a0601a" : "#5c4030";
   return (
     <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: size, height: size, flexShrink: 0 }}>
       <path d="M20 6L32 12V28L20 34L8 28V12L20 6Z" fill={hexFill} />
@@ -953,7 +953,7 @@ function SyncButtons({ data, onImport, compact, syncStatus, session, onUpload, o
     : syncStatus === "saved" ? "✓"
     : syncStatus === "offline" ? "—"
     : null;
-  const syncColor = syncStatus === "saved" ? "#4ade80"
+  const syncColor = syncStatus === "saved" ? "#c8906a"
     : syncStatus === "offline" ? "#f97316"
     : "#555";
 
@@ -967,7 +967,7 @@ function SyncButtons({ data, onImport, compact, syncStatus, session, onUpload, o
         }>{syncIcon}</span>
       )}
       {session && onUpload && (
-        <button style={{ ...btnStyle, color: "#4ade80" }} onClick={onUpload} title="Envoyer mes données vers le cloud (écraser)">
+        <button style={{ ...btnStyle, color: "#c8906a" }} onClick={onUpload} title="Envoyer mes données vers le cloud (écraser)">
           ↑
         </button>
       )}
@@ -1576,7 +1576,7 @@ function RoleOnboardingModal({ onSelect }) {
   const border   = isDark ? "#2a3a2e" : "#d4e8db";
   const text     = isDark ? "#e2ead5" : "#1a2e1f";
   const muted    = isDark ? "#7a9880" : "#6b8c72";
-  const accent   = "#4caf72";
+  const accent   = isDark ? "#c8906a" : "#8b4c20";
   const [selected, setSelected] = useState(null);
 
   const roles = [
@@ -2043,7 +2043,7 @@ function CustomSessionModal({ initial, data, onSave, onClose }) {
 
 const BLOCK_TYPES = {
   "Échauffement":    { color: "#f97316", defaultCharge: 5,  defaultDuration: 15, hasCharge: false },
-  "Grimpe":          { color: "#4ade80", defaultCharge: 24, defaultDuration: 90, hasCharge: true  },
+  "Grimpe":          { color: "#c8906a", defaultCharge: 24, defaultDuration: 90, hasCharge: true  },
   "Exercices":       { color: "#60a5fa", defaultCharge: 12, defaultDuration: 20, hasCharge: true  },
   "Suspension":      { color: "#a78bfa", defaultCharge: 0,  defaultDuration: 15, hasCharge: true  },
   "Étirements":      { color: "#f0abfc", defaultCharge: 2,  defaultDuration: 10, hasCharge: false },
@@ -2623,7 +2623,7 @@ function FeedbackHistoryModal({ type, id, name, onClose }) {
   const border  = isDark ? "#263228" : "#daeade";
   const text    = isDark ? "#d8e8d0" : "#1a2e1f";
   const muted   = isDark ? "#6a8870" : "#6b8c72";
-  const accent  = "#4caf72";
+  const accent  = isDark ? "#c8906a" : "#8b4c20";
 
   const fmtDate = (ds) => {
     if (!ds) return "";
@@ -2944,8 +2944,8 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, db
     flex: 1, padding: "10px 4px", background: "none", border: "none", cursor: "pointer",
     fontSize: 11, fontFamily: "inherit", letterSpacing: "0.07em", textTransform: "uppercase",
     fontWeight: tab === t ? 700 : 400,
-    color: tab === t ? (isDark ? "#4ade80" : "#2a7d4f") : (isDark ? "#707870" : "#8a7f70"),
-    borderBottom: `2px solid ${tab === t ? (isDark ? "#4ade80" : "#2a7d4f") : "transparent"}`,
+    color: tab === t ? (isDark ? "#c8906a" : "#8b4c20") : (isDark ? "#707870" : "#8a7f70"),
+    borderBottom: `2px solid ${tab === t ? (isDark ? "#c8906a" : "#8b4c20") : "transparent"}`,
     transition: "color 0.15s, border-color 0.15s",
   });
 
@@ -3000,16 +3000,16 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, db
             <div style={{ fontSize: 10, color: isDark ? "#707870" : "#8a7f70", marginTop: 5, letterSpacing: "0.05em" }}>
               {dayLabel}
               {session.startTime && (
-                <span style={{ marginLeft: 8, color: isDark ? "#4caf72" : "#2a7d4f", fontWeight: 600 }}>
+                <span style={{ marginLeft: 8, color: isDark ? "#c8906a" : "#8b4c20", fontWeight: 600 }}>
                   {session.startTime}{session.endTime ? ` – ${session.endTime}` : ""}
                 </span>
               )}
             </div>
           )}
           {session.coachNote && (
-            <div style={{ marginTop: 10, padding: "8px 12px", background: isDark ? "#1a2e22" : "#e8f5ee", borderRadius: 6, borderLeft: `3px solid ${isDark ? "#4caf72" : "#2a7d4f"}` }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: isDark ? "#4caf72" : "#2a7d4f", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 }}>Mot de l'entraîneur</div>
-              <div style={{ fontSize: 12, color: isDark ? "#c8e0c0" : "#1a3a28", lineHeight: 1.5 }}>{session.coachNote}</div>
+            <div style={{ marginTop: 10, padding: "8px 12px", background: isDark ? "#2a1a10" : "#ecddd4", borderRadius: 6, borderLeft: `3px solid ${isDark ? "#c8906a" : "#8b4c20"}` }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: isDark ? "#c8906a" : "#8b4c20", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 }}>Mot de l'entraîneur</div>
+              <div style={{ fontSize: 12, color: isDark ? "#e0c8b0" : "#3a2010", lineHeight: 1.5 }}>{session.coachNote}</div>
             </div>
           )}
         </div>
@@ -3251,9 +3251,9 @@ function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, db
               const inputStyle = { background: isDark ? "#141a16" : "#fff", border: `1px solid ${isDark ? "#3a4a3e" : "#c8d8c0"}`, borderRadius: 6, padding: "8px 11px", color: isDark ? "#d8e8d0" : "#1a2e1f", fontSize: 13, fontFamily: "inherit", outline: "none", width: "100%", boxSizing: "border-box" };
               const labelStyle = { fontSize: 11, color: isDark ? "#707870" : "#8a7f70", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6, display: "block" };
               const dayBtnStyle = (active) => ({
-                flex: 1, padding: "7px 2px", borderRadius: 6, border: `1px solid ${active ? (isDark ? "#4ade80" : "#2a7d4f") : (isDark ? "#2a3a2e" : "#d4e8db")}`,
-                background: active ? (isDark ? "#1e3a2a" : "#d4f0e0") : "none",
-                color: active ? (isDark ? "#4ade80" : "#2a7d4f") : (isDark ? "#8a9a88" : "#6b8c72"),
+                flex: 1, padding: "7px 2px", borderRadius: 6, border: `1px solid ${active ? (isDark ? "#c8906a" : "#8b4c20") : (isDark ? "#2a3a2e" : "#d4e8db")}`,
+                background: active ? (isDark ? "#2a1a10" : "#ecddd4") : "none",
+                color: active ? (isDark ? "#c8906a" : "#8b4c20") : (isDark ? "#8a9a88" : "#6b8c72"),
                 cursor: "pointer", fontSize: 11, fontWeight: active ? 700 : 400, fontFamily: "inherit",
               });
               return (
@@ -3406,7 +3406,7 @@ function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
   const border  = isDark ? "#263228" : "#daeade";
   const text    = isDark ? "#d8e8d0" : "#1a2e1f";
   const muted   = isDark ? "#6a8870" : "#6b8c72";
-  const accent  = "#4caf72";
+  const accent  = isDark ? "#c8906a" : "#8b4c20";
 
   const isSessionTab = tab === "sessions";
 
@@ -3679,7 +3679,7 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
           : future
             ? { background: "transparent", border: `1px solid ${isDark ? "#1e221e" : "#e5e0d8"}`, color: isDark ? "#252a25" : "#ccc8c0", fontWeight: 400 }
             : isToday
-              ? { background: isDark ? "#1a2a1a" : "#eaf5ea", border: `1px solid ${isDark ? "#2a4a2a" : "#9ecb9e"}`, color: isDark ? "#4ade80" : "#2a7d4f", fontWeight: 600 }
+              ? { background: isDark ? "#221510" : "#ecddd4", border: `1px solid ${isDark ? "#4a2a10" : "#c8a080"}`, color: isDark ? "#c8906a" : "#8b4c20", fontWeight: 600 }
               : { background: "transparent", border: `1px solid ${isDark ? "#252a25" : "#d8d3ca"}`, color: isDark ? "#333833" : "#c0bbb2", fontWeight: 400 };
         return (
           <button
@@ -4022,7 +4022,7 @@ function YearView({ data, currentDate, onSelectMonth, isMobile, creatine, custom
                           style={{
                             ...styles.yearHeatmapCell,
                             background: "transparent",
-                            outline: isToday ? `1px solid ${isDark ? "#4ade80" : "#2a7d4f"}` : "none",
+                            outline: isToday ? `1px solid ${isDark ? "#c8906a" : "#8b4c20"}` : "none",
                             outlineOffset: 0,
                             display: "flex",
                             alignItems: "center",
@@ -4239,7 +4239,7 @@ function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
   });
 
   const fmtDate = d => d ? d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : null;
-  const accent = isDark ? "#4ade80" : "#2a7d4f";
+  const accent = isDark ? "#c8906a" : "#8b4c20";
 
   const handleMicroClick = (e, meso, micro) => {
     e.stopPropagation();
@@ -4703,7 +4703,7 @@ function SleepSection({ sleepData, onImport, range }) {
       </div>
 
       {importMsg && (
-        <div style={{ fontSize: 11, color: importMsg.startsWith("⚠") ? "#f87171" : "#4ade80", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: importMsg.startsWith("⚠") ? "#f87171" : "#c8906a", marginBottom: 8 }}>
           {importMsg}
         </div>
       )}
@@ -4778,7 +4778,7 @@ function SleepSection({ sleepData, onImport, range }) {
                   <XAxis dataKey="date" tick={{ fill: styles.dashText, fontSize: 9 }} axisLine={false} tickLine={false} interval={Math.floor(chartData.length / 6)} />
                   <YAxis domain={[40, 100]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="score" name="Score" stroke={isDark ? "#4ade80" : "#2a7d4f"} strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="score" name="Score" stroke={isDark ? "#c8906a" : "#8b4c20"} strokeWidth={2} dot={false} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -4845,11 +4845,11 @@ function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine }) {
             type="checkbox"
             checked={!!creatine?.[today]}
             onChange={() => onToggleCreatine?.(today)}
-            style={{ cursor: "pointer", width: 14, height: 14, accentColor: isDark ? "#4ade80" : "#2a7d4f" }}
+            style={{ cursor: "pointer", width: 14, height: 14, accentColor: isDark ? "#c8906a" : "#8b4c20" }}
           />
           <span style={{ fontSize: 12, color: isDark ? "#9ca3af" : "#6b7280" }}>
             Créatine prise
-            {creatine?.[today] && <span style={{ marginLeft: 6, fontSize: 10, color: isDark ? "#4ade80" : "#2a7d4f" }}>▲</span>}
+            {creatine?.[today] && <span style={{ marginLeft: 6, fontSize: 10, color: isDark ? "#c8906a" : "#8b4c20" }}>▲</span>}
           </span>
         </label>
       {recent.length > 0 && (
@@ -4940,7 +4940,7 @@ function WeightSection({ weightData, onSave }) {
         />
         <span style={{ fontSize: 13, color: isDark ? "#9ca3af" : "#6b7280" }}>kg</span>
         {todayKg != null && (
-          <span style={{ fontSize: 11, color: isDark ? "#4ade80" : "#2a7d4f", fontWeight: 600 }}>✓ enregistré</span>
+          <span style={{ fontSize: 11, color: isDark ? "#c8906a" : "#8b4c20", fontWeight: 600 }}>✓ enregistré</span>
         )}
       </div>
       {chartData.length >= 2 && (
@@ -5108,7 +5108,7 @@ function HooperSection({ hoopers, onAdd, range }) {
         </div>
       )}
 
-      {saved && <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 8 }}>Indice enregistré ✓</div>}
+      {saved && <div style={{ fontSize: 11, color: "#c8906a", marginBottom: 8 }}>Indice enregistré ✓</div>}
 
       {chartData.length > 0 ? (
         <ResponsiveContainer width="100%" height={160}>
@@ -5120,11 +5120,11 @@ function HooperSection({ hoopers, onAdd, range }) {
             <Tooltip contentStyle={tooltipStyle}
               formatter={(v, n) => [v, n === "total" ? "Hooper" : n]}
             />
-            <ReferenceLine y={14} stroke={isDark ? "#4ade8033" : "#2a7d4f33"} strokeDasharray="4 4" />
+            <ReferenceLine y={14} stroke={isDark ? "#c8906a33" : "#8b4c2033"} strokeDasharray="4 4" />
             <ReferenceLine y={17} stroke="#f9731633" strokeDasharray="4 4" />
             <ReferenceLine y={20} stroke="#f8717133" strokeDasharray="4 4" />
-            <Line type="monotone" dataKey="total" name="Hooper" stroke={isDark ? "#4ade80" : "#2a7d4f"}
-              strokeWidth={2} dot={{ r: 3, fill: isDark ? "#4ade80" : "#2a7d4f" }} connectNulls />
+            <Line type="monotone" dataKey="total" name="Hooper" stroke={isDark ? "#c8906a" : "#8b4c20"}
+              strokeWidth={2} dot={{ r: 3, fill: isDark ? "#c8906a" : "#8b4c20" }} connectNulls />
           </LineChart>
         </ResponsiveContainer>
       ) : (
@@ -5259,7 +5259,7 @@ function PhotoCropModal({ onSave, onClose }) {
     img.src = imgSrc;
   };
 
-  const accent = isDark ? "#4ade80" : "#2a7d4f";
+  const accent = isDark ? "#c8906a" : "#8b4c20";
   const mutedColor = isDark ? "#707870" : "#8a7f70";
   const textColor = isDark ? "#e8e4de" : "#2a2218";
 
@@ -5476,7 +5476,7 @@ function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus,
     e.target.value = "";
   };
 
-  const accent = isDark ? "#4ade80" : "#2a7d4f";
+  const accent = isDark ? "#c8906a" : "#8b4c20";
   const mutedColor = isDark ? "#707870" : "#8a7f70";
   const textColor = isDark ? "#e8e4de" : "#2a2218";
   const surfaceBg = isDark ? "#1f2421" : "#e8e2d8";
@@ -5822,8 +5822,8 @@ function ActivityHeatmap({ data }) {
       const v = day.charge || 0;
       if (v === 0) return empty;
       const lvls = isDark
-        ? ["#1e4030", "#2a5e45", "#3a8a5e", "#4ade80", "#a7f3d0"]
-        : ["#c6e6d4", "#8fd4b0", "#4abe80", "#16a34a", "#14532d"];
+        ? ["#3a1e0a", "#5a3010", "#8a5020", "#c8906a", "#e8c0a0"]
+        : ["#e8d8c8", "#d0a878", "#b07840", "#8b4c20", "#5c3010"];
       if (v <= 5) return lvls[0];
       if (v <= 12) return lvls[1];
       if (v <= 20) return lvls[2];
@@ -5867,8 +5867,8 @@ function ActivityHeatmap({ data }) {
   // Legend colors per metric
   const legendColors = {
     charge: isDark
-      ? ["#1c2a22", "#1e4030", "#2a5e45", "#3a8a5e", "#4ade80"]
-      : ["#eaefec", "#c6e6d4", "#8fd4b0", "#4abe80", "#16a34a"],
+      ? ["#1c1612", "#3a1e0a", "#5a3010", "#8a5020", "#c8906a"]
+      : ["#f0ebe2", "#e8d8c8", "#d0a878", "#b07840", "#8b4c20"],
     rpe: isDark
       ? ["#1c2a22", "#3a2010", "#6b3a10", "#b45309", "#f97316"]
       : ["#eaefec", "#fde8c8", "#fbc87a", "#f97316", "#ea580c"],
@@ -6300,9 +6300,9 @@ function Dashboard({ data, onUpdateSleep }) {
               interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
             <YAxis tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
-            <Bar dataKey="charge" name="Charge" fill={isDark ? "#4ade80" : "#2a7d4f"} radius={[3, 3, 0, 0]} maxBarSize={36}>
+            <Bar dataKey="charge" name="Charge" fill={isDark ? "#c8906a" : "#8b4c20"} radius={[3, 3, 0, 0]} maxBarSize={36}>
               {range === "jour" && chartData.map((entry, i) => (
-                <Cell key={i} fill={entry.isToday ? (isDark ? "#facc15" : "#ca8a04") : (isDark ? "#4ade80" : "#2a7d4f")} />
+                <Cell key={i} fill={entry.isToday ? (isDark ? "#facc15" : "#ca8a04") : (isDark ? "#c8906a" : "#8b4c20")} />
               ))}
             </Bar>
           </BarChart>
@@ -6350,7 +6350,7 @@ function Dashboard({ data, onUpdateSleep }) {
                 interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
               <YAxis domain={[0, 28]} ticks={[0, 7, 14, 17, 20, 28]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => v != null ? [v + ` — ${hooperLabel(v)}`, "Hooper"] : null} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
-              <ReferenceLine y={14} stroke={isDark ? "#4ade8033" : "#2a7d4f33"} strokeDasharray="4 4" />
+              <ReferenceLine y={14} stroke={isDark ? "#c8906a33" : "#8b4c2033"} strokeDasharray="4 4" />
               <ReferenceLine y={17} stroke="#f9731633" strokeDasharray="4 4" />
               <ReferenceLine y={20} stroke="#f8717133" strokeDasharray="4 4" />
               <Bar dataKey="total" name="Hooper" radius={[3, 3, 0, 0]} maxBarSize={36}>
@@ -6484,7 +6484,7 @@ function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine,
   const sectionBg = isDark ? "#1e231f" : "#e8e3da";
   const textMain = isDark ? "#e8e4de" : "#2a2218";
   const textMuted = isDark ? "#9ca3af" : "#6b7280";
-  const accentGreen = isDark ? "#4ade80" : "#2a7d4f";
+  const accentGreen = isDark ? "#c8906a" : "#8b4c20";
   const borderStyle = `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`;
   const sLabel = { fontSize: 10, fontWeight: 700, color: textMuted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8, display: "block" };
   const btnNum = { width: 28, height: 28, borderRadius: 4, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "inherit", transition: "all 0.12s" };
@@ -6647,7 +6647,7 @@ function SessionComposerModal({ initial, availableBlocks, onSave, onClose }) {
   const border  = isDark ? "#263228" : "#daeade";
   const text    = isDark ? "#d8e8d0" : "#1a2e1f";
   const muted   = isDark ? "#6a8870" : "#6b8c72";
-  const accent  = "#4caf72";
+  const accent  = isDark ? "#c8906a" : "#8b4c20";
 
   const totalCharge   = composition.reduce((a, b) => a + (b.charge   || 0), 0);
   const totalDuration = composition.reduce((a, b) => a + (b.duration || 0), 0);
@@ -7265,7 +7265,7 @@ function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock
   const border  = isDark ? "#263228" : "#daeade";
   const text    = isDark ? "#d8e8d0" : "#1a2e1f";
   const muted   = isDark ? "#6a8870" : "#6b8c72";
-  const accent  = "#4caf72";
+  const accent  = isDark ? "#c8906a" : "#8b4c20";
   const danger  = isDark ? "#f87171" : "#dc2626";
 
   // ── Shared item row ──
@@ -7780,7 +7780,7 @@ function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHoo
   });
 
   // Colors
-  const accentGreen = isDark ? "#4ade80" : "#2a7d4f";
+  const accentGreen = isDark ? "#c8906a" : "#8b4c20";
   const panelBg = isDark ? "#1e231f" : "#e8e3da";
   const textMain = isDark ? "#e8e4de" : "#2a2218";
   const textMuted = isDark ? "#9ca3af" : "#6b7280";
@@ -8080,7 +8080,7 @@ function PublicWeekView({ data, currentDate }) {
   const monday = getMondayOf(currentDate);
   const today = new Date();
   const isMobile = useWindowWidth() < 768;
-  const accent = isDark ? "#4ade80" : "#16a34a";
+  const accent = isDark ? "#c8906a" : "#8b4c20";
 
   const days = DAYS_SHORT.map((dayLabel, di) => {
     const date = addDays(monday, di);
@@ -8222,7 +8222,7 @@ function PublicPlanView({ onBack }) {
   });
 
   const styles = makeStyles(isDark);
-  const accent = isDark ? "#4ade80" : "#16a34a";
+  const accent = isDark ? "#c8906a" : "#8b4c20";
   const mesocycles = planData?.mesocycles || [];
 
   useEffect(() => {
@@ -8674,7 +8674,7 @@ export default function ClimbingPlanner() {
 
   // ── Mesocycle CRUD ──
   const updateMesocycles = updater => setData(d => ({ ...d, mesocycles: updater(d.mesocycles || []) }));
-  const addMesocycle = () => updateMesocycles(m => [...m, { id: generateId(), label: "Nouveau mésocycle", color: "#4ade80", durationWeeks: 4, startDate: "", description: "", microcycles: [] }]);
+  const addMesocycle = () => updateMesocycles(m => [...m, { id: generateId(), label: "Nouveau mésocycle", color: "#c8906a", durationWeeks: 4, startDate: "", description: "", microcycles: [] }]);
   const updateMesocycle = (id, changes) => updateMesocycles(m => m.map(x => x.id === id ? { ...x, ...changes } : x));
   const deleteMesocycle = id => updateMesocycles(m => m.filter(x => x.id !== id));
   const addMicrocycle = mesoId => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: [...x.microcycles, { id: generateId(), label: "Nouveau microcycle", durationWeeks: 1, description: "" }] } : x));
@@ -8900,7 +8900,7 @@ export default function ClimbingPlanner() {
   const profilePhoto = data.profile?.avatarDataUrl || "";
   const profileBtn = (
     <button
-      style={{ ...styles.profileBtn, ...(viewMode === "profil" ? { borderColor: isDark ? "#4ade80" : "#2a7d4f", background: isDark ? "#263228" : "#d4e8db" } : {}) }}
+      style={{ ...styles.profileBtn, ...(viewMode === "profil" ? { borderColor: isDark ? "#c8906a" : "#8b4c20", background: isDark ? "#2a1a10" : "#ecddd4" } : {}) }}
       onClick={() => setViewMode("profil")}
       title="Profil"
     >
@@ -8913,12 +8913,12 @@ export default function ClimbingPlanner() {
 
   // Small sync status indicator for header
   const syncDot = syncStatus === "saving" ? <span style={{ fontSize: 11, color: "#888" }} title="Synchronisation…">⟳</span>
-    : syncStatus === "saved" ? <span style={{ fontSize: 11, color: isDark ? "#4ade80" : "#2a7d4f" }} title="Synchronisé">✓</span>
+    : syncStatus === "saved" ? <span style={{ fontSize: 11, color: isDark ? "#c8906a" : "#8b4c20" }} title="Synchronisé">✓</span>
     : syncStatus === "offline" ? <span style={{ fontSize: 11, color: "#f97316" }} title="Hors ligne">—</span>
     : null;
 
   // ── Auth gate ────────────────────────────────────────────────────────────────
-  const accent = isDark ? "#4ade80" : "#16a34a";
+  const accent = isDark ? "#c8906a" : "#8b4c20";
   if (!authChecked) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: isDark ? "#0f0f0f" : "#f0f0f0" }}>
@@ -9081,17 +9081,17 @@ export default function ClimbingPlanner() {
 
       {/* ── Bandeau vue athlète ── */}
       {viewingAthlete && (
-        <div style={{ background: isDark ? "#1a2e22" : "#e4f5ea", borderBottom: `1px solid ${isDark ? "#2a4a34" : "#b0d8bc"}`, padding: "7px 18px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: isDark ? "#4caf72" : "#1a6b3a", fontWeight: 700, letterSpacing: "0.05em" }}>
+        <div style={{ background: isDark ? "#2a1a10" : "#f0e4d8", borderBottom: `1px solid ${isDark ? "#4a2a14" : "#c8a080"}`, padding: "7px 18px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: isDark ? "#c8906a" : "#8b4c20", fontWeight: 700, letterSpacing: "0.05em" }}>
             VUE ATHLÈTE
           </span>
-          <span style={{ fontSize: 12, color: isDark ? "#a8d8b0" : "#1a4a2a", fontWeight: 600 }}>
+          <span style={{ fontSize: 12, color: isDark ? "#e0c0a0" : "#5c3010", fontWeight: 600 }}>
             {viewingAthlete.firstName} {viewingAthlete.lastName}
           </span>
           <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
             <button
               onClick={switchBackToCoach}
-              style={{ background: isDark ? "#263228" : "#d4e8db", border: `1px solid ${isDark ? "#3a5a40" : "#a0c8aa"}`, borderRadius: 5, color: isDark ? "#4caf72" : "#1a6b3a", padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
+              style={{ background: isDark ? "#2a1a10" : "#ecddd4", border: `1px solid ${isDark ? "#c8906a66" : "#8b4c2066"}`, borderRadius: 5, color: isDark ? "#c8906a" : "#8b4c20", padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
             >
               ← Retour à ma vue
             </button>
