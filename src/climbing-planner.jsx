@@ -8917,32 +8917,50 @@ export default function ClimbingPlanner() {
     return <PublicPlanView onBack={() => setShowPublicPlan(false)} />;
   }
   if (supabase && !session) {
+    const loginBrown = isDark ? "#c8906a" : "#5c3317";
+    const loginBrownMid = isDark ? "#a0601a" : "#8b4c20";
+    const loginBrownBg = isDark ? "rgba(160,96,26,0.12)" : "rgba(139,76,32,0.08)";
+    const loginBrownBorder = isDark ? "rgba(160,96,26,0.5)" : "rgba(139,76,32,0.4)";
+    const loginStyles = {
+      ...styles,
+      authBtn: { ...styles.authBtn, background: loginBrownBg, border: `1px solid ${loginBrownBorder}`, color: loginBrown },
+      authLogoutBtn: { ...styles.authLogoutBtn, color: isDark ? "#a08070" : "#8b6650" },
+    };
     return (
-      <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: [] }}>
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 20, background: styles.app.background }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: accent, letterSpacing: "0.06em" }}>Climbing Planner</div>
-          <div style={{ background: isDark ? "#1c1c1c" : "#fff", borderRadius: 12, padding: "28px 24px", boxShadow: "0 4px 24px rgba(0,0,0,0.18)", minWidth: 300 }}>
+      <ThemeContext.Provider value={{ styles: loginStyles, isDark, toggleTheme, mesocycles: [] }}>
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 24, background: isDark ? "#18120c" : "#ede7de" }}>
+          <div style={{
+            fontFamily: "'Newsreader', Georgia, serif",
+            fontSize: 22,
+            fontWeight: 500,
+            fontStyle: "italic",
+            color: loginBrown,
+            letterSpacing: "0.08em",
+          }}>Climbing Planner</div>
+          <div style={{
+            background: isDark ? "#211810" : "#faf6f1",
+            borderRadius: 12,
+            padding: "28px 24px",
+            boxShadow: `0 4px 28px rgba(92, 51, 23, ${isDark ? "0.35" : "0.10"})`,
+            minWidth: 300,
+            border: `1px solid ${isDark ? "#3d2510" : "#ddd0c2"}`,
+          }}>
             <AuthPanel session={null} onAuthChange={setSession} fullWidth />
           </div>
           <button
             onClick={() => setShowPublicPlan(true)}
             style={{
-              background: isDark
-                ? "linear-gradient(135deg, #1e1209 0%, #2d1c0e 100%)"
-                : "linear-gradient(135deg, #fdf6ef 0%, #f5e8d8 100%)",
-              border: `1.5px solid ${isDark ? "#a0601a" : "#c2773a"}`,
-              borderRadius: 10,
-              padding: "13px 32px",
-              color: isDark ? "#d4924a" : "#7a3e0a",
+              background: "none",
+              border: `1.5px solid ${loginBrownMid}`,
+              borderRadius: 8,
+              padding: "12px 30px",
+              color: loginBrown,
               cursor: "pointer",
               fontFamily: "'Newsreader', Georgia, serif",
               fontSize: 16,
               fontStyle: "italic",
               fontWeight: 500,
               letterSpacing: "0.06em",
-              boxShadow: isDark
-                ? "0 2px 14px rgba(160, 96, 26, 0.22), inset 0 1px 0 rgba(255,200,140,0.07)"
-                : "0 2px 14px rgba(194, 119, 58, 0.18), inset 0 1px 0 rgba(255,255,255,0.8)",
             }}
           >
             Planning d'Anto
