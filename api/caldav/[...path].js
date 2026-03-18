@@ -155,6 +155,9 @@ function buildVEVENT(uid, session, date) {
   }
 
   lines.push(`SUMMARY:${escapeICS(session.name)}`);
+  if (session.address) {
+    lines.push(`LOCATION:${escapeICS(session.address)}`);
+  }
   if (descParts.length) {
     lines.push(`DESCRIPTION:${escapeICS(descParts.join(" · "))}`);
   }
@@ -197,7 +200,7 @@ function buildFullICS(events, displayName) {
 // ─── ETag ─────────────────────────────────────────────────────────────────────
 
 function etagFor(uid, session) {
-  const src = uid + (session.name || "") + (session.startTime || "") + (session.duration || "");
+  const src = uid + (session.name || "") + (session.startTime || "") + (session.duration || "") + (session.address || "");
   let h = 0;
   for (let i = 0; i < src.length; i++) {
     h = Math.imul(31, h) + src.charCodeAt(i);

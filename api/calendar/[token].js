@@ -165,6 +165,9 @@ function generateICS(planData, displayName) {
         }
 
         lines.push(`SUMMARY:${escapeICS(session.name)}`);
+        if (session.address) {
+          lines.push(`LOCATION:${escapeICS(session.address)}`);
+        }
         if (descParts.length) {
           lines.push(`DESCRIPTION:${escapeICS(descParts.join(" · "))}`);
         }
