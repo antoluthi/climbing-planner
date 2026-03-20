@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Analytics } from '@vercel/analytics/react'
-import ClimbingPlanner from './climbing-planner'
+import ClimbingPlanner from './climbing-planner-new'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
