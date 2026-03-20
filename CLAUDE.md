@@ -4,7 +4,7 @@ Contexte technique et état du projet pour les sessions Claude Code.
 
 ## Stack
 
-- **React 19 + Vite 7** — single-file app : `src/climbing-planner.jsx`
+- **React 19 + Vite 7** — architecture modulaire multi-fichiers
 - **PWA** via `vite-plugin-pwa` (service worker, icônes, manifest)
 - **Supabase** (`@supabase/supabase-js`) — Auth magic link + sync cloud (tables `climbing_plans`, `coach_athletes`, `sessions_catalog`, `session_blocks`, `session_feedbacks`)
 - **Recharts** — graphiques stats (LineChart, BarChart)
@@ -12,43 +12,86 @@ Contexte technique et état du projet pour les sessions Claude Code.
 
 ## Architecture de l'app
 
-Tout est dans **`src/climbing-planner.jsx`** (~8 900 lignes). Ordre des sections :
+Le code source est organisé en modules dans `src/` :
 
 ```
-SUPABASE CLIENT
-DATA (constantes SESSIONS, DEFAULT_MESOCYCLES)
-STORAGE (loadData, saveData, useSupabaseSync)
-HOOKS :
-  ├─ useSessionsCatalog        — CRUD sessions_catalog (bibliothèque coach)
-  ├─ useSessionBlocks          — CRUD session_blocks (blocs multi-séances)
-  ├─ useCommunitySessionsSync  — sync séances communautaires (lecture seule)
-  └─ useCoachAthletes          — relations coach-athlète (coach_athletes)
-HELPERS (weekKey, addDays, getMondayOf, formatDate…)
-STYLES (makeStyles → objet avec tous les styles inline, thème dark/light)
-COMPONENTS :
-  ├─ PhotoCropModal          — recadrage/zoom avatar (useRef cropAreaRef, ResizeObserver, non-passive wheel/touch)
-  ├─ DayColumn               — colonne d'un jour (semaine), prop hasCreatine
-  ├─ WeekView                — vue semaine
-  ├─ MonthView               — vue mois (pas de barre d'intensité)
-  ├─ YearView                — vue année
-  ├─ CyclesTimeline          — timeline visuelle des mésocycles (ResizeObserver fitLabel)
-  ├─ CyclesEditor            — éditeur mésocycles/microcycles
-  ├─ CyclesView              — wrapper locked/unlocked
-  ├─ DailyNotesSection       — notes + checkbox créatine (toujours visible, décochée par défaut)
-  ├─ Dashboard               — stats + HooperSection + graphiques poids & Hooper
-  ├─ DayLogModal             — modal journal quotidien (note, créatine, poids, Hooper) depuis DayColumn
-  ├─ SessionComposerModal    — composition de séances à partir de blocs
-  ├─ FeedbackHistoryModal    — historique des feedbacks athlète par bloc/séance
-  ├─ SuspensionInfoCard      — affichage config d'un bloc Suspension
-  ├─ SuspensionSummaryChips  — chips résumé config Suspension
-  ├─ CoachAthletesSection    — section "Mes athlètes" dans ProfileView (coach/auto uniquement)
-  ├─ ProfileView             — avatar, infos, thème, gestion athlètes
-  ├─ CoachLibraryView        — bibliothèque de séances (vue "library", coach uniquement)
-  ├─ AccueilView             — page d'accueil (phrase contextuelle dynamique, police Newsreader)
-  ├─ PublicPlanView          — vue publique lecture-seule pour visiteurs non connectés
-  ├─ RoleOnboardingModal     — choix du rôle au 1er login
-  └─ ClimbingPlanner         — composant racine, state global
+src/
+├── main.jsx                      — point d'entrée React
+├── climbing-planner-new.jsx      — composant racine ClimbingPlanner (~1 078 lignes)
+├── climbing-planner.jsx          — ancien fichier monolithique (backup, non importé)
+├── index.css                     — styles globaux
+│
+├── lib/                          — utilitaires et données
+│   ├── supabase.js               — client Supabase singleton (default export)
+│   ├── constants.js              — MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, BLOCK_TYPES, GRIP_TYPES,
+│   │                               DEFAULT_SUSPENSION_CONFIG, CUSTOM_CYCLE_COLORS,
+│   │                               isDateInCustomCycle, getCustomCyclesForDate,
+│   │                               getDayLogWarning, getMesoColor, getMesoForDate
+│   ├── helpers.js                — getMondayOf, addDays, formatDate, weekKey, localDateStr,
+│   │                               calcEndTime, migrateWeekKeys, getDaySessions, getDayCharge, getMonthWeeks
+│   ├── charge.js                 — VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES,
+│   │                               getNbMouvementsZone, getChargeColor
+│   ├── storage.js                — generateId, loadData, saveData (localStorage)
+│   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
+│   └── hooper.js                 — hooperLabel, hooperColor
+│
+├── theme/
+│   ├── ThemeContext.jsx           — ThemeContext + useThemeCtx()
+│   └── makeStyles.js             — makeStyles(isDark) → objet styles inline complet
+│
+├── hooks/
+│   ├── useWindowWidth.js          — largeur fenêtre réactive
+│   ├── useSupabaseSync.js         — session auth, loadFromCloud, saveToCloud, uploadNow, writeStatus
+│   ├── useCommunitySessionsSync.js — sync séances communautaires (lecture seule)
+│   ├── useSessionsCatalog.js      — CRUD sessions_catalog (bibliothèque coach)
+│   ├── useSessionBlocks.js        — CRUD session_blocks (blocs multi-séances)
+│   └── useCoachAthletes.js        — relations coach-athlète (coach_athletes)
+│
+└── components/
+    ├── Logo.jsx                   — ClimbingPlannerLogo (SVG hexagone)
+    ├── SyncButtons.jsx            — boutons export/import/sync
+    ├── AuthPanel.jsx              — panneau auth (password + magic link)
+    ├── RoleOnboardingModal.jsx    — choix du rôle au 1er login
+    ├── RichText.jsx               — rendu texte riche (markdown-like)
+    ├── ConfirmModal.jsx           — dialogue de confirmation suppression
+    ├── CustomSessionModal.jsx     — formulaire séance personnalisée
+    ├── BlockEditor.jsx            — éditeur de bloc dans une séance
+    ├── BlockFormModal.jsx         — modal formulaire de bloc (avec config Suspension)
+    ├── SessionBuilder.jsx         — construction de séance pas à pas
+    ├── SessionPicker.jsx          — sélecteur de séance (athlète)
+    ├── SessionModal.jsx           — modal détail séance (feedback, déplacement)
+    ├── SessionComposerModal.jsx   — composition de séances à partir de blocs
+    ├── CoachPickerModal.jsx       — sélecteur séance/bloc (coach)
+    ├── FeedbackHistoryModal.jsx   — historique feedbacks athlète par bloc/séance
+    ├── SuspensionInfoCard.jsx     — affichage config bloc Suspension
+    ├── SuspensionSummaryChips.jsx — chips résumé config Suspension
+    ├── DayColumn.jsx              — colonne d'un jour (vue semaine)
+    ├── MonthView.jsx              — vue mois (grille calendrier)
+    ├── YearView.jsx               — vue année (12 mois)
+    ├── CyclesTimeline.jsx         — timeline visuelle des mésocycles
+    ├── CyclesView.jsx             — wrapper locked/unlocked cycles
+    ├── CustomCycleModal.jsx       — formulaire cycle personnalisé
+    ├── DailyNotesSection.jsx      — notes + checkbox créatine
+    ├── DayLogModal.jsx            — modal journal quotidien (note, créatine, poids, Hooper)
+    ├── Dashboard.jsx              — stats + graphiques poids & Hooper
+    ├── ActivityHeatmap.jsx        — heatmap d'activité GitHub-style
+    ├── SleepSection.jsx           — section sommeil (graphiques, import CSV)
+    ├── HooperSection.jsx          — section indice Hooper
+    ├── WeightSection.jsx          — section poids
+    ├── PhotoCropModal.jsx         — recadrage/zoom avatar
+    ├── CoachAthletesSection.jsx   — section "Mes athlètes" dans ProfileView
+    ├── CalendarSyncSection.jsx    — section sync calendrier (CalDAV/iCal)
+    ├── ProfileView.jsx            — avatar, infos, thème, gestion athlètes
+    ├── CoachLibraryView.jsx       — bibliothèque de séances (coach uniquement)
+    ├── AccueilView.jsx            — page d'accueil (phrase contextuelle, police Newsreader)
+    └── PublicPlanView.jsx         — vue publique lecture-seule (Planning d'Anto)
 ```
+
+### Conventions d'import/export
+- **Tous les modules** utilisent des **named exports** (`export function ...`)
+- **Seule exception** : `lib/supabase.js` utilise un **default export**
+- Les composants importent `useThemeCtx()` depuis `theme/ThemeContext.jsx` pour accéder aux styles
+- Les hooks importent `supabase` directement depuis `lib/supabase.js`
 
 ## Données
 
@@ -74,7 +117,6 @@ COMPONENTS :
     role: null,        // null | "coach" | "athlete" | "auto"
     firstName: "",
     lastName: "",
-    // PAS de creatineEnabled (supprimé)
   },
   customCycles: [],    // cycles personnalisés (ex: créatine, suppléments)
   cyclesLocked: false,
@@ -128,12 +170,12 @@ Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autor
 
 ### Vue athlète (coach regardant les données d'un athlète)
 - **Déclenchement** : bouton "Voir" dans ProfileView > section "Mes athlètes"
-- **`switchToAthlete(athlete)`** : sauvegarde les données coach dans `coachDataRef`, charge les données Supabase de l'athlète via `.eq("user_id", athlete.userId)`, remplace `data` state
+- **`switchToAthlete(athlete)`** dans `climbing-planner-new.jsx` : sauvegarde les données coach dans `coachDataRef`, charge les données Supabase de l'athlète, remplace `data` state
 - **`switchBackToCoach()`** : restaure depuis `coachDataRef`, efface `viewingAthlete`
 - **Auto-save modifié** : quand `viewingAthlete` est set → `saveToCloud(data, viewingAthlete.userId)` (jamais localStorage, jamais la ligne du coach)
-- **Bandeau** : barre verte "VUE ATHLÈTE — Prénom Nom" avec bouton "← Retour à ma vue"
+- **Bandeau** : barre brune "VUE ATHLÈTE — Prénom Nom" avec bouton "← Retour à ma vue"
 
-### Gestion des athlètes (`useCoachAthletes`)
+### Gestion des athlètes (`hooks/useCoachAthletes.js`)
 - Fetch : `coach_athletes` JOIN `climbing_plans` (deux requêtes)
 - Recherche : RPC `search_athletes(term)` → athlètes non-coach matchant le nom
 - Ajout : upsert dans `coach_athletes` (onConflict coach_id,athlete_id)
@@ -178,7 +220,7 @@ Navigation : les vues calendrier (week/month/year) sont regroupées sous un bout
 
 ## Points techniques importants
 
-### CyclesTimeline — texte adaptatif
+### CyclesTimeline — texte adaptatif (`components/CyclesTimeline.jsx`)
 `ResizeObserver` sur le conteneur mesure la largeur réelle en pixels.
 `fitLabel(label, px)` calcule combien de caractères rentrent (~5.5px/char à font-size 9, padding 12px).
 - Tout rentre → texte complet
@@ -186,7 +228,7 @@ Navigation : les vues calendrier (week/month/year) sont regroupées sous un bout
 - 1 char → première lettre seulement
 - < 18px → petit trait coloré (repère visuel)
 
-### PhotoCropModal — zoom/drag
+### PhotoCropModal — zoom/drag (`components/PhotoCropModal.jsx`)
 - `cropAreaRef` + listeners non-passifs via `useEffect` (`{ passive: false }`) pour wheel/touchmove
 - SVG d'overlay inside le div de crop (position:absolute, pointerEvents:none) — PAS en sibling
 
@@ -195,37 +237,38 @@ Navigation : les vues calendrier (week/month/year) sont regroupées sous un bout
 - Pas de toggle opt-in dans le profil
 - `data.creatine[date] = true` quand cochée, supprimée quand décochée
 
-### Thème
-`ThemeContext` + `useThemeCtx()` — dark/light, accent vert
-`makeStyles(isDark)` retourne l'objet de styles complet (renommé depuis `getStyles`)
+### Thème (`theme/ThemeContext.jsx` + `theme/makeStyles.js`)
+`ThemeContext` + `useThemeCtx()` — dark/light, accent brun
+`makeStyles(isDark)` retourne l'objet de styles complet
 
 ### Typographie
 - **Cormorant Garamond** (serif) pour les titres : `appTitle`, `weekRange`, `dashSectionTitle`, `modalTitle`
 - **Inter** pour le corps de texte
 
-### Blocs Suspension
+### Blocs Suspension (`components/SuspensionInfoCard.jsx`, `BlockFormModal.jsx`)
 - Config structurée : `{ type: "suspension", config: { ... } }` avec poids, durée, série, etc.
 - `SuspensionInfoCard` : résumé visuel de la config dans `SessionModal`
 - Feedback poids + graphique évolution dans `FeedbackHistoryModal`
 - Charge rating activé pour Suspension et Retour au calme
 
-### DayLogModal
+### DayLogModal (`components/DayLogModal.jsx`)
 - Modale quotidienne accessible depuis chaque colonne `DayColumn` (bouton journal)
 - Regroupe : note du jour, checkbox créatine, poids, Hooper
 - Bouton "Enregistrer" dirty-aware (désactivé si pas de changement)
 
-### Dashboard — graphiques
+### Dashboard — graphiques (`components/Dashboard.jsx`)
 - Graphique poids : scaffold période complète avec données manquantes nulles
 - Graphique Hooper : barres (BarChart) au lieu de lignes, scaffold identique
 - Sélecteur de plage Sem / Mois / An pour tous les graphiques stats
-- **Heatmap d'activité** (GitHub-style) : 53 semaines × 7 jours, sélecteur de métrique (Charge / RPE / Hooper), labels mois et jours, tooltip hover, légende Moins/Plus, adaptatif mobile
+- **Heatmap d'activité** (`components/ActivityHeatmap.jsx`, GitHub-style) : 53 semaines × 7 jours, sélecteur de métrique (Charge / RPE / Hooper), labels mois et jours, tooltip hover, légende Moins/Plus, adaptatif mobile
 
-### AccueilView — phrase contextuelle
+### AccueilView — phrase contextuelle (`components/AccueilView.jsx`)
 - Police **Newsreader** (serif élégant) pour la phrase d'accueil
 - Salutation granulaire selon l'heure (matin, après-midi, soir, nuit)
 - Phrase contextuelle dynamique : heure courante, complétion des séances du jour, contexte semaine (mésocycle, charge)
+- Fonctions helpers `getGreeting()` et `getContextualPhrase()` définies localement dans le fichier
 
-### Déplacement de séances (`SessionModal` — onglet "Déplacer")
+### Déplacement de séances (`components/SessionModal.jsx` — onglet "Déplacer")
 - **Coach / solo / auto** : sélecteur de date (navigation sem ← →) + heure → déplace directement la séance
   - "Enregistrer l'heure" si seul l'horaire change
   - "Déplacer la séance" si une autre journée est choisie
@@ -234,7 +277,7 @@ Navigation : les vues calendrier (week/month/year) sont regroupées sous un bout
   - Coach voit un point orange sur l'onglet "Déplacer" + liste Accepter/Refuser
   - Badge `↔` sur la `DayColumn` pour les séances avec suggestion en attente
 
-### Auto-save (useEffect sur `data`)
+### Auto-save (`climbing-planner-new.jsx`, useEffect sur `data`)
 ```js
 useEffect(() => {
   if (viewingAthlete) {
@@ -270,6 +313,10 @@ npm run lint     # ESLint
 
 ## Idées futures / backlog
 
+- Lazy-load des vues lourdes (Dashboard/Recharts) avec `React.lazy`
+- Code-splitting via `manualChunks` (Recharts séparé du bundle principal)
+- Migrer le stockage avatar base64 → Supabase Storage (URL)
+- Tests unitaires (helpers, charge, storage) + CI GitHub Actions
 - Sync Garmin Connect pour le sommeil (voir `garmin-sync-notes.md` — bloqué auth)
 - Import CSV sommeil Garmin (bouton déjà présent dans stats)
 - Notifications push PWA
