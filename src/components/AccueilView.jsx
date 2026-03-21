@@ -18,6 +18,21 @@ function getGreeting(hour, firstName) {
   return `Il se fait tard${n}`;
 }
 
+// ─── REAL TRAINING DETECTION ────────────────────────────────────────────────
+// A day with only stretching/mobility/recovery at charge ≤ 5 is NOT a real
+// training day — it shouldn't inflate consecutive-training-day streaks.
+
+function isRealTraining(sessions) {
+  if (sessions.length === 0) return false;
+  const charge = sessions.reduce((s, sess) => s + (sess.charge || 0), 0);
+  if (charge > 5) return true;
+  const names = sessions.map(s => (s.title || s.name || "").toLowerCase()).join(" ");
+  const blocks = sessions.flatMap(s => (s.blocks || []).map(b => b.type));
+  const hasHeavy = /force|maximal|campus|dynami|puissan|endur|volume|compét|compe|suspend|poutre|hangboard/.test(names)
+    || blocks.some(t => t === "Grimpe" || t === "Suspension" || t === "Exercices");
+  return hasHeavy;
+}
+
 // ─── CONTEXT BUILDER ────────────────────────────────────────────────────────
 
 function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayIndex, mesoCtx) {
@@ -116,16 +131,18 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
   const yesterdaySessions = getDaySessions(data, addDays(todayObj, -1));
   const yesterdayCharge = yesterdaySessions.reduce((s, sess) => s + (sess.charge || 0), 0);
 
+  // Rest/training streaks — only count real training (étirements seuls ≠ entraînement)
   let restDaysBefore = 0;
   for (let i = 1; i <= 7; i++) {
-    if (getDaySessions(data, addDays(todayObj, -i)).length === 0) restDaysBefore++;
+    if (!isRealTraining(getDaySessions(data, addDays(todayObj, -i)))) restDaysBefore++;
     else break;
   }
 
-  let consecutiveTrainingDays = isRestDay ? 0 : 1;
-  if (!isRestDay) {
+  const todayIsRealTraining = isRealTraining(todaySessions);
+  let consecutiveTrainingDays = todayIsRealTraining ? 1 : 0;
+  if (todayIsRealTraining) {
     for (let i = 1; i <= 7; i++) {
-      if (getDaySessions(data, addDays(todayObj, -i)).length > 0) consecutiveTrainingDays++;
+      if (isRealTraining(getDaySessions(data, addDays(todayObj, -i)))) consecutiveTrainingDays++;
       else break;
     }
   }
