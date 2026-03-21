@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { BLOCK_TYPES } from "../lib/constants.js";
+import { BLOCK_TYPES, GRIP_TYPES, DEFAULT_SUSPENSION_CONFIG } from "../lib/constants.js";
 import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "../lib/charge.js";
+import { RichText } from "./RichText.jsx";
 
 // ─── COMPOSANT: Éditeur de bloc ───────────────────────────────────────────────
 
-export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, allSessions, onCreateCustom }) {
+export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, allSessions, onCreateCustom, onSaveAsBlock }) {
   const { styles, isDark } = useThemeCtx();
   const cfg = BLOCK_TYPES[block.type] || BLOCK_TYPES["Grimpe"];
   const [open, setOpen] = useState(true);
@@ -13,10 +14,20 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
   const [nbMouvements, setNbMouvements] = useState("");
   const [calcZone, setCalcZone] = useState(3);
   const [calcComplexity, setCalcComplexity] = useState(3);
+  const [descPreview, setDescPreview] = useState(false);
+  const [blockSaved, setBlockSaved] = useState(false);
 
-  const hasCharge = block.type === "Grimpe" || block.type === "Exercices";
-  const grimpePresets = allSessions.filter(s => s.type === "Grimpe");
-  const exercicePresets = allSessions.filter(s => s.type === "Exercice");
+  const hasCharge = cfg.hasCharge;
+  const grimpePresets = allSessions?.filter(s => s.type === "Grimpe") || [];
+  const exercicePresets = allSessions?.filter(s => s.type === "Exercice") || [];
+
+  // Suspension config helpers
+  const suspCfg = block.config ? { ...DEFAULT_SUSPENSION_CONFIG, ...block.config } : null;
+  const patchSusp = (patch) => onUpdate({ config: { ...(block.config || DEFAULT_SUSPENSION_CONFIG), ...patch } });
+
+  // Description: blocks from DB use `description`, inline-created use `notes`
+  const desc = block.description ?? block.notes ?? "";
+  const setDesc = (val) => onUpdate({ description: val, notes: val });
 
   const inputStyle = {
     background: isDark ? "#181d1a" : "#f5f0e8",
@@ -25,6 +36,22 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
     fontSize: 11, fontFamily: "inherit", padding: "3px 6px", outline: "none",
   };
   const labelStyle = { fontSize: 9, color: isDark ? "#606860" : "#9a9080", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 2 };
+  const muted = isDark ? "#6a8870" : "#6b8c72";
+  const accent = isDark ? "#c8906a" : "#8b4c20";
+
+  const handleSaveAsBlock = () => {
+    if (!onSaveAsBlock) return;
+    onSaveAsBlock({
+      blockType: block.type,
+      name: block.name || block.presetName || block.type,
+      duration: block.duration || null,
+      charge: block.charge || 0,
+      description: desc,
+      config: block.type === "Suspension" ? (block.config || null) : null,
+    });
+    setBlockSaved(true);
+    setTimeout(() => setBlockSaved(false), 3000);
+  };
 
   return (
     <div style={{
@@ -36,18 +63,18 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
     }}>
       {/* Header du bloc */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", cursor: "pointer" }} onClick={() => setOpen(o => !o)}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, flex: 1 }}>{block.type}</span>
-        {block.type === "Grimpe" && block.presetName && (
-          <span style={{ fontSize: 10, color: isDark ? "#8a9090" : "#6b7060", fontStyle: "italic" }}>{block.presetName}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, flex: 0, flexShrink: 0 }}>{block.type}</span>
+        {(block.name || block.presetName) && (
+          <span style={{ fontSize: 10, color: isDark ? "#8a9090" : "#6b7060", fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+            {block.name || block.presetName}
+          </span>
         )}
-        {block.type === "Exercices" && block.name && (
-          <span style={{ fontSize: 10, color: isDark ? "#8a9090" : "#6b7060", fontStyle: "italic" }}>{block.name}</span>
-        )}
+        {!block.name && !block.presetName && <span style={{ flex: 1 }} />}
         {hasCharge && (
-          <span style={{ fontSize: 10, color: getChargeColor(block.charge || 0), fontWeight: 700 }}>⚡{block.charge || 0}</span>
+          <span style={{ fontSize: 10, color: getChargeColor(block.charge || 0), fontWeight: 700, flexShrink: 0 }}>⚡{block.charge || 0}</span>
         )}
-        <span style={{ fontSize: 10, color: isDark ? "#555" : "#aaa" }}>{open ? "▲" : "▼"}</span>
-        <div style={{ display: "flex", gap: 2 }} onClick={e => e.stopPropagation()}>
+        <span style={{ fontSize: 10, color: isDark ? "#555" : "#aaa", flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
+        <div style={{ display: "flex", gap: 2, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
           <button style={{ background: "none", border: "none", cursor: canMoveUp ? "pointer" : "default", opacity: canMoveUp ? 0.7 : 0.2, fontSize: 11, color: isDark ? "#aaa" : "#666", padding: "0 2px" }} onClick={onMoveUp} disabled={!canMoveUp}>↑</button>
           <button style={{ background: "none", border: "none", cursor: canMoveDown ? "pointer" : "default", opacity: canMoveDown ? 0.7 : 0.2, fontSize: 11, color: isDark ? "#aaa" : "#666", padding: "0 2px" }} onClick={onMoveDown} disabled={!canMoveDown}>↓</button>
           <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: isDark ? "#f87171" : "#dc2626", padding: "0 4px" }} onClick={onRemove}>✕</button>
@@ -58,8 +85,17 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
       {open && (
         <div style={{ padding: "0 10px 10px", display: "flex", flexDirection: "column", gap: 8 }}>
 
+          {/* Nom du bloc (editable) */}
+          <div>
+            <div style={labelStyle}>Nom du bloc</div>
+            <input style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+              placeholder="Nom du bloc…"
+              value={block.name || block.presetName || ""}
+              onChange={e => onUpdate({ name: e.target.value, presetName: e.target.value })} />
+          </div>
+
           {/* Preset picker pour Grimpe */}
-          {block.type === "Grimpe" && (
+          {block.type === "Grimpe" && grimpePresets.length > 0 && (
             <div>
               <div style={labelStyle}>Modèle de grimpe (optionnel)</div>
               <div style={{ display: "flex", gap: 6 }}>
@@ -68,7 +104,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
                   value={block.presetId ?? ""}
                   onChange={e => {
                     const preset = grimpePresets.find(s => String(s.id) === e.target.value);
-                    if (preset) onUpdate({ presetId: preset.id, presetName: preset.name, charge: preset.charge });
+                    if (preset) onUpdate({ presetId: preset.id, presetName: preset.name, name: preset.name, charge: preset.charge });
                     else onUpdate({ presetId: null, presetName: null });
                   }}
                 >
@@ -85,7 +121,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
           )}
 
           {/* Exercice picker */}
-          {block.type === "Exercices" && (
+          {block.type === "Exercices" && exercicePresets.length > 0 && (
             <div>
               <div style={labelStyle}>Exercice</div>
               <div style={{ display: "flex", gap: 6 }}>
@@ -110,14 +146,127 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
             </div>
           )}
 
-          {/* Suspension : vide pour l'instant */}
-          {block.type === "Suspension" && (
-            <div style={{ fontSize: 10, color: isDark ? "#606860" : "#9a9080", fontStyle: "italic" }}>
-              Module Suspension — à compléter prochainement
+          {/* ── Suspension config ── */}
+          {block.type === "Suspension" && suspCfg && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, background: isDark ? "#141a16" : "#f3f7f4", borderRadius: 6, padding: "10px 12px", border: `1px solid ${"#a78bfa"}44` }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.1em", textTransform: "uppercase" }}>Paramètres suspension</div>
+
+              {/* Mode bras + Support */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>Bras</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {[["two", "2 mains"], ["one", "1 main"]].map(([v, l]) => (
+                      <button key={v} onClick={() => patchSusp({ armMode: v })}
+                        style={{ flex: 1, padding: "4px 6px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: suspCfg.armMode === v ? 700 : 400, border: `1px solid ${suspCfg.armMode === v ? "#a78bfa" : (isDark ? "#2e342f" : "#ccc6b8")}`, background: suspCfg.armMode === v ? "#a78bfa28" : "none", color: suspCfg.armMode === v ? "#a78bfa" : muted }}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>Support</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {[["wall", "Mur"], ["floor", "Sol"]].map(([v, l]) => (
+                      <button key={v} onClick={() => patchSusp({ supportType: v })}
+                        style={{ flex: 1, padding: "4px 6px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: suspCfg.supportType === v ? 700 : 400, border: `1px solid ${suspCfg.supportType === v ? "#a78bfa" : (isDark ? "#2e342f" : "#ccc6b8")}`, background: suspCfg.supportType === v ? "#a78bfa28" : "none", color: suspCfg.supportType === v ? "#a78bfa" : muted }}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Prise */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>Prise (mm)</div>
+                  <input type="number" min="5" max="50" value={suspCfg.gripSize} onChange={e => patchSusp({ gripSize: +e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>Préhension</div>
+                  <select value={suspCfg.gripType} onChange={e => patchSusp({ gripType: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box", cursor: "pointer" }}>
+                    {GRIP_TYPES.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Temps */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>Suspension (s)</div>
+                  <input type="number" min="1" max="60" value={suspCfg.hangTime} onChange={e => patchSusp({ hangTime: +e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>Repos (s)</div>
+                  <input type="number" min="1" max="300" value={suspCfg.restTime} onChange={e => patchSusp({ restTime: +e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                </div>
+              </div>
+
+              {/* Séries × Répétitions */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>Séries</div>
+                  <input type="number" min="1" max="20" value={suspCfg.sets} onChange={e => patchSusp({ sets: +e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={labelStyle}>Répétitions</div>
+                  <input type="number" min="1" max="20" value={suspCfg.reps} onChange={e => patchSusp({ reps: +e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                </div>
+              </div>
+
+              {/* Poids */}
+              <div>
+                <div style={labelStyle}>
+                  Poids ciblé {suspCfg.supportType === "wall" ? "(kg, − = délestage)" : "(kg soulevé)"}
+                </div>
+                {suspCfg.armMode === "two" ? (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input type="number" step="0.5" value={suspCfg.targetWeight} onChange={e => patchSusp({ targetWeight: +e.target.value })}
+                      style={{ ...inputStyle, width: 70 }} />
+                    <span style={{ fontSize: 10, color: muted }}>kg</span>
+                    {suspCfg.supportType === "wall" && suspCfg.targetWeight < 0 && <span style={{ fontSize: 9, color: "#fbbf24" }}>délestage</span>}
+                    {suspCfg.supportType === "wall" && suspCfg.targetWeight > 0 && <span style={{ fontSize: 9, color: "#a78bfa" }}>lest</span>}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 9, color: muted, marginBottom: 2 }}>Gauche</div>
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <input type="number" step="0.5" value={suspCfg.targetWeightLeft} onChange={e => patchSusp({ targetWeightLeft: +e.target.value })}
+                          style={{ ...inputStyle, width: 60 }} />
+                        <span style={{ fontSize: 10, color: muted }}>kg</span>
+                      </div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 9, color: muted, marginBottom: 2 }}>Droite</div>
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <input type="number" step="0.5" value={suspCfg.targetWeightRight} onChange={e => patchSusp({ targetWeightRight: +e.target.value })}
+                          style={{ ...inputStyle, width: 60 }} />
+                        <span style={{ fontSize: 10, color: muted }}>kg</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Charge + calculateur (Grimpe et Exercices seulement) */}
+          {/* Initialize suspension config if missing */}
+          {block.type === "Suspension" && !suspCfg && (
+            <button onClick={() => onUpdate({ config: { ...DEFAULT_SUSPENSION_CONFIG } })}
+              style={{ padding: "6px 12px", background: "#a78bfa22", border: `1px solid #a78bfa55`, borderRadius: 5, color: "#a78bfa", cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: 600 }}>
+              Configurer la suspension
+            </button>
+          )}
+
+          {/* Charge + calculateur (types with hasCharge) */}
           {hasCharge && (
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -185,35 +334,53 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
             </div>
           )}
 
-          {/* Durée + Lieu (sauf Suspension) */}
-          {block.type !== "Suspension" && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 80px" }}>
-                <div style={labelStyle}>Durée (min)</div>
-                <input type="number" min="0" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
-                  value={block.duration ?? ""} onChange={e => onUpdate({ duration: +e.target.value })} />
+          {/* Durée + Lieu */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 80px" }}>
+              <div style={labelStyle}>Durée (min)</div>
+              <input type="number" min="0" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+                value={block.duration ?? ""} onChange={e => onUpdate({ duration: +e.target.value })} />
+            </div>
+            {block.type !== "Exercices" && (
+              <div style={{ flex: "2 1 120px" }}>
+                <div style={labelStyle}>Lieu</div>
+                <input style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+                  placeholder="Salle, falaise…" value={block.location ?? ""}
+                  onChange={e => onUpdate({ location: e.target.value })} />
               </div>
-              {block.type !== "Exercices" && (
-                <div style={{ flex: "2 1 120px" }}>
-                  <div style={labelStyle}>Lieu</div>
-                  <input style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
-                    placeholder="Salle, falaise…" value={block.location ?? ""}
-                    onChange={e => onUpdate({ location: e.target.value })} />
-                </div>
+            )}
+          </div>
+
+          {/* Description / Notes (rich text) */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+              <div style={labelStyle}>Consignes / Notes</div>
+              {desc && (
+                <button onClick={() => setDescPreview(p => !p)}
+                  style={{ background: "none", border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`, borderRadius: 3, color: muted, padding: "1px 6px", cursor: "pointer", fontSize: 9, fontFamily: "inherit" }}>
+                  {descPreview ? "Éditer" : "Aperçu"}
+                </button>
               )}
             </div>
-          )}
-
-          {/* Notes (sauf Suspension) */}
-          {block.type !== "Suspension" && (
-            <div>
-              <div style={labelStyle}>Notes</div>
+            {descPreview ? (
+              <div style={{ ...inputStyle, width: "100%", boxSizing: "border-box", minHeight: 48, padding: "6px 8px", lineHeight: 1.4 }}>
+                <RichText text={desc} />
+              </div>
+            ) : (
               <textarea style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical", minHeight: 48, lineHeight: 1.4 }}
                 placeholder="Description, objectifs, consignes…"
-                value={block.notes ?? ""}
-                onChange={e => onUpdate({ notes: e.target.value })}
+                value={desc}
+                onChange={e => setDesc(e.target.value)}
               />
-            </div>
+            )}
+          </div>
+
+          {/* Save as block template */}
+          {onSaveAsBlock && (
+            <button onClick={handleSaveAsBlock}
+              style={{ alignSelf: "flex-start", padding: "4px 12px", background: "none", border: `1px solid ${accent}55`, borderRadius: 5, color: blockSaved ? (isDark ? "#4ade80" : "#16a34a") : accent, cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: 600 }}>
+              {blockSaved ? "✓ Bloc sauvegardé" : "Sauver ce bloc comme modèle"}
+            </button>
           )}
         </div>
       )}
