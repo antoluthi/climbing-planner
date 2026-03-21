@@ -983,8 +983,10 @@ export default function ClimbingPlanner() {
           coachNote={templateEditor.coachNote}
           onConfirm={s => { addSession(templateEditor.dayIndex, s); setTemplateEditor(null); }}
           onSaveAsTemplate={s => saveUserSession(s)}
+          onSaveBlock={b => saveBlock(b)}
           onClose={() => setTemplateEditor(null)}
           allSessions={catalog}
+          dbBlocks={dbBlocks}
           onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
         />
       )}

@@ -12,7 +12,7 @@ import { RichText } from "./RichText.jsx";
 
 export function TemplateEditorModal({
   template, startTime: initStart, address: initAddr, coachNote: initNote,
-  onConfirm, onSaveAsTemplate, onClose, allSessions, onCreateCustom,
+  onConfirm, onSaveAsTemplate, onSaveBlock, onClose, allSessions, dbBlocks, onCreateCustom,
 }) {
   const { styles, isDark } = useThemeCtx();
   const originalName = template.title || template.name || "";
@@ -39,17 +39,25 @@ export function TemplateEditorModal({
   // ── Mode ──
   const [mode] = useState(initialMode);
 
-  // ── Block state ──
+  // ── Block state (enriched from dbBlocks) ──
+  const enrichBlock = (b) => {
+    // Merge DB block data if available (config, description)
+    const dbMatch = (dbBlocks || []).find(db => db.id === b.id || (db.name === b.name && db.blockType === (b.type || b.blockType)));
+    const merged = dbMatch ? { ...dbMatch, ...b, config: b.config ?? dbMatch.config ?? null, description: b.description ?? dbMatch.description ?? b.notes ?? "", type: b.type || b.blockType || dbMatch.blockType } : b;
+    return { ...merged, id: generateId(), type: merged.type || merged.blockType || "Grimpe" };
+  };
   const initBlocks = () => {
     if (isBlockTemplate) {
-      return [{
-        id: generateId(), type: template.blockType || "Grimpe",
-        charge: template.charge || 0, duration: template.duration || 0,
-        location: "", notes: template.description || "",
-        ...(template.config ? { config: template.config } : {}),
-      }];
+      const dbMatch = (dbBlocks || []).find(db => db.id === template.id || db.name === template.name);
+      return [enrichBlock({
+        type: template.blockType || "Grimpe",
+        name: template.name, charge: template.charge || 0,
+        duration: template.duration || 0,
+        description: template.description || "",
+        config: template.config ?? dbMatch?.config ?? null,
+      })];
     }
-    if (hasBlocks) return template.blocks.map(b => ({ ...b, id: generateId() }));
+    if (hasBlocks) return template.blocks.map(b => enrichBlock(b));
     return [
       { id: generateId(), type: "Échauffement", charge: 5, duration: 15, location: "", notes: "" },
       { id: generateId(), type: "Retour au calme", charge: 3, duration: 10, location: "", notes: "" },
@@ -238,6 +246,7 @@ export function TemplateEditorModal({
                   onMoveDown={() => moveBlock(bl.id, 1)}
                   allSessions={allSessions}
                   onCreateCustom={onCreateCustom}
+                  onSaveAsBlock={onSaveBlock}
                 />
               ))}
 
