@@ -38,6 +38,7 @@ import { CyclesView } from "./components/CyclesView.jsx";
 import { Dashboard } from "./components/Dashboard.jsx";
 import { DayLogModal } from "./components/DayLogModal.jsx";
 import { SessionComposerModal } from "./components/SessionComposerModal.jsx";
+import { TemplateEditorModal } from "./components/TemplateEditorModal.jsx";
 import { ProfileView } from "./components/ProfileView.jsx";
 import { CoachLibraryView } from "./components/CoachLibraryView.jsx";
 import { AccueilView } from "./components/AccueilView.jsx";
@@ -57,6 +58,7 @@ export default function ClimbingPlanner() {
   const [tempMeta, setTempMeta] = useState({});
   const [customSessionForm, setCustomSessionForm] = useState(null);
   const [sessionComposerForm, setSessionComposerForm] = useState(null);
+  const [templateEditor, setTemplateEditor] = useState(null);
   const [sessionModal, setSessionModal] = useState(null);
   const [isDark, setIsDark] = useState(() => localStorage.getItem("climbing_theme") === "dark");
   const [logDate, setLogDate] = useState(null);
@@ -960,17 +962,30 @@ export default function ClimbingPlanner() {
         <CoachPickerModal
           sessions={catalog}
           blocks={dbBlocks}
-          onSelect={s => { addSession(picker.dayIndex, s); setPicker(null); }}
+          onSelect={s => { setTemplateEditor({ template: s, dayIndex: picker.dayIndex, startTime: s.startTime || "", address: s.address || "", coachNote: s.coachNote || "" }); setPicker(null); }}
           onClose={() => setPicker(null)}
         />
       )}
       {picker && !hasCoachFeatures && (
         <SessionPicker
-          onSelect={s => { addSession(picker.dayIndex, s); setPicker(null); }}
+          onSelect={s => { setTemplateEditor({ template: s, dayIndex: picker.dayIndex, startTime: "", address: s.address || "", coachNote: "" }); setPicker(null); }}
           onClose={() => setPicker(null)}
           customSessions={catalog.filter(s => s.isCustom)}
           sessions={catalog.filter(s => !s.isCustom)}
           onCreateCustom={() => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
+        />
+      )}
+      {templateEditor && (
+        <TemplateEditorModal
+          template={templateEditor.template}
+          startTime={templateEditor.startTime}
+          address={templateEditor.address}
+          coachNote={templateEditor.coachNote}
+          onConfirm={s => { addSession(templateEditor.dayIndex, s); setTemplateEditor(null); }}
+          onSaveAsTemplate={s => saveUserSession(s)}
+          onClose={() => setTemplateEditor(null)}
+          allSessions={catalog}
+          onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
         />
       )}
       {customSessionForm !== null && (
