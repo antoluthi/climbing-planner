@@ -143,6 +143,11 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                       const brR = isLastInRow ? 3 : 0;
                       const mL = isFirstInRow ? 0 : -8;
                       const mR = isLastInRow ? 0 : -8;
+                      const noteEl = showLabel && dl.note ? (
+                        <span style={{ fontSize: 7, fontStyle: "italic", color: dl.color + "99", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>
+                          {dl.note}
+                        </span>
+                      ) : null;
                       if (dl.priority === "A") {
                         return (
                           <div key={dl.id} title={tip} style={{
@@ -158,6 +163,7 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                                 🏆 {dl.label}
                               </span>
                             )}
+                            {noteEl}
                             {!showLabel && <div style={{ height: 13 }} />}
                           </div>
                         );
@@ -177,6 +183,7 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                                 ◆ {dl.label}
                               </span>
                             )}
+                            {noteEl}
                             {!showLabel && <div style={{ height: 11 }} />}
                           </div>
                         );
@@ -195,6 +202,7 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                               ○ {dl.label}
                             </span>
                           )}
+                          {noteEl}
                           {!showLabel && <div style={{ height: 9 }} />}
                         </div>
                       );
