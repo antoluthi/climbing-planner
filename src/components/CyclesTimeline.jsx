@@ -4,7 +4,7 @@ import { addDays } from "../lib/helpers.js";
 
 // ─── CYCLES TIMELINE ─────────────────────────────────────────────────────────
 
-export function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
+export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) {
   const { styles, isDark } = useThemeCtx();
   const [popover, setPopover] = useState(null); // { meso, micro, x, y }
 
@@ -223,6 +223,78 @@ export function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
           })}
         </>
       )}
+
+      {/* Deadlines */}
+      {(deadlines || []).length > 0 && (() => {
+        // Compute a rough timeline range to position deadlines
+        const allStarts = chainedMesos.map(m => m.computedStart).filter(Boolean);
+        const timelineStart = allStarts.length > 0 ? new Date(Math.min(...allStarts)) : null;
+        const timelineEnd = chainedMesos.map(m => m.computedEnd).filter(Boolean).reduce((latest, d) => d > latest ? d : latest, timelineStart || new Date());
+        return (
+          <>
+            <div style={styles.timelineSectionSep}>Échéances</div>
+            {(deadlines || []).map(dl => {
+              const dlStart = dl.startDate ? new Date(dl.startDate + "T00:00:00") : null;
+              const dlEnd = dl.endDate ? new Date(dl.endDate + "T00:00:00") : dlStart;
+              const durationDays = dlStart && dlEnd ? Math.max(1, Math.round((dlEnd - dlStart) / 864e5) + 1) : 1;
+              const durationWeeks = Math.max(0.5, durationDays / 7);
+              const barPct = Math.min(100, Math.max(3, (durationWeeks / maxMesoWeeks) * 100));
+              const barAreaPx = Math.max(0, containerWidth - 148);
+              const dlBarPx = barAreaPx * (barPct / 100);
+
+              const priorityH = dl.priority === "A" ? 30 : dl.priority === "B" ? 22 : 16;
+              const priorityLabel = dl.priority === "A" ? "🏆" : dl.priority === "B" ? "◆" : "○";
+              const fmtDl = d => d ? d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "2-digit" }) : null;
+              const dateLabel = dl.endDate ? `${fmtDl(dlStart)} → ${fmtDl(dlEnd)}` : fmtDl(dlStart);
+
+              // Today indicator on this deadline's bar
+              let dlTodayPct = null;
+              if (dlStart && dlEnd) {
+                const now = new Date(); now.setHours(0, 0, 0, 0);
+                const s = new Date(dlStart); s.setHours(0, 0, 0, 0);
+                const e = new Date(dlEnd); e.setHours(0, 0, 0, 0);
+                if (now >= s && now <= e) {
+                  const totalMs = e - s || 1;
+                  dlTodayPct = ((now - s) / totalMs) * 100;
+                }
+              }
+
+              return (
+                <div key={dl.id} style={{ ...styles.timelineCustomRow, alignItems: "center" }}>
+                  <div style={{ ...styles.timelineLabelCol }}>
+                    <div style={styles.timelineLabelName}>
+                      <div style={{ width: 9, height: 9, borderRadius: 2, background: dl.color, transform: "rotate(45deg)", flexShrink: 0 }} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dl.label}</span>
+                    </div>
+                    <div style={styles.timelineLabelMeta}>{dateLabel}</div>
+                  </div>
+                  <div style={styles.timelineBarArea}>
+                    <div style={{
+                      height: priorityH, borderRadius: 4,
+                      display: "flex", alignItems: "center", padding: "0 8px",
+                      overflow: "hidden", border: `1px solid ${dl.color}88`,
+                      background: dl.color + (dl.priority === "A" ? "30" : dl.priority === "B" ? "22" : "14"),
+                      width: `${barPct}%`, position: "relative",
+                    }}>
+                      {dlTodayPct !== null && (
+                        <div style={{
+                          position: "absolute", left: `${dlTodayPct}%`,
+                          top: 0, bottom: 0, width: 2,
+                          background: "#ef4444", boxShadow: "0 0 4px #ef444488",
+                          borderRadius: 1, zIndex: 5, pointerEvents: "none",
+                        }} />
+                      )}
+                      <span style={{ fontSize: 9, color: dl.color, fontWeight: dl.priority === "A" ? 700 : 600, overflow: "hidden", whiteSpace: "nowrap" }}>
+                        {fitLabel(`${priorityLabel} ${dl.label}`, dlBarPx) || priorityLabel}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        );
+      })()}
 
       {/* Popover */}
       {popover && (

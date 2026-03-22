@@ -1,12 +1,11 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getChargeColor } from "../lib/charge.js";
-import { getMesoForDate } from "../lib/constants.js";
-import { getCustomCyclesForDate } from "../lib/constants.js";
+import { getMesoForDate, getCustomCyclesForDate, getDeadlinesForDate } from "../lib/constants.js";
 import { addDays, getMonthWeeks, getDaySessions, getDayCharge } from "../lib/helpers.js";
 
 // ─── VUE ANNÉE ────────────────────────────────────────────────────────────────
 
-export function YearView({ data, currentDate, onSelectMonth, isMobile, creatine, customCycles }) {
+export function YearView({ data, currentDate, onSelectMonth, isMobile, creatine, customCycles, deadlines }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const year = currentDate.getFullYear();
   const today = new Date();
@@ -82,6 +81,7 @@ export function YearView({ data, currentDate, onSelectMonth, isMobile, creatine,
                       const dateISO  = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
                       const hasCr    = inMonth && !!creatine?.[dateISO];
                       const activeCycles = inMonth ? getCustomCyclesForDate(customCycles, date) : [];
+                      const activeDeadlines = inMonth ? getDeadlinesForDate(deadlines, date) : [];
 
                       return (
                         <div
@@ -110,10 +110,13 @@ export function YearView({ data, currentDate, onSelectMonth, isMobile, creatine,
                           {hasCr && (
                             <span style={{ position: "absolute", top: 0, right: 0, fontSize: 4, color: isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)", lineHeight: 1 }}>▲</span>
                           )}
-                          {activeCycles.length > 0 && (
+                          {(activeCycles.length > 0 || activeDeadlines.length > 0) && (
                             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", flexDirection: "column", gap: 0, borderRadius: "0 0 2px 2px", overflow: "hidden" }}>
                               {activeCycles.slice(0, 2).map(cc => (
                                 <div key={cc.id} title={cc.name} style={{ height: 2, background: cc.color, opacity: 0.8 }} />
+                              ))}
+                              {activeDeadlines.slice(0, 2).map(dl => (
+                                <div key={dl.id} title={dl.label} style={{ height: dl.priority === "A" ? 3 : 2, background: dl.color, opacity: dl.priority === "C" ? 0.55 : 0.9 }} />
                               ))}
                             </div>
                           )}

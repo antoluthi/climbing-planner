@@ -6,7 +6,7 @@ import { ConfirmModal } from "./ConfirmModal.jsx";
 
 // ─── COMPOSANT JOUR ───────────────────────────────────────────────────────────
 
-export function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine, note, onSaveNote, logWarning, onOpenLog, pendingSuggestionsIds }) {
+export function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine, note, onSaveNote, logWarning, onOpenLog, pendingSuggestionsIds, deadlines }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
   const meso = weekMeta?.mesocycle;
@@ -57,6 +57,29 @@ export function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, on
           )}
         </div>
       </div>
+
+      {/* ── Deadline bands ── */}
+      {deadlines && deadlines.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 6 }}>
+          {deadlines.map(dl => (
+            <div
+              key={dl.id}
+              title={dl.label}
+              style={{
+                background: dl.color + (dl.priority === "C" ? "22" : dl.priority === "B" ? "33" : "44"),
+                borderLeft: `${dl.priority === "A" ? 3 : 2}px solid ${dl.color}`,
+                borderRadius: "0 3px 3px 0",
+                padding: "2px 6px",
+                display: "flex", alignItems: "center", gap: 5,
+              }}
+            >
+              <span style={{ fontSize: 9, fontWeight: dl.priority === "A" ? 700 : 600, color: dl.color, letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {dl.priority === "A" ? "🏆 " : dl.priority === "B" ? "◆ " : "○ "}{dl.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Journal bar ── */}
       {(() => {
