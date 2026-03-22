@@ -807,7 +807,6 @@ export default function ClimbingPlanner() {
           {/* ── Countdown badge ── */}
           {(() => {
             const today = new Date(); today.setHours(0, 0, 0, 0);
-            const horizon = addDays(today, 30);
             const upcoming = (data.deadlines || [])
               .filter(dl => dl.startDate && (dl.priority === "A" || dl.priority === "B"))
               .map(dl => {
@@ -819,22 +818,68 @@ export default function ClimbingPlanner() {
               .sort((a, b) => a.daysUntil - b.daysUntil);
             if (upcoming.length === 0) return null;
             const nearest = upcoming[0];
+            const isA = nearest.priority === "A";
+            const isImminent = nearest.daysUntil <= 3;
+            const countdownText = nearest.daysUntil === 0 ? "Aujourd'hui !" : nearest.daysUntil === 1 ? "Demain" : `Dans ${nearest.daysUntil} jours`;
+            const typeLabel = { competition: "Compétition", sortie: "Sortie", objectif: "Objectif" }[nearest.type] || nearest.type;
+
             return (
               <div style={{
-                background: nearest.color + (isDark ? "18" : "12"),
-                borderBottom: `1px solid ${nearest.color}44`,
-                borderLeft: `3px solid ${nearest.color}`,
-                padding: "5px 20px",
-                display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                background: isA
+                  ? (isDark ? nearest.color + "28" : nearest.color + "1a")
+                  : (isDark ? nearest.color + "18" : nearest.color + "0f"),
+                borderBottom: `1px solid ${nearest.color}${isA ? "66" : "33"}`,
+                borderLeft: `${isA ? 4 : 2}px solid ${nearest.color}`,
+                padding: isMobile ? "10px 14px" : "12px 20px",
+                display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap",
+                boxShadow: isA ? `inset 0 0 40px ${nearest.color}0a` : "none",
               }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: nearest.color, letterSpacing: "0.05em" }}>
-                  {nearest.priority === "A" ? "🏆" : "◆"} {nearest.label}
+                {/* Icône priorité */}
+                <span style={{ fontSize: isA ? 22 : 16, lineHeight: 1, flexShrink: 0 }}>
+                  {isA ? "🏆" : "◆"}
                 </span>
-                <span style={{ fontSize: 11, color: nearest.color + "cc" }}>
-                  {nearest.daysUntil === 0 ? "— Aujourd'hui !" : nearest.daysUntil === 1 ? "— Demain" : `— dans ${nearest.daysUntil} jours`}
-                </span>
-                {upcoming.length > 1 && (
-                  <span style={{ fontSize: 10, color: isDark ? "#606860" : "#9a9080", marginLeft: "auto" }}>
+
+                {/* Nom + type */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1, minWidth: 0 }}>
+                  <span style={{
+                    fontSize: isA ? (isMobile ? 14 : 16) : (isMobile ? 12 : 14),
+                    fontWeight: 700, color: nearest.color,
+                    letterSpacing: "0.03em", lineHeight: 1.2,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {nearest.label}
+                  </span>
+                  {!isMobile && (
+                    <span style={{ fontSize: 10, color: nearest.color + "99", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                      {typeLabel} · priorité {nearest.priority}
+                    </span>
+                  )}
+                  {nearest.note && !isMobile && (
+                    <span style={{ fontSize: 10, color: nearest.color + "88", fontStyle: "italic", marginTop: 1 }}>
+                      {nearest.note}
+                    </span>
+                  )}
+                </div>
+
+                {/* Compte à rebours */}
+                <div style={{
+                  display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, flexShrink: 0,
+                  background: nearest.color + (isA ? "22" : "15"),
+                  border: `1px solid ${nearest.color}${isA ? "55" : "33"}`,
+                  borderRadius: 6, padding: isMobile ? "4px 10px" : "6px 14px",
+                  boxShadow: isA && isImminent ? `0 0 10px ${nearest.color}44` : "none",
+                }}>
+                  <span style={{
+                    fontSize: isA ? (isMobile ? 15 : 17) : (isMobile ? 12 : 14),
+                    fontWeight: 800, color: nearest.color, lineHeight: 1, letterSpacing: "0.02em",
+                  }}>
+                    {countdownText}
+                  </span>
+                </div>
+
+                {/* Autres échéances imminentes */}
+                {upcoming.length > 1 && !isMobile && (
+                  <span style={{ fontSize: 10, color: isDark ? "#606860" : "#9a9080" }}>
                     +{upcoming.length - 1} autre{upcoming.length > 2 ? "s" : ""}
                   </span>
                 )}
