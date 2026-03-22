@@ -81,26 +81,25 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
         </div>
       )}
 
-      {/* ── Bloc mésocycles + overlays échéances verticaux ── */}
+      {/* ── Mésocycles ── */}
       {(() => {
-        // Compute timeline span for positioning vertical deadline lines
+        // Compute timeline span for positioning deadline markers
         const tStart = chainedMesos.map(m => m.computedStart).filter(Boolean).reduce((min, d) => d < min ? d : min, Infinity);
         const tEnd   = chainedMesos.map(m => m.computedEnd).filter(Boolean).reduce((max, d) => d > max ? d : max, -Infinity);
         const hasRange = isFinite(tStart) && isFinite(tEnd) && tEnd > tStart;
         const barAreaPx = Math.max(0, containerWidth - 148);
-        const labelColPx = 148;
 
-        // Deadline vertical lines — computed only when we have a valid date range
-        const dlLines = hasRange ? (deadlines || []).filter(dl => dl.startDate).map(dl => {
+        // Deadline markers — position relative to the bar area (no label column offset)
+        const dlMarkers = hasRange ? (deadlines || []).filter(dl => dl.startDate).map(dl => {
           const dlDate = new Date(dl.startDate + "T00:00:00");
           const pct = (dlDate - tStart) / (tEnd - tStart);
-          if (pct < -0.05 || pct > 1.05) return null; // outside range, skip
-          const x = labelColPx + barAreaPx * Math.max(0, Math.min(1, pct));
-          return { ...dl, x };
+          if (pct < -0.05 || pct > 1.05) return null;
+          const posX = barAreaPx * Math.max(0, Math.min(1, pct));
+          return { ...dl, posX };
         }).filter(Boolean) : [];
 
         return (
-          <div style={{ position: "relative" }}>
+          <>
             {/* Meso rows */}
             {chainedMesos.map((meso, idx) => {
         const barPct = (meso.durationWeeks / maxMesoWeeks) * 100;
@@ -206,59 +205,62 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
         );
       })}
 
-            {/* ── Deadline vertical lines overlay ── */}
-            {dlLines.map(dl => {
-              const lineW = dl.priority === "A" ? 2 : dl.priority === "B" ? 1.5 : 1;
-              const tip = [dl.label, dl.note].filter(Boolean).join(" · ");
-              return (
-                <div
-                  key={dl.id}
-                  title={tip}
-                  style={{
-                    position: "absolute",
-                    left: dl.x,
-                    top: 0, bottom: 0,
-                    width: lineW,
-                    background: dl.color + (dl.priority === "C" ? "88" : "cc"),
-                    boxShadow: dl.priority === "A" ? `0 0 6px ${dl.color}66` : "none",
-                    zIndex: 10,
-                    pointerEvents: "none",
-                    display: "flex", flexDirection: "column", alignItems: "center",
-                  }}
-                >
-                  {/* Vertical label */}
-                  <span style={{
-                    position: "absolute",
-                    top: 4,
-                    left: 3,
-                    fontSize: 8,
-                    fontWeight: dl.priority === "A" ? 700 : 600,
-                    color: dl.color,
-                    writingMode: "vertical-lr",
-                    textOrientation: "mixed",
-                    whiteSpace: "nowrap",
-                    letterSpacing: "0.04em",
-                    lineHeight: 1,
-                    opacity: dl.priority === "C" ? 0.75 : 1,
-                    pointerEvents: "none",
-                    userSelect: "none",
-                  }}>
-                    {dl.priority === "A" ? "🏆 " : dl.priority === "B" ? "◆ " : "○ "}{dl.label}
-                  </span>
-                  {/* Diamond marker at top */}
-                  <div style={{
-                    width: dl.priority === "A" ? 8 : 6,
-                    height: dl.priority === "A" ? 8 : 6,
-                    background: dl.color,
-                    transform: "rotate(45deg)",
-                    flexShrink: 0,
-                    marginTop: -1,
-                    opacity: dl.priority === "C" ? 0.6 : 1,
-                  }} />
+            {/* ── Dedicated Échéances row ── */}
+            {dlMarkers.length > 0 && (
+              <div style={{ ...styles.timelineRow, marginBottom: 8 }}>
+                <div style={styles.timelineLabelCol}>
+                  <div style={styles.timelineLabelName}>
+                    <span style={{ fontSize: 10, color: isDark ? "#5a6060" : "#9a9890", letterSpacing: "0.05em", fontStyle: "italic" }}>Échéances</span>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+                <div style={{ ...styles.timelineBarArea, position: "relative", minHeight: 40, alignItems: "flex-start" }}>
+                  {dlMarkers.map(dl => {
+                    const lineW = dl.priority === "A" ? 2 : dl.priority === "B" ? 1.5 : 1;
+                    const tip = [dl.label, dl.note].filter(Boolean).join(" · ");
+                    return (
+                      <div key={dl.id} title={tip} style={{
+                        position: "absolute",
+                        left: dl.posX,
+                        top: 0, bottom: 0,
+                        width: lineW,
+                        background: dl.color + (dl.priority === "C" ? "88" : "cc"),
+                        boxShadow: dl.priority === "A" ? `0 0 6px ${dl.color}66` : "none",
+                        pointerEvents: "none",
+                        display: "flex", flexDirection: "column", alignItems: "center",
+                      }}>
+                        <div style={{
+                          width: dl.priority === "A" ? 8 : 6,
+                          height: dl.priority === "A" ? 8 : 6,
+                          background: dl.color,
+                          transform: "rotate(45deg)",
+                          flexShrink: 0,
+                          marginTop: 2,
+                          opacity: dl.priority === "C" ? 0.6 : 1,
+                        }} />
+                        <span style={{
+                          position: "absolute",
+                          top: 13,
+                          left: 3,
+                          fontSize: 8,
+                          fontWeight: dl.priority === "A" ? 700 : 600,
+                          color: dl.color,
+                          writingMode: "vertical-lr",
+                          textOrientation: "mixed",
+                          whiteSpace: "nowrap",
+                          letterSpacing: "0.04em",
+                          lineHeight: 1,
+                          opacity: dl.priority === "C" ? 0.75 : 1,
+                          userSelect: "none",
+                        }}>
+                          {dl.priority === "A" ? "🏆 " : dl.priority === "B" ? "◆ " : "○ "}{dl.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
         );
       })()}
 

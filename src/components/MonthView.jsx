@@ -51,6 +51,17 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
             const hasCreatine = inMonth && !!creatine?.[dateISO];
             const activeCycles = inMonth ? getCustomCyclesForDate(customCycles, date) : [];
             const activeDeadlines = inMonth ? getDeadlinesForDate(deadlines, date) : [];
+            // For each deadline: determine if this date is start/end within the week row
+            const dlRenderInfo = activeDeadlines.map(dl => {
+              const dlStart = dl.startDate;
+              const dlEnd = dl.endDate || dl.startDate;
+              const isActualStart = dateISO === dlStart;
+              const isActualEnd = dateISO === dlEnd;
+              const isFirstInRow = isActualStart || di === 0;
+              const isLastInRow = isActualEnd || di === 6;
+              const showLabel = isActualStart || (di === 0 && dlStart < dateISO);
+              return { dl, isFirstInRow, isLastInRow, showLabel };
+            });
 
             return (
               <div
@@ -114,22 +125,83 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                   </div>
                 )}
 
-                {activeDeadlines.length > 0 && !isMobile && (
-                  <div style={styles.deadlineBands}>
-                    {activeDeadlines.slice(0, 3).map(dl => {
-                      const bandStyle = dl.priority === "A" ? styles.deadlineBandA : dl.priority === "B" ? styles.deadlineBandB : styles.deadlineBandC;
+                {/* Priority A: full-cell background overlays */}
+                {!isMobile && dlRenderInfo.filter(({ dl }) => dl.priority === "A").map(({ dl }) => (
+                  <div key={`bg-${dl.id}`} style={{
+                    position: "absolute", inset: 0,
+                    background: dl.color + "1a",
+                    borderRadius: 4,
+                    pointerEvents: "none", zIndex: 0,
+                  }} />
+                ))}
+                {/* Deadline strips */}
+                {!isMobile && dlRenderInfo.length > 0 && (
+                  <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 2, paddingTop: 2, position: "relative", zIndex: 1 }}>
+                    {dlRenderInfo.slice(0, 3).map(({ dl, isFirstInRow, isLastInRow, showLabel }) => {
                       const tip = dl.note ? `${dl.label} · ${dl.note}` : dl.label;
+                      const brL = isFirstInRow ? 3 : 0;
+                      const brR = isLastInRow ? 3 : 0;
+                      const mL = isFirstInRow ? 0 : -8;
+                      const mR = isLastInRow ? 0 : -8;
+                      if (dl.priority === "A") {
+                        return (
+                          <div key={dl.id} title={tip} style={{
+                            background: dl.color + "33",
+                            borderLeft: isFirstInRow ? `3px solid ${dl.color}` : `3px solid ${dl.color}00`,
+                            borderRadius: `${brL}px ${brR}px ${brR}px ${brL}px`,
+                            padding: "2px 5px",
+                            marginLeft: mL, marginRight: mR,
+                            overflow: "hidden",
+                          }}>
+                            {showLabel && (
+                              <span style={{ fontSize: 9, fontWeight: 700, color: dl.color, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
+                                🏆 {dl.label}
+                              </span>
+                            )}
+                            {!showLabel && <div style={{ height: 13 }} />}
+                          </div>
+                        );
+                      }
+                      if (dl.priority === "B") {
+                        return (
+                          <div key={dl.id} title={tip} style={{
+                            background: dl.color + "25",
+                            borderLeft: isFirstInRow ? `2px solid ${dl.color}` : `2px solid ${dl.color}00`,
+                            borderRadius: `${brL}px ${brR}px ${brR}px ${brL}px`,
+                            padding: showLabel ? "2px 4px" : "2px 0",
+                            marginLeft: mL, marginRight: mR,
+                            overflow: "hidden",
+                          }}>
+                            {showLabel && (
+                              <span style={{ fontSize: 8, fontWeight: 600, color: dl.color, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
+                                ◆ {dl.label}
+                              </span>
+                            )}
+                            {!showLabel && <div style={{ height: 11 }} />}
+                          </div>
+                        );
+                      }
                       return (
-                        <div
-                          key={dl.id}
-                          title={tip}
-                          style={{ ...bandStyle, background: dl.color }}
-                        />
+                        <div key={dl.id} title={tip} style={{
+                          background: dl.color + "18",
+                          borderLeft: isFirstInRow ? `1px solid ${dl.color}88` : `1px solid ${dl.color}00`,
+                          borderRadius: `${brL}px ${brR}px ${brR}px ${brL}px`,
+                          padding: showLabel ? "1px 4px" : "1px 0",
+                          marginLeft: mL, marginRight: mR,
+                          overflow: "hidden",
+                        }}>
+                          {showLabel && (
+                            <span style={{ fontSize: 8, fontWeight: 400, color: dl.color + "cc", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
+                              ○ {dl.label}
+                            </span>
+                          )}
+                          {!showLabel && <div style={{ height: 9 }} />}
+                        </div>
                       );
                     })}
                   </div>
                 )}
-                {activeDeadlines.length > 0 && isMobile && (
+                {isMobile && activeDeadlines.length > 0 && (
                   <div style={styles.deadlineDots}>
                     {activeDeadlines.slice(0, 2).map(dl => (
                       <div key={dl.id} title={dl.note ? `${dl.label} · ${dl.note}` : dl.label} style={{ ...styles.deadlineDot, background: dl.color }} />
