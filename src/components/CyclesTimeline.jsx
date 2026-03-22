@@ -82,26 +82,7 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
       )}
 
       {/* ── Mésocycles ── */}
-      {(() => {
-        // Compute timeline span for positioning deadline markers
-        const tStart = chainedMesos.map(m => m.computedStart).filter(Boolean).reduce((min, d) => d < min ? d : min, Infinity);
-        const tEnd   = chainedMesos.map(m => m.computedEnd).filter(Boolean).reduce((max, d) => d > max ? d : max, -Infinity);
-        const hasRange = isFinite(tStart) && isFinite(tEnd) && tEnd > tStart;
-        const barAreaPx = Math.max(0, containerWidth - 148);
-
-        // Deadline markers — position relative to the bar area (no label column offset)
-        const dlMarkers = hasRange ? (deadlines || []).filter(dl => dl.startDate).map(dl => {
-          const dlDate = new Date(dl.startDate + "T00:00:00");
-          const pct = (dlDate - tStart) / (tEnd - tStart);
-          if (pct < -0.05 || pct > 1.05) return null;
-          const posX = barAreaPx * Math.max(0, Math.min(1, pct));
-          return { ...dl, posX };
-        }).filter(Boolean) : [];
-
-        return (
-          <>
-            {/* Meso rows */}
-            {chainedMesos.map((meso, idx) => {
+      {chainedMesos.map((meso, idx) => {
         const barPct = (meso.durationWeeks / maxMesoWeeks) * 100;
         const totalMicroWeeks = meso.microcycles.reduce((a, m) => a + m.durationWeeks, 0);
         const hasMicros = meso.microcycles.length > 0;
@@ -122,6 +103,20 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
             todayPct = ((now - s) / msPerDay) / (meso.durationWeeks * 7) * 100;
           }
         }
+
+        // Deadlines that fall within this meso's date range
+        const dlsInMeso = (meso.computedStart && meso.computedEnd)
+          ? (deadlines || []).filter(dl => {
+              if (!dl.startDate) return false;
+              const d = new Date(dl.startDate + "T00:00:00");
+              return d >= meso.computedStart && d < meso.computedEnd;
+            }).map(dl => {
+              const d = new Date(dl.startDate + "T00:00:00");
+              const mesoSpan = meso.computedEnd - meso.computedStart;
+              const dlPct = (d - meso.computedStart) / mesoSpan * 100;
+              return { dl, dlPct: Math.max(0, Math.min(100, dlPct)) };
+            })
+          : [];
 
         return (
           <div key={meso.id} style={styles.timelineRow}>
@@ -155,6 +150,49 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
                     borderRadius: 1, zIndex: 5, pointerEvents: "none",
                   }} />
                 )}
+                {/* Deadline lines — inside the bar, clipped to bar height */}
+                {dlsInMeso.map(({ dl, dlPct }) => {
+                  const lineW = dl.priority === "A" ? 2 : dl.priority === "B" ? 1.5 : 1;
+                  const tip = [dl.label, dl.note].filter(Boolean).join(" · ");
+                  return (
+                    <div key={`dl-${dl.id}`} title={tip} style={{
+                      position: "absolute",
+                      left: `${dlPct}%`,
+                      top: 0, bottom: 0,
+                      width: lineW,
+                      background: dl.color + (dl.priority === "C" ? "88" : "cc"),
+                      boxShadow: dl.priority === "A" ? `0 0 5px ${dl.color}88` : "none",
+                      zIndex: 6,
+                      pointerEvents: "none",
+                      display: "flex", flexDirection: "column", alignItems: "center",
+                    }}>
+                      <div style={{
+                        width: dl.priority === "A" ? 7 : 5,
+                        height: dl.priority === "A" ? 7 : 5,
+                        background: dl.color,
+                        transform: "rotate(45deg)",
+                        flexShrink: 0,
+                        marginTop: 3,
+                        opacity: dl.priority === "C" ? 0.6 : 1,
+                      }} />
+                      <span style={{
+                        position: "absolute",
+                        top: 12,
+                        left: 3,
+                        fontSize: 7,
+                        fontWeight: dl.priority === "A" ? 700 : 600,
+                        color: dl.color,
+                        writingMode: "vertical-lr",
+                        whiteSpace: "nowrap",
+                        lineHeight: 1,
+                        opacity: dl.priority === "C" ? 0.75 : 1,
+                        userSelect: "none",
+                      }}>
+                        {dl.label}
+                      </span>
+                    </div>
+                  );
+                })}
                 {!hasMicros ? (
                   // No microcycles — single undivided block
                   <div
@@ -205,64 +243,6 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
         );
       })}
 
-            {/* ── Dedicated Échéances row ── */}
-            {dlMarkers.length > 0 && (
-              <div style={{ ...styles.timelineRow, marginBottom: 8 }}>
-                <div style={styles.timelineLabelCol}>
-                  <div style={styles.timelineLabelName}>
-                    <span style={{ fontSize: 10, color: isDark ? "#5a6060" : "#9a9890", letterSpacing: "0.05em", fontStyle: "italic" }}>Échéances</span>
-                  </div>
-                </div>
-                <div style={{ ...styles.timelineBarArea, position: "relative", minHeight: 40, alignItems: "flex-start" }}>
-                  {dlMarkers.map(dl => {
-                    const lineW = dl.priority === "A" ? 2 : dl.priority === "B" ? 1.5 : 1;
-                    const tip = [dl.label, dl.note].filter(Boolean).join(" · ");
-                    return (
-                      <div key={dl.id} title={tip} style={{
-                        position: "absolute",
-                        left: dl.posX,
-                        top: 0, bottom: 0,
-                        width: lineW,
-                        background: dl.color + (dl.priority === "C" ? "88" : "cc"),
-                        boxShadow: dl.priority === "A" ? `0 0 6px ${dl.color}66` : "none",
-                        pointerEvents: "none",
-                        display: "flex", flexDirection: "column", alignItems: "center",
-                      }}>
-                        <div style={{
-                          width: dl.priority === "A" ? 8 : 6,
-                          height: dl.priority === "A" ? 8 : 6,
-                          background: dl.color,
-                          transform: "rotate(45deg)",
-                          flexShrink: 0,
-                          marginTop: 2,
-                          opacity: dl.priority === "C" ? 0.6 : 1,
-                        }} />
-                        <span style={{
-                          position: "absolute",
-                          top: 13,
-                          left: 3,
-                          fontSize: 8,
-                          fontWeight: dl.priority === "A" ? 700 : 600,
-                          color: dl.color,
-                          writingMode: "vertical-lr",
-                          textOrientation: "mixed",
-                          whiteSpace: "nowrap",
-                          letterSpacing: "0.04em",
-                          lineHeight: 1,
-                          opacity: dl.priority === "C" ? 0.75 : 1,
-                          userSelect: "none",
-                        }}>
-                          {dl.priority === "A" ? "🏆 " : dl.priority === "B" ? "◆ " : "○ "}{dl.label}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </>
-        );
-      })()}
 
       {/* Custom cycles */}
       {ccWithDuration.length > 0 && (
