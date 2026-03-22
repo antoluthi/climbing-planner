@@ -118,10 +118,11 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                   <div style={styles.deadlineBands}>
                     {activeDeadlines.slice(0, 3).map(dl => {
                       const bandStyle = dl.priority === "A" ? styles.deadlineBandA : dl.priority === "B" ? styles.deadlineBandB : styles.deadlineBandC;
+                      const tip = dl.note ? `${dl.label} · ${dl.note}` : dl.label;
                       return (
                         <div
                           key={dl.id}
-                          title={`${dl.label} (${dl.priority})`}
+                          title={tip}
                           style={{ ...bandStyle, background: dl.color }}
                         />
                       );
@@ -131,7 +132,7 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                 {activeDeadlines.length > 0 && isMobile && (
                   <div style={styles.deadlineDots}>
                     {activeDeadlines.slice(0, 2).map(dl => (
-                      <div key={dl.id} title={dl.label} style={{ ...styles.deadlineDot, background: dl.color }} />
+                      <div key={dl.id} title={dl.note ? `${dl.label} · ${dl.note}` : dl.label} style={{ ...styles.deadlineDot, background: dl.color }} />
                     ))}
                   </div>
                 )}

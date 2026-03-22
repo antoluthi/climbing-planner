@@ -61,23 +61,32 @@ export function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, on
       {/* ── Deadline bands ── */}
       {deadlines && deadlines.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 6 }}>
-          {deadlines.map(dl => (
-            <div
-              key={dl.id}
-              title={dl.label}
-              style={{
-                background: dl.color + (dl.priority === "C" ? "22" : dl.priority === "B" ? "33" : "44"),
-                borderLeft: `${dl.priority === "A" ? 3 : 2}px solid ${dl.color}`,
-                borderRadius: "0 3px 3px 0",
-                padding: "2px 6px",
-                display: "flex", alignItems: "center", gap: 5,
-              }}
-            >
-              <span style={{ fontSize: 9, fontWeight: dl.priority === "A" ? 700 : 600, color: dl.color, letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {dl.priority === "A" ? "🏆 " : dl.priority === "B" ? "◆ " : "○ "}{dl.label}
-              </span>
-            </div>
-          ))}
+          {deadlines.map(dl => {
+            const typeLabel = { competition: "Compét.", sortie: "Sortie", objectif: "Objectif" }[dl.type] || dl.type;
+            const tooltipParts = [dl.label, dl.startDate, dl.endDate ? `→ ${dl.endDate}` : null, dl.note || null].filter(Boolean);
+            return (
+              <div
+                key={dl.id}
+                title={tooltipParts.join(" · ")}
+                style={{
+                  background: dl.color + (dl.priority === "C" ? "22" : dl.priority === "B" ? "33" : "44"),
+                  borderLeft: `${dl.priority === "A" ? 3 : 2}px solid ${dl.color}`,
+                  borderRadius: "0 3px 3px 0",
+                  padding: "3px 6px",
+                  display: "flex", flexDirection: "column", gap: 1,
+                }}
+              >
+                <span style={{ fontSize: 9, fontWeight: dl.priority === "A" ? 700 : 600, color: dl.color, letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>
+                  {dl.priority === "A" ? "🏆 " : dl.priority === "B" ? "◆ " : "○ "}{dl.label}
+                </span>
+                {dl.note && !isMobile && (
+                  <span style={{ fontSize: 8, color: dl.color + "cc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.2, fontStyle: "italic" }}>
+                    {dl.note.length > 40 ? dl.note.slice(0, 40) + "…" : dl.note}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
