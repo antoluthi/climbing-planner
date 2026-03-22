@@ -10,18 +10,36 @@ export function SessionPicker({ onSelect, onClose, customSessions, onCreateCusto
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [address, setAddress] = useState("");
+  const [sort, setSort] = useState("date"); // "date" | "charge"
   const catalogSessions = sessions || [];
 
-  const filtered = catalogSessions.filter(s => {
-    const matchType = filter === "Tous" || s.type === filter;
-    const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
-    return matchType && matchSearch;
-  });
+  const applySort = (arr) => {
+    if (sort === "date")   return [...arr].sort((a, b) => b.id - a.id);
+    if (sort === "charge") return [...arr].sort((a, b) => b.charge - a.charge);
+    return arr;
+  };
 
-  const filteredCustom = (customSessions || []).filter(s => {
+  const filtered = applySort(catalogSessions.filter(s => {
     const matchType = filter === "Tous" || s.type === filter;
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
     return matchType && matchSearch;
+  }));
+
+  const filteredCustom = applySort((customSessions || []).filter(s => {
+    const matchType = filter === "Tous" || s.type === filter;
+    const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
+    return matchType && matchSearch;
+  }));
+
+  const sortBtn = (key, label) => ({
+    style: {
+      padding: "3px 8px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit",
+      border: `1px solid ${sort === key ? (isDark ? "#c8906a88" : "#8b4c2088") : (isDark ? "#263228" : "#daeade")}`,
+      background: sort === key ? (isDark ? "#263228" : "#d4e8db") : "none",
+      color: sort === key ? (isDark ? "#c8906a" : "#8b4c20") : (isDark ? "#6a8870" : "#6b8c72"),
+    },
+    onClick: () => setSort(key),
+    children: label,
   });
 
   return (
@@ -39,16 +57,23 @@ export function SessionPicker({ onSelect, onClose, customSessions, onCreateCusto
             onChange={e => setSearch(e.target.value)}
             autoFocus
           />
-          <div style={styles.filterTabs}>
-            {["Tous", "Grimpe", "Exercice"].map(f => (
-              <button
-                key={f}
-                style={{ ...styles.filterTab, ...(filter === f ? styles.filterTabActive : {}) }}
-                onClick={() => setFilter(f)}
-              >
-                {f}
-              </button>
-            ))}
+          <div style={{ display: "flex", gap: 6, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={styles.filterTabs}>
+              {["Tous", "Grimpe", "Exercice"].map(f => (
+                <button
+                  key={f}
+                  style={{ ...styles.filterTab, ...(filter === f ? styles.filterTabActive : {}) }}
+                  onClick={() => setFilter(f)}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <span style={{ fontSize: 10, color: isDark ? "#6a8870" : "#6b8c72" }}>Trier :</span>
+              <button {...sortBtn("date",   "Date ↓")} />
+              <button {...sortBtn("charge", "Charge ↓")} />
+            </div>
           </div>
         </div>
         <div style={styles.sessionList}>
