@@ -1,11 +1,11 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getChargeColor } from "../lib/charge.js";
-import { DAYS, getCustomCyclesForDate, getMesoForDate } from "../lib/constants.js";
+import { DAYS, getCustomCyclesForDate, getMesoForDate, getDeadlinesForDate } from "../lib/constants.js";
 import { addDays, getMonthWeeks, getDaySessions } from "../lib/helpers.js";
 
 // ─── VUE MOIS ─────────────────────────────────────────────────────────────────
 
-export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles }) {
+export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles, deadlines }) {
   const { styles, isDark } = useThemeCtx();
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -50,6 +50,7 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
             const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
             const hasCreatine = inMonth && !!creatine?.[dateISO];
             const activeCycles = inMonth ? getCustomCyclesForDate(customCycles, date) : [];
+            const activeDeadlines = inMonth ? getDeadlinesForDate(deadlines, date) : [];
 
             return (
               <div
@@ -113,6 +114,27 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                   </div>
                 )}
 
+                {activeDeadlines.length > 0 && !isMobile && (
+                  <div style={styles.deadlineBands}>
+                    {activeDeadlines.slice(0, 3).map(dl => {
+                      const bandStyle = dl.priority === "A" ? styles.deadlineBandA : dl.priority === "B" ? styles.deadlineBandB : styles.deadlineBandC;
+                      return (
+                        <div
+                          key={dl.id}
+                          title={`${dl.label} (${dl.priority})`}
+                          style={{ ...bandStyle, background: dl.color }}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+                {activeDeadlines.length > 0 && isMobile && (
+                  <div style={styles.deadlineDots}>
+                    {activeDeadlines.slice(0, 2).map(dl => (
+                      <div key={dl.id} title={dl.label} style={{ ...styles.deadlineDot, background: dl.color }} />
+                    ))}
+                  </div>
+                )}
                 {hasCreatine && (
                   <span style={{ position: "absolute", top: 2, right: 3, fontSize: 6, color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)", lineHeight: 1 }} title="Créatine">▲</span>
                 )}

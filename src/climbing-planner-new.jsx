@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 // ── Lib ──
 import supabase from "./lib/supabase.js";
-import { MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, BLOCK_TYPES, DEFAULT_SUSPENSION_CONFIG, GRIP_TYPES, CUSTOM_CYCLE_COLORS, isDateInCustomCycle, getCustomCyclesForDate, getDayLogWarning, getMesoColor, getMesoForDate } from "./lib/constants.js";
+import { MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, BLOCK_TYPES, DEFAULT_SUSPENSION_CONFIG, GRIP_TYPES, CUSTOM_CYCLE_COLORS, isDateInCustomCycle, getCustomCyclesForDate, getDeadlinesForDate, getDayLogWarning, getMesoColor, getMesoForDate } from "./lib/constants.js";
 import { getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime, migrateWeekKeys, getDaySessions, getDayCharge, getMonthWeeks } from "./lib/helpers.js";
 import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "./lib/charge.js";
 import { generateId, loadData, saveData } from "./lib/storage.js";
@@ -381,6 +381,12 @@ export default function ClimbingPlanner() {
   const addCustomCycle = cc => updateCustomCycles(list => [...list, cc]);
   const updateCustomCycle = (id, cc) => updateCustomCycles(list => list.map(x => x.id === id ? { ...x, ...cc } : x));
   const deleteCustomCycle = id => updateCustomCycles(list => list.filter(x => x.id !== id));
+
+  // ── Deadline CRUD ──
+  const updateDeadlines = updater => setData(d => ({ ...d, deadlines: updater(d.deadlines || []) }));
+  const addDeadline = dl => updateDeadlines(list => [...list, dl]);
+  const updateDeadline = (id, dl) => updateDeadlines(list => list.map(x => x.id === id ? { ...x, ...dl } : x));
+  const deleteDeadline = id => updateDeadlines(list => list.filter(x => x.id !== id));
 
   // ── Sync planning futur ──
   const syncPlannedSessions = (updatedSession) => {
@@ -798,13 +804,50 @@ export default function ClimbingPlanner() {
       {/* ── Vue semaine ── */}
       {viewMode === "week" && (
         <>
-          {null}
+          {/* ── Countdown badge ── */}
+          {(() => {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const horizon = addDays(today, 30);
+            const upcoming = (data.deadlines || [])
+              .filter(dl => dl.startDate && (dl.priority === "A" || dl.priority === "B"))
+              .map(dl => {
+                const s = new Date(dl.startDate + "T00:00:00");
+                const daysUntil = Math.round((s - today) / 864e5);
+                return { ...dl, daysUntil };
+              })
+              .filter(dl => dl.daysUntil >= 0 && dl.daysUntil <= 30)
+              .sort((a, b) => a.daysUntil - b.daysUntil);
+            if (upcoming.length === 0) return null;
+            const nearest = upcoming[0];
+            return (
+              <div style={{
+                background: nearest.color + (isDark ? "18" : "12"),
+                borderBottom: `1px solid ${nearest.color}44`,
+                borderLeft: `3px solid ${nearest.color}`,
+                padding: "5px 20px",
+                display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: nearest.color, letterSpacing: "0.05em" }}>
+                  {nearest.priority === "A" ? "🏆" : "◆"} {nearest.label}
+                </span>
+                <span style={{ fontSize: 11, color: nearest.color + "cc" }}>
+                  {nearest.daysUntil === 0 ? "— Aujourd'hui !" : nearest.daysUntil === 1 ? "— Demain" : `— dans ${nearest.daysUntil} jours`}
+                </span>
+                {upcoming.length > 1 && (
+                  <span style={{ fontSize: 10, color: isDark ? "#606860" : "#9a9080", marginLeft: "auto" }}>
+                    +{upcoming.length - 1} autre{upcoming.length > 2 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
           <div style={isMobile ? styles.gridMobile : styles.grid}>
             {DAYS.map((day, i) => {
               const date = addDays(monday, i);
               const isToday = date.toDateString() === new Date().toDateString();
               const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
               const logWarning = getDayLogWarning(data, dateISO, date);
+              const dayDeadlines = getDeadlinesForDate(data.deadlines || [], date);
               return (
                 <DayColumn
                   key={i}
@@ -823,6 +866,7 @@ export default function ClimbingPlanner() {
                   logWarning={logWarning}
                   onOpenLog={() => setLogDate(dateISO)}
                   pendingSuggestionsIds={pendingSuggestionsIds}
+                  deadlines={dayDeadlines}
                 />
               );
             })}
@@ -855,6 +899,7 @@ export default function ClimbingPlanner() {
           mesocycles={data.mesocycles || []}
           creatine={data.creatine || {}}
           customCycles={data.customCycles || []}
+          deadlines={data.deadlines || []}
           onSelectWeek={(wm) => { setCurrentDate(wm); setViewMode("week"); }}
           onSessionClick={(date, si) => {
             const wKey2 = weekKey(getMondayOf(date));
@@ -873,6 +918,7 @@ export default function ClimbingPlanner() {
           isMobile={isMobile}
           creatine={data.creatine || {}}
           customCycles={data.customCycles || []}
+          deadlines={data.deadlines || []}
           onSelectMonth={(month) => {
             setCurrentDate(new Date(currentDate.getFullYear(), month, 1));
             setViewMode("month");
@@ -906,6 +952,10 @@ export default function ClimbingPlanner() {
           onAddCustomCycle={addCustomCycle}
           onUpdateCustomCycle={updateCustomCycle}
           onDeleteCustomCycle={deleteCustomCycle}
+          deadlines={data.deadlines || []}
+          onAddDeadline={addDeadline}
+          onUpdateDeadline={updateDeadline}
+          onDeleteDeadline={deleteDeadline}
           locked={!!data.cyclesLocked}
           onSetLocked={val => setData(d => ({ ...d, cyclesLocked: val }))}
           canEdit={(data.profile?.role ?? null) !== "athlete"}
