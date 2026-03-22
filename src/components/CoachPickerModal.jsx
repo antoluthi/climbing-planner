@@ -14,6 +14,7 @@ export function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
   const [startTime,  setStartTime]  = useState("09:00");
   const [coachNote,  setCoachNote]  = useState("");
   const [address,    setAddress]    = useState("");
+  const [sort,       setSort]       = useState("date"); // "date" | "charge"
 
   const surface = isDark ? "#1c2820" : "#ffffff";
   const bg2     = isDark ? "#141a16" : "#f3f7f4";
@@ -24,14 +25,20 @@ export function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
 
   const isSessionTab = tab === "sessions";
 
-  const filteredSessions = sessions.filter(s =>
+  const applySort = (arr) => {
+    if (sort === "date")   return [...arr].sort((a, b) => b.id - a.id);
+    if (sort === "charge") return [...arr].sort((a, b) => (b.charge ?? 0) - (a.charge ?? 0));
+    return arr;
+  };
+
+  const filteredSessions = applySort(sessions.filter(s =>
     (typeFilter === "Tous" || s.type === typeFilter) &&
     s.name.toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredBlocks = blocks.filter(b =>
+  ));
+  const filteredBlocks = applySort(blocks.filter(b =>
     (typeFilter === "Tous" || b.blockType === typeFilter) &&
     b.name.toLowerCase().includes(search.toLowerCase())
-  );
+  ));
 
   const sessionTypes  = [...new Set(sessions.map(s => s.type).filter(Boolean))];
   const filterOptions = isSessionTab
@@ -142,22 +149,39 @@ export function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
             onChange={e => setSearch(e.target.value)}
             autoFocus
           />
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {filterOptions.map(f => (
-              <button
-                key={f}
-                onClick={() => setTypeFilter(f)}
-                style={{
-                  padding: "3px 9px", borderRadius: 4, cursor: "pointer", fontSize: 10,
-                  fontFamily: "inherit",
-                  border: `1px solid ${typeFilter === f ? accent + "88" : border}`,
-                  background: typeFilter === f ? (isDark ? "#263228" : "#d4e8db") : "none",
-                  color: typeFilter === f ? accent : muted,
-                }}
-              >
-                {f}
-              </button>
-            ))}
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {filterOptions.map(f => (
+                <button
+                  key={f}
+                  onClick={() => setTypeFilter(f)}
+                  style={{
+                    padding: "3px 9px", borderRadius: 4, cursor: "pointer", fontSize: 10,
+                    fontFamily: "inherit",
+                    border: `1px solid ${typeFilter === f ? accent + "88" : border}`,
+                    background: typeFilter === f ? (isDark ? "#263228" : "#d4e8db") : "none",
+                    color: typeFilter === f ? accent : muted,
+                  }}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <span style={{ fontSize: 10, color: muted }}>Trier :</span>
+              {[["date", "Date ↓"], ["charge", "Charge ↓"]].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setSort(key)}
+                  style={{
+                    padding: "3px 8px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit",
+                    border: `1px solid ${sort === key ? accent + "88" : border}`,
+                    background: sort === key ? (isDark ? "#263228" : "#d4e8db") : "none",
+                    color: sort === key ? accent : muted,
+                  }}
+                >{label}</button>
+              ))}
+            </div>
           </div>
         </div>
 

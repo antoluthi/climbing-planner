@@ -11,6 +11,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
   const [subTab,          setSubTab]          = useState("sessions"); // "sessions" | "blocks"
   const [search,          setSearch]          = useState("");
   const [filter,          setFilter]          = useState("Tous");
+  const [sort,            setSort]            = useState("date"); // "date" | "charge"
   const [confirmId,       setConfirmId]       = useState(null);
   const [blockForm,       setBlockForm]       = useState(null); // null | { initial? }
   const [feedbackHistory, setFeedbackHistory] = useState(null); // null | { type, id, name }
@@ -39,21 +40,27 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
     </div>
   );
 
+  const applySort = (arr) => {
+    if (sort === "date")   return [...arr].sort((a, b) => b.id - a.id);
+    if (sort === "charge") return [...arr].sort((a, b) => (b.charge ?? 0) - (a.charge ?? 0));
+    return arr;
+  };
+
   // ── Séances tab — toutes les séances (communautaires) ──
   const allSessions = catalog; // plus de filtre isCustom
-  const filteredSessions = allSessions.filter(s => {
+  const filteredSessions = applySort(allSessions.filter(s => {
     const matchType   = filter === "Tous" || s.type === filter;
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
     return matchType && matchSearch;
-  });
+  }));
   const byType = {};
   filteredSessions.forEach(s => { (byType[s.type] = byType[s.type] || []).push(s); });
 
   // ── Blocs tab ──
-  const filteredBlocks = (blocks || []).filter(b =>
+  const filteredBlocks = applySort((blocks || []).filter(b =>
     (filter === "Tous" || b.blockType === filter) &&
     b.name.toLowerCase().includes(search.toLowerCase())
-  );
+  ));
   const byBlockType = {};
   filteredBlocks.forEach(b => { (byBlockType[b.blockType] = byBlockType[b.blockType] || []).push(b); });
 
@@ -69,7 +76,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
           {[{ key: "sessions", label: "Séances" }, { key: "blocks", label: "Blocs" }].map(({ key, label }) => (
             <button
               key={key}
-              onClick={() => { setSubTab(key); setSearch(""); setFilter("Tous"); setConfirmId(null); }}
+              onClick={() => { setSubTab(key); setSearch(""); setFilter("Tous"); setSort("date"); setConfirmId(null); }}
               style={{
                 flex: 1, padding: "8px 0", border: "none", borderRadius: 6, cursor: "pointer",
                 fontFamily: "inherit", fontSize: 12, fontWeight: 600,
@@ -101,27 +108,45 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
         </div>
 
         {/* ── Recherche + filtres ── */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
           <input
-            style={{ flex: 1, minWidth: 160, background: surface, border: `1px solid ${border}`, borderRadius: 6, padding: "7px 12px", color: text, fontSize: 12, fontFamily: "inherit", outline: "none" }}
+            style={{ background: surface, border: `1px solid ${border}`, borderRadius: 6, padding: "7px 12px", color: text, fontSize: 12, fontFamily: "inherit", outline: "none" }}
             placeholder="Rechercher…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {filterOptions.map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                style={{
-                  padding: "5px 10px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit",
-                  fontWeight: filter === f ? 600 : 400,
-                  background: filter === f ? (isDark ? "#263228" : "#d4e8db") : "none",
-                  border: `1px solid ${filter === f ? accent + "88" : border}`,
-                  color: filter === f ? accent : muted,
-                }}
-              >{f}</button>
-            ))}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {filterOptions.map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  style={{
+                    padding: "5px 10px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit",
+                    fontWeight: filter === f ? 600 : 400,
+                    background: filter === f ? (isDark ? "#263228" : "#d4e8db") : "none",
+                    border: `1px solid ${filter === f ? accent + "88" : border}`,
+                    color: filter === f ? accent : muted,
+                  }}
+                >{f}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <span style={{ fontSize: 10, color: muted }}>Trier :</span>
+              {[["date", "Date ↓"], ["charge", "Charge ↓"]].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setSort(key)}
+                  style={{
+                    padding: "4px 9px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit",
+                    fontWeight: sort === key ? 600 : 400,
+                    background: sort === key ? (isDark ? "#263228" : "#d4e8db") : "none",
+                    border: `1px solid ${sort === key ? accent + "88" : border}`,
+                    color: sort === key ? accent : muted,
+                  }}
+                >{label}</button>
+              ))}
+            </div>
           </div>
         </div>
 
