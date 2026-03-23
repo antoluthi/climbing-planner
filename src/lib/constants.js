@@ -131,3 +131,12 @@ export function getMesoForDate(mesocycles, date) {
   }
   return null;
 }
+
+// ── Quick sessions helpers ──────────────────────────────────────────────────
+export function getQuickSessionsForDate(quickSessions, dateISO) {
+  return (quickSessions || []).filter(qs => {
+    if (!qs.startDate) return false;
+    if (!qs.endDate) return qs.startDate === dateISO;
+    return qs.startDate <= dateISO && dateISO <= qs.endDate;
+  });
+}

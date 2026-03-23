@@ -9,6 +9,7 @@ const DEFAULT_DATA = {
   weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES,
   sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {},
   profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [], deadlines: [],
+  quickSessions: [],
 };
 
 export function loadData() {

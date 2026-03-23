@@ -1,11 +1,11 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getChargeColor } from "../lib/charge.js";
-import { DAYS, getCustomCyclesForDate, getMesoForDate, getDeadlinesForDate } from "../lib/constants.js";
+import { DAYS, getCustomCyclesForDate, getMesoForDate, getDeadlinesForDate, getQuickSessionsForDate } from "../lib/constants.js";
 import { addDays, getMonthWeeks, getDaySessions } from "../lib/helpers.js";
 
 // ─── VUE MOIS ─────────────────────────────────────────────────────────────────
 
-export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles, deadlines, onDeadlineClick }) {
+export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles, deadlines, onDeadlineClick, quickSessions, onQuickSessionClick }) {
   const { styles, isDark } = useThemeCtx();
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -51,6 +51,7 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
             const hasCreatine = inMonth && !!creatine?.[dateISO];
             const activeCycles = inMonth ? getCustomCyclesForDate(customCycles, date) : [];
             const activeDeadlines = inMonth ? getDeadlinesForDate(deadlines, date) : [];
+            const activeQuickSessions = inMonth ? getQuickSessionsForDate(quickSessions, dateISO) : [];
             // For each deadline: determine if this date is start/end within the week row
             const dlRenderInfo = activeDeadlines.map(dl => {
               const dlStart = dl.startDate;
@@ -219,6 +220,54 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                       <div key={dl.id} title={dl.note ? `${dl.label} · ${dl.note}` : dl.label}
                         onClick={onDeadlineClick ? e => { e.stopPropagation(); onDeadlineClick(dl); } : undefined}
                         style={{ ...styles.deadlineDot, background: dl.color, cursor: onDeadlineClick ? "pointer" : "default" }} />
+                    ))}
+                  </div>
+                )}
+                {/* Quick sessions */}
+                {!isMobile && activeQuickSessions.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: 2, zIndex: 1 }}>
+                    {activeQuickSessions.slice(0, 2).map(qs => {
+                      const qsStart = qs.startDate;
+                      const qsEnd = qs.endDate || qs.startDate;
+                      const isFirstInRow = dateISO === qsStart || di === 0;
+                      const isLastInRow = dateISO === qsEnd || di === 6;
+                      const showLabel = dateISO === qsStart || (di === 0 && qsStart < dateISO);
+                      const brL = isFirstInRow ? 3 : 0;
+                      const brR = isLastInRow ? 3 : 0;
+                      const mL = isFirstInRow ? 0 : -8;
+                      const mR = isLastInRow ? 0 : -8;
+                      return (
+                        <div
+                          key={qs.id}
+                          title={[qs.name, qs.content].filter(Boolean).join(" · ")}
+                          onClick={e => { e.stopPropagation(); onQuickSessionClick && onQuickSessionClick(qs); }}
+                          style={{
+                            background: qs.color + "2a",
+                            border: `1.5px solid ${qs.color}77`,
+                            borderRadius: `${brL}px ${brR}px ${brR}px ${brL}px`,
+                            padding: showLabel ? "2px 5px" : "2px 0",
+                            marginLeft: mL, marginRight: mR,
+                            overflow: "hidden",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {showLabel && (
+                            <span style={{ fontSize: 9, fontWeight: 600, color: qs.color, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
+                              {qs.name}
+                            </span>
+                          )}
+                          {!showLabel && <div style={{ height: 11 }} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {isMobile && activeQuickSessions.length > 0 && (
+                  <div style={styles.deadlineDots}>
+                    {activeQuickSessions.slice(0, 2).map(qs => (
+                      <div key={qs.id} title={qs.name}
+                        onClick={e => { e.stopPropagation(); onQuickSessionClick && onQuickSessionClick(qs); }}
+                        style={{ ...styles.deadlineDot, background: qs.color, borderRadius: "50%", cursor: "pointer" }} />
                     ))}
                   </div>
                 )}
