@@ -784,6 +784,11 @@ export default function ClimbingPlanner() {
             if (cr[dateISO]) delete cr[dateISO]; else cr[dateISO] = true;
             return { ...d, creatine: cr };
           })}
+          onSaveWeight={(dateISO, kg) => setData(d => {
+            const w = { ...(d.weight || {}) };
+            if (kg == null) delete w[dateISO]; else w[dateISO] = kg;
+            return { ...d, weight: w };
+          })}
           onAddHooper={entry => setData(d => {
             const existing = (d.hooper || []).filter(h => h.date !== entry.date);
             return { ...d, hooper: [...existing, entry].sort((a, b) => a.date.localeCompare(b.date)) };
