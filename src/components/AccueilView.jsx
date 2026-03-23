@@ -4,6 +4,7 @@ import { BLOCK_TYPES, getMesoForDate } from "../lib/constants.js";
 import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions } from "../lib/helpers.js";
 import { getChargeColor } from "../lib/charge.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
+import { CustomCheckbox } from "./CustomCheckbox.jsx";
 
 // ─── GREETING BY TIME OF DAY ──────────────────────────────────────────────────
 
@@ -612,7 +613,7 @@ function getContextualPhrase(ctx) {
 
 // ─── ACCUEIL ──────────────────────────────────────────────────────────────────
 
-export function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onAddHooper, onAddNutrition, onDeleteNutrition }) {
+export function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onSaveWeight, onAddHooper, onAddNutrition, onDeleteNutrition }) {
   const { isDark } = useThemeCtx();
   const today = localDateStr(new Date());
   const todayObj = new Date(today + "T12:00:00");
@@ -656,6 +657,17 @@ export function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, o
 
   // Creatine
   const hasCreatine = !!data.creatine?.[today];
+
+  // Weight
+  const todayWeight = data.weight?.[today] ?? null;
+  const [weightInput, setWeightInput] = useState(todayWeight != null ? String(todayWeight) : "");
+  const [weightEditing, setWeightEditing] = useState(false);
+  const handleWeightSave = () => {
+    setWeightEditing(false);
+    const val = parseFloat(weightInput.replace(",", "."));
+    if (!isNaN(val) && val > 0) onSaveWeight?.(today, Math.round(val * 10) / 10);
+    else if (weightInput.trim() === "") onSaveWeight?.(today, null);
+  };
 
   // Nutrition
   const todayMeals = data.nutrition?.[today] || [];
@@ -799,18 +811,50 @@ export function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, o
           {/* Créatine */}
           <div style={{ background: panelBg, borderRadius: 8, padding: "12px 14px", border: `1px solid ${panelBorder}` }}>
             <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={hasCreatine}
-                onChange={() => onToggleCreatine(today)}
-                style={{ width: 16, height: 16, accentColor: accentGreen, cursor: "pointer" }}
-              />
+              <CustomCheckbox checked={hasCreatine} onChange={() => onToggleCreatine(today)} isDark={isDark} accent={accentGreen} />
               <div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: textMain }}>Créatine</div>
                 <div style={{ fontSize: 10, color: textMuted }}>Prise de créatine du jour</div>
               </div>
               {hasCreatine && <span style={{ marginLeft: "auto", fontSize: 12, color: accentGreen, fontWeight: 700 }}>✓</span>}
             </label>
+          </div>
+
+          {/* Poids */}
+          <div style={{ background: panelBg, borderRadius: 8, padding: "12px 14px", border: `1px solid ${panelBorder}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: textMain }}>Poids</div>
+                {todayWeight != null && !weightEditing && (
+                  <div style={{ fontSize: 11, color: accentGreen, marginTop: 2, fontWeight: 600 }}>{todayWeight} kg</div>
+                )}
+                {todayWeight == null && !weightEditing && (
+                  <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>Non renseigné</div>
+                )}
+              </div>
+              {weightEditing ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    type="number" step="0.1" min="20" max="300"
+                    value={weightInput}
+                    onChange={e => setWeightInput(e.target.value)}
+                    onBlur={handleWeightSave}
+                    onKeyDown={e => e.key === "Enter" && handleWeightSave()}
+                    autoFocus
+                    style={{ background: isDark ? "#161a16" : "#f0ece4", border: `1px solid ${panelBorder}`, borderRadius: 6, color: textMain, fontSize: 16, fontFamily: "inherit", fontWeight: 700, padding: "4px 8px", outline: "none", width: 72, textAlign: "center" }}
+                  />
+                  <span style={{ fontSize: 12, color: textMuted }}>kg</span>
+                  <button onClick={handleWeightSave} style={{ background: accentGreen, border: "none", borderRadius: 5, color: isDark ? "#0a0f0a" : "#fff", padding: "4px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}>✓</button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setWeightInput(todayWeight != null ? String(todayWeight) : ""); setWeightEditing(true); }}
+                  style={{ background: "none", border: `1px solid ${panelBorder}`, borderRadius: 5, color: textMain, padding: "3px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+                >
+                  {todayWeight != null ? "Modifier" : "+ Saisir"}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Hooper */}
