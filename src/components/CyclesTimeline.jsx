@@ -4,6 +4,18 @@ import { addDays } from "../lib/helpers.js";
 
 // ─── CYCLES TIMELINE ─────────────────────────────────────────────────────────
 
+// Fixed type colors — independent of the deadline's custom color
+const DL_TYPE_COLORS = {
+  competition: "#f43f5e",
+  sortie:      "#34d399",
+  objectif:    "#60a5fa",
+};
+const DL_TYPE_LABELS = {
+  competition: "Compétition",
+  sortie:      "Sortie",
+  objectif:    "Objectif",
+};
+
 export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) {
   const { styles, isDark } = useThemeCtx();
   const [popover, setPopover] = useState(null); // { meso, micro, x, y }
@@ -150,18 +162,19 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
                     borderRadius: 1, zIndex: 5, pointerEvents: "none",
                   }} />
                 )}
-                {/* Deadline lines — inside the bar, clipped to bar height */}
+                {/* Deadline lines — type color, no text, clipped to bar height */}
                 {dlsInMeso.map(({ dl, dlPct }) => {
-                  const lineW = dl.priority === "A" ? 2 : dl.priority === "B" ? 1.5 : 1;
-                  const tip = [dl.label, dl.note].filter(Boolean).join(" · ");
+                  const typeColor = DL_TYPE_COLORS[dl.type] || "#94a3b8";
+                  const lineW = dl.priority === "A" ? 2.5 : dl.priority === "B" ? 1.5 : 1;
+                  const tip = [dl.label, DL_TYPE_LABELS[dl.type] || dl.type, dl.note].filter(Boolean).join(" · ");
                   return (
                     <div key={`dl-${dl.id}`} title={tip} style={{
                       position: "absolute",
                       left: `${dlPct}%`,
                       top: 0, bottom: 0,
                       width: lineW,
-                      background: dl.color + (dl.priority === "C" ? "88" : "cc"),
-                      boxShadow: dl.priority === "A" ? `0 0 5px ${dl.color}88` : "none",
+                      background: typeColor + (dl.priority === "C" ? "88" : "dd"),
+                      boxShadow: dl.priority === "A" ? `0 0 5px ${typeColor}99` : "none",
                       zIndex: 6,
                       pointerEvents: "none",
                       display: "flex", flexDirection: "column", alignItems: "center",
@@ -169,27 +182,12 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
                       <div style={{
                         width: dl.priority === "A" ? 7 : 5,
                         height: dl.priority === "A" ? 7 : 5,
-                        background: dl.color,
+                        background: typeColor,
                         transform: "rotate(45deg)",
                         flexShrink: 0,
                         marginTop: 3,
                         opacity: dl.priority === "C" ? 0.6 : 1,
                       }} />
-                      <span style={{
-                        position: "absolute",
-                        top: 12,
-                        left: 3,
-                        fontSize: 7,
-                        fontWeight: dl.priority === "A" ? 700 : 600,
-                        color: dl.color,
-                        writingMode: "vertical-lr",
-                        whiteSpace: "nowrap",
-                        lineHeight: 1,
-                        opacity: dl.priority === "C" ? 0.75 : 1,
-                        userSelect: "none",
-                      }}>
-                        {dl.label}
-                      </span>
                     </div>
                   );
                 })}
@@ -282,18 +280,29 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
         </>
       )}
 
-      {/* Deadlines legend — liste compacte sous les cycles, les lignes verticales sont dans le bloc mesos */}
+      {/* Échéances — légende types + liste */}
       {(deadlines || []).length > 0 && (
         <>
           <div style={styles.timelineSectionSep}>Échéances</div>
+          {/* Type color legend */}
+          <div style={{ display: "flex", gap: 14, marginBottom: 10, flexWrap: "wrap" }}>
+            {Object.entries(DL_TYPE_COLORS).map(([type, color]) => (
+              <div key={type} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <div style={{ width: 3, height: 16, background: color, borderRadius: 2, flexShrink: 0 }} />
+                <span style={{ fontSize: 10, color: isDark ? "#7a8080" : "#8a8070" }}>{DL_TYPE_LABELS[type]}</span>
+              </div>
+            ))}
+          </div>
+          {/* Deadline list */}
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             {(deadlines || []).map(dl => {
               const fmtDl = d => d ? new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "2-digit" }) : null;
               const dateLabel = dl.endDate ? `${fmtDl(dl.startDate)} → ${fmtDl(dl.endDate)}` : fmtDl(dl.startDate);
               const priorityLabel = dl.priority === "A" ? "🏆" : dl.priority === "B" ? "◆" : "○";
+              const typeColor = DL_TYPE_COLORS[dl.type] || "#94a3b8";
               return (
                 <div key={dl.id} style={{ display: "flex", alignItems: "center", gap: 10, paddingLeft: 4 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 1, background: dl.color, transform: "rotate(45deg)", flexShrink: 0, opacity: dl.priority === "C" ? 0.6 : 1 }} />
+                  <div style={{ width: 3, height: 14, background: typeColor + (dl.priority === "C" ? "88" : "dd"), borderRadius: 2, flexShrink: 0 }} />
                   <span style={{ fontSize: 11, fontWeight: dl.priority === "A" ? 700 : 500, color: isDark ? "#c8c0b4" : "#3a3028" }}>
                     {priorityLabel} {dl.label}
                   </span>

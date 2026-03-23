@@ -5,7 +5,7 @@ import { addDays, getMonthWeeks, getDaySessions } from "../lib/helpers.js";
 
 // ─── VUE MOIS ─────────────────────────────────────────────────────────────────
 
-export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles, deadlines }) {
+export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles, deadlines, onDeadlineClick }) {
   const { styles, isDark } = useThemeCtx();
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -148,15 +148,17 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                           {dl.note}
                         </span>
                       ) : null;
+                      const handleClick = onDeadlineClick ? e => { e.stopPropagation(); onDeadlineClick(dl); } : undefined;
                       if (dl.priority === "A") {
                         return (
-                          <div key={dl.id} title={tip} style={{
+                          <div key={dl.id} title={tip} onClick={handleClick} style={{
                             background: dl.color + "33",
                             borderLeft: isFirstInRow ? `3px solid ${dl.color}` : `3px solid ${dl.color}00`,
                             borderRadius: `${brL}px ${brR}px ${brR}px ${brL}px`,
                             padding: "2px 5px",
                             marginLeft: mL, marginRight: mR,
                             overflow: "hidden",
+                            cursor: onDeadlineClick ? "pointer" : "default",
                           }}>
                             {showLabel && (
                               <span style={{ fontSize: 9, fontWeight: 700, color: dl.color, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
@@ -170,13 +172,14 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                       }
                       if (dl.priority === "B") {
                         return (
-                          <div key={dl.id} title={tip} style={{
+                          <div key={dl.id} title={tip} onClick={handleClick} style={{
                             background: dl.color + "25",
                             borderLeft: isFirstInRow ? `2px solid ${dl.color}` : `2px solid ${dl.color}00`,
                             borderRadius: `${brL}px ${brR}px ${brR}px ${brL}px`,
                             padding: showLabel ? "2px 4px" : "2px 0",
                             marginLeft: mL, marginRight: mR,
                             overflow: "hidden",
+                            cursor: onDeadlineClick ? "pointer" : "default",
                           }}>
                             {showLabel && (
                               <span style={{ fontSize: 8, fontWeight: 600, color: dl.color, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
@@ -189,13 +192,14 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                         );
                       }
                       return (
-                        <div key={dl.id} title={tip} style={{
+                        <div key={dl.id} title={tip} onClick={handleClick} style={{
                           background: dl.color + "18",
                           borderLeft: isFirstInRow ? `1px solid ${dl.color}88` : `1px solid ${dl.color}00`,
                           borderRadius: `${brL}px ${brR}px ${brR}px ${brL}px`,
                           padding: showLabel ? "1px 4px" : "1px 0",
                           marginLeft: mL, marginRight: mR,
                           overflow: "hidden",
+                          cursor: onDeadlineClick ? "pointer" : "default",
                         }}>
                           {showLabel && (
                             <span style={{ fontSize: 8, fontWeight: 400, color: dl.color + "cc", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
@@ -212,7 +216,9 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                 {isMobile && activeDeadlines.length > 0 && (
                   <div style={styles.deadlineDots}>
                     {activeDeadlines.slice(0, 2).map(dl => (
-                      <div key={dl.id} title={dl.note ? `${dl.label} · ${dl.note}` : dl.label} style={{ ...styles.deadlineDot, background: dl.color }} />
+                      <div key={dl.id} title={dl.note ? `${dl.label} · ${dl.note}` : dl.label}
+                        onClick={onDeadlineClick ? e => { e.stopPropagation(); onDeadlineClick(dl); } : undefined}
+                        style={{ ...styles.deadlineDot, background: dl.color, cursor: onDeadlineClick ? "pointer" : "default" }} />
                     ))}
                   </div>
                 )}
