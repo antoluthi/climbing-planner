@@ -6,7 +6,7 @@ import { ConfirmModal } from "./ConfirmModal.jsx";
 
 // ─── COMPOSANT JOUR ───────────────────────────────────────────────────────────
 
-export function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine, note, onSaveNote, logWarning, onOpenLog, pendingSuggestionsIds, deadlines, onDeadlineClick }) {
+export function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine, note, onSaveNote, logWarning, onOpenLog, pendingSuggestionsIds, deadlines, onDeadlineClick, quickSessions, onQuickSessionClick, onDeleteQuickSession }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
   const meso = weekMeta?.mesocycle;
@@ -89,6 +89,53 @@ export function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, on
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Quick sessions ── */}
+      {quickSessions && quickSessions.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 6 }}>
+          {quickSessions.map(qs => (
+            <div
+              key={qs.id}
+              style={{
+                background: qs.color + "22",
+                border: `1.5px solid ${qs.color}88`,
+                borderRadius: 5,
+                padding: "3px 7px 3px 8px",
+                display: "flex", flexDirection: "column", gap: 1,
+                cursor: "pointer",
+                position: "relative",
+              }}
+              onClick={() => onQuickSessionClick && onQuickSessionClick(qs)}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: qs.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4, flex: 1 }}>
+                  {qs.name}
+                </span>
+                {onDeleteQuickSession && (
+                  <button
+                    style={{ fontSize: 9, color: qs.color + "88", background: "none", border: "none", cursor: "pointer", padding: "0 1px", lineHeight: 1, flexShrink: 0 }}
+                    onClick={e => { e.stopPropagation(); onDeleteQuickSession(qs.id); }}
+                    title="Supprimer"
+                  >✕</button>
+                )}
+              </div>
+              {!qs.allDay && qs.startTime && (
+                <span style={{ fontSize: 8, color: qs.color + "cc", lineHeight: 1.2 }}>
+                  {qs.startTime}{qs.endTime ? ` – ${qs.endTime}` : qs.duration ? ` · ${qs.duration}min` : ""}
+                </span>
+              )}
+              {qs.allDay && (
+                <span style={{ fontSize: 8, color: qs.color + "99", lineHeight: 1.2 }}>Toute la journée</span>
+              )}
+              {qs.content && !isMobile && (
+                <span style={{ fontSize: 8, color: isDark ? qs.color + "99" : qs.color + "cc", fontStyle: "italic", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {qs.content.length > 50 ? qs.content.slice(0, 50) + "…" : qs.content}
+                </span>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

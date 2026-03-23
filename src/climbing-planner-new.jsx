@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 // ── Lib ──
 import supabase from "./lib/supabase.js";
-import { MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, BLOCK_TYPES, DEFAULT_SUSPENSION_CONFIG, GRIP_TYPES, CUSTOM_CYCLE_COLORS, isDateInCustomCycle, getCustomCyclesForDate, getDeadlinesForDate, getDayLogWarning, getMesoColor, getMesoForDate } from "./lib/constants.js";
+import { MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, BLOCK_TYPES, DEFAULT_SUSPENSION_CONFIG, GRIP_TYPES, CUSTOM_CYCLE_COLORS, isDateInCustomCycle, getCustomCyclesForDate, getDeadlinesForDate, getQuickSessionsForDate, getDayLogWarning, getMesoColor, getMesoForDate } from "./lib/constants.js";
 import { getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime, migrateWeekKeys, getDaySessions, getDayCharge, getMonthWeeks } from "./lib/helpers.js";
 import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "./lib/charge.js";
 import { generateId, loadData, saveData } from "./lib/storage.js";
@@ -45,6 +45,8 @@ import { AccueilView } from "./components/AccueilView.jsx";
 import { PublicPlanView } from "./components/PublicPlanView.jsx";
 import { DeadlineDetailModal } from "./components/DeadlineDetailModal.jsx";
 import { DeadlineModal } from "./components/DeadlineModal.jsx";
+import { AddSessionChoiceModal } from "./components/AddSessionChoiceModal.jsx";
+import { QuickSessionModal } from "./components/QuickSessionModal.jsx";
 
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
 
@@ -393,6 +395,16 @@ export default function ClimbingPlanner() {
   // ── Deadline detail / quick-edit from calendar ──
   const [viewDeadline, setViewDeadline] = useState(null);
   const [editDeadlineFromView, setEditDeadlineFromView] = useState(null);
+
+  // ── Quick sessions CRUD ──
+  const updateQuickSessions = updater => setData(d => ({ ...d, quickSessions: updater(d.quickSessions || []) }));
+  const addQuickSession = qs => updateQuickSessions(list => [...list, qs]);
+  const updateQuickSession = (id, qs) => updateQuickSessions(list => list.map(x => x.id === id ? { ...x, ...qs } : x));
+  const deleteQuickSession = id => updateQuickSessions(list => list.filter(x => x.id !== id));
+
+  // ── Quick session picker state ──
+  // picker.mode: undefined = show choice modal, "prefaite" = catalog, "rapide" = quick form
+  const [quickEditSession, setQuickEditSession] = useState(null);
 
   // ── Sync planning futur ──
   const syncPlannedSessions = (updatedSession) => {
@@ -904,6 +916,7 @@ export default function ClimbingPlanner() {
               const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
               const logWarning = getDayLogWarning(data, dateISO, date);
               const dayDeadlines = getDeadlinesForDate(data.deadlines || [], date);
+              const dayQuickSessions = getQuickSessionsForDate(data.quickSessions || [], dateISO);
               return (
                 <DayColumn
                   key={i}
@@ -924,6 +937,9 @@ export default function ClimbingPlanner() {
                   pendingSuggestionsIds={pendingSuggestionsIds}
                   deadlines={dayDeadlines}
                   onDeadlineClick={setViewDeadline}
+                  quickSessions={dayQuickSessions}
+                  onQuickSessionClick={setQuickEditSession}
+                  onDeleteQuickSession={deleteQuickSession}
                 />
               );
             })}
@@ -957,6 +973,7 @@ export default function ClimbingPlanner() {
           creatine={data.creatine || {}}
           customCycles={data.customCycles || []}
           deadlines={data.deadlines || []}
+          quickSessions={data.quickSessions || []}
           onSelectWeek={(wm) => { setCurrentDate(wm); setViewMode("week"); }}
           onSessionClick={(date, si) => {
             const wKey2 = weekKey(getMondayOf(date));
@@ -965,6 +982,7 @@ export default function ClimbingPlanner() {
             openSessionModal(wKey2, di, si);
           }}
           onDeadlineClick={setViewDeadline}
+          onQuickSessionClick={setQuickEditSession}
         />
       )}
 
@@ -1072,6 +1090,15 @@ export default function ClimbingPlanner() {
         />
       )}
 
+      {/* ── Quick session edit ── */}
+      {quickEditSession && (
+        <QuickSessionModal
+          initial={quickEditSession}
+          onSave={qs => { updateQuickSession(qs.id, qs); setQuickEditSession(null); }}
+          onClose={() => setQuickEditSession(null)}
+        />
+      )}
+
       {/* ── Modals ── */}
       {sessionBuilderDay !== null && (
         <SessionBuilder
@@ -1082,7 +1109,15 @@ export default function ClimbingPlanner() {
           onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
         />
       )}
-      {picker && hasCoachFeatures && (
+      {/* ── Choice modal: prefaite vs personnalisee ── */}
+      {picker && !picker.mode && (
+        <AddSessionChoiceModal
+          onPrefaite={() => setPicker(p => ({ ...p, mode: "prefaite" }))}
+          onPersonnalisee={() => setPicker(p => ({ ...p, mode: "rapide" }))}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {picker && picker.mode === "prefaite" && hasCoachFeatures && (
         <CoachPickerModal
           sessions={catalog}
           blocks={dbBlocks}
@@ -1090,7 +1125,7 @@ export default function ClimbingPlanner() {
           onClose={() => setPicker(null)}
         />
       )}
-      {picker && !hasCoachFeatures && (
+      {picker && picker.mode === "prefaite" && !hasCoachFeatures && (
         <SessionPicker
           onSelect={s => { setTemplateEditor({ template: s, dayIndex: picker.dayIndex, startTime: "", address: s.address || "", coachNote: "" }); setPicker(null); }}
           onClose={() => setPicker(null)}
@@ -1099,6 +1134,19 @@ export default function ClimbingPlanner() {
           onCreateCustom={() => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
         />
       )}
+      {picker && picker.mode === "rapide" && (() => {
+        // Compute defaultDate from dayIndex
+        const mon = getMondayOf(currentDate);
+        const dayDate = addDays(mon, picker.dayIndex);
+        const defaultDate = `${dayDate.getFullYear()}-${String(dayDate.getMonth()+1).padStart(2,'0')}-${String(dayDate.getDate()).padStart(2,'0')}`;
+        return (
+          <QuickSessionModal
+            defaultDate={defaultDate}
+            onSave={qs => { addQuickSession(qs); setPicker(null); }}
+            onClose={() => setPicker(null)}
+          />
+        );
+      })()}
       {templateEditor && (
         <TemplateEditorModal
           template={templateEditor.template}
