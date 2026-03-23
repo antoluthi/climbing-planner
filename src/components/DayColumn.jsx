@@ -6,7 +6,7 @@ import { ConfirmModal } from "./ConfirmModal.jsx";
 
 // ─── COMPOSANT JOUR ───────────────────────────────────────────────────────────
 
-export function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine, note, onSaveNote, logWarning, onOpenLog, pendingSuggestionsIds, deadlines }) {
+export function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSession, onOpenSession, onRemove, isMobile, hasCreatine, note, onSaveNote, logWarning, onOpenLog, pendingSuggestionsIds, deadlines, onDeadlineClick }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
   const meso = weekMeta?.mesocycle;
@@ -68,12 +68,14 @@ export function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, on
               <div
                 key={dl.id}
                 title={tooltipParts.join(" · ")}
+                onClick={onDeadlineClick ? () => onDeadlineClick(dl) : undefined}
                 style={{
                   background: dl.color + (dl.priority === "C" ? "22" : dl.priority === "B" ? "33" : "44"),
                   borderLeft: `${dl.priority === "A" ? 3 : 2}px solid ${dl.color}`,
                   borderRadius: "0 3px 3px 0",
                   padding: "3px 6px",
                   display: "flex", flexDirection: "column", gap: 1,
+                  cursor: onDeadlineClick ? "pointer" : "default",
                 }}
               >
                 <span style={{ fontSize: 9, fontWeight: dl.priority === "A" ? 700 : 600, color: dl.color, letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>

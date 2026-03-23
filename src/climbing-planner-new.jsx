@@ -43,6 +43,8 @@ import { ProfileView } from "./components/ProfileView.jsx";
 import { CoachLibraryView } from "./components/CoachLibraryView.jsx";
 import { AccueilView } from "./components/AccueilView.jsx";
 import { PublicPlanView } from "./components/PublicPlanView.jsx";
+import { DeadlineDetailModal } from "./components/DeadlineDetailModal.jsx";
+import { DeadlineModal } from "./components/DeadlineModal.jsx";
 
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
 
@@ -387,6 +389,10 @@ export default function ClimbingPlanner() {
   const addDeadline = dl => updateDeadlines(list => [...list, dl]);
   const updateDeadline = (id, dl) => updateDeadlines(list => list.map(x => x.id === id ? { ...x, ...dl } : x));
   const deleteDeadline = id => updateDeadlines(list => list.filter(x => x.id !== id));
+
+  // ── Deadline detail / quick-edit from calendar ──
+  const [viewDeadline, setViewDeadline] = useState(null);
+  const [editDeadlineFromView, setEditDeadlineFromView] = useState(null);
 
   // ── Sync planning futur ──
   const syncPlannedSessions = (updatedSession) => {
@@ -917,6 +923,7 @@ export default function ClimbingPlanner() {
                   onOpenLog={() => setLogDate(dateISO)}
                   pendingSuggestionsIds={pendingSuggestionsIds}
                   deadlines={dayDeadlines}
+                  onDeadlineClick={setViewDeadline}
                 />
               );
             })}
@@ -957,6 +964,7 @@ export default function ClimbingPlanner() {
             const di = dow === 0 ? 6 : dow - 1;
             openSessionModal(wKey2, di, si);
           }}
+          onDeadlineClick={setViewDeadline}
         />
       )}
 
@@ -1045,6 +1053,22 @@ export default function ClimbingPlanner() {
           onRemoveAthlete={removeAthlete}
           viewingAthlete={viewingAthlete}
           onToggleViewAthlete={a => a ? switchToAthlete(a) : switchBackToCoach()}
+        />
+      )}
+
+      {/* ── Deadline detail / edit from calendar ── */}
+      {viewDeadline && (
+        <DeadlineDetailModal
+          deadline={viewDeadline}
+          onClose={() => setViewDeadline(null)}
+          onEdit={dl => { setViewDeadline(null); setEditDeadlineFromView(dl); }}
+        />
+      )}
+      {editDeadlineFromView && (
+        <DeadlineModal
+          initial={editDeadlineFromView}
+          onSave={dl => { updateDeadline(dl.id, dl); setEditDeadlineFromView(null); }}
+          onClose={() => setEditDeadlineFromView(null)}
         />
       )}
 
