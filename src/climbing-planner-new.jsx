@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 // ── Lib ──
 import supabase from "./lib/supabase.js";
-import { MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, BLOCK_TYPES, DEFAULT_SUSPENSION_CONFIG, GRIP_TYPES, CUSTOM_CYCLE_COLORS, isDateInCustomCycle, getCustomCyclesForDate, getDeadlinesForDate, getQuickSessionsForDate, getDayLogWarning, getMesoColor, getMesoForDate } from "./lib/constants.js";
+import { MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, BLOCK_TYPES, DEFAULT_SUSPENSION_CONFIG, GRIP_TYPES, CUSTOM_CYCLE_COLORS, isDateInCustomCycle, getCustomCyclesForDate, getDayLogWarning, getMesoColor, getMesoForDate } from "./lib/constants.js";
 import { getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime, migrateWeekKeys, getDaySessions, getDayCharge, getMonthWeeks } from "./lib/helpers.js";
 import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "./lib/charge.js";
 import { generateId, loadData, saveData } from "./lib/storage.js";
@@ -43,10 +43,6 @@ import { ProfileView } from "./components/ProfileView.jsx";
 import { CoachLibraryView } from "./components/CoachLibraryView.jsx";
 import { AccueilView } from "./components/AccueilView.jsx";
 import { PublicPlanView } from "./components/PublicPlanView.jsx";
-import { DeadlineDetailModal } from "./components/DeadlineDetailModal.jsx";
-import { DeadlineModal } from "./components/DeadlineModal.jsx";
-import { AddSessionChoiceModal } from "./components/AddSessionChoiceModal.jsx";
-import { QuickSessionModal } from "./components/QuickSessionModal.jsx";
 
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
 
@@ -295,7 +291,7 @@ export default function ClimbingPlanner() {
   };
 
   // ── Déplacer / suggestions ──
-  const moveSession = (fromWKey, fromDi, fromSi, toWKey, toDi, newStartTime) => {
+  const moveSession = (fromWKey, fromDi, fromSi, toWKey, toDi, newStartTime, newLocation) => {
     setData(d => {
       const src = (d.weeks[fromWKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
       const sess = src[fromDi]?.[fromSi];
@@ -303,6 +299,7 @@ export default function ClimbingPlanner() {
       const updated = { ...sess,
         startTime: newStartTime || sess.startTime || null,
         endTime: newStartTime ? calcEndTime(newStartTime, sess.estimatedTime) : sess.endTime ?? null,
+        ...(newLocation !== undefined ? { location: newLocation || null } : {}),
       };
       src[fromDi] = src[fromDi].filter((_, j) => j !== fromSi);
       const tgt = fromWKey === toWKey ? src : (d.weeks[toWKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
@@ -385,26 +382,6 @@ export default function ClimbingPlanner() {
   const addCustomCycle = cc => updateCustomCycles(list => [...list, cc]);
   const updateCustomCycle = (id, cc) => updateCustomCycles(list => list.map(x => x.id === id ? { ...x, ...cc } : x));
   const deleteCustomCycle = id => updateCustomCycles(list => list.filter(x => x.id !== id));
-
-  // ── Deadline CRUD ──
-  const updateDeadlines = updater => setData(d => ({ ...d, deadlines: updater(d.deadlines || []) }));
-  const addDeadline = dl => updateDeadlines(list => [...list, dl]);
-  const updateDeadline = (id, dl) => updateDeadlines(list => list.map(x => x.id === id ? { ...x, ...dl } : x));
-  const deleteDeadline = id => updateDeadlines(list => list.filter(x => x.id !== id));
-
-  // ── Deadline detail / quick-edit from calendar ──
-  const [viewDeadline, setViewDeadline] = useState(null);
-  const [editDeadlineFromView, setEditDeadlineFromView] = useState(null);
-
-  // ── Quick sessions CRUD ──
-  const updateQuickSessions = updater => setData(d => ({ ...d, quickSessions: updater(d.quickSessions || []) }));
-  const addQuickSession = qs => updateQuickSessions(list => [...list, qs]);
-  const updateQuickSession = (id, qs) => updateQuickSessions(list => list.map(x => x.id === id ? { ...x, ...qs } : x));
-  const deleteQuickSession = id => updateQuickSessions(list => list.filter(x => x.id !== id));
-
-  // ── Quick session picker state ──
-  // picker.mode: undefined = show choice modal, "prefaite" = catalog, "rapide" = quick form
-  const [quickEditSession, setQuickEditSession] = useState(null);
 
   // ── Sync planning futur ──
   const syncPlannedSessions = (updatedSession) => {
@@ -802,11 +779,6 @@ export default function ClimbingPlanner() {
             if (cr[dateISO]) delete cr[dateISO]; else cr[dateISO] = true;
             return { ...d, creatine: cr };
           })}
-          onSaveWeight={(dateISO, kg) => setData(d => {
-            const w = { ...(d.weight || {}) };
-            if (kg == null) delete w[dateISO]; else w[dateISO] = kg;
-            return { ...d, weight: w };
-          })}
           onAddHooper={entry => setData(d => {
             const existing = (d.hooper || []).filter(h => h.date !== entry.date);
             return { ...d, hooper: [...existing, entry].sort((a, b) => a.date.localeCompare(b.date)) };
@@ -827,96 +799,13 @@ export default function ClimbingPlanner() {
       {/* ── Vue semaine ── */}
       {viewMode === "week" && (
         <>
-          {/* ── Countdown badge ── */}
-          {(() => {
-            const today = new Date(); today.setHours(0, 0, 0, 0);
-            const upcoming = (data.deadlines || [])
-              .filter(dl => dl.startDate && (dl.priority === "A" || dl.priority === "B"))
-              .map(dl => {
-                const s = new Date(dl.startDate + "T00:00:00");
-                const daysUntil = Math.round((s - today) / 864e5);
-                return { ...dl, daysUntil };
-              })
-              .filter(dl => dl.daysUntil >= 0 && dl.daysUntil <= 30)
-              .sort((a, b) => a.daysUntil - b.daysUntil);
-            if (upcoming.length === 0) return null;
-            const nearest = upcoming[0];
-            const isA = nearest.priority === "A";
-            const isImminent = nearest.daysUntil <= 3;
-            const countdownText = nearest.daysUntil === 0 ? "Aujourd'hui !" : nearest.daysUntil === 1 ? "Demain" : `Dans ${nearest.daysUntil} jours`;
-            const typeLabel = { competition: "Compétition", sortie: "Sortie", objectif: "Objectif" }[nearest.type] || nearest.type;
-
-            return (
-              <div style={{
-                background: isA
-                  ? (isDark ? nearest.color + "28" : nearest.color + "1a")
-                  : (isDark ? nearest.color + "18" : nearest.color + "0f"),
-                borderBottom: `1px solid ${nearest.color}${isA ? "66" : "33"}`,
-                borderLeft: `${isA ? 4 : 2}px solid ${nearest.color}`,
-                padding: isMobile ? "10px 14px" : "12px 20px",
-                display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, flexWrap: "wrap",
-                boxShadow: isA ? `inset 0 0 40px ${nearest.color}0a` : "none",
-              }}>
-                {/* Icône priorité */}
-                <span style={{ fontSize: isA ? 22 : 16, lineHeight: 1, flexShrink: 0 }}>
-                  {isA ? "🏆" : "◆"}
-                </span>
-
-                {/* Nom + type */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1, minWidth: 0 }}>
-                  <span style={{
-                    fontSize: isA ? (isMobile ? 14 : 16) : (isMobile ? 12 : 14),
-                    fontWeight: 700, color: nearest.color,
-                    letterSpacing: "0.03em", lineHeight: 1.2,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>
-                    {nearest.label}
-                  </span>
-                  {!isMobile && (
-                    <span style={{ fontSize: 10, color: nearest.color + "99", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                      {typeLabel} · priorité {nearest.priority}
-                    </span>
-                  )}
-                  {nearest.note && !isMobile && (
-                    <span style={{ fontSize: 10, color: nearest.color + "88", fontStyle: "italic", marginTop: 1 }}>
-                      {nearest.note}
-                    </span>
-                  )}
-                </div>
-
-                {/* Compte à rebours */}
-                <div style={{
-                  display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, flexShrink: 0,
-                  background: nearest.color + (isA ? "22" : "15"),
-                  border: `1px solid ${nearest.color}${isA ? "55" : "33"}`,
-                  borderRadius: 6, padding: isMobile ? "4px 10px" : "6px 14px",
-                  boxShadow: isA && isImminent ? `0 0 10px ${nearest.color}44` : "none",
-                }}>
-                  <span style={{
-                    fontSize: isA ? (isMobile ? 15 : 17) : (isMobile ? 12 : 14),
-                    fontWeight: 800, color: nearest.color, lineHeight: 1, letterSpacing: "0.02em",
-                  }}>
-                    {countdownText}
-                  </span>
-                </div>
-
-                {/* Autres échéances imminentes */}
-                {upcoming.length > 1 && !isMobile && (
-                  <span style={{ fontSize: 10, color: isDark ? "#606860" : "#9a9080" }}>
-                    +{upcoming.length - 1} autre{upcoming.length > 2 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-            );
-          })()}
+          {null}
           <div style={isMobile ? styles.gridMobile : styles.grid}>
             {DAYS.map((day, i) => {
               const date = addDays(monday, i);
               const isToday = date.toDateString() === new Date().toDateString();
               const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
               const logWarning = getDayLogWarning(data, dateISO, date);
-              const dayDeadlines = getDeadlinesForDate(data.deadlines || [], date);
-              const dayQuickSessions = getQuickSessionsForDate(data.quickSessions || [], dateISO);
               return (
                 <DayColumn
                   key={i}
@@ -935,11 +824,6 @@ export default function ClimbingPlanner() {
                   logWarning={logWarning}
                   onOpenLog={() => setLogDate(dateISO)}
                   pendingSuggestionsIds={pendingSuggestionsIds}
-                  deadlines={dayDeadlines}
-                  onDeadlineClick={setViewDeadline}
-                  quickSessions={dayQuickSessions}
-                  onQuickSessionClick={setQuickEditSession}
-                  onDeleteQuickSession={deleteQuickSession}
                 />
               );
             })}
@@ -972,8 +856,6 @@ export default function ClimbingPlanner() {
           mesocycles={data.mesocycles || []}
           creatine={data.creatine || {}}
           customCycles={data.customCycles || []}
-          deadlines={data.deadlines || []}
-          quickSessions={data.quickSessions || []}
           onSelectWeek={(wm) => { setCurrentDate(wm); setViewMode("week"); }}
           onSessionClick={(date, si) => {
             const wKey2 = weekKey(getMondayOf(date));
@@ -981,8 +863,6 @@ export default function ClimbingPlanner() {
             const di = dow === 0 ? 6 : dow - 1;
             openSessionModal(wKey2, di, si);
           }}
-          onDeadlineClick={setViewDeadline}
-          onQuickSessionClick={setQuickEditSession}
         />
       )}
 
@@ -994,7 +874,6 @@ export default function ClimbingPlanner() {
           isMobile={isMobile}
           creatine={data.creatine || {}}
           customCycles={data.customCycles || []}
-          deadlines={data.deadlines || []}
           onSelectMonth={(month) => {
             setCurrentDate(new Date(currentDate.getFullYear(), month, 1));
             setViewMode("month");
@@ -1028,10 +907,6 @@ export default function ClimbingPlanner() {
           onAddCustomCycle={addCustomCycle}
           onUpdateCustomCycle={updateCustomCycle}
           onDeleteCustomCycle={deleteCustomCycle}
-          deadlines={data.deadlines || []}
-          onAddDeadline={addDeadline}
-          onUpdateDeadline={updateDeadline}
-          onDeleteDeadline={deleteDeadline}
           locked={!!data.cyclesLocked}
           onSetLocked={val => setData(d => ({ ...d, cyclesLocked: val }))}
           canEdit={(data.profile?.role ?? null) !== "athlete"}
@@ -1074,31 +949,6 @@ export default function ClimbingPlanner() {
         />
       )}
 
-      {/* ── Deadline detail / edit from calendar ── */}
-      {viewDeadline && (
-        <DeadlineDetailModal
-          deadline={viewDeadline}
-          onClose={() => setViewDeadline(null)}
-          onEdit={dl => { setViewDeadline(null); setEditDeadlineFromView(dl); }}
-        />
-      )}
-      {editDeadlineFromView && (
-        <DeadlineModal
-          initial={editDeadlineFromView}
-          onSave={dl => { updateDeadline(dl.id, dl); setEditDeadlineFromView(null); }}
-          onClose={() => setEditDeadlineFromView(null)}
-        />
-      )}
-
-      {/* ── Quick session edit ── */}
-      {quickEditSession && (
-        <QuickSessionModal
-          initial={quickEditSession}
-          onSave={qs => { updateQuickSession(qs.id, qs); setQuickEditSession(null); }}
-          onClose={() => setQuickEditSession(null)}
-        />
-      )}
-
       {/* ── Modals ── */}
       {sessionBuilderDay !== null && (
         <SessionBuilder
@@ -1109,15 +959,7 @@ export default function ClimbingPlanner() {
           onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
         />
       )}
-      {/* ── Choice modal: prefaite vs personnalisee ── */}
-      {picker && !picker.mode && (
-        <AddSessionChoiceModal
-          onPrefaite={() => setPicker(p => ({ ...p, mode: "prefaite" }))}
-          onPersonnalisee={() => setPicker(p => ({ ...p, mode: "rapide" }))}
-          onClose={() => setPicker(null)}
-        />
-      )}
-      {picker && picker.mode === "prefaite" && hasCoachFeatures && (
+      {picker && hasCoachFeatures && (
         <CoachPickerModal
           sessions={catalog}
           blocks={dbBlocks}
@@ -1125,7 +967,7 @@ export default function ClimbingPlanner() {
           onClose={() => setPicker(null)}
         />
       )}
-      {picker && picker.mode === "prefaite" && !hasCoachFeatures && (
+      {picker && !hasCoachFeatures && (
         <SessionPicker
           onSelect={s => { setTemplateEditor({ template: s, dayIndex: picker.dayIndex, startTime: "", address: s.address || "", coachNote: "" }); setPicker(null); }}
           onClose={() => setPicker(null)}
@@ -1134,19 +976,6 @@ export default function ClimbingPlanner() {
           onCreateCustom={() => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
         />
       )}
-      {picker && picker.mode === "rapide" && (() => {
-        // Compute defaultDate from dayIndex
-        const mon = getMondayOf(currentDate);
-        const dayDate = addDays(mon, picker.dayIndex);
-        const defaultDate = `${dayDate.getFullYear()}-${String(dayDate.getMonth()+1).padStart(2,'0')}-${String(dayDate.getDate()).padStart(2,'0')}`;
-        return (
-          <QuickSessionModal
-            defaultDate={defaultDate}
-            onSave={qs => { addQuickSession(qs); setPicker(null); }}
-            onClose={() => setPicker(null)}
-          />
-        );
-      })()}
       {templateEditor && (
         <TemplateEditorModal
           template={templateEditor.template}
@@ -1231,7 +1060,7 @@ export default function ClimbingPlanner() {
             smWeekKey={smKey}
             smDayIndex={smDi}
             smSessionIndex={smSi}
-            onMoveSession={(toWKey, toDi, newTime) => moveSession(smKey, smDi, smSi, toWKey, toDi, newTime)}
+            onMoveSession={(toWKey, toDi, newTime, newLoc) => moveSession(smKey, smDi, smSi, toWKey, toDi, newTime, newLoc)}
             onUpdateStartTime={(newTime) => { updateSessionTime(smKey, smDi, smSi, newTime); }}
             onSuggestMove={(toWKey, toDi, note) => suggestMoveSession(smKey, smDi, smSi, toWKey, toDi, note)}
             moveSuggestions={data.moveSuggestions || []}

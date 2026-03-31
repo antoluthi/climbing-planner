@@ -17,6 +17,7 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onS
 
   // ── Déplacer tab state ──
   const [newStartTime, setNewStartTime] = useState(session.startTime || "");
+  const [newLocation, setNewLocation] = useState(session.location || "");
   const [targetWeekKey, setTargetWeekKey] = useState(smWeekKey || "");
   const [targetDayIndex, setTargetDayIndex] = useState(smDayIndex ?? 0);
   const [suggestionNote, setSuggestionNote] = useState("");
@@ -34,6 +35,7 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onS
 
   const dayChanged = targetWeekKey !== smWeekKey || targetDayIndex !== smDayIndex;
   const timeChanged = newStartTime !== (session.startTime || "");
+  const locationChanged = newLocation !== (session.location || "");
 
   const pendingSuggestions = (moveSuggestions || []).filter(s => s.sessionId === session.id && s.status === "pending");
 
@@ -116,7 +118,19 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onS
               <span style={{ position: "absolute", top: 6, right: 2, width: 7, height: 7, borderRadius: "50%", background: "#f97316" }} />
             )}
           </button>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 2, padding: "0 8px", alignItems: "center" }}>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 4, padding: "0 8px", alignItems: "center" }}>
+            {!isAthleteUser && onEdit && (
+              <button
+                title="Modifier la séance"
+                onClick={onEdit}
+                style={{
+                  background: "none", border: `1px solid ${isDark ? "#3a4a3e" : "#c8d0c0"}`,
+                  borderRadius: 5, cursor: "pointer", color: isDark ? "#8a9a88" : "#6b8070",
+                  fontSize: 13, padding: "2px 7px", fontFamily: "inherit", lineHeight: 1.4,
+                  transition: "background 0.15s, color 0.15s",
+                }}
+              >✎</button>
+            )}
             <button style={styles.closeBtn} onClick={onClose}>✕</button>
           </div>
         </div>
@@ -418,13 +432,27 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onS
                         {timeSaved ? "✓ Heure enregistrée" : "Enregistrer l'heure"}
                       </button>
                     )}
-                    {!isAthleteUser && timeChanged && !dayChanged && (
+                    {!isAthleteUser && (timeChanged || locationChanged) && !dayChanged && (
                       <button style={{ ...styles.saveBtn, marginTop: 8, padding: "8px 16px", fontSize: 12 }}
-                        onClick={() => onMoveSession(smWeekKey, smDayIndex, newStartTime)}>
-                        Enregistrer l'heure
+                        onClick={() => onMoveSession(smWeekKey, smDayIndex, newStartTime, newLocation)}>
+                        Enregistrer{timeChanged && locationChanged ? " l'heure et le lieu" : timeChanged ? " l'heure" : " le lieu"}
                       </button>
                     )}
                   </div>
+
+                  {/* ── Lieu ── */}
+                  {!isAthleteUser && (
+                    <div>
+                      <label style={labelStyle}>Lieu</label>
+                      <input
+                        type="text"
+                        value={newLocation}
+                        onChange={e => setNewLocation(e.target.value)}
+                        placeholder="Salle, falaise…"
+                        style={inputStyle}
+                      />
+                    </div>
+                  )}
 
                   {/* ── Jour ── */}
                   <div>
@@ -453,11 +481,11 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onS
                     {/* Coach: move button */}
                     {!isAthleteUser && dayChanged && (
                       <button style={{ ...styles.saveBtn, marginTop: 12 }}
-                        onClick={() => onMoveSession(targetWeekKey, targetDayIndex, newStartTime || session.startTime || null)}>
+                        onClick={() => onMoveSession(targetWeekKey, targetDayIndex, newStartTime || session.startTime || null, newLocation)}>
                         Déplacer la séance
                       </button>
                     )}
-                    {!isAthleteUser && dayChanged && (timeChanged) && (
+                    {!isAthleteUser && dayChanged && timeChanged && (
                       <div style={{ fontSize: 10, color: isDark ? "#5a7a62" : "#8a9e90", marginTop: 4 }}>
                         La séance sera déplacée avec l'heure {newStartTime}.
                       </div>
