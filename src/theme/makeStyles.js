@@ -159,13 +159,13 @@ export function makeStyles(isDark) {
     },
 
     grid: {
-      display: "grid", gridTemplateColumns: "repeat(7, 1fr)",
+      display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridTemplateRows: "1fr",
       gap: 1, flex: 1, background: t.gridGap, position: "relative", zIndex: 1, minHeight: 420,
     },
     gridMobile: { display: "flex", flexDirection: "column", background: t.gridGap, gap: 1, position: "relative", zIndex: 1 },
     dayCol: {
       background: t.bg, display: "flex", flexDirection: "column",
-      padding: "10px 8px", minHeight: 200, position: "relative", transition: "background 0.15s",
+      padding: "10px 8px", minHeight: 0, position: "relative", transition: "background 0.15s",
     },
     dayColMobile: { minHeight: "auto", padding: "10px 16px", borderBottom: `1px solid ${t.gridGap}` },
     dayColToday: { background: t.todayBg, borderTop: `2px solid ${t.accent}` },
@@ -321,22 +321,6 @@ export function makeStyles(isDark) {
     cycleAddMicroBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 4, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit", marginTop: 4 },
     cycleAddMesoBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em" },
     cycleDurLabel: { fontSize: 10, color: t.textMuted },
-    // ── Deadlines ──
-    deadlineBandA: { height: 4, borderRadius: 2, opacity: 0.92, flexShrink: 0 },
-    deadlineBandB: { height: 3, borderRadius: 1.5, opacity: 0.80, flexShrink: 0 },
-    deadlineBandC: { height: 2, borderRadius: 1, opacity: 0.60, flexShrink: 0 },
-    deadlineBands: { marginTop: "auto", display: "flex", flexDirection: "column", gap: 1, paddingBottom: 2, paddingTop: 2 },
-    deadlineDots: { display: "flex", gap: 2, paddingTop: 2, flexWrap: "wrap" },
-    deadlineDot: { width: 5, height: 5, borderRadius: 1, opacity: 0.85 },
-    deadlinesSection: { marginTop: 24, borderTop: `1px solid ${t.border}`, paddingTop: 18 },
-    deadlinesSectionHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-    deadlinesSectionTitle: { fontSize: 13, fontWeight: 700, color: t.text, letterSpacing: "0.04em" },
-    deadlineRow: { display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: t.inputBg, borderRadius: 6, marginBottom: 6, border: `1px solid ${t.border}` },
-    deadlineColorSwatch: { width: 10, height: 36, borderRadius: 3, flexShrink: 0 },
-    deadlineInfo: { flex: 1, display: "flex", flexDirection: "column", gap: 2, minWidth: 0 },
-    deadlineName: { fontSize: 13, fontWeight: 500, color: t.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-    deadlineDate: { fontSize: 10, color: t.textDim },
-    deadlinePriorityBadge: { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, letterSpacing: "0.05em", flexShrink: 0 },
     // ── Custom cycles section ──
     customCyclesSection: { marginTop: 32, borderTop: `1px solid ${t.border}`, paddingTop: 20 },
     customCyclesSectionHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
