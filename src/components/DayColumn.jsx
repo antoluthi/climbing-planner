@@ -158,17 +158,17 @@ export function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, on
     }}>
 
       {/* ── En-tête ── */}
-      <div style={{ ...styles.dayHeader, flexShrink: 0 }}>
+      <div style={{ ...styles.dayHeader, flexShrink: 0, flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
           <span style={{ ...styles.dayName, ...(isToday ? styles.dayNameToday : {}) }}>{dayLabel}</span>
           <span style={styles.dayDate}>{dateLabel}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, minHeight: 18 }}>
           {hasCreatine && (
             <span style={{ fontSize: 7, color: isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", lineHeight: 1 }} title="Créatine">▲</span>
           )}
           {totalCharge > 0 && (
-            <span style={{ ...styles.dayCharge, color: getChargeColor(totalCharge) }}>⚡{totalCharge}</span>
+            <span style={{ ...styles.dayCharge, marginTop: 0, color: getChargeColor(totalCharge) }}>⚡{totalCharge}</span>
           )}
         </div>
       </div>
