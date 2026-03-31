@@ -34,11 +34,12 @@ function JournalButton({ logWarning, isToday, isDark, onOpenLog }) {
       style={{
         width: "100%", cursor: "pointer", fontFamily: "inherit",
         display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-        padding: "5px 8px", fontSize: 11, borderRadius: 6, lineHeight: 1,
+        padding: "0 8px", fontSize: 11, borderRadius: 6, lineHeight: 1,
+        height: 26, boxSizing: "border-box",
         ...btnStyle,
       }}
     >
-      <span style={{ fontSize: warn ? 13 : 11 }}>{warn ? "⚠" : "≡"}</span>
+      <span style={{ fontSize: 11 }}>{warn ? "⚠" : "≡"}</span>
       <span>{warn ? (isToday ? "Compléter le journal" : "Journal incomplet") : (isToday ? "Journal du jour ✓" : "Journal")}</span>
     </button>
   );
