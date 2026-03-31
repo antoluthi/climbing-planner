@@ -68,7 +68,15 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onS
   const defaultContent = hasWarmup ? "warmup" : hasMain ? "main" : hasCooldown ? "cooldown" : "main";
   const [contentTab, setContentTab] = useState(defaultContent);
 
-  const [done,           setDone]           = useState(session.feedback?.done           ?? false);
+  // status: null | "done" | "adapted" | "not_done"
+  const initStatus = () => {
+    const fb = session.feedback;
+    if (!fb) return null;
+    if (fb.status) return fb.status;
+    return fb.done ? "done" : "not_done";
+  };
+  const [status,         setStatus]         = useState(initStatus);
+  const [adaptedCharge,  setAdaptedCharge]  = useState(session.feedback?.adaptedCharge ?? session.charge ?? 24);
   const [rpe,            setRpe]            = useState(session.feedback?.rpe            ?? 5);
   const [quality,        setQuality]        = useState(session.feedback?.quality        ?? null);
   const [notes,          setNotes]          = useState(session.feedback?.notes          ?? "");
@@ -77,6 +85,7 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onS
   const mesoLabel = weekMeta?.mesocycle || session.dateMeta?.mesocycle;
   const mesoColor = getMesoColor(mesocycles, mesoLabel);
   const hasFeedback = !!session.feedback;
+  const sessionDone = status === "done" || status === "adapted";
 
   const contentTabs = [
     hasWarmup   && { key: "warmup",   label: "Échauffement" },
@@ -245,20 +254,50 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onS
           ) : tab === "ressenti" ? (
             /* ── Ressenti ── */
             <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 18 }}>
-              {/* Done */}
-              <div style={{ display: "flex", gap: 8 }}>
+              {/* Status */}
+              <div style={{ display: "flex", gap: 6 }}>
                 <button
-                  style={{ ...styles.doneBtn, ...(done ? styles.doneBtnActive : {}), flex: 1 }}
-                  onClick={() => setDone(true)}
+                  style={{ ...styles.doneBtn, ...(status === "done" ? styles.doneBtnActive : {}), flex: 1 }}
+                  onClick={() => setStatus("done")}
                 >✓ Réalisée</button>
                 <button
-                  style={{ ...styles.doneBtn, ...(!done ? styles.doneBtnActiveNeg : {}), flex: 1 }}
-                  onClick={() => setDone(false)}
+                  style={{ ...styles.doneBtn, flex: 1,
+                    ...(status === "adapted" ? {
+                      background: isDark ? "#1e1a08" : "#fef3c7",
+                      color: isDark ? "#fbbf24" : "#92400e",
+                      borderColor: isDark ? "#78500a" : "#fcd34d",
+                      fontWeight: 700,
+                    } : {}),
+                  }}
+                  onClick={() => setStatus("adapted")}
+                >~ Adaptée</button>
+                <button
+                  style={{ ...styles.doneBtn, ...(status === "not_done" ? styles.doneBtnActiveNeg : {}), flex: 1 }}
+                  onClick={() => setStatus("not_done")}
                 >✗ Non réalisée</button>
               </div>
 
-              {done && (
+              {sessionDone && (
                 <>
+                  {/* Charge adaptée (uniquement si "Adaptée") */}
+                  {status === "adapted" && (
+                    <div style={{ background: isDark ? "#1e1a08" : "#fef9ec", border: `1px solid ${isDark ? "#78500a" : "#fcd34d"}`, borderRadius: 8, padding: "12px 14px" }}>
+                      <div style={{ fontSize: 11, color: isDark ? "#fbbf24" : "#92400e", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span>Charge réalisée</span>
+                        <span style={{ fontWeight: 700, color: getChargeColor(adaptedCharge) }}>{adaptedCharge}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 10, color: isDark ? "#a08040" : "#a07830", minWidth: 16, textAlign: "center" }}>0</span>
+                        <input type="range" min={0} max={30} step={1} value={adaptedCharge}
+                          onChange={e => setAdaptedCharge(+e.target.value)} style={{ ...styles.slider, flex: 1 }} />
+                        <span style={{ fontSize: 10, color: isDark ? "#a08040" : "#a07830", minWidth: 16, textAlign: "center" }}>30</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: isDark ? "#7a6830" : "#a07830", marginTop: 4, textAlign: "center" }}>
+                        Charge prévue : {session.charge}
+                      </div>
+                    </div>
+                  )}
+
                   {/* RPE */}
                   <div>
                     <div style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7f70", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
@@ -399,7 +438,15 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onS
                 </>
               )}
 
-              <button style={styles.saveBtn} onClick={() => onSave({ done, rpe: done ? rpe : null, quality: done ? quality : null, notes, blockFeedbacks: done ? blockFeedbacks : [] })}>
+              <button style={styles.saveBtn} onClick={() => onSave({
+                status,
+                done: sessionDone,
+                adaptedCharge: status === "adapted" ? adaptedCharge : null,
+                rpe: sessionDone ? rpe : null,
+                quality: sessionDone ? quality : null,
+                notes,
+                blockFeedbacks: sessionDone ? blockFeedbacks : [],
+              })}>
                 Enregistrer le ressenti
               </button>
             </div>
