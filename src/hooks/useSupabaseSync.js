@@ -156,5 +156,22 @@ export function useSupabaseSync() {
     }
   }, [buildRow]);
 
-  return { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus };
+  // Subscribe to realtime changes on the user's own row.
+  // Calls onChanged() whenever another device (or tab) saves.
+  // Returns an unsubscribe function.
+  const subscribeToChanges = useCallback((userId, onChanged) => {
+    if (!supabase || !userId) return () => {};
+    const channel = supabase
+      .channel(`plan_sync_${userId}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "climbing_plans",
+        filter: `user_id=eq.${userId}`,
+      }, onChanged)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  return { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges };
 }

@@ -70,11 +70,15 @@ export default function ClimbingPlanner() {
     return !d;
   });
 
-  const { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus } = useSupabaseSync();
+  const { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges } = useSupabaseSync();
   const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
   const { catalog, saveUserSession, deleteUserSession } = useSessionsCatalog(session?.user?.id);
   const { blocks: dbBlocks, saveBlock, deleteBlock } = useSessionBlocks(session?.user?.id);
   const { athletes, searchAthletes, addAthlete, removeAthlete } = useCoachAthletes(session?.user?.id);
+
+  // ── Guard anti-écrasement cloud : quand on charge depuis le cloud,
+  //    on ne re-sauvegarde PAS vers le cloud (évite la race condition debounce).
+  const isCloudSetRef = useRef(false);
 
   // ── Vue athlète (coach regarde les données d'un athlète) ──
   const coachDataRef = useRef(null);
@@ -97,6 +101,7 @@ export default function ClimbingPlanner() {
         setCloudLoaded(true);
         if (cloudData) {
           const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
+          isCloudSetRef.current = true; // skip the auto-save that will be triggered by setData
           setData(cleanData);
           saveData(cleanData);
         } else {
@@ -105,6 +110,23 @@ export default function ClimbingPlanner() {
       })
       .catch(() => {});
   }, [session, cloudLoaded, loadFromCloud, uploadNow]);
+
+  // ── Realtime sync : recharge silencieusement si un autre appareil/onglet sauvegarde ──
+  useEffect(() => {
+    if (!session?.user?.id || !cloudLoaded) return;
+    const unsubscribe = subscribeToChanges(session.user.id, async () => {
+      try {
+        const cloudData = await loadFromCloud();
+        if (cloudData) {
+          const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
+          isCloudSetRef.current = true;
+          setData(cleanData);
+          saveData(cleanData);
+        }
+      } catch {}
+    });
+    return unsubscribe;
+  }, [session?.user?.id, cloudLoaded]); // eslint-disable-line
 
   // Phase 2b : re-lire le status depuis la DB
   useEffect(() => {
@@ -150,6 +172,12 @@ export default function ClimbingPlanner() {
   };
 
   useEffect(() => {
+    // Si les données viennent d'être chargées depuis le cloud, ne pas re-sauvegarder
+    // (évite d'écraser des modifications utilisateur en vol pendant le debounce).
+    if (isCloudSetRef.current) {
+      isCloudSetRef.current = false;
+      return;
+    }
     if (viewingAthlete) {
       saveToCloud(data, viewingAthlete.userId);
     } else {
