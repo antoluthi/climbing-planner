@@ -8,8 +8,7 @@ export function generateId() {
 const DEFAULT_DATA = {
   weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES,
   sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {},
-  profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [], deadlines: [],
-  quickSessions: [],
+  profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [],
 };
 
 export function loadData() {

@@ -4,15 +4,12 @@ import { addDays } from "../lib/helpers.js";
 import { CyclesTimeline } from "./CyclesTimeline.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { CustomCycleModal } from "./CustomCycleModal.jsx";
-import { DeadlineModal } from "./DeadlineModal.jsx";
 
-export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro, customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle, deadlines, onAddDeadline, onUpdateDeadline, onDeleteDeadline, locked, onSetLocked, canEdit }) {
+export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro, customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle, locked, onSetLocked, canEdit }) {
   const { styles, isDark } = useThemeCtx();
   const [pendingDelete, setPendingDelete] = useState(null);
   const [showCustomCycleForm, setShowCustomCycleForm] = useState(false);
   const [editingCustomCycle, setEditingCustomCycle] = useState(null);
-  const [showDeadlineForm, setShowDeadlineForm] = useState(false);
-  const [editingDeadline, setEditingDeadline] = useState(null);
 
   // ── Timeline mode (locked, or athlete who can't edit) ──
   if (locked || canEdit === false) {
@@ -20,7 +17,6 @@ export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, 
       <CyclesTimeline
         mesocycles={mesocycles}
         customCycles={customCycles || []}
-        deadlines={deadlines || []}
         onEdit={canEdit === false ? null : () => onSetLocked(false)}
       />
     );
@@ -180,60 +176,17 @@ export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, 
         })}
       </div>
 
-      {/* ── Échéances ── */}
-      <div style={styles.deadlinesSection}>
-        <div style={styles.deadlinesSectionHeader}>
-          <span style={styles.deadlinesSectionTitle}>Échéances</span>
-          <button style={styles.cycleAddMesoBtn} onClick={() => { setShowDeadlineForm(true); setEditingDeadline(null); }}>
-            ＋ Nouvelle échéance
-          </button>
-        </div>
-
-        {(deadlines || []).length === 0 && (
-          <div style={{ color: isDark ? "#5a6060" : "#9a9890", fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 4 }}>
-            Aucune échéance. Ex : coupe régionale, sortie falaise, objectif voie…
-          </div>
-        )}
-
-        {(deadlines || []).map(dl => {
-          const fmtDate = d => d ? new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : "—";
-          const dateInfo = dl.endDate
-            ? `${fmtDate(dl.startDate)} → ${fmtDate(dl.endDate)}`
-            : fmtDate(dl.startDate);
-          const typeLabel = { competition: "Compétition", sortie: "Sortie", objectif: "Objectif" }[dl.type] || dl.type;
-          return (
-            <div key={dl.id} style={styles.deadlineRow}>
-              <div style={{ ...styles.deadlineColorSwatch, background: dl.color }} />
-              <div style={styles.deadlineInfo}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <span style={styles.deadlineName}>{dl.label}</span>
-                  <span style={{ ...styles.deadlinePriorityBadge, background: dl.color + "33", color: dl.color, border: `1px solid ${dl.color}55` }}>
-                    {dl.priority}
-                  </span>
-                </div>
-                <span style={styles.deadlineDate}>{typeLabel} · {dateInfo}</span>
-                {dl.note && <span style={{ ...styles.deadlineDate, fontStyle: "italic", marginTop: 1 }}>{dl.note}</span>}
-              </div>
-              <button style={styles.cycleDeleteBtn} onClick={() => { setEditingDeadline(dl); setShowDeadlineForm(false); }} title="Modifier">Mod.</button>
-              <button style={styles.cycleDeleteBtn} onClick={() => setPendingDelete({ type: "deadline", id: dl.id, label: dl.label })} title="Supprimer">✕</button>
-            </div>
-          );
-        })}
-      </div>
-
       {pendingDelete && (
         <ConfirmModal
           title={
             pendingDelete.type === "meso" ? "Supprimer ce mésocycle ?" :
             pendingDelete.type === "micro" ? "Supprimer ce microcycle ?" :
-            pendingDelete.type === "deadline" ? "Supprimer cette échéance ?" :
             "Supprimer ce cycle personnalisé ?"
           }
           sub={pendingDelete.label}
           onConfirm={() => {
             if (pendingDelete.type === "meso") onDeleteMeso(pendingDelete.id);
             else if (pendingDelete.type === "micro") onDeleteMicro(pendingDelete.mesoId, pendingDelete.microId);
-            else if (pendingDelete.type === "deadline") onDeleteDeadline(pendingDelete.id);
             else onDeleteCustomCycle(pendingDelete.id);
           }}
           onClose={() => setPendingDelete(null)}
@@ -250,19 +203,6 @@ export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, 
             setEditingCustomCycle(null);
           }}
           onClose={() => { setShowCustomCycleForm(false); setEditingCustomCycle(null); }}
-        />
-      )}
-
-      {(showDeadlineForm || editingDeadline) && (
-        <DeadlineModal
-          initial={editingDeadline}
-          onSave={dl => {
-            if (editingDeadline) onUpdateDeadline(dl.id, dl);
-            else onAddDeadline(dl);
-            setShowDeadlineForm(false);
-            setEditingDeadline(null);
-          }}
-          onClose={() => { setShowDeadlineForm(false); setEditingDeadline(null); }}
         />
       )}
 

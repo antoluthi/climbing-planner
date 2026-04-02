@@ -388,7 +388,7 @@ function getMonthWeeks(year, month) {
 const ThemeContext = createContext(null);
 const useThemeCtx = () => useContext(ThemeContext);
 
-function makeStyles(isDark) {
+export function makeStyles(isDark) {
   const D = isDark;
   const t = {
     bg:              D ? "#191e1b"   : "#f0ebe2",
@@ -3853,7 +3853,7 @@ function DayColumn({ dayLabel, dateLabel, sessions, isToday, weekMeta, onAddSess
 
 // ─── VUE MOIS ─────────────────────────────────────────────────────────────────
 
-function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles }) {
+export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles }) {
   const { styles, isDark } = useThemeCtx();
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -3977,7 +3977,7 @@ function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSe
 
 // ─── VUE ANNÉE ────────────────────────────────────────────────────────────────
 
-function YearView({ data, currentDate, onSelectMonth, isMobile, creatine, customCycles }) {
+export function YearView({ data, currentDate, onSelectMonth, isMobile, creatine, customCycles }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const year = currentDate.getFullYear();
   const today = new Date();
@@ -5008,14 +5008,14 @@ function WeightSection({ weightData, onSave }) {
 
 // ─── HOOPER INDEX ─────────────────────────────────────────────────────────────
 
-function hooperLabel(total) {
+export function hooperLabel(total) {
   if (total <= 14) return "Bien récupéré";
   if (total <= 17) return "Modérément fatigué";
   if (total <= 20) return "Très fatigué";
   return "Surmenage";
 }
 
-function hooperColor(total, isDark) {
+export function hooperColor(total, isDark) {
   if (total <= 14) return isDark ? "#4ade80" : "#2a7d4f";
   if (total <= 17) return "#f97316";
   return "#f87171";

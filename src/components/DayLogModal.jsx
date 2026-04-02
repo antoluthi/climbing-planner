@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { CustomCheckbox } from "./CustomCheckbox.jsx";
 import { addDays, localDateStr } from "../lib/helpers.js";
 import { isDateInCustomCycle } from "../lib/constants.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
@@ -164,7 +163,8 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
               )}
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
-              <CustomCheckbox checked={hasCreatine} onChange={() => onToggleCreatine(dateISO)} isDark={isDark} accent={accentGreen} />
+              <input type="checkbox" checked={hasCreatine} onChange={() => onToggleCreatine(dateISO)}
+                style={{ cursor: "pointer", width: 16, height: 16, accentColor: accentGreen }} />
               <span style={{ fontSize: 14, color: textMain }}>
                 Créatine prise
                 {hasCreatine && <span style={{ marginLeft: 8, fontSize: 11, color: accentGreen }}>▲</span>}

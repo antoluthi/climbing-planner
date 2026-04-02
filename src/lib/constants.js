@@ -75,23 +75,6 @@ export function getCustomCyclesForDate(customCycles, date) {
   return (customCycles || []).filter(cc => isDateInCustomCycle(cc, date));
 }
 
-export function isDateInDeadline(deadline, date) {
-  if (!deadline.startDate) return false;
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const start = new Date(deadline.startDate + "T00:00:00");
-  const startNorm = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  if (!deadline.endDate) {
-    return d.getTime() === startNorm.getTime();
-  }
-  const end = new Date(deadline.endDate + "T00:00:00");
-  const endNorm = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-  return d >= startNorm && d <= endNorm;
-}
-
-export function getDeadlinesForDate(deadlines, date) {
-  return (deadlines || []).filter(dl => isDateInDeadline(dl, date));
-}
-
 export function getDayLogWarning(data, dateISO, dateObj) {
   const today = localDateStr(new Date());
   if (dateISO > today) return { hasWarning: false, hooperMissing: false, creatineMissing: false, isFuture: true };
@@ -130,13 +113,4 @@ export function getMesoForDate(mesocycles, date) {
     }
   }
   return null;
-}
-
-// ── Quick sessions helpers ──────────────────────────────────────────────────
-export function getQuickSessionsForDate(quickSessions, dateISO) {
-  return (quickSessions || []).filter(qs => {
-    if (!qs.startDate) return false;
-    if (!qs.endDate) return qs.startDate === dateISO;
-    return qs.startDate <= dateISO && dateISO <= qs.endDate;
-  });
 }

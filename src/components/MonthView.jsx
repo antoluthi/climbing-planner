@@ -1,11 +1,11 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getChargeColor } from "../lib/charge.js";
-import { DAYS, getCustomCyclesForDate, getMesoForDate, getDeadlinesForDate, getQuickSessionsForDate } from "../lib/constants.js";
+import { DAYS, getCustomCyclesForDate, getMesoForDate } from "../lib/constants.js";
 import { addDays, getMonthWeeks, getDaySessions } from "../lib/helpers.js";
 
 // ─── VUE MOIS ─────────────────────────────────────────────────────────────────
 
-export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles, deadlines, onDeadlineClick, quickSessions, onQuickSessionClick }) {
+export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles }) {
   const { styles, isDark } = useThemeCtx();
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -50,19 +50,6 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
             const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
             const hasCreatine = inMonth && !!creatine?.[dateISO];
             const activeCycles = inMonth ? getCustomCyclesForDate(customCycles, date) : [];
-            const activeDeadlines = inMonth ? getDeadlinesForDate(deadlines, date) : [];
-            const activeQuickSessions = inMonth ? getQuickSessionsForDate(quickSessions, dateISO) : [];
-            // For each deadline: determine if this date is start/end within the week row
-            const dlRenderInfo = activeDeadlines.map(dl => {
-              const dlStart = dl.startDate;
-              const dlEnd = dl.endDate || dl.startDate;
-              const isActualStart = dateISO === dlStart;
-              const isActualEnd = dateISO === dlEnd;
-              const isFirstInRow = isActualStart || di === 0;
-              const isLastInRow = isActualEnd || di === 6;
-              const showLabel = isActualStart || (di === 0 && dlStart < dateISO);
-              return { dl, isFirstInRow, isLastInRow, showLabel };
-            });
 
             return (
               <div
@@ -126,151 +113,6 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                   </div>
                 )}
 
-                {/* Priority A: full-cell background overlays */}
-                {!isMobile && dlRenderInfo.filter(({ dl }) => dl.priority === "A").map(({ dl }) => (
-                  <div key={`bg-${dl.id}`} style={{
-                    position: "absolute", inset: 0,
-                    background: dl.color + "1a",
-                    borderRadius: 4,
-                    pointerEvents: "none", zIndex: 0,
-                  }} />
-                ))}
-                {/* Deadline strips */}
-                {!isMobile && dlRenderInfo.length > 0 && (
-                  <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 2, paddingTop: 2, position: "relative", zIndex: 1 }}>
-                    {dlRenderInfo.slice(0, 3).map(({ dl, isFirstInRow, isLastInRow, showLabel }) => {
-                      const tip = dl.note ? `${dl.label} · ${dl.note}` : dl.label;
-                      const brL = isFirstInRow ? 3 : 0;
-                      const brR = isLastInRow ? 3 : 0;
-                      const mL = isFirstInRow ? 0 : -8;
-                      const mR = isLastInRow ? 0 : -8;
-                      const noteEl = showLabel && dl.note ? (
-                        <span style={{ fontSize: 7, fontStyle: "italic", color: dl.color + "99", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>
-                          {dl.note}
-                        </span>
-                      ) : null;
-                      const handleClick = onDeadlineClick ? e => { e.stopPropagation(); onDeadlineClick(dl); } : undefined;
-                      if (dl.priority === "A") {
-                        return (
-                          <div key={dl.id} title={tip} onClick={handleClick} style={{
-                            background: dl.color + "33",
-                            borderLeft: isFirstInRow ? `3px solid ${dl.color}` : `3px solid ${dl.color}00`,
-                            borderRadius: `${brL}px ${brR}px ${brR}px ${brL}px`,
-                            padding: "2px 5px",
-                            marginLeft: mL, marginRight: mR,
-                            overflow: "hidden",
-                            cursor: onDeadlineClick ? "pointer" : "default",
-                          }}>
-                            {showLabel && (
-                              <span style={{ fontSize: 9, fontWeight: 700, color: dl.color, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
-                                🏆 {dl.label}
-                              </span>
-                            )}
-                            {noteEl}
-                            {!showLabel && <div style={{ height: 13 }} />}
-                          </div>
-                        );
-                      }
-                      if (dl.priority === "B") {
-                        return (
-                          <div key={dl.id} title={tip} onClick={handleClick} style={{
-                            background: dl.color + "25",
-                            borderLeft: isFirstInRow ? `2px solid ${dl.color}` : `2px solid ${dl.color}00`,
-                            borderRadius: `${brL}px ${brR}px ${brR}px ${brL}px`,
-                            padding: showLabel ? "2px 4px" : "2px 0",
-                            marginLeft: mL, marginRight: mR,
-                            overflow: "hidden",
-                            cursor: onDeadlineClick ? "pointer" : "default",
-                          }}>
-                            {showLabel && (
-                              <span style={{ fontSize: 8, fontWeight: 600, color: dl.color, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
-                                ◆ {dl.label}
-                              </span>
-                            )}
-                            {noteEl}
-                            {!showLabel && <div style={{ height: 11 }} />}
-                          </div>
-                        );
-                      }
-                      return (
-                        <div key={dl.id} title={tip} onClick={handleClick} style={{
-                          background: dl.color + "18",
-                          borderLeft: isFirstInRow ? `1px solid ${dl.color}88` : `1px solid ${dl.color}00`,
-                          borderRadius: `${brL}px ${brR}px ${brR}px ${brL}px`,
-                          padding: showLabel ? "1px 4px" : "1px 0",
-                          marginLeft: mL, marginRight: mR,
-                          overflow: "hidden",
-                          cursor: onDeadlineClick ? "pointer" : "default",
-                        }}>
-                          {showLabel && (
-                            <span style={{ fontSize: 8, fontWeight: 400, color: dl.color + "cc", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
-                              ○ {dl.label}
-                            </span>
-                          )}
-                          {noteEl}
-                          {!showLabel && <div style={{ height: 9 }} />}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {isMobile && activeDeadlines.length > 0 && (
-                  <div style={styles.deadlineDots}>
-                    {activeDeadlines.slice(0, 2).map(dl => (
-                      <div key={dl.id} title={dl.note ? `${dl.label} · ${dl.note}` : dl.label}
-                        onClick={onDeadlineClick ? e => { e.stopPropagation(); onDeadlineClick(dl); } : undefined}
-                        style={{ ...styles.deadlineDot, background: dl.color, cursor: onDeadlineClick ? "pointer" : "default" }} />
-                    ))}
-                  </div>
-                )}
-                {/* Quick sessions */}
-                {!isMobile && activeQuickSessions.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: 2, zIndex: 1 }}>
-                    {activeQuickSessions.slice(0, 2).map(qs => {
-                      const qsStart = qs.startDate;
-                      const qsEnd = qs.endDate || qs.startDate;
-                      const isFirstInRow = dateISO === qsStart || di === 0;
-                      const isLastInRow = dateISO === qsEnd || di === 6;
-                      const showLabel = dateISO === qsStart || (di === 0 && qsStart < dateISO);
-                      const brL = isFirstInRow ? 3 : 0;
-                      const brR = isLastInRow ? 3 : 0;
-                      const mL = isFirstInRow ? 0 : -8;
-                      const mR = isLastInRow ? 0 : -8;
-                      return (
-                        <div
-                          key={qs.id}
-                          title={[qs.name, qs.content].filter(Boolean).join(" · ")}
-                          onClick={e => { e.stopPropagation(); onQuickSessionClick && onQuickSessionClick(qs); }}
-                          style={{
-                            background: qs.color + "2a",
-                            border: `1.5px solid ${qs.color}77`,
-                            borderRadius: `${brL}px ${brR}px ${brR}px ${brL}px`,
-                            padding: showLabel ? "2px 5px" : "2px 0",
-                            marginLeft: mL, marginRight: mR,
-                            overflow: "hidden",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {showLabel && (
-                            <span style={{ fontSize: 9, fontWeight: 600, color: qs.color, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
-                              {qs.name}
-                            </span>
-                          )}
-                          {!showLabel && <div style={{ height: 11 }} />}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {isMobile && activeQuickSessions.length > 0 && (
-                  <div style={styles.deadlineDots}>
-                    {activeQuickSessions.slice(0, 2).map(qs => (
-                      <div key={qs.id} title={qs.name}
-                        onClick={e => { e.stopPropagation(); onQuickSessionClick && onQuickSessionClick(qs); }}
-                        style={{ ...styles.deadlineDot, background: qs.color, borderRadius: "50%", cursor: "pointer" }} />
-                    ))}
-                  </div>
-                )}
                 {hasCreatine && (
                   <span style={{ position: "absolute", top: 2, right: 3, fontSize: 6, color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)", lineHeight: 1 }} title="Créatine">▲</span>
                 )}

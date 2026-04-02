@@ -545,6 +545,13 @@ function getContextualPhrase(ctx) {
 
   // ── 15. Séance tardive (nuit) ──
   if (ctx.isNight) {
+    // Après minuit (0h–5h) : les séances du jour sont forcément passées même si
+    // leur heure (ex. 17:00 = 1020 min) est > nowMin (ex. 1h = 60 min)
+    if (ctx.hour < 5) {
+      if (ctx.sessionCount > 0) return "Les séances du jour sont passées. Bon repos — la récupération commence maintenant.";
+      return "Nuit calme — dormez bien, la progression se fait autant la nuit qu'à l'entraînement.";
+    }
+    // ≥ 22h : séances à venir ou passées
     if (ctx.allSessionsPassed) return "Les séances sont passées — si c'est fait, bravo. Sinon, reposez-vous et attaquez proprement demain.";
     if (ctx.hasSuspension) return "Poutre en pleine nuit — les tendons sont froids. Échauffez-vous deux fois plus que d'habitude, sans exception.";
     if (ctx.hasForce)      return "Force très tard le soir — le corps est en mode récupération, l'échauffement sera long mais indispensable.";

@@ -4,19 +4,7 @@ import { addDays } from "../lib/helpers.js";
 
 // ─── CYCLES TIMELINE ─────────────────────────────────────────────────────────
 
-// Fixed type colors — independent of the deadline's custom color
-const DL_TYPE_COLORS = {
-  competition: "#f43f5e",
-  sortie:      "#34d399",
-  objectif:    "#60a5fa",
-};
-const DL_TYPE_LABELS = {
-  competition: "Compétition",
-  sortie:      "Sortie",
-  objectif:    "Objectif",
-};
-
-export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) {
+export function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
   const { styles, isDark } = useThemeCtx();
   const [popover, setPopover] = useState(null); // { meso, micro, x, y }
 
@@ -93,7 +81,7 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
         </div>
       )}
 
-      {/* ── Mésocycles ── */}
+      {/* Mésocycles */}
       {chainedMesos.map((meso, idx) => {
         const barPct = (meso.durationWeeks / maxMesoWeeks) * 100;
         const totalMicroWeeks = meso.microcycles.reduce((a, m) => a + m.durationWeeks, 0);
@@ -115,20 +103,6 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
             todayPct = ((now - s) / msPerDay) / (meso.durationWeeks * 7) * 100;
           }
         }
-
-        // Deadlines that fall within this meso's date range
-        const dlsInMeso = (meso.computedStart && meso.computedEnd)
-          ? (deadlines || []).filter(dl => {
-              if (!dl.startDate) return false;
-              const d = new Date(dl.startDate + "T00:00:00");
-              return d >= meso.computedStart && d < meso.computedEnd;
-            }).map(dl => {
-              const d = new Date(dl.startDate + "T00:00:00");
-              const mesoSpan = meso.computedEnd - meso.computedStart;
-              const dlPct = (d - meso.computedStart) / mesoSpan * 100;
-              return { dl, dlPct: Math.max(0, Math.min(100, dlPct)) };
-            })
-          : [];
 
         return (
           <div key={meso.id} style={styles.timelineRow}>
@@ -162,35 +136,6 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
                     borderRadius: 1, zIndex: 5, pointerEvents: "none",
                   }} />
                 )}
-                {/* Deadline lines — type color, no text, clipped to bar height */}
-                {dlsInMeso.map(({ dl, dlPct }) => {
-                  const typeColor = DL_TYPE_COLORS[dl.type] || "#94a3b8";
-                  const lineW = dl.priority === "A" ? 2.5 : dl.priority === "B" ? 1.5 : 1;
-                  const tip = [dl.label, DL_TYPE_LABELS[dl.type] || dl.type, dl.note].filter(Boolean).join(" · ");
-                  return (
-                    <div key={`dl-${dl.id}`} title={tip} style={{
-                      position: "absolute",
-                      left: `${dlPct}%`,
-                      top: 0, bottom: 0,
-                      width: lineW,
-                      background: typeColor + (dl.priority === "C" ? "88" : "dd"),
-                      boxShadow: dl.priority === "A" ? `0 0 5px ${typeColor}99` : "none",
-                      zIndex: 6,
-                      pointerEvents: "none",
-                      display: "flex", flexDirection: "column", alignItems: "center",
-                    }}>
-                      <div style={{
-                        width: dl.priority === "A" ? 7 : 5,
-                        height: dl.priority === "A" ? 7 : 5,
-                        background: typeColor,
-                        transform: "rotate(45deg)",
-                        flexShrink: 0,
-                        marginTop: 3,
-                        opacity: dl.priority === "C" ? 0.6 : 1,
-                      }} />
-                    </div>
-                  );
-                })}
                 {!hasMicros ? (
                   // No microcycles — single undivided block
                   <div
@@ -241,7 +186,6 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
         );
       })}
 
-
       {/* Custom cycles */}
       {ccWithDuration.length > 0 && (
         <>
@@ -277,41 +221,6 @@ export function CyclesTimeline({ mesocycles, customCycles, deadlines, onEdit }) 
               </div>
             );
           })}
-        </>
-      )}
-
-      {/* Échéances — légende types + liste */}
-      {(deadlines || []).length > 0 && (
-        <>
-          <div style={styles.timelineSectionSep}>Échéances</div>
-          {/* Type color legend */}
-          <div style={{ display: "flex", gap: 14, marginBottom: 10, flexWrap: "wrap" }}>
-            {Object.entries(DL_TYPE_COLORS).map(([type, color]) => (
-              <div key={type} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <div style={{ width: 3, height: 16, background: color, borderRadius: 2, flexShrink: 0 }} />
-                <span style={{ fontSize: 10, color: isDark ? "#7a8080" : "#8a8070" }}>{DL_TYPE_LABELS[type]}</span>
-              </div>
-            ))}
-          </div>
-          {/* Deadline list */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {(deadlines || []).map(dl => {
-              const fmtDl = d => d ? new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "2-digit" }) : null;
-              const dateLabel = dl.endDate ? `${fmtDl(dl.startDate)} → ${fmtDl(dl.endDate)}` : fmtDl(dl.startDate);
-              const priorityLabel = dl.priority === "A" ? "🏆" : dl.priority === "B" ? "◆" : "○";
-              const typeColor = DL_TYPE_COLORS[dl.type] || "#94a3b8";
-              return (
-                <div key={dl.id} style={{ display: "flex", alignItems: "center", gap: 10, paddingLeft: 4 }}>
-                  <div style={{ width: 3, height: 14, background: typeColor + (dl.priority === "C" ? "88" : "dd"), borderRadius: 2, flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, fontWeight: dl.priority === "A" ? 700 : 500, color: isDark ? "#c8c0b4" : "#3a3028" }}>
-                    {priorityLabel} {dl.label}
-                  </span>
-                  <span style={{ fontSize: 10, color: isDark ? "#4a5050" : "#b0a898" }}>{dateLabel}</span>
-                  {dl.note && <span style={{ fontSize: 10, color: isDark ? "#4a5050" : "#b0a898", fontStyle: "italic" }}>· {dl.note}</span>}
-                </div>
-              );
-            })}
-          </div>
         </>
       )}
 
