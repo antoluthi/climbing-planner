@@ -548,7 +548,31 @@ function getContextualPhrase(ctx) {
     // Après minuit (0h–5h) : les séances du jour sont forcément passées même si
     // leur heure (ex. 17:00 = 1020 min) est > nowMin (ex. 1h = 60 min)
     if (ctx.hour < 5) {
-      if (ctx.sessionCount > 0) return "Les séances du jour sont passées. Bon repos — la récupération commence maintenant.";
+      const tmwCount = ctx.tomorrowSessions.length;
+      const tmwCharge = ctx.tomorrowCharge;
+      if (ctx.sessionCount > 0) {
+        // Séances du jour passées → anticiper demain
+        if (ctx.tomorrowIsRest)
+          return "Séances du jour passées. Repos demain aussi — profitez-en pour vraiment récupérer.";
+        if (ctx.tomorrowHasSuspension && ctx.tomorrowIsHeavy)
+          return `Séances du jour passées. Demain : poutre + charge ${tmwCharge} — dormez au moins 8h, les tendons récupèrent la nuit.`;
+        if (ctx.tomorrowIsHeavy)
+          return `Séances du jour passées. Grosse journée demain (charge ${tmwCharge}) — sommeil prioritaire, éteignez les écrans.`;
+        if (tmwCount >= 2)
+          return `Séances du jour passées. ${tmwCount} séances demain — reposez-vous sérieusement cette nuit.`;
+        if (tmwCount === 1)
+          return "Séances du jour passées. Bon repos — récupération et sommeil pour attaquer demain.";
+        return "Les séances du jour sont passées. Bon repos — la récupération commence maintenant.";
+      }
+      // Jour de repos, anticiper demain
+      if (ctx.tomorrowIsRest)
+        return "Repos aujourd'hui et demain — profitez-en, c'est planifié.";
+      if (ctx.tomorrowHasSuspension && ctx.tomorrowIsHeavy)
+        return `Poutre et charge ${tmwCharge} demain — dormez bien, les tendons récupèrent principalement la nuit.`;
+      if (ctx.tomorrowIsHeavy)
+        return `Charge ${tmwCharge} demain — rechargez cette nuit : sommeil, hydratation, pas d'écrans.`;
+      if (tmwCount >= 1)
+        return "Nuit calme avant l'entraînement de demain — dormez bien.";
       return "Nuit calme — dormez bien, la progression se fait autant la nuit qu'à l'entraînement.";
     }
     // ≥ 22h : séances à venir ou passées
