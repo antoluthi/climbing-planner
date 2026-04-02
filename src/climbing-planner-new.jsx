@@ -70,7 +70,7 @@ export default function ClimbingPlanner() {
     return !d;
   });
 
-  const { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges } = useSupabaseSync();
+  const { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges, hasPendingSave } = useSupabaseSync();
   const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
   const { catalog, saveUserSession, deleteUserSession } = useSessionsCatalog(session?.user?.id);
   const { blocks: dbBlocks, saveBlock, deleteBlock } = useSessionBlocks(session?.user?.id);
@@ -115,6 +115,9 @@ export default function ClimbingPlanner() {
   useEffect(() => {
     if (!session?.user?.id || !cloudLoaded) return;
     const unsubscribe = subscribeToChanges(session.user.id, async () => {
+      // Si on a un save en cours (debounce actif), nos données locales sont plus
+      // récentes que le cloud — ne pas recharger, on écraserais nos propres modifs.
+      if (hasPendingSave()) return;
       try {
         const cloudData = await loadFromCloud();
         if (cloudData) {

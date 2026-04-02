@@ -173,5 +173,9 @@ export function useSupabaseSync() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  return { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges };
+  // Indique si un save est en cours (debounce non encore flushed).
+  // Utilisé par le handler Realtime pour éviter d'écraser des modifications locales.
+  const hasPendingSave = useCallback(() => pendingSaveRef.current !== null, []);
+
+  return { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges, hasPendingSave };
 }
