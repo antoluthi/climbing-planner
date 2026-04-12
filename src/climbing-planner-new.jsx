@@ -13,7 +13,7 @@ import { ThemeContext, useThemeCtx } from "./theme/ThemeContext.jsx";
 import { makeStyles } from "./theme/makeStyles.js";
 
 // ── Hooks ──
-import { useWindowWidth, useWindowHeight } from "./hooks/useWindowWidth.js";
+import { useWindowWidth } from "./hooks/useWindowWidth.js";
 import { useSupabaseSync } from "./hooks/useSupabaseSync.js";
 import { useCommunitySessionsSync } from "./hooks/useCommunitySessionsSync.js";
 import { useSessionsCatalog } from "./hooks/useSessionsCatalog.js";
@@ -94,12 +94,11 @@ export default function ClimbingPlanner() {
 
   // ── Vue athlète (coach regarde les données d'un athlète) ──
   const coachDataRef = useRef(null);
+  const swipeRef = useRef(null);
   const [viewingAthlete, setViewingAthlete] = useState(null);
 
   const windowWidth = useWindowWidth();
-  const windowHeight = useWindowHeight();
   const isMobile = windowWidth < 768;
-  const isShortScreen = windowHeight < 844;
 
   const monday = getMondayOf(currentDate);
   const wKey = weekKey(monday);
@@ -690,7 +689,7 @@ export default function ClimbingPlanner() {
 
   return (
     <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: data.mesocycles || [] }}>
-    <div style={{ ...styles.app, height: (viewMode === "week" && !isShortScreen) ? "100vh" : undefined, minHeight: "100vh", overflowY: (viewMode === "week" && !isShortScreen) ? "hidden" : "auto", overflowX: "hidden" }}>
+    <div style={{ ...styles.app, height: viewMode === "week" ? "100dvh" : undefined, minHeight: "100dvh", overflowY: viewMode === "week" ? "hidden" : "auto", overflowX: "hidden" }}>
       <div style={styles.grain} />
 
       {/* ── HEADER MOBILE ── */}
@@ -862,7 +861,19 @@ export default function ClimbingPlanner() {
 
       {/* ── Vue semaine (desktop + mobile, 7 colonnes) ── */}
       {viewMode === "week" && (
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: isShortScreen ? 600 : 0 }}>
+        <div
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, touchAction: "pan-y" }}
+          onTouchStart={isMobile ? (e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } : undefined}
+          onTouchEnd={isMobile ? (e) => {
+            if (!swipeRef.current) return;
+            const dx = e.changedTouches[0].clientX - swipeRef.current.x;
+            const dy = e.changedTouches[0].clientY - swipeRef.current.y;
+            swipeRef.current = null;
+            if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+              if (dx > 0) handlePrev(); else handleNext();
+            }
+          } : undefined}
+        >
           <div style={styles.grid}>
             {DAYS.map((day, i) => {
               const date = addDays(monday, i);

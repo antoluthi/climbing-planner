@@ -197,12 +197,16 @@ export function DayColumn({
   );
 
   // Timeline range (configurable, default 0-24 = full day)
-  const rangeStart = timelineRange?.start ?? 0;
-  const rangeEnd = timelineRange?.end ?? 24;
+  const rangeStart = timelineRange?.start ?? 6;
+  const rangeEnd = timelineRange?.end ?? 22;
   const rangeHours = rangeEnd - rangeStart;
 
   // Compute dynamic hour height based on visible range
-  const hourHeight = Math.max(timelineHeight / rangeHours, 20);
+  // On mobile: force-fit to container (no scroll), minimum 8px/hour
+  // On desktop: minimum 20px/hour (scrolls if needed)
+  const hourHeight = isMobile
+    ? Math.max(timelineHeight / rangeHours, 8)
+    : Math.max(timelineHeight / rangeHours, 20);
   const totalHeight = hourHeight * rangeHours;
   const minutesToPx = (minutes) => ((minutes / 60) - rangeStart) * hourHeight;
   const gutter = isCompact ? 0 : isNarrow ? 16 : isMobile ? GUTTER_WIDTH_MOBILE : GUTTER_WIDTH;
@@ -243,7 +247,7 @@ export function DayColumn({
           flexDirection: isCompact ? "column" : "row",
           alignItems: isCompact ? "center" : "center",
           justifyContent: "space-between",
-          padding: isCompact ? "4px 2px 3px" : isNarrow ? "5px 4px 4px" : "8px 8px 6px",
+          padding: isCompact ? "2px 2px 1px" : isNarrow ? "4px 4px 3px" : "8px 8px 6px",
           marginBottom: 0,
           gap: isCompact ? 1 : 0,
         }}
@@ -320,14 +324,14 @@ export function DayColumn({
         onScroll={handleTimelineScroll}
         style={{
           flex: 1,
-          overflowY: "auto",
+          overflowY: isMobile ? "hidden" : "auto",
           overflowX: "hidden",
           scrollbarWidth: "none",
           position: "relative",
           minHeight: 0,
         }}
       >
-        <div style={{ position: "relative", height: totalHeight }}>
+        <div style={{ position: "relative", height: isMobile ? "100%" : totalHeight }}>
 
           {/* Lignes horaires */}
           {Array.from({ length: rangeHours + 1 }, (_, i) => {
@@ -444,61 +448,63 @@ export function DayColumn({
                 }}
                 onClick={() => onOpenSession(s._origIdx)}
               >
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 2, flex: 1, minHeight: 0 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* Heure */}
-                    {!isShort && !isCompact && (
-                      <span style={{
-                        fontSize: sz.sessionTime,
-                        color: isDark ? "#5a7860" : "#7a9a80",
-                        fontWeight: 600,
-                        display: "block",
-                        lineHeight: 1.3,
-                      }}>
-                        {s.startTime}{!isNarrow && s.endTime ? ` → ${s.endTime}` : ""}
-                      </span>
-                    )}
-                    {/* Titre */}
-                    <span style={{
-                      fontSize: isShort ? Math.max(sz.sessionTitle - 1, 6) : sz.sessionTitle,
-                      fontWeight: 600,
-                      color: isDark ? "#c8c4be" : "#3a3028",
-                      display: "block",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      lineHeight: 1.3,
-                    }}>
-                      {s.title || s.name}
-                    </span>
-                    {/* Blocs */}
-                    {!isShort && !isNarrow && s.blocks && s.blocks.length > 0 && (
-                      <div style={{ display: "flex", gap: 2, flexWrap: "wrap", marginTop: 2 }}>
-                        {s.blocks.slice(0, 3).map((bl, bi) => {
-                          const cfg = BLOCK_TYPES[bl.type];
-                          if (!cfg) return null;
-                          return (
-                            <span key={bi} style={{
-                              fontSize: 8,
-                              padding: "0px 4px",
-                              borderRadius: 8,
-                              background: cfg.color + "22",
-                              color: cfg.color,
-                              border: `1px solid ${cfg.color}44`,
-                              lineHeight: 1.6,
-                            }}>
-                              {bl.type === "Exercices" && bl.name
-                                ? bl.name.split(" ").slice(0, 2).join(" ")
-                                : bl.type}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+                {isCompact ? null : (
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 2, flex: 1, minHeight: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Heure */}
+                      {!isShort && !isNarrow && (
+                        <span style={{
+                          fontSize: sz.sessionTime,
+                          color: isDark ? "#5a7860" : "#7a9a80",
+                          fontWeight: 600,
+                          display: "block",
+                          lineHeight: 1.3,
+                        }}>
+                          {s.startTime}{s.endTime ? ` → ${s.endTime}` : ""}
+                        </span>
+                      )}
+                      {/* Titre */}
+                      {!isNarrow && (
+                        <span style={{
+                          fontSize: isShort ? Math.max(sz.sessionTitle - 1, 6) : sz.sessionTitle,
+                          fontWeight: 600,
+                          color: isDark ? "#c8c4be" : "#3a3028",
+                          display: "block",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          lineHeight: 1.3,
+                        }}>
+                          {s.title || s.name}
+                        </span>
+                      )}
+                      {/* Blocs */}
+                      {!isShort && !isNarrow && s.blocks && s.blocks.length > 0 && (
+                        <div style={{ display: "flex", gap: 2, flexWrap: "wrap", marginTop: 2 }}>
+                          {s.blocks.slice(0, 3).map((bl, bi) => {
+                            const cfg = BLOCK_TYPES[bl.type];
+                            if (!cfg) return null;
+                            return (
+                              <span key={bi} style={{
+                                fontSize: 8,
+                                padding: "0px 4px",
+                                borderRadius: 8,
+                                background: cfg.color + "22",
+                                color: cfg.color,
+                                border: `1px solid ${cfg.color}44`,
+                                lineHeight: 1.6,
+                              }}>
+                                {bl.type === "Exercices" && bl.name
+                                  ? bl.name.split(" ").slice(0, 2).join(" ")
+                                  : bl.type}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Charge + bouton supprimer */}
-                  {!isCompact && (
+                    {/* Charge */}
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, flexShrink: 0 }}>
                       <span style={{ fontSize: sz.charge, color: getChargeColor(s.charge), fontWeight: 700, lineHeight: 1.2 }}>
                         ⚡{s.charge}
@@ -507,8 +513,8 @@ export function DayColumn({
                         <span style={styles.feedbackDot} title="Feedback">{s.feedback.done ? "☑" : "☐"}</span>
                       )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -516,7 +522,7 @@ export function DayColumn({
       </div>
 
       {/* ── Pied : bouton ajouter ── */}
-      <div style={{ padding: isCompact ? "2px 1px 3px" : isNarrow ? "3px 2px 4px" : "4px 6px 6px", flexShrink: 0, borderTop: `1px solid ${isDark ? "#1e221e" : "#e5e0da"}` }}>
+      <div style={{ padding: isCompact ? "1px 1px 2px" : isNarrow ? "3px 2px 4px" : "4px 6px 6px", flexShrink: 0, borderTop: `1px solid ${isDark ? "#1e221e" : "#e5e0da"}` }}>
         {!isNarrow && !isCompact && (
           <div style={{ marginBottom: 4 }}>
             {noteOpen ? (
@@ -555,8 +561,8 @@ export function DayColumn({
             )}
           </div>
         )}
-        <button style={{ ...styles.addBtn, fontSize: sz.addBtn, padding: isCompact ? "2px 0" : undefined }} onClick={onAddSession}>
-          <span style={{ ...styles.addBtnIcon, fontSize: sz.addBtn }}>+</span>
+        <button style={{ ...styles.addBtn, fontSize: sz.addBtn, padding: isCompact ? "1px 0" : undefined, minHeight: isCompact ? 16 : undefined }} onClick={onAddSession}>
+          <span style={{ ...styles.addBtnIcon, fontSize: isCompact ? 10 : sz.addBtn }}>+</span>
           {!isCompact && <span style={{ ...styles.addBtnLabel, fontSize: sz.addBtn }}>Séance</span>}
         </button>
       </div>
