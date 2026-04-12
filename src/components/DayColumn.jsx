@@ -562,13 +562,22 @@ export function DayColumn({
                 onClick={() => onOpenQuickSession?.(qs)}
               >
                 {!isCompact && (isMultiDay ? isStart : true) && (
-                  <span style={{
-                    fontSize: sz.sessionTitle, fontWeight: 600,
-                    color: isDark ? "#c8c4be" : "#3a3028",
-                    display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  }}>
-                    {qs.name}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    {qs.isObjective && (
+                      <span style={{
+                        fontSize: 6, fontWeight: 700, letterSpacing: "0.05em",
+                        color: accent, background: accent + "22",
+                        borderRadius: 3, padding: "1px 3px", lineHeight: 1, flexShrink: 0,
+                      }}>OBJ</span>
+                    )}
+                    <span style={{
+                      fontSize: sz.sessionTitle, fontWeight: 600,
+                      color: isDark ? "#c8c4be" : "#3a3028",
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1,
+                    }}>
+                      {qs.name}
+                    </span>
+                  </div>
                 )}
               </div>
             );

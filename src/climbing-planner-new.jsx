@@ -917,6 +917,19 @@ export default function ClimbingPlanner() {
 
       {/* ── Vue mois ── */}
       {viewMode === "month" && (
+        <div
+          style={{ touchAction: "pan-y" }}
+          onTouchStart={isMobile ? (e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } : undefined}
+          onTouchEnd={isMobile ? (e) => {
+            if (!swipeRef.current) return;
+            const dx = e.changedTouches[0].clientX - swipeRef.current.x;
+            const dy = e.changedTouches[0].clientY - swipeRef.current.y;
+            swipeRef.current = null;
+            if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+              if (dx > 0) handlePrev(); else handleNext();
+            }
+          } : undefined}
+        >
         <MonthView
           data={data}
           currentDate={currentDate}
@@ -933,10 +946,24 @@ export default function ClimbingPlanner() {
           }}
           objectives={(data.quickSessions || []).filter(qs => qs.isObjective)}
         />
+        </div>
       )}
 
       {/* ── Vue année ── */}
       {viewMode === "year" && (
+        <div
+          style={{ touchAction: "pan-y" }}
+          onTouchStart={isMobile ? (e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } : undefined}
+          onTouchEnd={isMobile ? (e) => {
+            if (!swipeRef.current) return;
+            const dx = e.changedTouches[0].clientX - swipeRef.current.x;
+            const dy = e.changedTouches[0].clientY - swipeRef.current.y;
+            swipeRef.current = null;
+            if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+              if (dx > 0) handlePrev(); else handleNext();
+            }
+          } : undefined}
+        >
         <YearView
           data={data}
           currentDate={currentDate}
@@ -948,6 +975,7 @@ export default function ClimbingPlanner() {
             setViewMode("month");
           }}
         />
+        </div>
       )}
 
       {/* ── Dashboard ── */}
