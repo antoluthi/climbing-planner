@@ -209,7 +209,7 @@ export function DayColumn({
     : Math.max(timelineHeight / rangeHours, 20);
   const totalHeight = hourHeight * rangeHours;
   const minutesToPx = (minutes) => ((minutes / 60) - rangeStart) * hourHeight;
-  const gutter = isCompact ? 0 : isNarrow ? 16 : isMobile ? GUTTER_WIDTH_MOBILE : GUTTER_WIDTH;
+  const gutter = isCompact ? 10 : isNarrow ? 16 : isMobile ? GUTTER_WIDTH_MOBILE : GUTTER_WIDTH;
 
   const noteAreaStyle = {
     width: "100%",
@@ -240,28 +240,39 @@ export function DayColumn({
         flexDirection: "column",
       }}
     >
-      {/* ── En-tête ── */}
+      {/* ── En-tête (hauteur fixe pour alignement entre colonnes) ── */}
       <div
         style={{
           ...styles.dayHeader,
-          flexDirection: isCompact ? "column" : "row",
-          alignItems: isCompact ? "center" : "center",
-          justifyContent: "space-between",
-          padding: isCompact ? "2px 2px 1px" : isNarrow ? "4px 4px 3px" : "8px 8px 6px",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: isCompact ? "2px 1px 1px" : isNarrow ? "4px 4px 3px" : "8px 8px 6px",
           marginBottom: 0,
-          gap: isCompact ? 1 : 0,
+          gap: 0,
+          height: isCompact ? 28 : isNarrow ? 34 : undefined,
+          boxSizing: "border-box",
+          overflow: "hidden",
         }}
       >
-        <div style={{ display: "flex", gap: isCompact ? 0 : 4, flexDirection: isCompact ? "column" : "row", alignItems: isCompact ? "center" : "baseline" }}>
-          <span style={{ ...styles.dayName, ...(isToday ? styles.dayNameToday : {}), fontSize: sz.dayName }}>
-            {isCompact ? dayLabel.slice(0, 3) : dayLabel}
-          </span>
-          {sz.dayDate > 0 && <span style={{ ...styles.dayDate, fontSize: sz.dayDate }}>{dateLabel}</span>}
-        </div>
-        {totalCharge > 0 && (
-          <span style={{ ...styles.dayCharge, color: getChargeColor(totalCharge), fontSize: sz.charge }}>
-            ⚡{totalCharge}
-          </span>
+        <span style={{ ...styles.dayName, ...(isToday ? styles.dayNameToday : {}), fontSize: sz.dayName, lineHeight: 1.2 }}>
+          {isCompact ? dayLabel.slice(0, 3) : dayLabel}
+        </span>
+        {isCompact ? (
+          totalCharge > 0 && (
+            <span style={{ fontSize: 6, color: getChargeColor(totalCharge), fontWeight: 700, lineHeight: 1 }}>
+              ⚡{totalCharge}
+            </span>
+          )
+        ) : (
+          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+            {sz.dayDate > 0 && <span style={{ ...styles.dayDate, fontSize: sz.dayDate }}>{dateLabel}</span>}
+            {totalCharge > 0 && (
+              <span style={{ ...styles.dayCharge, color: getChargeColor(totalCharge), fontSize: sz.charge }}>
+                ⚡{totalCharge}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
@@ -270,9 +281,9 @@ export function DayColumn({
         <JournalButton logWarning={logWarning} isToday={isToday} isMobile={isMobile} isCompact={isCompact} isDark={isDark} onOpenLog={onOpenLog} />
       </div>
 
-      {/* ── Séances sans heure (compact, au-dessus de la timeline) ── */}
-      {(untimedSessions.length > 0 || (quickSessions || []).length > 0) && (
-        <div style={{ padding: isCompact ? "0 1px 2px" : isNarrow ? "0 2px 3px" : "0 6px 4px", display: "flex", flexDirection: "column", gap: 2 }}>
+      {/* ── Séances sans heure (au-dessus de la timeline, seulement desktop/tablette) ── */}
+      {!isCompact && (untimedSessions.length > 0 || (quickSessions || []).length > 0) && (
+        <div style={{ padding: isNarrow ? "0 2px 3px" : "0 6px 4px", display: "flex", flexDirection: "column", gap: 2 }}>
           {untimedSessions.map((s) => (
             <div
               key={s._origIdx}
@@ -281,7 +292,7 @@ export function DayColumn({
                 border: `1px solid ${getChargeColor(s.charge)}33`,
                 borderLeft: `2px solid ${getChargeColor(s.charge)}`,
                 borderRadius: 3,
-                padding: isCompact ? "1px 2px" : "3px 6px",
+                padding: "3px 6px",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -296,11 +307,9 @@ export function DayColumn({
               }}>
                 {s.title || s.name}
               </span>
-              {!isCompact && (
-                <span style={{ fontSize: sz.charge, color: getChargeColor(s.charge), fontWeight: 700 }}>
-                  ⚡{s.charge}
-                </span>
-              )}
+              <span style={{ fontSize: sz.charge, color: getChargeColor(s.charge), fontWeight: 700 }}>
+                ⚡{s.charge}
+              </span>
             </div>
           ))}
           {(quickSessions || []).map((qs, qi) => (
@@ -355,11 +364,12 @@ export function DayColumn({
                   color: isDark ? "#3a4040" : "#bcb8b0",
                   width: gutter,
                   textAlign: "right",
-                  paddingRight: isNarrow ? 2 : 5,
+                  paddingRight: isCompact ? 1 : isNarrow ? 2 : 5,
                   lineHeight: 1,
                   flexShrink: 0,
                   userSelect: "none",
                   marginTop: -1,
+                  visibility: isCompact && (h % 3 !== 0) ? "hidden" : "visible",
                 }}>
                   {isCompact ? h : `${h.toString().padStart(2, "0")}h`}
                 </span>}
@@ -518,6 +528,38 @@ export function DayColumn({
               </div>
             );
           })}
+
+          {/* Compact: untimed sessions + quick sessions as small bars at bottom */}
+          {isCompact && (untimedSessions.length > 0 || (quickSessions || []).length > 0) && (
+            <div style={{ position: "absolute", bottom: 2, left: gutter + 1, right: 1, display: "flex", flexDirection: "column", gap: 1, zIndex: 3 }}>
+              {untimedSessions.map((s) => (
+                <div
+                  key={s._origIdx}
+                  style={{
+                    height: 4,
+                    borderRadius: 2,
+                    background: getChargeColor(s.charge),
+                    opacity: 0.6,
+                    cursor: "pointer",
+                  }}
+                  onClick={() => onOpenSession(s._origIdx)}
+                />
+              ))}
+              {(quickSessions || []).map((qs, qi) => (
+                <div
+                  key={qs.id || qi}
+                  style={{
+                    height: 4,
+                    borderRadius: 2,
+                    background: qs.color || "#60a5fa",
+                    opacity: 0.6,
+                    cursor: "pointer",
+                  }}
+                  onClick={() => onOpenQuickSession?.(qs)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
