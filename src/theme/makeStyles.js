@@ -167,7 +167,7 @@ export function makeStyles(isDark) {
       background: t.bg, display: "flex", flexDirection: "column",
       padding: "10px 8px", minHeight: 0, overflow: "hidden", position: "relative", transition: "background 0.15s",
     },
-    dayColMobile: { minHeight: "auto", padding: "10px 16px", borderBottom: `1px solid ${t.gridGap}` },
+    dayColMobile: { minHeight: 0, flex: 1, padding: 0, borderBottom: "none" },
     dayColToday: { background: t.todayBg, borderTop: `2px solid ${t.accent}` },
     dayHeader: { display: "flex", flexDirection: "column", gap: 1, marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${t.border}` },
     dayHeaderMobile: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${t.border}` },

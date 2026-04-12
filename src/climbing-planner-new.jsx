@@ -71,6 +71,10 @@ export default function ClimbingPlanner() {
   const [quickSessionForm, setQuickSessionForm] = useState(null);
   const [deadlineModal, setDeadlineModal] = useState(null);
   const [deadlineDetailModal, setDeadlineDetailModal] = useState(null);
+  const [mobileDayIdx, setMobileDayIdx] = useState(() => {
+    const dow = new Date().getDay();
+    return dow === 0 ? 6 : dow - 1;
+  });
 
   const styles = makeStyles(isDark);
   const toggleTheme = () => setIsDark(d => {
@@ -684,7 +688,7 @@ export default function ClimbingPlanner() {
 
   return (
     <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: data.mesocycles || [] }}>
-    <div style={{ ...styles.app, height: (!isMobile && viewMode === "week") ? "100vh" : undefined, minHeight: "100vh", overflowY: (!isMobile && viewMode === "week") ? "hidden" : "auto", overflowX: "hidden" }}>
+    <div style={{ ...styles.app, height: viewMode === "week" ? "100vh" : undefined, minHeight: "100vh", overflowY: viewMode === "week" ? "hidden" : "auto", overflowX: "hidden" }}>
       <div style={styles.grain} />
 
       {/* ── HEADER MOBILE ── */}
@@ -855,9 +859,9 @@ export default function ClimbingPlanner() {
       )}
 
       {/* ── Vue semaine ── */}
-      {viewMode === "week" && (
+      {viewMode === "week" && !isMobile && (
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-          <div style={isMobile ? styles.gridMobile : styles.grid}>
+          <div style={styles.grid}>
             {DAYS.map((day, i) => {
               const date = addDays(monday, i);
               const isToday = date.toDateString() === new Date().toDateString();
@@ -883,7 +887,7 @@ export default function ClimbingPlanner() {
                   onRemoveQuickSession={id => removeQuickSession(id)}
                   onOpenSession={(si) => openSessionModal(wKey, i, si)}
                   onRemove={(si) => removeSession(i, si)}
-                  isMobile={isMobile}
+                  isMobile={false}
                   hasCreatine={!!data.creatine?.[dateISO]}
                   note={data.notes?.[dateISO] || ""}
                   onSaveNote={text => setData(d => ({ ...d, notes: { ...(d.notes || {}), [dateISO]: text } }))}
@@ -896,6 +900,80 @@ export default function ClimbingPlanner() {
           </div>
         </div>
       )}
+
+      {/* ── Vue semaine mobile (1 jour à la fois avec timeline) ── */}
+      {viewMode === "week" && isMobile && (() => {
+        const i = mobileDayIdx;
+        const date = addDays(monday, i);
+        const isToday = date.toDateString() === new Date().toDateString();
+        const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+        const logWarning = getDayLogWarning(data, dateISO, date);
+        return (
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+            {/* Day picker strip */}
+            <div style={{ display: "flex", background: isDark ? "#161a17" : "#e8e2d8", borderBottom: `1px solid ${isDark ? "#252b27" : "#ccc6b8"}`, flexShrink: 0 }}>
+              {DAYS.map((day, di) => {
+                const d = addDays(monday, di);
+                const isTodayDi = d.toDateString() === new Date().toDateString();
+                const isActive = di === mobileDayIdx;
+                const hasSessions = (weekSessions[di] || []).length > 0;
+                return (
+                  <button
+                    key={di}
+                    onClick={() => setMobileDayIdx(di)}
+                    style={{
+                      flex: 1, padding: "8px 0 6px", border: "none", cursor: "pointer",
+                      background: isActive ? (isDark ? "#1f2421" : "#f0ebe2") : "transparent",
+                      borderBottom: isActive ? `2px solid ${isDark ? "#c8906a" : "#8b4c20"}` : "2px solid transparent",
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
+                      color: isActive ? (isDark ? "#c8906a" : "#8b4c20") : isTodayDi ? (isDark ? "#c8906a88" : "#8b4c2088") : (isDark ? "#5a6060" : "#9a9080"),
+                    }}>{day.slice(0, 3)}</span>
+                    <span style={{
+                      fontSize: 12, fontWeight: isTodayDi ? 700 : 500,
+                      color: isActive ? (isDark ? "#e8e4de" : "#2a2218") : (isDark ? "#707870" : "#8a7f70"),
+                      width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                      background: isTodayDi ? (isDark ? "#c8906a33" : "#8b4c2022") : "transparent",
+                    }}>{d.getDate()}</span>
+                    {hasSessions && <div style={{ width: 4, height: 4, borderRadius: "50%", background: isDark ? "#c8906a66" : "#8b4c2066" }} />}
+                  </button>
+                );
+              })}
+            </div>
+            <DayColumn
+              key={i}
+              dayLabel={DAYS[i]}
+              dateLabel={formatDate(date)}
+              sessions={weekSessions[i] || []}
+              isToday={isToday}
+              weekMeta={weekMeta}
+              onAddSession={() => setAddChoiceDay(i)}
+              quickSessions={(data.quickSessions || []).filter(qs => {
+                const d2 = addDays(monday, i);
+                const iso = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}`;
+                if (qs.startDate === iso) return true;
+                if (qs.endDate && qs.startDate <= iso && qs.endDate >= iso) return true;
+                return false;
+              })}
+              onOpenQuickSession={qs => setQuickSessionForm({ initial: qs })}
+              onRemoveQuickSession={id => removeQuickSession(id)}
+              onOpenSession={(si) => openSessionModal(wKey, i, si)}
+              onRemove={(si) => removeSession(i, si)}
+              isMobile={true}
+              hasCreatine={!!data.creatine?.[dateISO]}
+              note={data.notes?.[dateISO] || ""}
+              onSaveNote={text => setData(d => ({ ...d, notes: { ...(d.notes || {}), [dateISO]: text } }))}
+              logWarning={logWarning}
+              onOpenLog={() => setLogDate(dateISO)}
+              pendingSuggestionsIds={pendingSuggestionsIds}
+            />
+          </div>
+        );
+      })()}
 
       {/* ── Vue mois ── */}
       {viewMode === "month" && (

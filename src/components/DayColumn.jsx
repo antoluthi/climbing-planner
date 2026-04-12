@@ -5,9 +5,8 @@ import { BLOCK_TYPES, getMesoColor } from "../lib/constants.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 
 // ─── TIMELINE CONSTANTS ─────────────────────────────────────────────────────
-const HOUR_HEIGHT = 56; // px per hour
-const TOTAL_HEIGHT = 24 * HOUR_HEIGHT; // 1344px (full day)
-const GUTTER_WIDTH = 30; // width of time labels gutter
+const GUTTER_WIDTH = 26; // width of time labels gutter
+const GUTTER_WIDTH_MOBILE = 22;
 
 const timeToMinutes = (time) => {
   if (!time || typeof time !== "string" || !time.includes(":")) return null;
@@ -16,10 +15,8 @@ const timeToMinutes = (time) => {
   return h * 60 + m;
 };
 
-const minutesToPx = (minutes) => (minutes / 60) * HOUR_HEIGHT;
-
 // ─── SCROLL SYNC (module-level, shared across all DayColumns) ──────────────
-let _sharedScrollTop = 7 * HOUR_HEIGHT; // default view: 07:00
+let _sharedScrollTop = null; // will be set on first render based on ratio
 const _scrollListeners = new Set();
 
 function subscribeScroll(fn) {
@@ -60,30 +57,22 @@ function JournalButton({ logWarning, isToday, isMobile, isDark, onOpenLog }) {
     <button
       onClick={() => onOpenLog?.()}
       style={{
-        width: "100%",
-        cursor: "pointer",
-        fontFamily: "inherit",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 5,
-        padding: isMobile ? "6px 2px" : "6px 8px",
-        fontSize: isMobile ? 10 : 11,
-        borderRadius: 6,
-        lineHeight: 1,
-        marginBottom: 6,
+        width: "100%", cursor: "pointer", fontFamily: "inherit",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+        padding: "0 8px", fontSize: 11, borderRadius: 6, lineHeight: 1,
+        height: 26, boxSizing: "border-box",
         ...btnStyle,
       }}
     >
-      <span style={{ fontSize: warn ? 13 : 11 }}>{warn ? "⚠ " : "⚡"}</span>
+      {warn && <span style={{ fontSize: 11 }}>{warn ? "△" : "="}</span>}
       {!isMobile && (
         <span>
           {warn
             ? isToday
-              ? "Compléter le journal"
+              ? "Completer le journal"
               : "Journal incomplet"
             : isToday
-            ? "Journal du jour →"
+            ? "Journal du jour"
             : "Journal"}
         </span>
       )}
@@ -123,6 +112,7 @@ export function DayColumn({
   const [pendingDeleteIdx, setPendingDeleteIdx] = useState(null);
   const timelineRef = useRef(null);
   const isSyncingRef = useRef(false);
+  const [timelineHeight, setTimelineHeight] = useState(600);
 
   useEffect(() => {
     if (!noteOpen) setNoteText(note || "");
@@ -132,26 +122,49 @@ export function DayColumn({
     if (noteOpen && noteRef.current) noteRef.current.focus();
   }, [noteOpen]);
 
-  // Timeline: inject CSS, init scroll position, subscribe to sync
+  // Timeline: inject CSS, measure height, init scroll position, subscribe to sync
   useEffect(() => {
     injectTimelineCSS();
-    if (isMobile || !timelineRef.current) return;
+    if (!timelineRef.current) return;
 
-    timelineRef.current.scrollTop = _sharedScrollTop;
+    // Measure available height
+    const measure = () => {
+      if (!timelineRef.current) return;
+      const h = timelineRef.current.clientHeight;
+      if (h > 0) setTimelineHeight(h);
+    };
+    measure();
 
-    const unsub = subscribeScroll((top) => {
-      if (!timelineRef.current || isSyncingRef.current) return;
-      isSyncingRef.current = true;
-      timelineRef.current.scrollTop = top;
-      isSyncingRef.current = false;
-    });
+    const ro = new ResizeObserver(measure);
+    ro.observe(timelineRef.current);
 
-    return unsub;
+    if (!isMobile) {
+      // Sync scroll across columns (desktop only)
+      if (_sharedScrollTop !== null) {
+        timelineRef.current.scrollTop = _sharedScrollTop;
+      } else {
+        // Default: scroll to 7:00
+        const totalH = timelineRef.current.scrollHeight;
+        timelineRef.current.scrollTop = (7 / 24) * totalH;
+        _sharedScrollTop = timelineRef.current.scrollTop;
+      }
+
+      const unsub = subscribeScroll((top) => {
+        if (!timelineRef.current || isSyncingRef.current) return;
+        isSyncingRef.current = true;
+        timelineRef.current.scrollTop = top;
+        isSyncingRef.current = false;
+      });
+
+      return () => { ro.disconnect(); unsub(); };
+    }
+
+    return () => ro.disconnect();
   }, [isMobile]);
 
   const handleTimelineScroll = (e) => {
     if (isSyncingRef.current) return;
-    broadcastScroll(e.target.scrollTop);
+    if (!isMobile) broadcastScroll(e.target.scrollTop);
   };
 
   const handleNoteBlur = () => {
@@ -167,6 +180,14 @@ export function DayColumn({
   const untimedSessions = sessionsWithIdx.filter(
     (s) => !s.startTime || timeToMinutes(s.startTime) === null
   );
+
+  // Compute dynamic hour height: use available height to show all 24h
+  // If the container is short, hours compress. If tall, they expand.
+  // Minimum: ensure sessions are still readable (at least 20px per hour)
+  const hourHeight = Math.max(timelineHeight / 24, 20);
+  const totalHeight = hourHeight * 24;
+  const minutesToPx = (minutes) => (minutes / 60) * hourHeight;
+  const gutter = isMobile ? GUTTER_WIDTH_MOBILE : GUTTER_WIDTH;
 
   const noteAreaStyle = {
     width: "100%",
@@ -184,91 +205,15 @@ export function DayColumn({
     outline: "none",
   };
 
-  // ── MOBILE: vue liste originale ──────────────────────────────────────────────
-  if (isMobile) {
-    return (
-      <div
-        style={{
-          ...styles.dayCol,
-          ...(isToday ? styles.dayColToday : {}),
-          ...styles.dayColMobile,
-        }}
-      >
-        <div style={styles.dayHeaderMobile}>
-          <div style={styles.dayHeaderMobileLeft}>
-            <span style={{ ...styles.dayName, ...(isToday ? styles.dayNameToday : {}) }}>
-              {dayLabel}
-            </span>
-            <span style={styles.dayDate}>{dateLabel}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            {hasCreatine && (
-              <span
-                style={{ fontSize: 7, color: isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", lineHeight: 1 }}
-                title="Créatine"
-              >₂</span>
-            )}
-            {totalCharge > 0 && (
-              <span style={{ ...styles.dayCharge, color: getChargeColor(totalCharge) }}>
-                ⚡{totalCharge}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <JournalButton logWarning={logWarning} isToday={isToday} isMobile={true} isDark={isDark} onOpenLog={onOpenLog} />
-
-        <div style={styles.sessionCards}>
-          {sessions.map((s, i) => (
-            <MobileSessionCard
-              key={i}
-              s={s}
-              i={i}
-              styles={styles}
-              isDark={isDark}
-              meso={meso}
-              mesoColor={mesoColor}
-              onOpenSession={onOpenSession}
-              pendingSuggestionsIds={pendingSuggestionsIds}
-              onDelete={() => setPendingDeleteIdx(i)}
-            />
-          ))}
-          {(quickSessions || []).map((qs, qi) => (
-            <QuickSessionCard
-              key={qs.id || qi}
-              qs={qs}
-              isDark={isDark}
-              onClick={() => onOpenQuickSession?.(qs)}
-              onDelete={() => onRemoveQuickSession?.(qs.id)}
-            />
-          ))}
-        </div>
-
-        <button style={{ ...styles.addBtn, marginTop: 0 }} onClick={onAddSession}>
-          <span style={styles.addBtnIcon}>+</span>
-          <span style={styles.addBtnLabel}>Séance</span>
-        </button>
-
-        {pendingDeleteIdx !== null && (
-          <ConfirmModal
-            title="Supprimer cette séance ?"
-            sub={sessions[pendingDeleteIdx]?.name}
-            onConfirm={() => onRemove(pendingDeleteIdx)}
-            onClose={() => setPendingDeleteIdx(null)}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // ── DESKTOP: vue calendrier timeline ─────────────────────────────────────────
+  // ── Shared timeline view (desktop + mobile) ──
   return (
     <div
       style={{
         ...styles.dayCol,
         ...(isToday ? styles.dayColToday : {}),
+        ...(isMobile ? styles.dayColMobile : {}),
         padding: 0,
-        minHeight: "unset",
+        minHeight: 0,
         display: "flex",
         flexDirection: "column",
       }}
@@ -280,22 +225,22 @@ export function DayColumn({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "8px 8px 6px",
+          padding: isMobile ? "8px 12px 6px" : "8px 8px 6px",
           marginBottom: 0,
         }}
       >
         <div>
-          <span style={{ ...styles.dayName, ...(isToday ? styles.dayNameToday : {}) }}>
+          <span style={{ ...styles.dayName, ...(isToday ? styles.dayNameToday : {}), fontSize: isMobile ? 13 : undefined }}>
             {dayLabel}
           </span>
-          <span style={{ ...styles.dayDate, marginLeft: 5 }}>{dateLabel}</span>
+          <span style={{ ...styles.dayDate, marginLeft: 5, fontSize: isMobile ? 11 : undefined }}>{dateLabel}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           {hasCreatine && (
             <span
               style={{ fontSize: 7, color: isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", lineHeight: 1 }}
               title="Créatine"
-            >₂</span>
+            >C</span>
           )}
           {totalCharge > 0 && (
             <span style={{ ...styles.dayCharge, color: getChargeColor(totalCharge) }}>
@@ -306,13 +251,13 @@ export function DayColumn({
       </div>
 
       {/* ── Journal ── */}
-      <div style={{ padding: "0 6px" }}>
-        <JournalButton logWarning={logWarning} isToday={isToday} isMobile={false} isDark={isDark} onOpenLog={onOpenLog} />
+      <div style={{ padding: isMobile ? "0 10px" : "0 6px" }}>
+        <JournalButton logWarning={logWarning} isToday={isToday} isMobile={isMobile} isDark={isDark} onOpenLog={onOpenLog} />
       </div>
 
       {/* ── Séances sans heure (compact, au-dessus de la timeline) ── */}
       {(untimedSessions.length > 0 || (quickSessions || []).length > 0) && (
-        <div style={{ padding: "0 6px 4px", display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ padding: isMobile ? "0 10px 4px" : "0 6px 4px", display: "flex", flexDirection: "column", gap: 2 }}>
           {untimedSessions.map((s) => (
             <div
               key={s._origIdx}
@@ -330,13 +275,13 @@ export function DayColumn({
               onClick={() => onOpenSession(s._origIdx)}
             >
               <span style={{
-                fontSize: 9, fontWeight: 600,
+                fontSize: isMobile ? 11 : 9, fontWeight: 600,
                 color: isDark ? "#c8c4be" : "#3a3028",
                 flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
                 {s.title || s.name}
               </span>
-              <span style={{ fontSize: 9, color: getChargeColor(s.charge), fontWeight: 700 }}>
+              <span style={{ fontSize: isMobile ? 10 : 9, color: getChargeColor(s.charge), fontWeight: 700 }}>
                 ⚡{s.charge}
               </span>
               <button
@@ -351,6 +296,7 @@ export function DayColumn({
               key={qs.id || qi}
               qs={qs}
               isDark={isDark}
+              isMobile={isMobile}
               onClick={() => onOpenQuickSession?.(qs)}
               onDelete={() => onRemoveQuickSession?.(qs.id)}
             />
@@ -365,14 +311,14 @@ export function DayColumn({
         onScroll={handleTimelineScroll}
         style={{
           flex: 1,
-          overflowY: "scroll",
+          overflowY: "auto",
           overflowX: "hidden",
           scrollbarWidth: "none",
           position: "relative",
           minHeight: 0,
         }}
       >
-        <div style={{ position: "relative", height: TOTAL_HEIGHT }}>
+        <div style={{ position: "relative", height: totalHeight }}>
 
           {/* Lignes horaires */}
           {Array.from({ length: 24 }, (_, h) => (
@@ -380,7 +326,7 @@ export function DayColumn({
               key={h}
               style={{
                 position: "absolute",
-                top: h * HOUR_HEIGHT,
+                top: h * hourHeight,
                 left: 0,
                 right: 0,
                 display: "flex",
@@ -389,11 +335,11 @@ export function DayColumn({
               }}
             >
               <span style={{
-                fontSize: 8,
+                fontSize: isMobile ? 7 : 8,
                 color: isDark ? "#3a4040" : "#bcb8b0",
-                width: GUTTER_WIDTH,
+                width: gutter,
                 textAlign: "right",
-                paddingRight: 5,
+                paddingRight: isMobile ? 3 : 5,
                 lineHeight: 1,
                 flexShrink: 0,
                 userSelect: "none",
@@ -410,14 +356,14 @@ export function DayColumn({
             </div>
           ))}
 
-          {/* Lignes demi-heures (pointillées) */}
-          {Array.from({ length: 24 }, (_, h) => (
+          {/* Lignes demi-heures (pointillées) — only if enough space */}
+          {hourHeight >= 30 && Array.from({ length: 24 }, (_, h) => (
             <div
               key={`hh${h}`}
               style={{
                 position: "absolute",
-                top: h * HOUR_HEIGHT + HOUR_HEIGHT / 2,
-                left: GUTTER_WIDTH,
+                top: h * hourHeight + hourHeight / 2,
+                left: gutter,
                 right: 0,
                 borderTop: `1px dashed ${isDark ? "#191d19" : "#eae6e0"}`,
                 pointerEvents: "none",
@@ -434,7 +380,7 @@ export function DayColumn({
                 style={{
                   position: "absolute",
                   top: nowPx,
-                  left: GUTTER_WIDTH - 5,
+                  left: gutter - 4,
                   right: 0,
                   zIndex: 10,
                   pointerEvents: "none",
@@ -442,7 +388,7 @@ export function DayColumn({
                   alignItems: "center",
                 }}
               >
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
                 <div style={{ flex: 1, borderTop: "1.5px solid #ef4444" }} />
               </div>
             );
@@ -456,8 +402,8 @@ export function DayColumn({
               : startMin + (s.estimatedTime || 60);
             const duration = Math.max((endMin ?? startMin + 60) - startMin, 15);
             const top = minutesToPx(startMin);
-            const height = Math.max(minutesToPx(duration), 22);
-            const isShort = height < 38;
+            const height = Math.max(minutesToPx(duration), 20);
+            const isShort = height < 34;
 
             return (
               <div
@@ -465,7 +411,7 @@ export function DayColumn({
                 style={{
                   position: "absolute",
                   top,
-                  left: GUTTER_WIDTH + 2,
+                  left: gutter + 2,
                   right: 3,
                   height,
                   background: isDark ? "#1c211d" : "#f2ede5",
@@ -487,9 +433,9 @@ export function DayColumn({
                     {/* Heure */}
                     {!isShort && (
                       <span style={{
-                        fontSize: 8,
+                        fontSize: isMobile ? 9 : 8,
                         color: isDark ? "#5a7860" : "#7a9a80",
-                           fontWeight: 600,
+                        fontWeight: 600,
                         display: "block",
                         lineHeight: 1.3,
                       }}>
@@ -498,7 +444,7 @@ export function DayColumn({
                     )}
                     {/* Titre */}
                     <span style={{
-                      fontSize: isShort ? 9 : 10,
+                      fontSize: isMobile ? 11 : (isShort ? 9 : 10),
                       fontWeight: 600,
                       color: isDark ? "#c8c4be" : "#3a3028",
                       display: "block",
@@ -512,7 +458,7 @@ export function DayColumn({
                     {/* Blocs */}
                     {!isShort && s.blocks && s.blocks.length > 0 && (
                       <div style={{ display: "flex", gap: 2, flexWrap: "wrap", marginTop: 2 }}>
-                        {s.blocks.slice(0, 3).map((bl, bi) => {
+                        {s.blocks.slice(0, isMobile ? 4 : 3).map((bl, bi) => {
                           const cfg = BLOCK_TYPES[bl.type];
                           if (!cfg) return null;
                           return (
@@ -537,7 +483,7 @@ export function DayColumn({
 
                   {/* Charge + bouton supprimer */}
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, flexShrink: 0 }}>
-                    <span style={{ fontSize: 9, color: getChargeColor(s.charge), fontWeight: 700, lineHeight: 1.2 }}>
+                    <span style={{ fontSize: isMobile ? 10 : 9, color: getChargeColor(s.charge), fontWeight: 700, lineHeight: 1.2 }}>
                       ⚡{s.charge}
                     </span>
                     {s.feedback && (
@@ -560,44 +506,46 @@ export function DayColumn({
       </div>
 
       {/* ── Pied : note + bouton ajouter ── */}
-      <div style={{ padding: "4px 6px 6px", flexShrink: 0, borderTop: `1px solid ${isDark ? "#1e221e" : "#e5e0da"}` }}>
-        <div style={{ marginBottom: 4 }}>
-          {noteOpen ? (
-            <textarea
-              ref={noteRef}
-              style={noteAreaStyle}
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              onBlur={handleNoteBlur}
-              placeholder="Note du jour..."
-            />
-          ) : noteText ? (
-            <div
-              onClick={() => setNoteOpen(true)}
-              style={{
-                fontSize: 10,
-                color: isDark ? "#8a9090" : "#6b7060",
-                lineHeight: 1.4,
-                cursor: "text",
-                padding: "3px 5px",
-                borderRadius: 4,
-                borderLeft: `2px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
-                background: isDark ? "#1a1f1c55" : "#e4dfd655",
-                wordBreak: "break-word",
-              }}
-            >
-              {noteText.length > 60 ? noteText.slice(0, 60) + "…" : noteText}
-            </div>
-          ) : (
-            <div
-              onClick={() => setNoteOpen(true)}
-              style={{ fontSize: 9, color: isDark ? "#303530" : "#ccc8c0", cursor: "text", padding: "2px 3px", letterSpacing: "0.03em" }}
-            >
-              ✎ note
-            </div>
-          )}
-        </div>
-        <button style={styles.addBtn} onClick={onAddSession}>
+      <div style={{ padding: isMobile ? "4px 10px 6px" : "4px 6px 6px", flexShrink: 0, borderTop: `1px solid ${isDark ? "#1e221e" : "#e5e0da"}` }}>
+        {!isMobile && (
+          <div style={{ marginBottom: 4 }}>
+            {noteOpen ? (
+              <textarea
+                ref={noteRef}
+                style={noteAreaStyle}
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                onBlur={handleNoteBlur}
+                placeholder="Note du jour..."
+              />
+            ) : noteText ? (
+              <div
+                onClick={() => setNoteOpen(true)}
+                style={{
+                  fontSize: 10,
+                  color: isDark ? "#8a9090" : "#6b7060",
+                  lineHeight: 1.4,
+                  cursor: "text",
+                  padding: "3px 5px",
+                  borderRadius: 4,
+                  borderLeft: `2px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
+                  background: isDark ? "#1a1f1c55" : "#e4dfd655",
+                  wordBreak: "break-word",
+                }}
+              >
+                {noteText.length > 60 ? noteText.slice(0, 60) + "…" : noteText}
+              </div>
+            ) : (
+              <div
+                onClick={() => setNoteOpen(true)}
+                style={{ fontSize: 9, color: isDark ? "#303530" : "#ccc8c0", cursor: "text", padding: "2px 3px", letterSpacing: "0.03em" }}
+              >
+                note
+              </div>
+            )}
+          </div>
+        )}
+        <button style={{ ...styles.addBtn, fontSize: isMobile ? 12 : undefined }} onClick={onAddSession}>
           <span style={styles.addBtnIcon}>+</span>
           <span style={styles.addBtnLabel}>Séance</span>
         </button>
@@ -615,83 +563,8 @@ export function DayColumn({
   );
 }
 
-// ─── CARTE SÉANCE (mobile / liste) ─────────────────────────────────────────
-function MobileSessionCard({ s, i, styles, isDark, meso, mesoColor, onOpenSession, pendingSuggestionsIds, onDelete }) {
-  return (
-    <div
-      style={{ ...styles.sessionCard, cursor: "pointer" }}
-      onClick={() => onOpenSession(i)}
-    >
-      <div style={{ ...styles.sessionCardAccent, background: getChargeColor(s.charge) }} />
-      <div style={styles.sessionCardContent}>
-        {s.startTime && (
-          <span style={{ fontSize: 9, color: isDark ? "#5a7860" : "#7a9a80", fontWeight: 600, marginBottom: 1, display: "block" }}>
-            {s.startTime}{s.endTime ? ` → ${s.endTime}` : ""}
-          </span>
-        )}
-        <span style={styles.sessionCardName}>{s.title || s.name}</span>
-
-        {s.blocks && s.blocks.length > 0 && (
-          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>
-            {s.blocks.map((bl, bi) => {
-              const cfg = BLOCK_TYPES[bl.type];
-              if (!cfg) return null;
-              return (
-                <span key={bi} title={bl.type + (bl.name ? ` → ${bl.name}` : "")} style={{
-                  fontSize: 9, padding: "1px 5px", borderRadius: 10,
-                  background: cfg.color + "22", color: cfg.color, border: `1px solid ${cfg.color}44`, lineHeight: 1.6,
-                }}>
-                  {bl.type === "Exercices" && bl.name ? bl.name.split(" ").slice(0, 2).join(" ") : bl.type}
-                </span>
-              );
-            })}
-          </div>
-        )}
-
-        {!s.blocks && s.isCustom && (
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
-            <span style={styles.customBadge}>perso</span>
-            {s.estimatedTime && (
-              <span style={{ ...styles.customBadge, background: "none", borderColor: "transparent", color: styles.dashText }}>
-                {s.estimatedTime}min
-              </span>
-            )}
-            {meso && (
-              <span style={{ ...styles.sessionCardMeso, background: mesoColor + "22", color: mesoColor, border: `1px solid ${mesoColor}55` }}>
-                {meso}
-              </span>
-            )}
-          </div>
-        )}
-
-        {s.coachNote && (
-          <div style={{
-            fontSize: 9, color: isDark ? "#a0b8a0" : "#4a7060", fontStyle: "italic",
-            marginTop: 3, lineHeight: 1.4,
-            borderLeft: `2px solid ${isDark ? "#3a6040" : "#a0c8a8"}`, paddingLeft: 5,
-          }}>
-            {s.coachNote}
-          </div>
-        )}
-
-        <div style={styles.sessionCardFooter}>
-          <span style={{ ...styles.sessionCardCharge, color: getChargeColor(s.charge) }}>⚡{s.charge}</span>
-          {s.estimatedTime && <span style={{ fontSize: 9, color: isDark ? "#606860" : "#9a9080" }}>{s.estimatedTime}min</span>}
-          {s.feedback && <span style={styles.feedbackDot} title="Feedback enregistré">{s.feedback.done ? "☑" : "☐"}</span>}
-          {pendingSuggestionsIds?.has(s.id) && (
-            <span title="Suggestion de déplacement en attente" style={{ fontSize: 9, background: "#f9731622", color: "#f97316", border: "1px solid #f9731655", borderRadius: 8, padding: "1px 5px", fontWeight: 700 }}>→</span>
-          )}
-        </div>
-      </div>
-      <div style={styles.sessionCardActions}>
-        <button style={styles.actionBtn} title="Supprimer" onClick={(e) => { e.stopPropagation(); onDelete(); }}>×</button>
-      </div>
-    </div>
-  );
-}
-
 // ─── CARTE SÉANCE RAPIDE ────────────────────────────────────────────────────
-function QuickSessionCard({ qs, isDark, onClick, onDelete }) {
+function QuickSessionCard({ qs, isDark, isMobile, onClick, onDelete }) {
   const accent = qs.color || "#60a5fa";
   return (
     <div
@@ -716,20 +589,17 @@ function QuickSessionCard({ qs, isDark, onClick, onDelete }) {
         }}>OBJ</span>
       )}
       <span style={{
-        fontSize: 9, fontWeight: 600,
+        fontSize: isMobile ? 11 : 9, fontWeight: 600,
         color: isDark ? "#c8c4be" : "#3a3028",
         flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>
         {qs.name}
       </span>
       {qs.startTime && (
-        <span style={{ fontSize: 9, color: accent, fontWeight: 600 }}>
+        <span style={{ fontSize: isMobile ? 10 : 9, color: accent, fontWeight: 600 }}>
           {qs.startTime}
         </span>
       )}
-      <span style={{ fontSize: 8, color: accent, background: accent + "22", borderRadius: 8, padding: "0 4px" }}>
-        ✎
-      </span>
       <button
         style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: isDark ? "#5a5a5a" : "#aaa", padding: "0 2px", lineHeight: 1 }}
         title="Supprimer"
