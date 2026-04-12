@@ -953,7 +953,7 @@ function getContextualPhrase(ctx) {
 
 // ─── ACCUEIL ──────────────────────────────────────────────────────────────────
 
-export function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onSaveWeight, onAddHooper, onAddNutrition, onDeleteNutrition }) {
+export function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onSaveWeight, onAddHooper, onAddNutrition, onDeleteNutrition, deadlines, onOpenDeadline, onNewDeadline, onRemoveDeadline }) {
   const { isDark } = useThemeCtx();
   const today = localDateStr(new Date());
   const todayObj = new Date(today + "T12:00:00");
@@ -1341,6 +1341,65 @@ export function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, o
               </div>
             )}
           </div>
+
+        {/* ── Échéances / Objectifs ── */}
+        {((deadlines || []).length > 0 || onNewDeadline) && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <span style={{ ...sectionLabel, marginBottom: 0 }}>Échéances</span>
+              {onNewDeadline && (
+                <button
+                  onClick={onNewDeadline}
+                  style={{ background: "none", border: `1px solid ${panelBorder}`, borderRadius: 6, color: textMuted, fontSize: 11, padding: "3px 10px", cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  + Nouvelle
+                </button>
+              )}
+            </div>
+            {(deadlines || []).length === 0 ? (
+              <div style={{ fontSize: 12, color: textMuted, fontStyle: "italic", padding: "8px 0" }}>Aucune échéance planifiée.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {(deadlines || []).map(dl => {
+                  const isPast = dl.startDate < new Date().toISOString().slice(0, 10);
+                  return (
+                    <div
+                      key={dl.id}
+                      onClick={() => onOpenDeadline?.(dl)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        background: dl.color + (isDark ? "15" : "10"),
+                        border: `1px solid ${dl.color}44`,
+                        borderLeft: `4px solid ${dl.color}`,
+                        borderRadius: 7, padding: "8px 12px", cursor: "pointer",
+                        opacity: isPast ? 0.55 : 1,
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: textMain, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {dl.label}
+                        </div>
+                        <div style={{ fontSize: 11, color: dl.color, marginTop: 2 }}>
+                          {new Date(dl.startDate + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
+                          {dl.endDate && ` → ${new Date(dl.endDate + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}`}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: dl.color, background: dl.color + "22", borderRadius: 10, padding: "1px 7px", border: `1px solid ${dl.color}44`, flexShrink: 0 }}>
+                        {dl.priority}
+                      </span>
+                      <button
+                        onClick={e => { e.stopPropagation(); onRemoveDeadline?.(dl.id); }}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: isDark ? "#4a4a4a" : "#bbb", fontSize: 14, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
+                        title="Supprimer"
+                      >×</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
 
         </div>
       </div>
