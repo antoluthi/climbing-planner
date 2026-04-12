@@ -40,7 +40,7 @@ function injectTimelineCSS() {
 }
 
 // ─── JOURNAL BUTTON ─────────────────────────────────────────────────────────
-function JournalButton({ logWarning, isToday, isMobile, isDark, onOpenLog }) {
+function JournalButton({ logWarning, isToday, isMobile, isCompact, isDark, onOpenLog }) {
   const warn = logWarning?.hasWarning;
   const future = logWarning?.isFuture;
   const btnStyle = warn
@@ -58,14 +58,14 @@ function JournalButton({ logWarning, isToday, isMobile, isDark, onOpenLog }) {
       onClick={() => onOpenLog?.()}
       style={{
         width: "100%", cursor: "pointer", fontFamily: "inherit",
-        display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-        padding: "0 8px", fontSize: 11, borderRadius: 6, lineHeight: 1,
-        height: 26, boxSizing: "border-box",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: isCompact ? 0 : 5,
+        padding: isCompact ? "0 2px" : "0 8px", fontSize: isCompact ? 8 : 11, borderRadius: isCompact ? 4 : 6, lineHeight: 1,
+        height: isCompact ? 18 : 26, boxSizing: "border-box",
         ...btnStyle,
       }}
     >
-      {warn && <span style={{ fontSize: 11 }}>{warn ? "△" : "="}</span>}
-      {!isMobile && (
+      {warn && <span style={{ fontSize: isCompact ? 7 : 11 }}>{warn ? "△" : "="}</span>}
+      {!isMobile && !isCompact && (
         <span>
           {warn
             ? isToday
@@ -76,6 +76,7 @@ function JournalButton({ logWarning, isToday, isMobile, isDark, onOpenLog }) {
             : "Journal"}
         </span>
       )}
+      {isCompact && !warn && <span style={{ fontSize: 7 }}>J</span>}
     </button>
   );
 }
@@ -101,6 +102,7 @@ export function DayColumn({
   onOpenQuickSession,
   onRemoveQuickSession,
   colWidth,
+  timelineRange,
 }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
@@ -157,9 +159,8 @@ export function DayColumn({
       if (_sharedScrollTop !== null) {
         timelineRef.current.scrollTop = _sharedScrollTop;
       } else {
-        // Default: scroll to 7:00
-        const totalH = timelineRef.current.scrollHeight;
-        timelineRef.current.scrollTop = (7 / 24) * totalH;
+        // Default: scroll to top (range already starts at configured hour)
+        timelineRef.current.scrollTop = 0;
         _sharedScrollTop = timelineRef.current.scrollTop;
       }
 
@@ -195,12 +196,15 @@ export function DayColumn({
     (s) => !s.startTime || timeToMinutes(s.startTime) === null
   );
 
-  // Compute dynamic hour height: use available height to show all 24h
-  // If the container is short, hours compress. If tall, they expand.
-  // Minimum: ensure sessions are still readable (at least 20px per hour)
-  const hourHeight = Math.max(timelineHeight / 24, 20);
-  const totalHeight = hourHeight * 24;
-  const minutesToPx = (minutes) => (minutes / 60) * hourHeight;
+  // Timeline range (configurable, default 0-24 = full day)
+  const rangeStart = timelineRange?.start ?? 0;
+  const rangeEnd = timelineRange?.end ?? 24;
+  const rangeHours = rangeEnd - rangeStart;
+
+  // Compute dynamic hour height based on visible range
+  const hourHeight = Math.max(timelineHeight / rangeHours, 20);
+  const totalHeight = hourHeight * rangeHours;
+  const minutesToPx = (minutes) => ((minutes / 60) - rangeStart) * hourHeight;
   const gutter = isCompact ? 0 : isNarrow ? 16 : isMobile ? GUTTER_WIDTH_MOBILE : GUTTER_WIDTH;
 
   const noteAreaStyle = {
@@ -257,12 +261,10 @@ export function DayColumn({
         )}
       </div>
 
-      {/* ── Journal (hidden on very narrow columns) ── */}
-      {!isCompact && (
-        <div style={{ padding: isNarrow ? "0 2px" : "0 6px" }}>
-          <JournalButton logWarning={logWarning} isToday={isToday} isMobile={isMobile} isDark={isDark} onOpenLog={onOpenLog} />
-        </div>
-      )}
+      {/* ── Journal ── */}
+      <div style={{ padding: isCompact ? "0 1px" : isNarrow ? "0 2px" : "0 6px" }}>
+        <JournalButton logWarning={logWarning} isToday={isToday} isMobile={isMobile} isCompact={isCompact} isDark={isDark} onOpenLog={onOpenLog} />
+      </div>
 
       {/* ── Séances sans heure (compact, au-dessus de la timeline) ── */}
       {(untimedSessions.length > 0 || (quickSessions || []).length > 0) && (
@@ -328,55 +330,62 @@ export function DayColumn({
         <div style={{ position: "relative", height: totalHeight }}>
 
           {/* Lignes horaires */}
-          {Array.from({ length: 24 }, (_, h) => (
-            <div
-              key={h}
-              style={{
-                position: "absolute",
-                top: h * hourHeight,
-                left: 0,
-                right: 0,
-                display: "flex",
-                alignItems: "flex-start",
-                pointerEvents: "none",
-              }}
-            >
-              {gutter > 0 && <span style={{
-                fontSize: sz.hourLabel,
-                color: isDark ? "#3a4040" : "#bcb8b0",
-                width: gutter,
-                textAlign: "right",
-                paddingRight: isNarrow ? 2 : 5,
-                lineHeight: 1,
-                flexShrink: 0,
-                userSelect: "none",
-                marginTop: -1,
-              }}>
-                {isCompact ? h : `${h.toString().padStart(2, "0")}h`}
-              </span>}
-              <div style={{
-                flex: 1,
-                borderTop: h % 6 === 0
-                  ? `1px solid ${isDark ? "#2a302a" : "#ccc6b8"}`
-                  : `1px solid ${isDark ? "#1e221e" : "#e5e0da"}`,
-              }} />
-            </div>
-          ))}
+          {Array.from({ length: rangeHours + 1 }, (_, i) => {
+            const h = rangeStart + i;
+            if (h > 23) return null;
+            return (
+              <div
+                key={h}
+                style={{
+                  position: "absolute",
+                  top: i * hourHeight,
+                  left: 0,
+                  right: 0,
+                  display: "flex",
+                  alignItems: "flex-start",
+                  pointerEvents: "none",
+                }}
+              >
+                {gutter > 0 && <span style={{
+                  fontSize: sz.hourLabel,
+                  color: isDark ? "#3a4040" : "#bcb8b0",
+                  width: gutter,
+                  textAlign: "right",
+                  paddingRight: isNarrow ? 2 : 5,
+                  lineHeight: 1,
+                  flexShrink: 0,
+                  userSelect: "none",
+                  marginTop: -1,
+                }}>
+                  {isCompact ? h : `${h.toString().padStart(2, "0")}h`}
+                </span>}
+                <div style={{
+                  flex: 1,
+                  borderTop: h % 6 === 0
+                    ? `1px solid ${isDark ? "#2a302a" : "#ccc6b8"}`
+                    : `1px solid ${isDark ? "#1e221e" : "#e5e0da"}`,
+                }} />
+              </div>
+            );
+          })}
 
           {/* Lignes demi-heures (pointillées) — only if enough space */}
-          {hourHeight >= 30 && Array.from({ length: 24 }, (_, h) => (
-            <div
-              key={`hh${h}`}
-              style={{
-                position: "absolute",
-                top: h * hourHeight + hourHeight / 2,
-                left: gutter,
-                right: 0,
-                borderTop: `1px dashed ${isDark ? "#191d19" : "#eae6e0"}`,
-                pointerEvents: "none",
-              }}
-            />
-          ))}
+          {hourHeight >= 30 && Array.from({ length: rangeHours }, (_, i) => {
+            const h = rangeStart + i;
+            return (
+              <div
+                key={`hh${h}`}
+                style={{
+                  position: "absolute",
+                  top: i * hourHeight + hourHeight / 2,
+                  left: gutter,
+                  right: 0,
+                  borderTop: `1px dashed ${isDark ? "#191d19" : "#eae6e0"}`,
+                  pointerEvents: "none",
+                }}
+              />
+            );
+          })}
 
           {/* Indicateur heure actuelle */}
           {isToday && (() => {

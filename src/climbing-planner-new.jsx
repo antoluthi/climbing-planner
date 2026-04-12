@@ -897,6 +897,7 @@ export default function ClimbingPlanner() {
                   logWarning={logWarning}
                   onOpenLog={() => setLogDate(dateISO)}
                   pendingSuggestionsIds={pendingSuggestionsIds}
+                  timelineRange={data.profile?.timelineRange}
                 />
               );
             })}

@@ -196,7 +196,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
       {/* ── Apparence ── */}
       <div style={styles.profileSection}>
         <div style={styles.profileSectionTitle}>Apparence</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
           <span style={{ fontSize: 12, color: textColor }}>Thème</span>
           <button
             onClick={toggleTheme}
@@ -204,6 +204,31 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
           >
             {isDark ? "Mode clair" : "Mode sombre"}
           </button>
+        </div>
+        {/* Timeline range */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: textColor }}>Plage horaire</span>
+          <select
+            value={profile.timelineRange?.start ?? 6}
+            onChange={e => onUpdateProfile({ ...profile, timelineRange: { ...(profile.timelineRange || {}), start: Number(e.target.value), end: profile.timelineRange?.end ?? 22 } })}
+            style={{ background: inputBg, border: `1px solid ${btnBorder}`, color: textColor, padding: "4px 8px", borderRadius: 4, fontSize: 11, fontFamily: "inherit" }}
+          >
+            {Array.from({ length: 13 }, (_, i) => (
+              <option key={i} value={i}>{`${i.toString().padStart(2, "0")}h`}</option>
+            ))}
+          </select>
+          <span style={{ fontSize: 11, color: mutedColor }}>—</span>
+          <select
+            value={profile.timelineRange?.end ?? 22}
+            onChange={e => onUpdateProfile({ ...profile, timelineRange: { ...(profile.timelineRange || {}), start: profile.timelineRange?.start ?? 6, end: Number(e.target.value) } })}
+            style={{ background: inputBg, border: `1px solid ${btnBorder}`, color: textColor, padding: "4px 8px", borderRadius: 4, fontSize: 11, fontFamily: "inherit" }}
+          >
+            {Array.from({ length: 13 }, (_, i) => {
+              const v = i + 12;
+              return <option key={v} value={v}>{`${v.toString().padStart(2, "0")}h`}</option>;
+            })}
+          </select>
+          <span style={{ fontSize: 10, color: mutedColor, fontStyle: "italic" }}>Vue semaine</span>
         </div>
       </div>
 
