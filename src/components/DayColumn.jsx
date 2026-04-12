@@ -103,6 +103,7 @@ export function DayColumn({
   onRemoveQuickSession,
   colWidth,
   timelineRange,
+  dateISO,
 }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
@@ -196,6 +197,12 @@ export function DayColumn({
     (s) => !s.startTime || timeToMinutes(s.startTime) === null
   );
 
+  // Split quickSessions into timed (positioned on timeline) vs allDay
+  const timedQuickSessions = (quickSessions || []).filter(qs => !qs.allDay && qs.startTime && timeToMinutes(qs.startTime) !== null);
+  const allDayQuickSessions = (quickSessions || []).filter(qs => qs.allDay || !qs.startTime);
+  // Multi-day quickSessions: detect if this day is part of a span
+  const multiDayQuickSessions = (quickSessions || []).filter(qs => qs.endDate && qs.startDate !== qs.endDate);
+
   // Timeline range (configurable, default 0-24 = full day)
   const rangeStart = timelineRange?.start ?? 6;
   const rangeEnd = timelineRange?.end ?? 22;
@@ -281,8 +288,8 @@ export function DayColumn({
         <JournalButton logWarning={logWarning} isToday={isToday} isMobile={isMobile} isCompact={isCompact} isDark={isDark} onOpenLog={onOpenLog} />
       </div>
 
-      {/* ── Séances sans heure (au-dessus de la timeline, seulement desktop/tablette) ── */}
-      {!isCompact && (untimedSessions.length > 0 || (quickSessions || []).length > 0) && (
+      {/* ── Séances sans heure + allDay quickSessions (au-dessus de la timeline, desktop/tablette) ── */}
+      {!isCompact && (untimedSessions.length > 0 || allDayQuickSessions.length > 0) && (
         <div style={{ padding: isNarrow ? "0 2px 3px" : "0 6px 4px", display: "flex", flexDirection: "column", gap: 2 }}>
           {untimedSessions.map((s) => (
             <div
@@ -312,13 +319,16 @@ export function DayColumn({
               </span>
             </div>
           ))}
-          {(quickSessions || []).map((qs, qi) => (
+          {allDayQuickSessions.map((qs, qi) => (
             <QuickSessionCard
               key={qs.id || qi}
               qs={qs}
               isDark={isDark}
               isCompact={isCompact}
               isNarrow={isNarrow}
+              isMultiDay={!!(qs.endDate && qs.startDate !== qs.endDate)}
+              isSpanStart={dateISO === qs.startDate}
+              isSpanEnd={dateISO === qs.endDate}
               onClick={() => onOpenQuickSession?.(qs)}
               onDelete={() => onRemoveQuickSession?.(qs.id)}
             />
@@ -529,8 +539,90 @@ export function DayColumn({
             );
           })}
 
-          {/* Compact: untimed sessions + quick sessions as small bars at bottom */}
-          {isCompact && (untimedSessions.length > 0 || (quickSessions || []).length > 0) && (
+          {/* Timed quickSessions positioned on timeline */}
+          {timedQuickSessions.map((qs) => {
+            const startMin = timeToMinutes(qs.startTime);
+            const endMin = qs.endTime ? timeToMinutes(qs.endTime) : startMin + (qs.duration || 60);
+            const dur = Math.max((endMin ?? startMin + 60) - startMin, 15);
+            const top = minutesToPx(startMin);
+            const height = Math.max(minutesToPx(dur), 16);
+            const accent = qs.color || "#60a5fa";
+            return (
+              <div
+                key={qs.id}
+                style={{
+                  position: "absolute",
+                  top,
+                  left: gutter + 2,
+                  right: 3,
+                  height,
+                  background: accent + (isDark ? "18" : "12"),
+                  border: `1px solid ${accent}55`,
+                  borderLeft: `3px solid ${accent}`,
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  overflow: "hidden",
+                  boxSizing: "border-box",
+                  padding: isCompact ? "1px 2px" : "3px 5px",
+                  zIndex: 2,
+                }}
+                onClick={() => onOpenQuickSession?.(qs)}
+              >
+                {!isCompact && (
+                  <span style={{
+                    fontSize: sz.sessionTitle, fontWeight: 600,
+                    color: isDark ? "#c8c4be" : "#3a3028",
+                    display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}>
+                    {qs.name}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Multi-day bar at top of timeline */}
+          {multiDayQuickSessions.length > 0 && (
+            <div style={{ position: "absolute", top: 0, left: gutter + 1, right: 1, display: "flex", flexDirection: "column", gap: 1, zIndex: 4 }}>
+              {multiDayQuickSessions.filter(qs => qs.allDay || !qs.startTime).map((qs) => {
+                const accent = qs.color || "#60a5fa";
+                const isStart = dateISO === qs.startDate;
+                const isEnd = dateISO === qs.endDate;
+                return (
+                  <div
+                    key={qs.id}
+                    style={{
+                      height: isCompact ? 5 : 16,
+                      background: accent + (isDark ? "30" : "25"),
+                      borderLeft: isStart ? `3px solid ${accent}` : "none",
+                      borderRight: isEnd ? `3px solid ${accent}` : "none",
+                      borderTop: `1px solid ${accent}55`,
+                      borderBottom: `1px solid ${accent}55`,
+                      borderRadius: isStart && isEnd ? 4 : isStart ? "4px 0 0 4px" : isEnd ? "0 4px 4px 0" : 0,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      paddingLeft: isCompact ? 2 : 5,
+                      overflow: "hidden",
+                    }}
+                    onClick={() => onOpenQuickSession?.(qs)}
+                  >
+                    {!isCompact && isStart && (
+                      <span style={{
+                        fontSize: sz.sessionTitle - 1, fontWeight: 600,
+                        color: accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                      }}>
+                        {qs.name}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Compact: untimed sessions + allDay quickSessions (non-multi-day) as small bars at bottom */}
+          {isCompact && (untimedSessions.length > 0 || allDayQuickSessions.filter(qs => !qs.endDate || qs.startDate === qs.endDate).length > 0) && (
             <div style={{ position: "absolute", bottom: 2, left: gutter + 1, right: 1, display: "flex", flexDirection: "column", gap: 1, zIndex: 3 }}>
               {untimedSessions.map((s) => (
                 <div
@@ -545,7 +637,7 @@ export function DayColumn({
                   onClick={() => onOpenSession(s._origIdx)}
                 />
               ))}
-              {(quickSessions || []).map((qs, qi) => (
+              {allDayQuickSessions.filter(qs => !qs.endDate || qs.startDate === qs.endDate).map((qs, qi) => (
                 <div
                   key={qs.id || qi}
                   style={{
@@ -622,7 +714,7 @@ export function DayColumn({
 }
 
 // ─── CARTE SÉANCE RAPIDE ────────────────────────────────────────────────────
-function QuickSessionCard({ qs, isDark, isCompact, isNarrow, onClick, onDelete }) {
+function QuickSessionCard({ qs, isDark, isCompact, isNarrow, isMultiDay, isSpanStart, isSpanEnd, onClick, onDelete }) {
   const accent = qs.color || "#60a5fa";
   const titleSize = isCompact ? 7 : isNarrow ? 8 : 9;
   return (
@@ -630,8 +722,11 @@ function QuickSessionCard({ qs, isDark, isCompact, isNarrow, onClick, onDelete }
       style={{
         background: accent + (isDark ? "18" : "12"),
         border: `1px solid ${accent}55`,
-        borderLeft: `3px solid ${accent}`,
-        borderRadius: 4,
+        borderLeft: isMultiDay && !isSpanStart ? `1px solid ${accent}55` : `3px solid ${accent}`,
+        borderRight: isMultiDay && !isSpanEnd ? "none" : `1px solid ${accent}55`,
+        borderRadius: isMultiDay
+          ? (isSpanStart && isSpanEnd ? 4 : isSpanStart ? "4px 0 0 4px" : isSpanEnd ? "0 4px 4px 0" : 0)
+          : 4,
         padding: isCompact ? "2px 3px" : "3px 6px",
         cursor: "pointer",
         display: "flex",
@@ -652,14 +747,14 @@ function QuickSessionCard({ qs, isDark, isCompact, isNarrow, onClick, onDelete }
         color: isDark ? "#c8c4be" : "#3a3028",
         flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>
-        {qs.name}
+        {isMultiDay && !isSpanStart ? "" : qs.name}
       </span>
-      {qs.startTime && !isCompact && (
+      {qs.startTime && !isCompact && !isMultiDay && (
         <span style={{ fontSize: isNarrow ? 7 : 9, color: accent, fontWeight: 600 }}>
           {qs.startTime}
         </span>
       )}
-      {!isCompact && (
+      {!isCompact && isSpanStart && (
         <button
           style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: isDark ? "#5a5a5a" : "#aaa", padding: "0 2px", lineHeight: 1 }}
           title="Supprimer"

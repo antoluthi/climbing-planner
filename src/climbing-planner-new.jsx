@@ -890,12 +890,11 @@ export default function ClimbingPlanner() {
                   weekMeta={weekMeta}
                   onAddSession={() => setAddChoiceDay(i)}
                   quickSessions={(data.quickSessions || []).filter(qs => {
-                    const d2 = addDays(monday, i);
-                    const iso = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}`;
-                    if (qs.startDate === iso) return true;
-                    if (qs.endDate && qs.startDate <= iso && qs.endDate >= iso) return true;
+                    if (qs.startDate === dateISO) return true;
+                    if (qs.endDate && qs.startDate <= dateISO && qs.endDate >= dateISO) return true;
                     return false;
                   })}
+                  dateISO={dateISO}
                   onOpenQuickSession={qs => setQuickSessionForm({ initial: qs })}
                   onRemoveQuickSession={id => removeQuickSession(id)}
                   onOpenSession={(si) => openSessionModal(wKey, i, si)}
