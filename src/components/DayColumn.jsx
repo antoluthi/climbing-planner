@@ -100,9 +100,23 @@ export function DayColumn({
   quickSessions,
   onOpenQuickSession,
   onRemoveQuickSession,
+  colWidth,
 }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
+
+  // Dynamic sizing based on column width
+  const isCompact = colWidth && colWidth < 80;
+  const isNarrow = colWidth && colWidth < 120;
+  const sz = {
+    dayName: isCompact ? 7 : isNarrow ? 8 : isMobile ? 9 : 11,
+    dayDate: isCompact ? 0 : isNarrow ? 7 : isMobile ? 8 : 10,
+    charge: isCompact ? 7 : isNarrow ? 8 : 9,
+    sessionTitle: isCompact ? 7 : isNarrow ? 8 : isMobile ? 9 : 10,
+    sessionTime: isCompact ? 6 : isNarrow ? 7 : 8,
+    hourLabel: isCompact ? 6 : isNarrow ? 7 : 8,
+    addBtn: isCompact ? 8 : isNarrow ? 9 : 11,
+  };
   const meso = weekMeta?.mesocycle;
   const mesoColor = meso ? getMesoColor(mesocycles, meso) : null;
 
@@ -187,7 +201,7 @@ export function DayColumn({
   const hourHeight = Math.max(timelineHeight / 24, 20);
   const totalHeight = hourHeight * 24;
   const minutesToPx = (minutes) => (minutes / 60) * hourHeight;
-  const gutter = isMobile ? GUTTER_WIDTH_MOBILE : GUTTER_WIDTH;
+  const gutter = isCompact ? 0 : isNarrow ? 16 : isMobile ? GUTTER_WIDTH_MOBILE : GUTTER_WIDTH;
 
   const noteAreaStyle = {
     width: "100%",
@@ -222,73 +236,65 @@ export function DayColumn({
       <div
         style={{
           ...styles.dayHeader,
-          flexDirection: "row",
-          alignItems: "center",
+          flexDirection: isCompact ? "column" : "row",
+          alignItems: isCompact ? "center" : "center",
           justifyContent: "space-between",
-          padding: isMobile ? "8px 12px 6px" : "8px 8px 6px",
+          padding: isCompact ? "4px 2px 3px" : isNarrow ? "5px 4px 4px" : "8px 8px 6px",
           marginBottom: 0,
+          gap: isCompact ? 1 : 0,
         }}
       >
-        <div>
-          <span style={{ ...styles.dayName, ...(isToday ? styles.dayNameToday : {}), fontSize: isMobile ? 13 : undefined }}>
-            {dayLabel}
+        <div style={{ display: "flex", gap: isCompact ? 0 : 4, flexDirection: isCompact ? "column" : "row", alignItems: isCompact ? "center" : "baseline" }}>
+          <span style={{ ...styles.dayName, ...(isToday ? styles.dayNameToday : {}), fontSize: sz.dayName }}>
+            {isCompact ? dayLabel.slice(0, 3) : dayLabel}
           </span>
-          <span style={{ ...styles.dayDate, marginLeft: 5, fontSize: isMobile ? 11 : undefined }}>{dateLabel}</span>
+          {sz.dayDate > 0 && <span style={{ ...styles.dayDate, fontSize: sz.dayDate }}>{dateLabel}</span>}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          {hasCreatine && (
-            <span
-              style={{ fontSize: 7, color: isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", lineHeight: 1 }}
-              title="Créatine"
-            >C</span>
-          )}
-          {totalCharge > 0 && (
-            <span style={{ ...styles.dayCharge, color: getChargeColor(totalCharge) }}>
-              ⚡{totalCharge}
-            </span>
-          )}
-        </div>
+        {totalCharge > 0 && (
+          <span style={{ ...styles.dayCharge, color: getChargeColor(totalCharge), fontSize: sz.charge }}>
+            ⚡{totalCharge}
+          </span>
+        )}
       </div>
 
-      {/* ── Journal ── */}
-      <div style={{ padding: isMobile ? "0 10px" : "0 6px" }}>
-        <JournalButton logWarning={logWarning} isToday={isToday} isMobile={isMobile} isDark={isDark} onOpenLog={onOpenLog} />
-      </div>
+      {/* ── Journal (hidden on very narrow columns) ── */}
+      {!isCompact && (
+        <div style={{ padding: isNarrow ? "0 2px" : "0 6px" }}>
+          <JournalButton logWarning={logWarning} isToday={isToday} isMobile={isMobile} isDark={isDark} onOpenLog={onOpenLog} />
+        </div>
+      )}
 
       {/* ── Séances sans heure (compact, au-dessus de la timeline) ── */}
       {(untimedSessions.length > 0 || (quickSessions || []).length > 0) && (
-        <div style={{ padding: isMobile ? "0 10px 4px" : "0 6px 4px", display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ padding: isCompact ? "0 1px 2px" : isNarrow ? "0 2px 3px" : "0 6px 4px", display: "flex", flexDirection: "column", gap: 2 }}>
           {untimedSessions.map((s) => (
             <div
               key={s._origIdx}
               style={{
                 background: isDark ? "#1e231f" : "#f0ece4",
                 border: `1px solid ${getChargeColor(s.charge)}33`,
-                borderLeft: `3px solid ${getChargeColor(s.charge)}`,
-                borderRadius: 4,
-                padding: "3px 6px",
+                borderLeft: `2px solid ${getChargeColor(s.charge)}`,
+                borderRadius: 3,
+                padding: isCompact ? "1px 2px" : "3px 6px",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: 4,
+                gap: 2,
               }}
               onClick={() => onOpenSession(s._origIdx)}
             >
               <span style={{
-                fontSize: isMobile ? 11 : 9, fontWeight: 600,
+                fontSize: sz.sessionTitle, fontWeight: 600,
                 color: isDark ? "#c8c4be" : "#3a3028",
                 flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
                 {s.title || s.name}
               </span>
-              <span style={{ fontSize: isMobile ? 10 : 9, color: getChargeColor(s.charge), fontWeight: 700 }}>
-                ⚡{s.charge}
-              </span>
-              <button
-                style={{ ...styles.actionBtn, padding: "0 3px", fontSize: 9 }}
-                title="Supprimer"
-                onClick={(e) => { e.stopPropagation(); setPendingDeleteIdx(s._origIdx); }}
-              >×</button>
+              {!isCompact && (
+                <span style={{ fontSize: sz.charge, color: getChargeColor(s.charge), fontWeight: 700 }}>
+                  ⚡{s.charge}
+                </span>
+              )}
             </div>
           ))}
           {(quickSessions || []).map((qs, qi) => (
@@ -296,7 +302,8 @@ export function DayColumn({
               key={qs.id || qi}
               qs={qs}
               isDark={isDark}
-              isMobile={isMobile}
+              isCompact={isCompact}
+              isNarrow={isNarrow}
               onClick={() => onOpenQuickSession?.(qs)}
               onDelete={() => onRemoveQuickSession?.(qs.id)}
             />
@@ -334,19 +341,19 @@ export function DayColumn({
                 pointerEvents: "none",
               }}
             >
-              <span style={{
-                fontSize: isMobile ? 7 : 8,
+              {gutter > 0 && <span style={{
+                fontSize: sz.hourLabel,
                 color: isDark ? "#3a4040" : "#bcb8b0",
                 width: gutter,
                 textAlign: "right",
-                paddingRight: isMobile ? 3 : 5,
+                paddingRight: isNarrow ? 2 : 5,
                 lineHeight: 1,
                 flexShrink: 0,
                 userSelect: "none",
                 marginTop: -1,
               }}>
-                {`${h.toString().padStart(2, "0")}h`}
-              </span>
+                {isCompact ? h : `${h.toString().padStart(2, "0")}h`}
+              </span>}
               <div style={{
                 flex: 1,
                 borderTop: h % 6 === 0
@@ -431,34 +438,34 @@ export function DayColumn({
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 2, flex: 1, minHeight: 0 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {/* Heure */}
-                    {!isShort && (
+                    {!isShort && !isCompact && (
                       <span style={{
-                        fontSize: isMobile ? 9 : 8,
+                        fontSize: sz.sessionTime,
                         color: isDark ? "#5a7860" : "#7a9a80",
                         fontWeight: 600,
                         display: "block",
                         lineHeight: 1.3,
                       }}>
-                        {s.startTime}{s.endTime ? ` → ${s.endTime}` : ""}
+                        {s.startTime}{!isNarrow && s.endTime ? ` → ${s.endTime}` : ""}
                       </span>
                     )}
                     {/* Titre */}
                     <span style={{
-                      fontSize: isMobile ? 11 : (isShort ? 9 : 10),
+                      fontSize: isShort ? Math.max(sz.sessionTitle - 1, 6) : sz.sessionTitle,
                       fontWeight: 600,
                       color: isDark ? "#c8c4be" : "#3a3028",
                       display: "block",
-                      whiteSpace: isShort ? "nowrap" : "normal",
+                      whiteSpace: "nowrap",
                       overflow: "hidden",
-                      textOverflow: isShort ? "ellipsis" : "clip",
+                      textOverflow: "ellipsis",
                       lineHeight: 1.3,
                     }}>
                       {s.title || s.name}
                     </span>
                     {/* Blocs */}
-                    {!isShort && s.blocks && s.blocks.length > 0 && (
+                    {!isShort && !isNarrow && s.blocks && s.blocks.length > 0 && (
                       <div style={{ display: "flex", gap: 2, flexWrap: "wrap", marginTop: 2 }}>
-                        {s.blocks.slice(0, isMobile ? 4 : 3).map((bl, bi) => {
+                        {s.blocks.slice(0, 3).map((bl, bi) => {
                           const cfg = BLOCK_TYPES[bl.type];
                           if (!cfg) return null;
                           return (
@@ -482,22 +489,16 @@ export function DayColumn({
                   </div>
 
                   {/* Charge + bouton supprimer */}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, flexShrink: 0 }}>
-                    <span style={{ fontSize: isMobile ? 10 : 9, color: getChargeColor(s.charge), fontWeight: 700, lineHeight: 1.2 }}>
-                      ⚡{s.charge}
-                    </span>
-                    {s.feedback && (
-                      <span style={styles.feedbackDot} title="Feedback">{s.feedback.done ? "☑" : "☐"}</span>
-                    )}
-                    {pendingSuggestionsIds?.has(s.id) && (
-                      <span style={{ fontSize: 8, background: "#f9731622", color: "#f97316", border: "1px solid #f9731655", borderRadius: 6, padding: "0 3px" }}>→</span>
-                    )}
-                    <button
-                      style={{ ...styles.actionBtn, padding: "1px 3px", fontSize: 9, marginTop: "auto" }}
-                      title="Supprimer"
-                      onClick={(e) => { e.stopPropagation(); setPendingDeleteIdx(s._origIdx); }}
-                    >×</button>
-                  </div>
+                  {!isCompact && (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, flexShrink: 0 }}>
+                      <span style={{ fontSize: sz.charge, color: getChargeColor(s.charge), fontWeight: 700, lineHeight: 1.2 }}>
+                        ⚡{s.charge}
+                      </span>
+                      {!isNarrow && s.feedback && (
+                        <span style={styles.feedbackDot} title="Feedback">{s.feedback.done ? "☑" : "☐"}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -505,9 +506,9 @@ export function DayColumn({
         </div>
       </div>
 
-      {/* ── Pied : note + bouton ajouter ── */}
-      <div style={{ padding: isMobile ? "4px 10px 6px" : "4px 6px 6px", flexShrink: 0, borderTop: `1px solid ${isDark ? "#1e221e" : "#e5e0da"}` }}>
-        {!isMobile && (
+      {/* ── Pied : bouton ajouter ── */}
+      <div style={{ padding: isCompact ? "2px 1px 3px" : isNarrow ? "3px 2px 4px" : "4px 6px 6px", flexShrink: 0, borderTop: `1px solid ${isDark ? "#1e221e" : "#e5e0da"}` }}>
+        {!isNarrow && !isCompact && (
           <div style={{ marginBottom: 4 }}>
             {noteOpen ? (
               <textarea
@@ -545,9 +546,9 @@ export function DayColumn({
             )}
           </div>
         )}
-        <button style={{ ...styles.addBtn, fontSize: isMobile ? 12 : undefined }} onClick={onAddSession}>
-          <span style={styles.addBtnIcon}>+</span>
-          <span style={styles.addBtnLabel}>Séance</span>
+        <button style={{ ...styles.addBtn, fontSize: sz.addBtn, padding: isCompact ? "2px 0" : undefined }} onClick={onAddSession}>
+          <span style={{ ...styles.addBtnIcon, fontSize: sz.addBtn }}>+</span>
+          {!isCompact && <span style={{ ...styles.addBtnLabel, fontSize: sz.addBtn }}>Séance</span>}
         </button>
       </div>
 
@@ -564,8 +565,9 @@ export function DayColumn({
 }
 
 // ─── CARTE SÉANCE RAPIDE ────────────────────────────────────────────────────
-function QuickSessionCard({ qs, isDark, isMobile, onClick, onDelete }) {
+function QuickSessionCard({ qs, isDark, isCompact, isNarrow, onClick, onDelete }) {
   const accent = qs.color || "#60a5fa";
+  const titleSize = isCompact ? 7 : isNarrow ? 8 : 9;
   return (
     <div
       style={{
@@ -573,15 +575,15 @@ function QuickSessionCard({ qs, isDark, isMobile, onClick, onDelete }) {
         border: `1px solid ${accent}55`,
         borderLeft: `3px solid ${accent}`,
         borderRadius: 4,
-        padding: "3px 6px",
+        padding: isCompact ? "2px 3px" : "3px 6px",
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
-        gap: 4,
+        gap: isCompact ? 2 : 4,
       }}
       onClick={onClick}
     >
-      {qs.isObjective && (
+      {qs.isObjective && !isCompact && (
         <span style={{
           fontSize: 7, fontWeight: 700, letterSpacing: "0.05em",
           color: accent, background: accent + "22",
@@ -589,22 +591,24 @@ function QuickSessionCard({ qs, isDark, isMobile, onClick, onDelete }) {
         }}>OBJ</span>
       )}
       <span style={{
-        fontSize: isMobile ? 11 : 9, fontWeight: 600,
+        fontSize: titleSize, fontWeight: 600,
         color: isDark ? "#c8c4be" : "#3a3028",
         flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>
         {qs.name}
       </span>
-      {qs.startTime && (
-        <span style={{ fontSize: isMobile ? 10 : 9, color: accent, fontWeight: 600 }}>
+      {qs.startTime && !isCompact && (
+        <span style={{ fontSize: isNarrow ? 7 : 9, color: accent, fontWeight: 600 }}>
           {qs.startTime}
         </span>
       )}
-      <button
-        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: isDark ? "#5a5a5a" : "#aaa", padding: "0 2px", lineHeight: 1 }}
-        title="Supprimer"
-        onClick={(e) => { e.stopPropagation(); onDelete(); }}
-      >×</button>
+      {!isCompact && (
+        <button
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: isDark ? "#5a5a5a" : "#aaa", padding: "0 2px", lineHeight: 1 }}
+          title="Supprimer"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        >×</button>
+      )}
     </div>
   );
 }

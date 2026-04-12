@@ -11,3 +11,15 @@ export function useWindowWidth() {
   }, []);
   return width;
 }
+
+export function useWindowHeight() {
+  const [height, setHeight] = useState(() =>
+    typeof window !== "undefined" ? window.innerHeight : 900
+  );
+  useEffect(() => {
+    const handler = () => setHeight(window.innerHeight);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return height;
+}
