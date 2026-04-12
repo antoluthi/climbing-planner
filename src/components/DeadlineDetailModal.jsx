@@ -4,7 +4,7 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 // ─── DEADLINE DETAIL MODAL ────────────────────────────────────────────────────
 
 const TYPE_LABELS = { competition: "Compétition", sortie: "Sortie", objectif: "Objectif" };
-const PRIORITY_ICON = { A: "🏆", B: "◆", C: "○" };
+const PRIORITY_ICON = { A: "A", B: "B", C: "C" };
 const PRIORITY_LABEL = { A: "Priorité A — Principale", B: "Priorité B — Secondaire", C: "Priorité C — Indicatif" };
 
 function fmtDate(iso) {

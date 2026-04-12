@@ -158,7 +158,7 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onS
             </span>
             {session.estimatedTime && <span style={styles.detailMetaChip}>{session.estimatedTime} min</span>}
             {session.location      && <span style={styles.detailMetaChip}>{session.location}</span>}
-            {session.address       && <span style={styles.detailMetaChip}>📍 {session.address}</span>}
+            {session.address       && <span style={styles.detailMetaChip}>{session.address}</span>}
             {session.minRecovery   && <span style={styles.detailMetaChip}>{session.minRecovery}h récup</span>}
             {mesoLabel && <span style={{ ...styles.sessionCardMeso, background: mesoColor + "22", color: mesoColor, border: `1px solid ${mesoColor}55` }}>{mesoLabel}</span>}
             {weekMeta?.microcycle && <span style={styles.detailMetaChip}>{weekMeta.microcycle}</span>}

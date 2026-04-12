@@ -33,6 +33,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onClose }) {
   const [startTime, setStartTime] = useState(initial?.startTime || "09:00");
   const [duration, setDuration] = useState(initial?.duration ?? 90);
   const [content, setContent]   = useState(initial?.content || "");
+  const [isObjective, setIsObjective] = useState(initial?.isObjective ?? false);
 
   useEffect(() => {
     const h = e => { if (e.key === "Escape") onClose(); };
@@ -56,6 +57,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onClose }) {
       duration: allDay ? undefined : Number(duration) || undefined,
       content: content.trim() || undefined,
       isQuick: true,
+      isObjective,
     });
     onClose();
   };
@@ -209,6 +211,27 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onClose }) {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Objectif */}
+          <div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <div
+                onClick={() => setIsObjective(v => !v)}
+                style={{
+                  width: 34, height: 18, borderRadius: 9,
+                  background: isObjective ? color : (isDark ? "#2a3028" : "#ccc"),
+                  position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
+                }}
+              >
+                <div style={{
+                  position: "absolute", top: 2, left: isObjective ? 16 : 2,
+                  width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                  transition: "left 0.2s",
+                }} />
+              </div>
+              <span style={{ fontSize: 12, color: isObjective ? textMain : textMuted, fontWeight: isObjective ? 600 : 400 }}>Objectif</span>
+            </label>
           </div>
 
           {/* Contenu */}

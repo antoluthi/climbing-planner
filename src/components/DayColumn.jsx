@@ -245,7 +245,7 @@ export function DayColumn({
         </div>
 
         <button style={{ ...styles.addBtn, marginTop: 0 }} onClick={onAddSession}>
-          <span style={styles.addBtnIcon}>➕</span>
+          <span style={styles.addBtnIcon}>+</span>
           <span style={styles.addBtnLabel}>Séance</span>
         </button>
 
@@ -369,7 +369,7 @@ export function DayColumn({
           overflowX: "hidden",
           scrollbarWidth: "none",
           position: "relative",
-          minHeight: 400,
+          minHeight: 0,
         }}
       >
         <div style={{ position: "relative", height: TOTAL_HEIGHT }}>
@@ -598,7 +598,7 @@ export function DayColumn({
           )}
         </div>
         <button style={styles.addBtn} onClick={onAddSession}>
-          <span style={styles.addBtnIcon}>➕</span>
+          <span style={styles.addBtnIcon}>+</span>
           <span style={styles.addBtnLabel}>Séance</span>
         </button>
       </div>
@@ -708,6 +708,13 @@ function QuickSessionCard({ qs, isDark, onClick, onDelete }) {
       }}
       onClick={onClick}
     >
+      {qs.isObjective && (
+        <span style={{
+          fontSize: 7, fontWeight: 700, letterSpacing: "0.05em",
+          color: accent, background: accent + "22",
+          borderRadius: 3, padding: "1px 3px", lineHeight: 1, flexShrink: 0,
+        }}>OBJ</span>
+      )}
       <span style={{
         fontSize: 9, fontWeight: 600,
         color: isDark ? "#c8c4be" : "#3a3028",

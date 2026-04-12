@@ -1342,7 +1342,43 @@ export function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, o
             )}
           </div>
 
-        {/* ── Échéances / Objectifs ── */}
+        {/* ── Objectifs ── */}
+        {(() => {
+          const allObj = (data.quickSessions || []).filter(qs => qs.isObjective);
+          const upcoming = allObj.filter(o => (o.endDate || o.startDate) >= today).sort((a, b) => a.startDate.localeCompare(b.startDate));
+          if (upcoming.length === 0) return null;
+          return (
+            <div style={{ marginTop: 24 }}>
+              <span style={{ ...sectionLabel }}>Objectifs</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {upcoming.map(o => {
+                  const daysUntil = Math.ceil((new Date(o.startDate + "T00:00:00") - new Date(today + "T12:00:00")) / 864e5);
+                  const c = o.color || "#f59e0b";
+                  return (
+                    <div key={o.id} style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      background: c + (isDark ? "15" : "10"),
+                      border: `1px solid ${c}44`,
+                      borderLeft: `4px solid ${c}`,
+                      borderRadius: 7, padding: "8px 12px",
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: textMain, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.name}</div>
+                        <div style={{ fontSize: 11, color: c, marginTop: 2 }}>
+                          {new Date(o.startDate + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}
+                          {daysUntil > 0 ? ` — dans ${daysUntil} jour${daysUntil > 1 ? "s" : ""}` : daysUntil === 0 ? " — aujourd'hui" : ""}
+                        </div>
+                      </div>
+                      {o.content && <span style={{ fontSize: 10, color: textMuted, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.content}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Échéances ── */}
         {((deadlines || []).length > 0 || onNewDeadline) && (
           <div style={{ marginTop: 24 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>

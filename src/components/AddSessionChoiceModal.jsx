@@ -63,7 +63,7 @@ export function AddSessionChoiceModal({ onPrefaite, onPersonnalisee, onClose }) 
             onMouseEnter={e => { e.currentTarget.style.background = cardHover; e.currentTarget.style.borderColor = accent + "66"; }}
             onMouseLeave={e => { e.currentTarget.style.background = cardBg; e.currentTarget.style.borderColor = cardBorder; }}
           >
-            <span style={{ fontSize: 22 }}>📋</span>
+            <span style={{ fontSize: 16, fontWeight: 700, opacity: 0.7 }}>+</span>
             <span style={{ fontSize: 13, fontWeight: 700, color: textMain }}>Séance préfaite</span>
             <span style={{ fontSize: 11, color: textMuted, lineHeight: 1.5 }}>
               Choisir dans le catalogue de séances et de blocs
@@ -77,7 +77,7 @@ export function AddSessionChoiceModal({ onPrefaite, onPersonnalisee, onClose }) 
             onMouseEnter={e => { e.currentTarget.style.background = cardHover; e.currentTarget.style.borderColor = accent + "66"; }}
             onMouseLeave={e => { e.currentTarget.style.background = cardBg; e.currentTarget.style.borderColor = cardBorder; }}
           >
-            <span style={{ fontSize: 22 }}>✏️</span>
+            <span style={{ fontSize: 16, fontWeight: 700, opacity: 0.7 }}>~</span>
             <span style={{ fontSize: 13, fontWeight: 700, color: textMain }}>Personnalisée</span>
             <span style={{ fontSize: 11, color: textMuted, lineHeight: 1.5 }}>
               Événement libre — nom, dates, heure, couleur, contenu

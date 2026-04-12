@@ -5,7 +5,7 @@ import { CyclesTimeline } from "./CyclesTimeline.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { CustomCycleModal } from "./CustomCycleModal.jsx";
 
-export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro, customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle, locked, onSetLocked, canEdit }) {
+export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro, customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle, locked, onSetLocked, canEdit, objectives }) {
   const { styles, isDark } = useThemeCtx();
   const [pendingDelete, setPendingDelete] = useState(null);
   const [showCustomCycleForm, setShowCustomCycleForm] = useState(false);
@@ -17,6 +17,7 @@ export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, 
       <CyclesTimeline
         mesocycles={mesocycles}
         customCycles={customCycles || []}
+        objectives={objectives}
         onEdit={canEdit === false ? null : () => onSetLocked(false)}
       />
     );

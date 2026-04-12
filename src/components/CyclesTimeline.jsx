@@ -4,7 +4,7 @@ import { addDays } from "../lib/helpers.js";
 
 // ─── CYCLES TIMELINE ─────────────────────────────────────────────────────────
 
-export function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
+export function CyclesTimeline({ mesocycles, customCycles, objectives, onEdit }) {
   const { styles, isDark } = useThemeCtx();
   const [popover, setPopover] = useState(null); // { meso, micro, x, y }
 
@@ -217,6 +217,79 @@ export function CyclesTimeline({ mesocycles, customCycles, onEdit }) {
                       {fitLabel(ccBarText, ccBarPx) || ""}
                     </span>
                   </div>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      {/* Objectifs */}
+      {(objectives || []).length > 0 && (
+        <>
+          <div style={styles.timelineSectionSep}>Objectifs</div>
+          {objectives.map(obj => {
+            const objStart = obj.startDate ? new Date(obj.startDate + "T00:00:00") : null;
+            const objEnd = obj.endDate ? new Date(obj.endDate + "T00:00:00") : objStart;
+            if (!objStart) return null;
+            // Position relative to the global timeline span
+            const globalStart = chainedMesos[0]?.computedStart;
+            const globalEnd = chainedMesos[chainedMesos.length - 1]?.computedEnd;
+            if (!globalStart || !globalEnd) {
+              // No meso context — show as simple row
+              const fmtObj = objStart.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+              return (
+                <div key={obj.id} style={styles.timelineCustomRow}>
+                  <div style={styles.timelineLabelCol}>
+                    <div style={styles.timelineLabelName}>
+                      <div style={{ width: 9, height: 9, borderRadius: "50%", background: obj.color || "#f59e0b", flexShrink: 0, border: `2px solid ${obj.color || "#f59e0b"}` }} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{obj.name}</span>
+                    </div>
+                    <div style={styles.timelineLabelMeta}>{fmtObj}</div>
+                  </div>
+                  <div style={styles.timelineBarArea}>
+                    <div style={{ ...styles.timelineCustomBar, width: "8%", background: (obj.color || "#f59e0b") + "25", borderColor: (obj.color || "#f59e0b") + "60" }}>
+                      <span style={{ fontSize: 9, color: obj.color || "#f59e0b", fontWeight: 600 }}>{obj.name.slice(0, 8)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            const msPerDay = 864e5;
+            const totalDays = Math.max(1, (globalEnd - globalStart) / msPerDay);
+            const leftPct = Math.max(0, Math.min(100, ((objStart - globalStart) / msPerDay) / totalDays * 100));
+            const widthPct = obj.endDate ? Math.max(2, ((objEnd - objStart) / msPerDay) / totalDays * 100) : 0;
+            const fmtObj = objStart.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+            return (
+              <div key={obj.id} style={styles.timelineCustomRow}>
+                <div style={styles.timelineLabelCol}>
+                  <div style={styles.timelineLabelName}>
+                    <div style={{ width: 9, height: 9, borderRadius: "50%", background: obj.color || "#f59e0b", flexShrink: 0, border: `2px solid ${obj.color || "#f59e0b"}` }} />
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{obj.name}</span>
+                  </div>
+                  <div style={styles.timelineLabelMeta}>{fmtObj}</div>
+                </div>
+                <div style={{ ...styles.timelineBarArea, position: "relative" }}>
+                  {widthPct > 0 ? (
+                    <div style={{
+                      position: "absolute", left: `${leftPct}%`, width: `${widthPct}%`,
+                      height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                      background: (obj.color || "#f59e0b") + "18",
+                      border: `1px solid ${(obj.color || "#f59e0b")}44`,
+                      borderRadius: 4,
+                    }}>
+                      <span style={{ fontSize: 9, color: obj.color || "#f59e0b", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {obj.name}
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{
+                      position: "absolute", left: `${leftPct}%`, top: "50%", transform: "translate(-50%, -50%)",
+                      width: 10, height: 10, borderRadius: "50%",
+                      background: obj.color || "#f59e0b", border: `2px solid ${isDark ? "#191e1b" : "#f0ebe2"}`,
+                      zIndex: 3,
+                    }} />
+                  )}
                 </div>
               </div>
             );

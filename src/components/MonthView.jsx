@@ -5,7 +5,7 @@ import { addDays, getMonthWeeks, getDaySessions } from "../lib/helpers.js";
 
 // ─── VUE MOIS ─────────────────────────────────────────────────────────────────
 
-export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles }) {
+export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycles, onSessionClick, creatine, customCycles, objectives }) {
   const { styles, isDark } = useThemeCtx();
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -50,6 +50,11 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
             const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
             const hasCreatine = inMonth && !!creatine?.[dateISO];
             const activeCycles = inMonth ? getCustomCyclesForDate(customCycles, date) : [];
+            const dayObjectives = inMonth ? (objectives || []).filter(o => {
+              if (o.startDate === dateISO) return true;
+              if (o.endDate && o.startDate <= dateISO && o.endDate >= dateISO) return true;
+              return false;
+            }) : [];
 
             return (
               <div
@@ -113,6 +118,26 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                   </div>
                 )}
 
+                {dayObjectives.length > 0 && !isMobile && (
+                  <div style={{ display: "flex", gap: 2, marginTop: 2 }}>
+                    {dayObjectives.slice(0, 2).map(o => (
+                      <div key={o.id} style={{
+                        fontSize: 8, fontWeight: 700, color: o.color || "#f59e0b",
+                        background: (o.color || "#f59e0b") + "18",
+                        border: `1px solid ${(o.color || "#f59e0b")}33`,
+                        borderRadius: 3, padding: "0 3px", lineHeight: "14px",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%",
+                      }}>{o.name.length > 10 ? o.name.slice(0, 9) + "…" : o.name}</div>
+                    ))}
+                  </div>
+                )}
+                {dayObjectives.length > 0 && isMobile && (
+                  <div style={{ display: "flex", gap: 2, justifyContent: "center", marginTop: 1 }}>
+                    {dayObjectives.slice(0, 2).map(o => (
+                      <div key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: o.color || "#f59e0b", border: `1px solid ${(o.color || "#f59e0b")}88` }} />
+                    ))}
+                  </div>
+                )}
                 {hasCreatine && (
                   <span style={{ position: "absolute", top: 2, right: 3, fontSize: 6, color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)", lineHeight: 1 }} title="Créatine">▲</span>
                 )}

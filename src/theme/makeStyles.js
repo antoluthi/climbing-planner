@@ -160,12 +160,12 @@ export function makeStyles(isDark) {
 
     grid: {
       display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridTemplateRows: "1fr",
-      gap: 1, flex: 1, background: t.gridGap, position: "relative", zIndex: 1, minHeight: 420,
+      gap: 1, flex: 1, background: t.gridGap, position: "relative", zIndex: 1, minHeight: 0, overflow: "hidden",
     },
     gridMobile: { display: "flex", flexDirection: "column", background: t.gridGap, gap: 1, position: "relative", zIndex: 1 },
     dayCol: {
       background: t.bg, display: "flex", flexDirection: "column",
-      padding: "10px 8px", minHeight: 0, position: "relative", transition: "background 0.15s",
+      padding: "10px 8px", minHeight: 0, overflow: "hidden", position: "relative", transition: "background 0.15s",
     },
     dayColMobile: { minHeight: "auto", padding: "10px 16px", borderBottom: `1px solid ${t.gridGap}` },
     dayColToday: { background: t.todayBg, borderTop: `2px solid ${t.accent}` },

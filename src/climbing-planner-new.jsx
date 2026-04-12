@@ -684,7 +684,7 @@ export default function ClimbingPlanner() {
 
   return (
     <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: data.mesocycles || [] }}>
-    <div style={{ ...styles.app, overflowY: isMobile ? "auto" : "hidden", overflowX: "hidden" }}>
+    <div style={{ ...styles.app, height: (!isMobile && viewMode === "week") ? "100vh" : undefined, minHeight: "100vh", overflowY: (!isMobile && viewMode === "week") ? "hidden" : "auto", overflowX: "hidden" }}>
       <div style={styles.grain} />
 
       {/* ── HEADER MOBILE ── */}
@@ -856,8 +856,7 @@ export default function ClimbingPlanner() {
 
       {/* ── Vue semaine ── */}
       {viewMode === "week" && (
-        <>
-          {null}
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
           <div style={isMobile ? styles.gridMobile : styles.grid}>
             {DAYS.map((day, i) => {
               const date = addDays(monday, i);
@@ -895,23 +894,7 @@ export default function ClimbingPlanner() {
               );
             })}
           </div>
-          {!isMobile && (
-            <div style={styles.chargeBar}>
-              {DAYS.map((day, i) => {
-                const dayCharge = (weekSessions[i] || []).reduce((a, s) => a + s.charge, 0);
-                const pct = Math.min(dayCharge / 80 * 100, 100);
-                return (
-                  <div key={i} style={styles.chargeBarCol}>
-                    <div style={styles.chargeBarTrack}>
-                      <div style={{ ...styles.chargeBarFill, height: `${pct}%`, background: getChargeColor(dayCharge) }} />
-                    </div>
-                    <span style={{ ...styles.chargeBarLabel, color: dayCharge > 0 ? getChargeColor(dayCharge) : styles.chargeBarLabelEmpty }}>{dayCharge || ""}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
+        </div>
       )}
 
       {/* ── Vue mois ── */}
@@ -930,6 +913,7 @@ export default function ClimbingPlanner() {
             const di = dow === 0 ? 6 : dow - 1;
             openSessionModal(wKey2, di, si);
           }}
+          objectives={(data.quickSessions || []).filter(qs => qs.isObjective)}
         />
       )}
 
@@ -977,6 +961,7 @@ export default function ClimbingPlanner() {
           locked={!!data.cyclesLocked}
           onSetLocked={val => setData(d => ({ ...d, cyclesLocked: val }))}
           canEdit={(data.profile?.role ?? null) !== "athlete"}
+          objectives={(data.quickSessions || []).filter(qs => qs.isObjective)}
         />
       )}
 
