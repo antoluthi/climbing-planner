@@ -45,8 +45,6 @@ import { AccueilView } from "./components/AccueilView.jsx";
 import { PublicPlanView } from "./components/PublicPlanView.jsx";
 import { AddSessionChoiceModal } from "./components/AddSessionChoiceModal.jsx";
 import { QuickSessionModal } from "./components/QuickSessionModal.jsx";
-import { DeadlineModal } from "./components/DeadlineModal.jsx";
-import { DeadlineDetailModal } from "./components/DeadlineDetailModal.jsx";
 
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
 
@@ -69,8 +67,6 @@ export default function ClimbingPlanner() {
   const [showPublicPlan, setShowPublicPlan] = useState(false);
   const [addChoiceDay, setAddChoiceDay] = useState(null);
   const [quickSessionForm, setQuickSessionForm] = useState(null);
-  const [deadlineModal, setDeadlineModal] = useState(null);
-  const [deadlineDetailModal, setDeadlineDetailModal] = useState(null);
   const [mobileDayIdx, setMobileDayIdx] = useState(() => {
     const dow = new Date().getDay();
     return dow === 0 ? 6 : dow - 1;
@@ -564,10 +560,6 @@ export default function ClimbingPlanner() {
   const editQuickSession = qs => setData(d => ({ ...d, quickSessions: (d.quickSessions || []).map(q => q.id === qs.id ? qs : q) }));
   const removeQuickSession = id => setData(d => ({ ...d, quickSessions: (d.quickSessions || []).filter(q => q.id !== id) }));
 
-  // ── Deadlines CRUD ──
-  const addDeadline = dl => setData(d => ({ ...d, deadlines: [...(d.deadlines || []), dl] }));
-  const editDeadline = dl => setData(d => ({ ...d, deadlines: (d.deadlines || []).map(x => x.id === dl.id ? dl : x) }));
-  const removeDeadline = id => setData(d => ({ ...d, deadlines: (d.deadlines || []).filter(x => x.id !== id) }));
 
   const isCalendarMode = ["week", "month", "year"].includes(viewMode);
   const isCoach = data.profile?.role === "coach";
@@ -852,10 +844,6 @@ export default function ClimbingPlanner() {
             if (dayMeals.length === 0) delete nutrition[dateISO]; else nutrition[dateISO] = dayMeals;
             return { ...d, nutrition };
           })}
-          deadlines={data.deadlines || []}
-          onOpenDeadline={dl => setDeadlineDetailModal(dl)}
-          onNewDeadline={() => setDeadlineModal({})}
-          onRemoveDeadline={id => removeDeadline(id)}
         />
       )}
 
@@ -1213,23 +1201,6 @@ export default function ClimbingPlanner() {
         />
       )}
 
-      {/* ── DeadlineModal ── */}
-      {deadlineModal && (
-        <DeadlineModal
-          initial={deadlineModal.initial}
-          onSave={dl => { deadlineModal.initial ? editDeadline(dl) : addDeadline(dl); setDeadlineModal(null); }}
-          onClose={() => setDeadlineModal(null)}
-        />
-      )}
-
-      {/* ── DeadlineDetailModal ── */}
-      {deadlineDetailModal && (
-        <DeadlineDetailModal
-          deadline={deadlineDetailModal}
-          onClose={() => setDeadlineDetailModal(null)}
-          onEdit={dl => { setDeadlineModal({ initial: dl }); setDeadlineDetailModal(null); }}
-        />
-      )}
     </div>
     </ThemeContext.Provider>
   );
