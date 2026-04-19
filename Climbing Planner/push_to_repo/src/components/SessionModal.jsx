@@ -5,17 +5,15 @@ import { getChargeColor } from "../lib/charge.js";
 import { getMondayOf, addDays, weekKey } from "../lib/helpers.js";
 import { RichText } from "./RichText.jsx";
 import { SuspensionInfoCard } from "./SuspensionInfoCard.jsx";
-import { ConfirmModal } from "./ConfirmModal.jsx";
 
 // ─── MODAL: SESSION UNIFIÉE (Séance + Ressenti) ───────────────────────────────
 
-export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onDelete, onSave, dbBlocks,
+export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onSave, dbBlocks,
   role, smWeekKey, smDayIndex, smSessionIndex,
   onMoveSession, onUpdateStartTime, onSuggestMove, moveSuggestions,
   onAcceptSuggestion, onRejectSuggestion }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
   const [tab, setTab] = useState("session");
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // ── Déplacer tab state ──
   const [newStartTime, setNewStartTime] = useState(session.startTime || "");
@@ -142,18 +140,6 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onD
                 }}
               >✎</button>
             )}
-            {!isAthleteUser && onDelete && (
-              <button
-                title="Supprimer la séance"
-                onClick={() => setConfirmDelete(true)}
-                style={{
-                  background: "none", border: `1px solid ${isDark ? "#4a2a2a" : "#e0c0c0"}`,
-                  borderRadius: 5, cursor: "pointer", color: isDark ? "#c87070" : "#b05050",
-                  fontSize: 13, padding: "2px 7px", fontFamily: "inherit", lineHeight: 1.4,
-                  transition: "background 0.15s, color 0.15s",
-                }}
-              >🗑</button>
-            )}
             <button style={styles.closeBtn} onClick={onClose}>✕</button>
           </div>
         </div>
@@ -172,7 +158,7 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onD
             </span>
             {session.estimatedTime && <span style={styles.detailMetaChip}>{session.estimatedTime} min</span>}
             {session.location      && <span style={styles.detailMetaChip}>{session.location}</span>}
-            {session.address       && <span style={styles.detailMetaChip}>{session.address}</span>}
+            {session.address       && <span style={styles.detailMetaChip}>📍 {session.address}</span>}
             {session.minRecovery   && <span style={styles.detailMetaChip}>{session.minRecovery}h récup</span>}
             {mesoLabel && <span style={{ ...styles.sessionCardMeso, background: mesoColor + "22", color: mesoColor, border: `1px solid ${mesoColor}55` }}>{mesoLabel}</span>}
             {weekMeta?.microcycle && <span style={styles.detailMetaChip}>{weekMeta.microcycle}</span>}
@@ -601,14 +587,6 @@ export function SessionModal({ session, dayLabel, weekMeta, onClose, onEdit, onD
           ) : null}
         </div>
       </div>
-      {confirmDelete && (
-        <ConfirmModal
-          title="Supprimer cette séance ?"
-          sub={session.name}
-          onConfirm={() => { onDelete?.(); }}
-          onClose={() => setConfirmDelete(false)}
-        />
-      )}
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { generateId } from "../lib/storage.js";
-import { ConfirmModal } from "./ConfirmModal.jsx";
 
 // ─── QUICK SESSION MODAL ──────────────────────────────────────────────────────
 // Séance rapide : non enregistrée en base, stockée dans data.quickSessions[]
@@ -20,7 +19,7 @@ function addMinutes(timeStr, minutes) {
   return `${fmt2(Math.floor(total / 60) % 24)}:${fmt2(total % 60)}`;
 }
 
-export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onClose }) {
+export function QuickSessionModal({ initial, defaultDate, onSave, onClose }) {
   const { styles, isDark } = useThemeCtx();
 
   const today = defaultDate || new Date().toISOString().slice(0, 10);
@@ -34,8 +33,6 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
   const [startTime, setStartTime] = useState(initial?.startTime || "09:00");
   const [duration, setDuration] = useState(initial?.duration ?? 90);
   const [content, setContent]   = useState(initial?.content || "");
-  const [isObjective, setIsObjective] = useState(initial?.isObjective ?? false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     const h = e => { if (e.key === "Escape") onClose(); };
@@ -59,7 +56,6 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
       duration: allDay ? undefined : Number(duration) || undefined,
       content: content.trim() || undefined,
       isQuick: true,
-      isObjective,
     });
     onClose();
   };
@@ -215,27 +211,6 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
             )}
           </div>
 
-          {/* Objectif */}
-          <div>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <div
-                onClick={() => setIsObjective(v => !v)}
-                style={{
-                  width: 34, height: 18, borderRadius: 9,
-                  background: isObjective ? color : (isDark ? "#2a3028" : "#ccc"),
-                  position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
-                }}
-              >
-                <div style={{
-                  position: "absolute", top: 2, left: isObjective ? 16 : 2,
-                  width: 14, height: 14, borderRadius: "50%", background: "#fff",
-                  transition: "left 0.2s",
-                }} />
-              </div>
-              <span style={{ fontSize: 12, color: isObjective ? textMain : textMuted, fontWeight: isObjective ? 600 : 400 }}>Objectif</span>
-            </label>
-          </div>
-
           {/* Contenu */}
           <div>
             <label style={labelStyle}>Contenu</label>
@@ -250,23 +225,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "10px 18px 14px", display: "flex", justifyContent: "flex-end", gap: 8, borderTop: `1px solid ${inputBorder}`, alignItems: "center" }}>
-          {initial && onDelete && (
-            <button
-              title="Supprimer"
-              onClick={() => setConfirmDelete(true)}
-              style={{
-                marginRight: "auto",
-                background: "none",
-                border: `1px solid ${isDark ? "#4a2a2a" : "#e0c0c0"}`,
-                color: isDark ? "#c87070" : "#b05050",
-                borderRadius: 6, padding: "6px 12px",
-                fontSize: 12, fontFamily: "inherit", cursor: "pointer",
-              }}
-            >
-              Supprimer
-            </button>
-          )}
+        <div style={{ padding: "10px 18px 14px", display: "flex", justifyContent: "flex-end", gap: 8, borderTop: `1px solid ${inputBorder}` }}>
           <button style={styles.confirmCancelBtn} onClick={onClose}>Annuler</button>
           <button
             style={{ ...styles.confirmDeleteBtn, background: canSave ? color : (isDark ? "#3a3028" : "#ccc"), cursor: canSave ? "pointer" : "default", opacity: canSave ? 1 : 0.6 }}
@@ -277,14 +236,6 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
           </button>
         </div>
       </div>
-      {confirmDelete && (
-        <ConfirmModal
-          title="Supprimer cette séance personnalisée ?"
-          sub={name}
-          onConfirm={() => { onDelete?.(initial?.id); onClose(); }}
-          onClose={() => setConfirmDelete(false)}
-        />
-      )}
     </div>
   );
 }

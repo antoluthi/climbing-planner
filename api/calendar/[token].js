@@ -99,6 +99,60 @@ function toICSDate(date) {
   return date.getUTCFullYear() + pad(date.getUTCMonth() + 1) + pad(date.getUTCDate());
 }
 
+function isoDateFrom(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
+function writeEvent(lines, uid, session, date, now, endDateOverride) {
+  const descParts = [];
+  if (session.blockType) descParts.push(session.blockType);
+  if (session.duration) descParts.push(`${session.duration} min`);
+  if (session.charge) descParts.push(`Charge : ${session.charge}`);
+  if (session.description) descParts.push(session.description);
+
+  lines.push("BEGIN:VEVENT");
+  lines.push(`UID:${uid}`);
+  lines.push(`DTSTAMP:${now}`);
+
+  if (session.startTime) {
+    const [h, m] = session.startTime.split(":").map(Number);
+    const startDate = new Date(date);
+    startDate.setUTCHours(h, m, 0, 0);
+    lines.push(`DTSTART:${toICSDateTime(startDate)}`);
+
+    let endDate;
+    if (endDateOverride) {
+      endDate = new Date(endDateOverride);
+      if (session.endTime) {
+        const [eh, em] = session.endTime.split(":").map(Number);
+        endDate.setUTCHours(eh, em, 0, 0);
+      } else {
+        endDate.setUTCHours(h + 1, m, 0, 0);
+      }
+    } else if (session.endTime) {
+      const [eh, em] = session.endTime.split(":").map(Number);
+      endDate = new Date(date);
+      endDate.setUTCHours(eh, em, 0, 0);
+      if (endDate <= startDate) endDate = addDays(endDate, 1);
+    } else if (session.duration) {
+      endDate = new Date(startDate.getTime() + session.duration * 60000);
+    } else {
+      endDate = new Date(startDate.getTime() + 3600000);
+    }
+    lines.push(`DTEND:${toICSDateTime(endDate)}`);
+  } else {
+    lines.push(`DTSTART;VALUE=DATE:${toICSDate(date)}`);
+    const lastDay = endDateOverride || date;
+    lines.push(`DTEND;VALUE=DATE:${toICSDate(addDays(lastDay, 1))}`);
+  }
+
+  lines.push(`SUMMARY:${escapeICS(session.name)}`);
+  if (session.address) lines.push(`LOCATION:${escapeICS(session.address)}`);
+  if (descParts.length) lines.push(`DESCRIPTION:${escapeICS(descParts.join(" · "))}`);
+  lines.push("END:VEVENT");
+}
+
 function generateICS(planData, displayName) {
   const calName = `Planning Escalade${displayName ? " — " + displayName : ""}`;
   const now = toICSDateTimeUTC(new Date());
@@ -112,69 +166,55 @@ function generateICS(planData, displayName) {
     "METHOD:PUBLISH",
   ];
 
+  const seen = new Set();
+  const writeIfNew = (uid, session, date, endDate) => {
+    if (seen.has(uid)) return;
+    seen.add(uid);
+    writeEvent(lines, uid, session, date, now, endDate);
+  };
+
   const weeks = migrateWeekKeys(planData?.weeks || {});
 
   for (const [mondayISO, days] of Object.entries(weeks)) {
     if (!Array.isArray(days)) continue;
-    // mondayISO is "YYYY-MM-DD" (the Monday of the week, local date)
-    // Use noon UTC to avoid any DST/timezone ambiguity on the server
     const monday = new Date(mondayISO + "T12:00:00Z");
 
     days.forEach((daySessions, dayIndex) => {
       if (!Array.isArray(daySessions)) return;
       const date = addDays(monday, dayIndex);
+      const dateISO = isoDateFrom(date);
 
-      daySessions.forEach((session, sessionIndex) => {
+      daySessions.forEach((session) => {
         if (!session?.name) return;
-
-        const uid = `climbing-${mondayISO}-d${dayIndex}-s${sessionIndex}@climbing-planner`;
-
-        const descParts = [];
-        if (session.blockType) descParts.push(session.blockType);
-        if (session.duration) descParts.push(`${session.duration} min`);
-        if (session.charge) descParts.push(`Charge : ${session.charge}`);
-        if (session.description) descParts.push(session.description);
-
-        lines.push("BEGIN:VEVENT");
-        lines.push(`UID:${uid}`);
-        lines.push(`DTSTAMP:${now}`);
-
-        if (session.startTime) {
-          const [h, m] = session.startTime.split(":").map(Number);
-          const startDate = new Date(date);
-          startDate.setUTCHours(h, m, 0, 0);
-          lines.push(`DTSTART:${toICSDateTime(startDate)}`);
-
-          let endDate;
-          if (session.endTime) {
-            const [eh, em] = session.endTime.split(":").map(Number);
-            endDate = new Date(date);
-            endDate.setUTCHours(eh, em, 0, 0);
-            // If end <= start (crosses midnight), add a day
-            if (endDate <= startDate) endDate = addDays(endDate, 1);
-          } else if (session.duration) {
-            endDate = new Date(startDate.getTime() + session.duration * 60000);
-          } else {
-            endDate = new Date(startDate.getTime() + 3600000); // 1h default
-          }
-          lines.push(`DTEND:${toICSDateTime(endDate)}`);
-        } else {
-          // All-day event — DTEND is exclusive (next day)
-          lines.push(`DTSTART;VALUE=DATE:${toICSDate(date)}`);
-          lines.push(`DTEND;VALUE=DATE:${toICSDate(addDays(date, 1))}`);
-        }
-
-        lines.push(`SUMMARY:${escapeICS(session.name)}`);
-        if (session.address) {
-          lines.push(`LOCATION:${escapeICS(session.address)}`);
-        }
-        if (descParts.length) {
-          lines.push(`DESCRIPTION:${escapeICS(descParts.join(" · "))}`);
-        }
-        lines.push("END:VEVENT");
+        const baseId = session.id || `pos-${dayIndex}-${session.name}`;
+        const slot = session.startTime ? `t${session.startTime.replace(":", "")}` : "allday";
+        const uid = `climbing-${dateISO}-${baseId}-${slot}@climbing-planner`;
+        writeIfNew(uid, session, date);
       });
     });
   }
+
+  // Séances personnalisées (quickSessions)
+  const quickSessions = Array.isArray(planData?.quickSessions) ? planData.quickSessions : [];
+  quickSessions.forEach((qs) => {
+    if (!qs?.name || !qs.startDate) return;
+    const startDate = new Date(qs.startDate + "T12:00:00Z");
+    if (isNaN(startDate.getTime())) return;
+    const endDate = qs.endDate && qs.endDate !== qs.startDate
+      ? new Date(qs.endDate + "T12:00:00Z")
+      : null;
+    const uid = `climbing-quick-${qs.id || qs.startDate + "-" + qs.name}@climbing-planner`;
+    const session = {
+      id: qs.id,
+      name: qs.name,
+      startTime: qs.allDay ? null : (qs.startTime || null),
+      endTime: qs.allDay ? null : (qs.endTime || null),
+      duration: qs.allDay ? null : (qs.duration || null),
+      description: qs.content || null,
+      address: qs.location || null,
+    };
+    writeIfNew(uid, session, startDate, endDate && !isNaN(endDate.getTime()) ? endDate : null);
+  });
 
   lines.push("END:VCALENDAR");
   return lines.map(foldLine).join("\r\n") + "\r\n";

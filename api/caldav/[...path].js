@@ -93,10 +93,23 @@ function foldLine(line) {
 
 // ─── Event extraction ─────────────────────────────────────────────────────────
 
+function isoDateFrom(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
 function extractEvents(planData) {
   const events = [];
+  const seen = new Set();
+  const push = (event) => {
+    if (seen.has(event.uid)) return;
+    seen.add(event.uid);
+    events.push(event);
+  };
+
   const weeks = migrateWeekKeys(planData?.weeks || {});
 
+  // ── Sessions planifiées dans les semaines ─────────────────────────────
   for (const [mondayISO, days] of Object.entries(weeks)) {
     if (!Array.isArray(days)) continue;
     const monday = new Date(mondayISO + "T12:00:00Z");
@@ -104,21 +117,51 @@ function extractEvents(planData) {
     days.forEach((daySessions, dayIndex) => {
       if (!Array.isArray(daySessions)) return;
       const date = addDays(monday, dayIndex);
+      const dateISO = isoDateFrom(date);
 
-      daySessions.forEach((session, sessionIndex) => {
+      daySessions.forEach((session) => {
         if (!session?.name) return;
-        const uid = `climbing-${mondayISO}-d${dayIndex}-s${sessionIndex}@climbing-planner`;
-        events.push({ uid, session, date });
+        // UID stable sur (date + session.id + startTime) — collapse les vrais doublons
+        // (même template ajouté deux fois au même horaire). Si pas d'id, on retombe
+        // sur le nom + position pour rester déterministe.
+        const baseId = session.id || `pos-${dayIndex}-${session.name}`;
+        const slot = session.startTime ? `t${session.startTime.replace(":", "")}` : "allday";
+        const uid = `climbing-${dateISO}-${baseId}-${slot}@climbing-planner`;
+        push({ uid, session, date });
       });
     });
   }
+
+  // ── Séances personnalisées (quickSessions) ────────────────────────────
+  const quickSessions = Array.isArray(planData?.quickSessions) ? planData.quickSessions : [];
+  quickSessions.forEach((qs) => {
+    if (!qs?.name || !qs.startDate) return;
+    const startDate = new Date(qs.startDate + "T12:00:00Z");
+    if (isNaN(startDate.getTime())) return;
+    const endDate = qs.endDate && qs.endDate !== qs.startDate
+      ? new Date(qs.endDate + "T12:00:00Z")
+      : null;
+    const uid = `climbing-quick-${qs.id || qs.startDate + "-" + qs.name}@climbing-planner`;
+    const session = {
+      id: qs.id,
+      name: qs.name,
+      startTime: qs.allDay ? null : (qs.startTime || null),
+      endTime: qs.allDay ? null : (qs.endTime || null),
+      duration: qs.allDay ? null : (qs.duration || null),
+      description: qs.content || null,
+      address: qs.location || null,
+      isQuick: true,
+      isObjective: !!qs.isObjective,
+    };
+    push({ uid, session, date: startDate, endDate: endDate && !isNaN(endDate.getTime()) ? endDate : null });
+  });
 
   return events;
 }
 
 // ─── ICS generation ───────────────────────────────────────────────────────────
 
-function buildVEVENT(uid, session, date) {
+function buildVEVENT(uid, session, date, endDateOverride) {
   const now = toICSDateTimeUTC(new Date());
   const descParts = [];
   if (session.blockType) descParts.push(session.blockType);
@@ -138,7 +181,15 @@ function buildVEVENT(uid, session, date) {
     lines.push(`DTSTART:${toICSDateTime(startDate)}`);
 
     let endDate;
-    if (session.endTime) {
+    if (endDateOverride) {
+      endDate = new Date(endDateOverride);
+      if (session.endTime) {
+        const [eh, em] = session.endTime.split(":").map(Number);
+        endDate.setUTCHours(eh, em, 0, 0);
+      } else {
+        endDate.setUTCHours(h + 1, m, 0, 0);
+      }
+    } else if (session.endTime) {
       const [eh, em] = session.endTime.split(":").map(Number);
       endDate = new Date(date);
       endDate.setUTCHours(eh, em, 0, 0);
@@ -151,7 +202,9 @@ function buildVEVENT(uid, session, date) {
     lines.push(`DTEND:${toICSDateTime(endDate)}`);
   } else {
     lines.push(`DTSTART;VALUE=DATE:${toICSDate(date)}`);
-    lines.push(`DTEND;VALUE=DATE:${toICSDate(addDays(date, 1))}`);
+    // DTEND is exclusive → endDate + 1 day, ou date + 1 day sinon
+    const lastDay = endDateOverride || date;
+    lines.push(`DTEND;VALUE=DATE:${toICSDate(addDays(lastDay, 1))}`);
   }
 
   lines.push(`SUMMARY:${escapeICS(session.name)}`);
@@ -166,8 +219,8 @@ function buildVEVENT(uid, session, date) {
   return lines.map(foldLine).join("\r\n");
 }
 
-function buildSingleICS(uid, session, date) {
-  const vevent = buildVEVENT(uid, session, date);
+function buildSingleICS(uid, session, date, endDate) {
+  const vevent = buildVEVENT(uid, session, date, endDate);
   return (
     [
       "BEGIN:VCALENDAR",
@@ -190,8 +243,8 @@ function buildFullICS(events, displayName) {
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
   ];
-  for (const { uid, session, date } of events) {
-    lines.push(buildVEVENT(uid, session, date));
+  for (const { uid, session, date, endDate } of events) {
+    lines.push(buildVEVENT(uid, session, date, endDate));
   }
   lines.push("END:VCALENDAR");
   return lines.join("\r\n") + "\r\n";
@@ -307,9 +360,9 @@ function xmlPropfindEvent(href, etag) {
 
 function xmlReport(baseHref, events) {
   const entries = events
-    .map(({ uid, session, date }) => {
+    .map(({ uid, session, date, endDate }) => {
       const etag = etagFor(uid, session);
-      const ics = buildSingleICS(uid, session, date);
+      const ics = buildSingleICS(uid, session, date, endDate);
       return `  <D:response>
     <D:href>${xe(baseHref + uid + ".ics")}</D:href>
     <D:propstat>
@@ -425,7 +478,7 @@ export default async function handler(req, res) {
         res.status(404).send("Event not found");
         return;
       }
-      const icsContent = buildSingleICS(event.uid, event.session, event.date);
+      const icsContent = buildSingleICS(event.uid, event.session, event.date, event.endDate);
       const etag = etagFor(event.uid, event.session);
       res.setHeader("Content-Type", "text/calendar; charset=utf-8");
       res.setHeader("ETag", etag);
