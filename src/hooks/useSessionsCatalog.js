@@ -15,6 +15,7 @@ export function useSessionsCatalog(userId) {
       .order("sort_order", { ascending: true })
       .order("id", { ascending: true });
     if (error || !data) return;
+    const me = userIdRef.current;
     setCatalog(data.map(r => ({
       id: r.id,
       type: r.type,
@@ -23,7 +24,9 @@ export function useSessionsCatalog(userId) {
       minRecovery: r.min_recovery ?? undefined,
       estimatedTime: r.estimated_time ?? undefined,
       description: r.description ?? undefined,
-      isCustom: r.user_id != null,
+      // isCustom = créé par l'utilisateur courant (vs séance communautaire d'un autre)
+      isCustom: r.user_id === me,
+      creatorName: r.extra?.creatorName || null,
       ...(r.extra || {}),
     })));
   }, []);
@@ -35,11 +38,12 @@ export function useSessionsCatalog(userId) {
     const uid = userIdRef.current;
     if (!supabase || !uid) return null;
     const extra = {};
-    if (session.warmup)   extra.warmup   = session.warmup;
-    if (session.main)     extra.main     = session.main;
-    if (session.cooldown) extra.cooldown = session.cooldown;
-    if (session.location) extra.location = session.location;
-    if (session.blocks?.length) extra.blocks = session.blocks;  // composition de blocs
+    if (session.warmup)      extra.warmup      = session.warmup;
+    if (session.main)        extra.main        = session.main;
+    if (session.cooldown)    extra.cooldown    = session.cooldown;
+    if (session.location)    extra.location    = session.location;
+    if (session.blocks?.length) extra.blocks   = session.blocks;
+    if (session.creatorName) extra.creatorName = session.creatorName;
     const row = {
       user_id: uid,
       type: session.type,
@@ -52,7 +56,8 @@ export function useSessionsCatalog(userId) {
       sort_order: 999,
     };
     let dbError;
-    if (session.isCustom && typeof session.id === "number") {
+    // UPDATE si la séance a déjà un ID numérique (existante, qu'elle soit mienne ou communautaire)
+    if (typeof session.id === "number") {
       const { error } = await supabase.from("sessions_catalog").update(row).eq("id", session.id);
       dbError = error;
     } else {

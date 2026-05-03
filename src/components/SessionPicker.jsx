@@ -77,7 +77,7 @@ export function SessionPicker({ onSelect, onClose, customSessions, onCreateCusto
           </div>
         </div>
         <div style={styles.sessionList}>
-          {/* Custom sessions section */}
+          {/* Mes séances */}
           {filteredCustom.length > 0 && (
             <>
               <div style={{ ...styles.customPickerLabel, padding: "6px 14px 2px", fontSize: 9 }}>MES SÉANCES</div>
@@ -99,20 +99,32 @@ export function SessionPicker({ onSelect, onClose, customSessions, onCreateCusto
               ))}
             </>
           )}
-          {/* Predefined sessions */}
-          {filtered.map(s => (
-            <div key={s.id} style={{ ...styles.sessionItem, background: selected?.id === s.id ? (isDark ? "#1b3026" : "#e2f5e8") : undefined }} onClick={() => setSelected(s)}>
-              <div style={styles.sessionItemLeft}>
-                <span style={{ ...styles.sessionTypeBadge, background: s.type === "Grimpe" ? styles.seanceBadgeBg : styles.exerciceBadgeBg }}>
-                  {s.type}
-                </span>
-                <span style={styles.sessionItemName}>{s.name}</span>
-              </div>
-              <span style={{ ...styles.chargePill, background: getChargeColor(s.charge) + "33", color: getChargeColor(s.charge), border: `1px solid ${getChargeColor(s.charge)}55` }}>
-                {s.charge}
-              </span>
-            </div>
-          ))}
+          {/* Séances communautaires (créées par d'autres utilisateurs) */}
+          {filtered.length > 0 && (
+            <>
+              <div style={{ ...styles.customPickerLabel, padding: "6px 14px 2px", fontSize: 9 }}>COMMUNAUTÉ</div>
+              {filtered.map(s => (
+                <div key={s.id} style={{ ...styles.sessionItem, background: selected?.id === s.id ? (isDark ? "#1b3026" : "#e2f5e8") : undefined }} onClick={() => setSelected(s)}>
+                  <div style={styles.sessionItemLeft}>
+                    <span style={{ ...styles.sessionTypeBadge, background: s.type === "Grimpe" ? styles.seanceBadgeBg : styles.exerciceBadgeBg }}>
+                      {s.type}
+                    </span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <span style={styles.sessionItemName}>{s.name}</span>
+                      {s.creatorName && (
+                        <span style={{ fontSize: 9, color: isDark ? "#6a8870" : "#7a9a80", fontStyle: "italic" }}>
+                          par {s.creatorName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span style={{ ...styles.chargePill, background: getChargeColor(s.charge) + "33", color: getChargeColor(s.charge), border: `1px solid ${getChargeColor(s.charge)}55` }}>
+                    {s.charge}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
           {filtered.length === 0 && filteredCustom.length === 0 && (
             <div style={styles.emptySearch}>Aucune séance trouvée</div>
           )}

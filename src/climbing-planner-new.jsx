@@ -81,6 +81,12 @@ export default function ClimbingPlanner() {
   const { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges, hasPendingSave } = useSupabaseSync();
   const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
   const { catalog, saveUserSession, deleteUserSession } = useSessionsCatalog(session?.user?.id);
+
+  // Wrapper qui injecte le nom du créateur dans les séances sauvegardées
+  const saveUserSessionWithName = (sess) => {
+    const creatorName = [data.profile?.firstName, data.profile?.lastName].filter(Boolean).join(" ").trim() || null;
+    return saveUserSession({ ...sess, creatorName: sess.creatorName || creatorName });
+  };
   const { blocks: dbBlocks, saveBlock, deleteBlock } = useSessionBlocks(session?.user?.id);
   const { athletes, searchAthletes, addAthlete, removeAthlete } = useCoachAthletes(session?.user?.id);
 
@@ -484,7 +490,7 @@ export default function ClimbingPlanner() {
     for (const sess of affectedSessions) {
       const updatedBlocks = sess.blocks.map(bl => bl.id === b.id ? { ...bl, ...b } : bl);
       const updatedSession = { ...sess, blocks: updatedBlocks };
-      saveUserSession(updatedSession);
+      saveUserSessionWithName(updatedSession);
       syncPlannedSessions(updatedSession);
     }
     syncPlannedBlocks(b);
@@ -497,7 +503,7 @@ export default function ClimbingPlanner() {
       customSessionForm.onSave(customSession);
       return;
     }
-    saveUserSession(customSession);
+    saveUserSessionWithName(customSession);
     syncPlannedSessions(customSession);
     setData(d => {
       let weeks = d.weeks;
@@ -536,7 +542,7 @@ export default function ClimbingPlanner() {
   // ── Handler SessionBuilder ──
   const saveBuiltSession = (builtSession) => {
     const dayIndex = sessionBuilderDay;
-    saveUserSession(builtSession);
+    saveUserSessionWithName(builtSession);
     syncPlannedSessions(builtSession);
     setData(d => {
       let weeks = d.weeks;
@@ -559,6 +565,41 @@ export default function ClimbingPlanner() {
   const addQuickSession = qs => setData(d => ({ ...d, quickSessions: [...(d.quickSessions || []), qs] }));
   const editQuickSession = qs => setData(d => ({ ...d, quickSessions: (d.quickSessions || []).map(q => q.id === qs.id ? qs : q) }));
   const removeQuickSession = id => setData(d => ({ ...d, quickSessions: (d.quickSessions || []).filter(q => q.id !== id) }));
+
+  const saveQuickSessionFeedback = (quickSessionId, feedback) => {
+    setData(d => ({
+      ...d,
+      quickSessions: (d.quickSessions || []).map(qs =>
+        qs.id === quickSessionId ? { ...qs, feedback } : qs
+      ),
+    }));
+    if (supabase && session?.user?.id) {
+      const qs = (data.quickSessions || []).find(q => q.id === quickSessionId);
+      if (!qs) return;
+      const feedbackDate = qs.startDate;
+      const athleteName = [data.profile?.firstName, data.profile?.lastName].filter(Boolean).join(" ") || null;
+      let wk = null;
+      if (feedbackDate) {
+        const d2 = new Date(feedbackDate + "T00:00:00");
+        if (!isNaN(d2.getTime())) wk = weekKey(getMondayOf(d2));
+      }
+      supabase.from("session_feedbacks").upsert({
+        user_id: session.user.id,
+        athlete_name: athleteName,
+        session_id: null,
+        session_name: qs.name ?? "",
+        feedback_date: feedbackDate,
+        week_key: wk,
+        done: feedback.done,
+        rpe: feedback.rpe ?? null,
+        quality: feedback.quality ?? null,
+        notes: feedback.notes || null,
+        block_feedbacks: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,session_name,feedback_date" })
+        .then(({ error }) => { if (error) console.error("[session_feedbacks] quick upsert error:", error); });
+    }
+  };
 
 
   const isCalendarMode = ["week", "month", "year"].includes(viewMode);
@@ -1069,7 +1110,7 @@ export default function ClimbingPlanner() {
           address={templateEditor.address}
           coachNote={templateEditor.coachNote}
           onConfirm={s => { addSession(templateEditor.dayIndex, s); setTemplateEditor(null); }}
-          onSaveAsTemplate={s => saveUserSession(s)}
+          onSaveAsTemplate={s => saveUserSessionWithName(s)}
           onSaveBlock={b => saveBlock(b)}
           onClose={() => setTemplateEditor(null)}
           allSessions={catalog}
@@ -1161,9 +1202,11 @@ export default function ClimbingPlanner() {
               setSessionModal(null);
             }}
             onEdit={() => {
-              if (smSession.isCustom) {
+              // Toute séance avec un ID numérique (catalog ou communautaire) → édition directe
+              if (typeof smSession.id === "number") {
                 setCustomSessionForm({ initial: smSession, targetDay: null });
               } else {
+                // Session sans ID catalog → copie locale uniquement
                 setCustomSessionForm({
                   initial: { ...smSession, isCustom: true },
                   targetDay: null,
@@ -1207,6 +1250,9 @@ export default function ClimbingPlanner() {
           onSave={qs => { quickSessionForm.initial ? editQuickSession(qs) : addQuickSession(qs); setQuickSessionForm(null); }}
           onDelete={id => { removeQuickSession(id); setQuickSessionForm(null); }}
           onClose={() => setQuickSessionForm(null)}
+          onSaveFeedback={quickSessionForm.initial
+            ? (feedback) => { saveQuickSessionFeedback(quickSessionForm.initial.id, feedback); setQuickSessionForm(null); }
+            : undefined}
         />
       )}
 

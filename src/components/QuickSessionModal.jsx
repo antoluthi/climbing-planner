@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { generateId } from "../lib/storage.js";
+import { getChargeColor } from "../lib/charge.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 
 // ─── QUICK SESSION MODAL ──────────────────────────────────────────────────────
 // Séance rapide : non enregistrée en base, stockée dans data.quickSessions[]
+// Onglets : Séance (détails) | Ressenti (feedback, uniquement si session existante)
 
 const COLOR_PALETTE = [
   "#f43f5e", "#f97316", "#f59e0b", "#84cc16",
@@ -20,11 +22,16 @@ function addMinutes(timeStr, minutes) {
   return `${fmt2(Math.floor(total / 60) % 24)}:${fmt2(total % 60)}`;
 }
 
-export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onClose }) {
+export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onClose, onSaveFeedback }) {
   const { styles, isDark } = useThemeCtx();
 
   const today = defaultDate || new Date().toISOString().slice(0, 10);
+  const isExisting = !!initial;
 
+  // ── Tab ──
+  const [tab, setTab] = useState("session");
+
+  // ── Séance fields ──
   const [name, setName]         = useState(initial?.name || "");
   const [color, setColor]       = useState(initial?.color || "#60a5fa");
   const [startDate, setStartDate] = useState(initial?.startDate || today);
@@ -36,6 +43,21 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
   const [content, setContent]   = useState(initial?.content || "");
   const [isObjective, setIsObjective] = useState(initial?.isObjective ?? false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // ── Ressenti fields ──
+  const initStatus = () => {
+    const fb = initial?.feedback;
+    if (!fb) return null;
+    if (fb.status) return fb.status;
+    return fb.done ? "done" : "not_done";
+  };
+  const [status,  setStatus]  = useState(initStatus);
+  const [rpe,     setRpe]     = useState(initial?.feedback?.rpe     ?? 5);
+  const [quality, setQuality] = useState(initial?.feedback?.quality ?? null);
+  const [notes,   setNotes]   = useState(initial?.feedback?.notes   ?? "");
+
+  const sessionDone = status === "done" || status === "adapted";
+  const hasFeedback = !!initial?.feedback;
 
   useEffect(() => {
     const h = e => { if (e.key === "Escape") onClose(); };
@@ -64,11 +86,24 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
     onClose();
   };
 
-  const textMain = isDark ? "#e8e4de" : "#2a2218";
+  const handleSaveFeedback = () => {
+    if (!onSaveFeedback) return;
+    onSaveFeedback({
+      status,
+      done: sessionDone,
+      rpe: sessionDone ? rpe : null,
+      quality: sessionDone ? quality : null,
+      notes,
+    });
+  };
+
+  // ── Styles ──
+  const textMain  = isDark ? "#e8e4de" : "#2a2218";
   const textMuted = isDark ? "#7a8080" : "#8a8070";
-  const inputBg = isDark ? "#1a1f1c" : "#f5f2ec";
+  const inputBg   = isDark ? "#1a1f1c" : "#f5f2ec";
   const inputBorder = isDark ? "#2e3430" : "#d0cbc2";
-  const surface = isDark ? "#161a17" : "#ffffff";
+  const surface   = isDark ? "#161a17" : "#ffffff";
+  const accent    = isDark ? "#c8906a" : "#8b4c20";
 
   const inputStyle = {
     ...styles.customFormInput,
@@ -92,6 +127,22 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
     display: "block",
   };
 
+  const tabStyle = (active) => ({
+    flex: 1,
+    padding: "9px 4px",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    fontSize: 11,
+    fontFamily: "inherit",
+    letterSpacing: "0.07em",
+    textTransform: "uppercase",
+    fontWeight: active ? 700 : 400,
+    color: active ? (isDark ? "#c8906a" : "#8b4c20") : (isDark ? "#707870" : "#8a7f70"),
+    borderBottom: `2px solid ${active ? (isDark ? "#c8906a" : "#8b4c20") : "transparent"}`,
+    transition: "color 0.15s, border-color 0.15s",
+  });
+
   return (
     <div style={styles.confirmOverlay} onClick={onClose}>
       <div
@@ -101,182 +152,268 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
         {/* Header */}
         <div style={{ background: color + "22", borderBottom: `2px solid ${color}55`, padding: "14px 18px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: textMain, fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-            {initial ? "Modifier la séance" : "Séance personnalisée"}
+            {initial ? initial.name || "Modifier la séance" : "Séance personnalisée"}
           </span>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", flex: 1 }}>
-
-          {/* Nom */}
-          <div>
-            <label style={labelStyle}>Nom *</label>
-            <input
-              style={inputStyle}
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Ex : Stage falaise, Sortie bloc…"
-              autoFocus
-            />
+        {/* Tab bar — uniquement si séance existante */}
+        {isExisting && (
+          <div style={{ display: "flex", borderBottom: `1px solid ${inputBorder}`, background: surface, flexShrink: 0 }}>
+            <button style={tabStyle(tab === "session")} onClick={() => setTab("session")}>Séance</button>
+            <button style={tabStyle(tab === "ressenti")} onClick={() => setTab("ressenti")}>
+              Ressenti{hasFeedback ? " ✓" : ""}
+            </button>
           </div>
+        )}
 
-          {/* Couleur */}
-          <div>
-            <label style={labelStyle}>Couleur</label>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {COLOR_PALETTE.map(c => (
-                <button
-                  key={c}
-                  onClick={() => setColor(c)}
-                  style={{
-                    width: 22, height: 22, borderRadius: "50%",
-                    background: c,
-                    border: color === c ? `2.5px solid ${isDark ? "#fff" : "#333"}` : `2px solid ${isDark ? "#2a2f2a" : "#ccc"}`,
-                    cursor: "pointer", flexShrink: 0,
-                    boxShadow: color === c ? `0 0 0 2px ${c}66` : "none",
-                    transition: "transform 0.1s",
-                    transform: color === c ? "scale(1.15)" : "scale(1)",
-                  }}
-                />
-              ))}
+        {/* ── Tab Séance ── */}
+        {tab === "session" && (
+          <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", flex: 1 }}>
+
+            {/* Nom */}
+            <div>
+              <label style={labelStyle}>Nom *</label>
+              <input
+                style={inputStyle}
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Ex : Stage falaise, Sortie bloc…"
+                autoFocus
+              />
             </div>
-          </div>
 
-          {/* Dates */}
-          <div>
-            <label style={labelStyle}>Date</label>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <input type="date" style={inputStyle} value={startDate} onChange={e => setStartDate(e.target.value)} />
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <span style={{ ...labelStyle, marginBottom: 0, textTransform: "none", fontWeight: 500, fontSize: 12 }}>Plusieurs jours</span>
+            {/* Couleur */}
+            <div>
+              <label style={labelStyle}>Couleur</label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {COLOR_PALETTE.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => setColor(c)}
+                    style={{
+                      width: 22, height: 22, borderRadius: "50%",
+                      background: c,
+                      border: color === c ? `2.5px solid ${isDark ? "#fff" : "#333"}` : `2px solid ${isDark ? "#2a2f2a" : "#ccc"}`,
+                      cursor: "pointer", flexShrink: 0,
+                      boxShadow: color === c ? `0 0 0 2px ${c}66` : "none",
+                      transition: "transform 0.1s",
+                      transform: color === c ? "scale(1.15)" : "scale(1)",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Dates */}
+            <div>
+              <label style={labelStyle}>Date</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <input type="date" style={inputStyle} value={startDate} onChange={e => setStartDate(e.target.value)} />
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <span style={{ ...labelStyle, marginBottom: 0, textTransform: "none", fontWeight: 500, fontSize: 12 }}>Plusieurs jours</span>
+                  <div
+                    onClick={() => setMultiDay(v => !v)}
+                    style={{
+                      width: 34, height: 18, borderRadius: 9,
+                      background: multiDay ? color : (isDark ? "#2a3028" : "#ccc"),
+                      position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
+                    }}
+                  >
+                    <div style={{
+                      position: "absolute", top: 2, left: multiDay ? 16 : 2,
+                      width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                      transition: "left 0.2s",
+                    }} />
+                  </div>
+                </label>
+                {multiDay && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 11, color: textMuted, whiteSpace: "nowrap" }}>jusqu'au</span>
+                    <input type="date" style={{ ...inputStyle, flex: 1 }} value={endDate} min={startDate} onChange={e => setEndDate(e.target.value)} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Heure */}
+            <div>
+              <label style={labelStyle}>Heure</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 8 }}>
                 <div
-                  onClick={() => setMultiDay(v => !v)}
+                  onClick={() => setAllDay(v => !v)}
                   style={{
                     width: 34, height: 18, borderRadius: 9,
-                    background: multiDay ? color : (isDark ? "#2a3028" : "#ccc"),
+                    background: allDay ? color : (isDark ? "#2a3028" : "#ccc"),
                     position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
                   }}
                 >
                   <div style={{
-                    position: "absolute", top: 2, left: multiDay ? 16 : 2,
+                    position: "absolute", top: 2, left: allDay ? 16 : 2,
                     width: 14, height: 14, borderRadius: "50%", background: "#fff",
                     transition: "left 0.2s",
                   }} />
                 </div>
+                <span style={{ fontSize: 12, color: textMuted }}>Toute la journée</span>
               </label>
-              {multiDay && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 11, color: textMuted, whiteSpace: "nowrap" }}>jusqu'au</span>
-                  <input type="date" style={{ ...inputStyle, flex: 1 }} value={endDate} min={startDate} onChange={e => setEndDate(e.target.value)} />
+              {!allDay && (
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ ...labelStyle, textTransform: "none", fontWeight: 500, fontSize: 11, marginBottom: 3 }}>Début</span>
+                    <input type="time" style={inputStyle} value={startTime} onChange={e => setStartTime(e.target.value)} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ ...labelStyle, textTransform: "none", fontWeight: 500, fontSize: 11, marginBottom: 3 }}>Durée (min)</span>
+                    <input
+                      type="number"
+                      min={0} max={1440} step={15}
+                      style={inputStyle}
+                      value={duration}
+                      onChange={e => setDuration(e.target.value)}
+                      placeholder="90"
+                    />
+                  </div>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Heure */}
-          <div>
-            <label style={labelStyle}>Heure</label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 8 }}>
-              <div
-                onClick={() => setAllDay(v => !v)}
-                style={{
-                  width: 34, height: 18, borderRadius: 9,
-                  background: allDay ? color : (isDark ? "#2a3028" : "#ccc"),
-                  position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
+            {/* Objectif */}
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <div
+                  onClick={() => setIsObjective(v => !v)}
+                  style={{
+                    width: 34, height: 18, borderRadius: 9,
+                    background: isObjective ? color : (isDark ? "#2a3028" : "#ccc"),
+                    position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
+                  }}
+                >
+                  <div style={{
+                    position: "absolute", top: 2, left: isObjective ? 16 : 2,
+                    width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                    transition: "left 0.2s",
+                  }} />
+                </div>
+                <span style={{ fontSize: 12, color: isObjective ? textMain : textMuted, fontWeight: isObjective ? 600 : 400 }}>Objectif</span>
+              </label>
+            </div>
+
+            {/* Contenu */}
+            <div>
+              <label style={labelStyle}>Contenu</label>
+              <textarea
+                style={{ ...inputStyle, minHeight: 72, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }}
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                placeholder="Objectifs, détails, participants…"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab Ressenti ── */}
+        {tab === "ressenti" && (
+          <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 18, overflowY: "auto", flex: 1 }}>
+
+            {/* Status */}
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                style={{ ...styles.doneBtn, ...(status === "done" ? styles.doneBtnActive : {}), flex: 1 }}
+                onClick={() => setStatus("done")}
+              >✓ Réalisée</button>
+              <button
+                style={{ ...styles.doneBtn, flex: 1,
+                  ...(status === "adapted" ? {
+                    background: isDark ? "#1e1a08" : "#fef3c7",
+                    color: isDark ? "#fbbf24" : "#92400e",
+                    borderColor: isDark ? "#78500a" : "#fcd34d",
+                    fontWeight: 700,
+                  } : {}),
                 }}
-              >
-                <div style={{
-                  position: "absolute", top: 2, left: allDay ? 16 : 2,
-                  width: 14, height: 14, borderRadius: "50%", background: "#fff",
-                  transition: "left 0.2s",
-                }} />
-              </div>
-              <span style={{ fontSize: 12, color: textMuted }}>Toute la journée</span>
-            </label>
-            {!allDay && (
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <div style={{ flex: 1 }}>
-                  <span style={{ ...labelStyle, textTransform: "none", fontWeight: 500, fontSize: 11, marginBottom: 3 }}>Début</span>
-                  <input type="time" style={inputStyle} value={startTime} onChange={e => setStartTime(e.target.value)} />
+                onClick={() => setStatus("adapted")}
+              >~ Adaptée</button>
+              <button
+                style={{ ...styles.doneBtn, ...(status === "not_done" ? styles.doneBtnActiveNeg : {}), flex: 1 }}
+                onClick={() => setStatus("not_done")}
+              >✗ Non réalisée</button>
+            </div>
+
+            {sessionDone && (
+              <>
+                {/* RPE */}
+                <div>
+                  <div style={{ fontSize: 11, color: textMuted, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                    <span>Fatigue RPE</span>
+                    <span style={{ color: getChargeColor(rpe * 3), fontWeight: 700 }}>{rpe}/10</span>
+                  </div>
+                  <input type="range" min={1} max={10} step={1} value={rpe}
+                    onChange={e => setRpe(+e.target.value)} style={styles.slider} />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: textMuted, marginTop: 2 }}>
+                    <span>Facile</span><span>Modéré</span><span>Maximal</span>
+                  </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <span style={{ ...labelStyle, textTransform: "none", fontWeight: 500, fontSize: 11, marginBottom: 3 }}>Durée (min)</span>
-                  <input
-                    type="number"
-                    min={0} max={1440} step={15}
-                    style={inputStyle}
-                    value={duration}
-                    onChange={e => setDuration(e.target.value)}
-                    placeholder="90"
-                  />
+
+                {/* Quality */}
+                <div>
+                  <div style={{ fontSize: 11, color: textMuted, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>Qualité de séance</div>
+                  <div style={styles.stars}>
+                    {[1,2,3,4,5].map(s => (
+                      <button key={s}
+                        style={{ ...styles.star, color: quality >= s ? "#fbbf24" : (isDark ? "#555" : "#bbb") }}
+                        onClick={() => setQuality(s === quality ? null : s)}
+                      >★</button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
-          </div>
 
-          {/* Objectif */}
-          <div>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <div
-                onClick={() => setIsObjective(v => !v)}
+            {/* Notes — toujours visible */}
+            <div>
+              <div style={{ fontSize: 11, color: textMuted, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6 }}>Notes</div>
+              <textarea style={{ ...styles.textarea, minHeight: 70 }}
+                placeholder="Sensations, observations…"
+                value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+              />
+            </div>
+
+            <button style={styles.saveBtn} onClick={handleSaveFeedback}>
+              Enregistrer le ressenti
+            </button>
+          </div>
+        )}
+
+        {/* Footer — uniquement dans l'onglet Séance */}
+        {tab === "session" && (
+          <div style={{ padding: "10px 18px 14px", display: "flex", justifyContent: "flex-end", gap: 8, borderTop: `1px solid ${inputBorder}`, alignItems: "center", flexShrink: 0 }}>
+            {initial && onDelete && (
+              <button
+                title="Supprimer"
+                onClick={() => setConfirmDelete(true)}
                 style={{
-                  width: 34, height: 18, borderRadius: 9,
-                  background: isObjective ? color : (isDark ? "#2a3028" : "#ccc"),
-                  position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
+                  marginRight: "auto",
+                  background: "none",
+                  border: `1px solid ${isDark ? "#4a2a2a" : "#e0c0c0"}`,
+                  color: isDark ? "#c87070" : "#b05050",
+                  borderRadius: 6, padding: "6px 12px",
+                  fontSize: 12, fontFamily: "inherit", cursor: "pointer",
                 }}
               >
-                <div style={{
-                  position: "absolute", top: 2, left: isObjective ? 16 : 2,
-                  width: 14, height: 14, borderRadius: "50%", background: "#fff",
-                  transition: "left 0.2s",
-                }} />
-              </div>
-              <span style={{ fontSize: 12, color: isObjective ? textMain : textMuted, fontWeight: isObjective ? 600 : 400 }}>Objectif</span>
-            </label>
-          </div>
-
-          {/* Contenu */}
-          <div>
-            <label style={labelStyle}>Contenu</label>
-            <textarea
-              style={{ ...inputStyle, minHeight: 72, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }}
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              placeholder="Objectifs, détails, participants…"
-            />
-          </div>
-
-        </div>
-
-        {/* Footer */}
-        <div style={{ padding: "10px 18px 14px", display: "flex", justifyContent: "flex-end", gap: 8, borderTop: `1px solid ${inputBorder}`, alignItems: "center" }}>
-          {initial && onDelete && (
+                Supprimer
+              </button>
+            )}
+            <button style={styles.confirmCancelBtn} onClick={onClose}>Annuler</button>
             <button
-              title="Supprimer"
-              onClick={() => setConfirmDelete(true)}
-              style={{
-                marginRight: "auto",
-                background: "none",
-                border: `1px solid ${isDark ? "#4a2a2a" : "#e0c0c0"}`,
-                color: isDark ? "#c87070" : "#b05050",
-                borderRadius: 6, padding: "6px 12px",
-                fontSize: 12, fontFamily: "inherit", cursor: "pointer",
-              }}
+              style={{ ...styles.confirmDeleteBtn, background: canSave ? color : (isDark ? "#3a3028" : "#ccc"), cursor: canSave ? "pointer" : "default", opacity: canSave ? 1 : 0.6 }}
+              onClick={handleSave}
+              disabled={!canSave}
             >
-              Supprimer
+              {initial ? "Enregistrer" : "Ajouter"}
             </button>
-          )}
-          <button style={styles.confirmCancelBtn} onClick={onClose}>Annuler</button>
-          <button
-            style={{ ...styles.confirmDeleteBtn, background: canSave ? color : (isDark ? "#3a3028" : "#ccc"), cursor: canSave ? "pointer" : "default", opacity: canSave ? 1 : 0.6 }}
-            onClick={handleSave}
-            disabled={!canSave}
-          >
-            {initial ? "Enregistrer" : "Ajouter"}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
+
       {confirmDelete && (
         <ConfirmModal
           title="Supprimer cette séance personnalisée ?"

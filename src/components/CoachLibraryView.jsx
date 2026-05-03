@@ -91,12 +91,12 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: text }}>
-              {isSessionTab ? "Mes séances" : "Mes blocs"}
+              {isSessionTab ? "Séances" : "Blocs"}
             </div>
             <div style={{ fontSize: 11, color: muted, marginTop: 1 }}>
               {isSessionTab
-                ? `${allSessions.length} séance${allSessions.length !== 1 ? "s" : ""}`
-                : `${(blocks || []).length} bloc${(blocks || []).length !== 1 ? "s" : ""}`}
+                ? `${allSessions.length} séance${allSessions.length !== 1 ? "s" : ""} · communautaires`
+                : `${(blocks || []).length} bloc${(blocks || []).length !== 1 ? "s" : ""} · communautaires`}
             </div>
           </div>
           <button
@@ -168,7 +168,19 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
                   {sessions.map(s => (
                     <div key={s.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${getChargeColor(s.charge)}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</span>
+                          {!s.isCustom && s.creatorName && (
+                            <span style={{ fontSize: 9, fontWeight: 600, padding: "1px 6px", borderRadius: 4, background: isDark ? "#1a2a2a" : "#e0f0f0", color: isDark ? "#5ab8b8" : "#2a7a7a", letterSpacing: "0.04em", flexShrink: 0 }}>
+                              {s.creatorName}
+                            </span>
+                          )}
+                          {!s.isCustom && !s.creatorName && (
+                            <span style={{ fontSize: 9, fontWeight: 600, padding: "1px 6px", borderRadius: 4, background: isDark ? "#1a2a2a" : "#e0f0f0", color: isDark ? "#5ab8b8" : "#2a7a7a", letterSpacing: "0.04em", flexShrink: 0 }}>
+                              communauté
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10 }}>
                           {s.estimatedTime && <span>{s.estimatedTime} min</span>}
                           {s.location     && <span>{s.location}</span>}
