@@ -27,7 +27,7 @@ import { AuthPanel } from "./components/AuthPanel.jsx";
 import { RoleOnboardingModal } from "./components/RoleOnboardingModal.jsx";
 import { ConfirmModal } from "./components/ConfirmModal.jsx";
 import { CustomSessionModal } from "./components/CustomSessionModal.jsx";
-import { SessionBuilder } from "./components/SessionBuilder.jsx";
+import { SessionComposer } from "./components/SessionComposer.jsx";
 import { SessionPicker } from "./components/SessionPicker.jsx";
 import { SessionModal } from "./components/SessionModal.jsx";
 import { CoachPickerModal } from "./components/CoachPickerModal.jsx";
@@ -37,14 +37,16 @@ import { YearView } from "./components/YearView.jsx";
 import { CyclesView } from "./components/CyclesView.jsx";
 import { Dashboard } from "./components/Dashboard.jsx";
 import { DayLogModal } from "./components/DayLogModal.jsx";
-import { SessionComposerModal } from "./components/SessionComposerModal.jsx";
 import { TemplateEditorModal } from "./components/TemplateEditorModal.jsx";
 import { ProfileView } from "./components/ProfileView.jsx";
 import { CoachLibraryView } from "./components/CoachLibraryView.jsx";
 import { AccueilView } from "./components/AccueilView.jsx";
+import { DayListView } from "./components/DayListView.jsx";
 import { PublicPlanView } from "./components/PublicPlanView.jsx";
-import { AddSessionChoiceModal } from "./components/AddSessionChoiceModal.jsx";
+import { NewSessionSheet } from "./components/NewSessionSheet.jsx";
 import { QuickSessionModal } from "./components/QuickSessionModal.jsx";
+import { ToastContainer } from "./components/ToastContainer.jsx";
+import { toast } from "./lib/toast.js";
 
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
 
@@ -285,6 +287,32 @@ export default function ClimbingPlanner() {
     updateWeekSessions(updated);
   };
 
+  // Mutation rapide : bascule "fait / non-fait" en 1 tap depuis la liste.
+  const toggleSessionDone = (smKey, dayIndex, sessionIndex) => {
+    let prevFb = null;
+    setData(d => {
+      const ws = (d.weeks[smKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
+      const s = ws[dayIndex]?.[sessionIndex];
+      if (!s) return d;
+      const fb = s.feedback;
+      prevFb = fb;
+      const wasDone = fb?.status === "done" || fb?.status === "adapted" || (fb && fb.done);
+      const newFb = wasDone
+        ? null
+        : { status: "done", done: true, rpe: fb?.rpe ?? null, quality: fb?.quality ?? null, notes: fb?.notes ?? "", blockFeedbacks: fb?.blockFeedbacks ?? [], adaptedCharge: null };
+      ws[dayIndex] = ws[dayIndex].map((sx, j) => j === sessionIndex ? { ...sx, feedback: newFb } : sx);
+      return { ...d, weeks: { ...d.weeks, [smKey]: ws } };
+    });
+    const willBeDone = !(prevFb?.status === "done" || prevFb?.status === "adapted" || (prevFb && prevFb.done));
+    toast.success(willBeDone ? "Marquée faite" : "Statut retiré", {
+      undo: () => setData(d => {
+        const ws = (d.weeks[smKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
+        ws[dayIndex] = ws[dayIndex].map((sx, j) => j === sessionIndex ? { ...sx, feedback: prevFb } : sx);
+        return { ...d, weeks: { ...d.weeks, [smKey]: ws } };
+      }),
+    });
+  };
+
   const saveSessionFeedback = (feedback) => {
     if (!sessionModal) return;
     const { weekKey: smKey, dayIndex, sessionIndex } = sessionModal;
@@ -324,6 +352,7 @@ export default function ClimbingPlanner() {
     }
 
     setSessionModal(null);
+    toast.success("Ressenti enregistré");
   };
 
   const openSessionModal = (wKey, dayIndex, sessionIndex) => {
@@ -332,7 +361,9 @@ export default function ClimbingPlanner() {
 
   // ── Déplacer / suggestions ──
   const moveSession = (fromWKey, fromDi, fromSi, toWKey, toDi, newStartTime, newLocation) => {
+    let snapshot = null;
     setData(d => {
+      snapshot = d.weeks;
       const src = (d.weeks[fromWKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
       const sess = src[fromDi]?.[fromSi];
       if (!sess) return d;
@@ -349,6 +380,13 @@ export default function ClimbingPlanner() {
       return { ...d, weeks: newWeeks };
     });
     setSessionModal(null);
+    if (fromWKey !== toWKey || fromDi !== toDi || newStartTime) {
+      const targetDate = addDays(new Date(toWKey + "T00:00:00"), toDi + 1);
+      const targetLabel = targetDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+      toast.success(`Déplacée au ${targetLabel}`, {
+        undo: () => snapshot && setData(d => ({ ...d, weeks: snapshot })),
+      });
+    }
   };
 
   const updateSessionTime = (wKey, di, si, newStartTime) => {
@@ -535,7 +573,9 @@ export default function ClimbingPlanner() {
 
   // ── Handler SessionBuilder ──
   const saveBuiltSession = (builtSession) => {
-    const dayIndex = sessionBuilderDay;
+    const dayIndex = sessionBuilderDay && typeof sessionBuilderDay === "object"
+      ? sessionBuilderDay.dayIndex
+      : sessionBuilderDay;
     saveUserSession(builtSession);
     syncPlannedSessions(builtSession);
     setData(d => {
@@ -847,20 +887,60 @@ export default function ClimbingPlanner() {
         />
       )}
 
-      {/* ── Vue semaine (desktop + mobile, 7 colonnes) ── */}
-      {viewMode === "week" && (
+      {/* ── Vue semaine — mobile: liste 1 jour, desktop: 7 colonnes timeline ── */}
+      {viewMode === "week" && isMobile && (() => {
+        const date = addDays(monday, mobileDayIdx);
+        const isToday = date.toDateString() === new Date().toDateString();
+        const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+        const logWarning = getDayLogWarning(data, dateISO, date);
+        return (
+          <div
+            style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, touchAction: "pan-y" }}
+            onTouchStart={(e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+            onTouchEnd={(e) => {
+              if (!swipeRef.current) return;
+              const dx = e.changedTouches[0].clientX - swipeRef.current.x;
+              const dy = e.changedTouches[0].clientY - swipeRef.current.y;
+              swipeRef.current = null;
+              if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                // Swipe horizontal : passer au jour suivant/précédent
+                if (dx > 0) {
+                  if (mobileDayIdx > 0) setMobileDayIdx(i => i - 1);
+                  else handlePrev();
+                } else {
+                  if (mobileDayIdx < 6) setMobileDayIdx(i => i + 1);
+                  else handleNext();
+                }
+              }
+            }}
+          >
+            <DayListView
+              monday={monday}
+              dayIndex={mobileDayIdx}
+              setDayIndex={setMobileDayIdx}
+              sessions={weekSessions[mobileDayIdx] || []}
+              isToday={isToday}
+              weekMeta={weekMeta}
+              logWarning={logWarning}
+              onOpenSession={(si) => openSessionModal(wKey, mobileDayIdx, si)}
+              onOpenLog={() => setLogDate(dateISO)}
+              onAddSession={() => setAddChoiceDay(mobileDayIdx)}
+              onToggleSessionDone={(si) => toggleSessionDone(wKey, mobileDayIdx, si)}
+              quickSessions={(data.quickSessions || []).filter(qs => {
+                if (qs.startDate === dateISO) return true;
+                if (qs.endDate && qs.startDate <= dateISO && qs.endDate >= dateISO) return true;
+                return false;
+              })}
+              onOpenQuickSession={qs => setQuickSessionForm({ initial: qs })}
+              pendingSuggestionsIds={pendingSuggestionsIds}
+            />
+          </div>
+        );
+      })()}
+
+      {viewMode === "week" && !isMobile && (
         <div
           style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, touchAction: "pan-y" }}
-          onTouchStart={isMobile ? (e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } : undefined}
-          onTouchEnd={isMobile ? (e) => {
-            if (!swipeRef.current) return;
-            const dx = e.changedTouches[0].clientX - swipeRef.current.x;
-            const dy = e.changedTouches[0].clientY - swipeRef.current.y;
-            swipeRef.current = null;
-            if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-              if (dx > 0) handlePrev(); else handleNext();
-            }
-          } : undefined}
         >
           <div style={styles.grid}>
             {DAYS.map((day, i) => {
@@ -1036,15 +1116,29 @@ export default function ClimbingPlanner() {
       )}
 
       {/* ── Modals ── */}
-      {sessionBuilderDay !== null && (
-        <SessionBuilder
-          onSave={saveBuiltSession}
-          onClose={() => setSessionBuilderDay(null)}
-          communitySessions={communitySessions}
-          allSessions={catalog}
-          onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
-        />
-      )}
+      {sessionBuilderDay !== null && (() => {
+        const dayIndex = sessionBuilderDay && typeof sessionBuilderDay === "object"
+          ? sessionBuilderDay.dayIndex
+          : sessionBuilderDay;
+        const titlePrefill = sessionBuilderDay && typeof sessionBuilderDay === "object"
+          ? sessionBuilderDay.titlePrefill
+          : "";
+        const dDay = dayIndex !== null && dayIndex !== undefined ? addDays(monday, dayIndex) : null;
+        const dayLabelStr = dDay ? `${DAYS[dayIndex]} ${formatDate(dDay)}` : null;
+        return (
+          <SessionComposer
+            onSave={saveBuiltSession}
+            onClose={() => setSessionBuilderDay(null)}
+            communitySessions={communitySessions}
+            allSessions={catalog}
+            availableBlocks={dbBlocks}
+            onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
+            onSaveBlock={saveBlock}
+            titlePrefill={titlePrefill}
+            dayLabel={dayLabelStr}
+          />
+        );
+      })()}
       {picker && hasCoachFeatures && (
         <CoachPickerModal
           sessions={catalog}
@@ -1086,9 +1180,13 @@ export default function ClimbingPlanner() {
         />
       )}
       {sessionComposerForm !== null && (
-        <SessionComposerModal
+        <SessionComposer
           initial={sessionComposerForm.initial}
           availableBlocks={dbBlocks}
+          allSessions={catalog}
+          communitySessions={communitySessions}
+          onSaveBlock={saveBlock}
+          onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
           onSave={s => { saveCustomSession(s, undefined); setSessionComposerForm(null); }}
           onClose={() => setSessionComposerForm(null)}
         />
@@ -1153,12 +1251,17 @@ export default function ClimbingPlanner() {
             onAcceptSuggestion={acceptMoveSuggestion}
             onRejectSuggestion={rejectMoveSuggestion}
             onDelete={() => {
+              let snapshot = null;
               setData(d => {
+                snapshot = d.weeks;
                 const ws = (d.weeks[smKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
                 if (ws[smDi]) ws[smDi] = ws[smDi].filter((_, j) => j !== smSi);
                 return { ...d, weeks: { ...d.weeks, [smKey]: ws } };
               });
               setSessionModal(null);
+              toast.success("Séance supprimée", {
+                undo: () => snapshot && setData(d => ({ ...d, weeks: snapshot })),
+              });
             }}
             onEdit={() => {
               if (smSession.isCustom) {
@@ -1185,19 +1288,32 @@ export default function ClimbingPlanner() {
         );
       })()}
 
-      {/* ── AddSessionChoiceModal ── */}
-      {addChoiceDay !== null && (
-        <AddSessionChoiceModal
-          onPrefaite={() => { setPicker({ dayIndex: addChoiceDay }); setAddChoiceDay(null); }}
-          onPersonnalisee={() => {
-            const d2 = addDays(monday, addChoiceDay);
-            const iso = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}`;
-            setQuickSessionForm({ initial: null, defaultDate: iso });
-            setAddChoiceDay(null);
-          }}
-          onClose={() => setAddChoiceDay(null)}
-        />
-      )}
+      {/* ── NewSessionSheet (remplace AddSessionChoiceModal) ── */}
+      {addChoiceDay !== null && (() => {
+        const d2 = addDays(monday, addChoiceDay);
+        const dayLabelStr = `${DAYS[addChoiceDay]} ${formatDate(d2)}`;
+        return (
+          <NewSessionSheet
+            defaultDate={`${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}`}
+            dayLabel={dayLabelStr}
+            catalog={catalog}
+            weeks={data.weeks}
+            onQuickInsert={session => {
+              const di = addChoiceDay;
+              addSession(di, session);
+              setAddChoiceDay(null);
+              toast.success("Séance ajoutée", {
+                undo: () => removeSession(di, (data.weeks[wKey] || [])[di]?.length ?? 0),
+              });
+            }}
+            onCompose={titlePrefill => {
+              setSessionBuilderDay({ dayIndex: addChoiceDay, titlePrefill });
+              setAddChoiceDay(null);
+            }}
+            onClose={() => setAddChoiceDay(null)}
+          />
+        );
+      })()}
 
       {/* ── QuickSessionModal ── */}
       {quickSessionForm && (
@@ -1210,6 +1326,7 @@ export default function ClimbingPlanner() {
         />
       )}
 
+      <ToastContainer isMobile={isMobile} />
     </div>
     </ThemeContext.Provider>
   );

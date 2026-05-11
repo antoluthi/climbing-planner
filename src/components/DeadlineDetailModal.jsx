@@ -40,7 +40,7 @@ export function DeadlineDetailModal({ deadline: dl, onClose, onEdit }) {
         <div style={{ background: dl.color + "22", borderBottom: `2px solid ${dl.color}55`, padding: "16px 18px 14px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: textMain, lineHeight: 1.2, fontFamily: "'Cormorant Garamond', Georgia, serif", marginBottom: 6 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: textMain, lineHeight: 1.2, fontFamily: "'Newsreader', Georgia, serif", marginBottom: 6 }}>
                 {PRIORITY_ICON[dl.priority]} {dl.label}
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

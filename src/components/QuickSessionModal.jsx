@@ -100,7 +100,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
       >
         {/* Header */}
         <div style={{ background: color + "22", borderBottom: `2px solid ${color}55`, padding: "14px 18px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: textMain, fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: textMain, fontFamily: "'Newsreader', Georgia, serif" }}>
             {initial ? "Modifier la séance" : "Séance personnalisée"}
           </span>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>

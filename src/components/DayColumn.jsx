@@ -114,11 +114,11 @@ export function DayColumn({
   const sz = {
     dayName: isCompact ? 7 : isNarrow ? 8 : isMobile ? 9 : 11,
     dayDate: isCompact ? 0 : isNarrow ? 7 : isMobile ? 8 : 10,
-    charge: isCompact ? 7 : isNarrow ? 8 : 9,
-    sessionTitle: isCompact ? 7 : isNarrow ? 8 : isMobile ? 9 : 10,
-    sessionTime: isCompact ? 6 : isNarrow ? 7 : 8,
-    hourLabel: isCompact ? 6 : isNarrow ? 7 : 8,
-    addBtn: isCompact ? 8 : isNarrow ? 9 : 11,
+    charge: isCompact ? 7 : isNarrow ? 8 : 10,
+    sessionTitle: isCompact ? 7 : isNarrow ? 8 : isMobile ? 9 : 12,
+    sessionTime: isCompact ? 6 : isNarrow ? 7 : 11,
+    hourLabel: isCompact ? 6 : isNarrow ? 7 : 9,
+    addBtn: isCompact ? 8 : isNarrow ? 9 : 12,
   };
   const meso = weekMeta?.mesocycle;
   const mesoColor = meso ? getMesoColor(mesocycles, meso) : null;
@@ -263,10 +263,10 @@ export function DayColumn({
 
   // Compute dynamic hour height based on visible range
   // On mobile: force-fit to container (no scroll), minimum 8px/hour
-  // On desktop: minimum 20px/hour (scrolls if needed)
+  // On desktop: minimum 56px/hour (scrolls if needed) — augmenté de 20→56 pour lisibilité
   const hourHeight = isMobile
     ? Math.max(timelineHeight / rangeHours, 8)
-    : Math.max(timelineHeight / rangeHours, 20);
+    : Math.max(timelineHeight / rangeHours, 56);
   const totalHeight = hourHeight * rangeHours;
   const minutesToPx = (minutes) => ((minutes / 60) - rangeStart) * hourHeight;
   const gutter = isCompact ? 10 : isNarrow ? 16 : isMobile ? GUTTER_WIDTH_MOBILE : GUTTER_WIDTH;
