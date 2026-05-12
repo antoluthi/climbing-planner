@@ -4,6 +4,7 @@ import { BLOCK_TYPES, getMesoForDate } from "../lib/constants.js";
 import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions } from "../lib/helpers.js";
 import { getChargeColor } from "../lib/charge.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
+import { AccueilSkeleton } from "./ui/Skeleton.jsx";
 
 // ─── GREETING BY TIME OF DAY ──────────────────────────────────────────────────
 
@@ -953,8 +954,16 @@ function getContextualPhrase(ctx) {
 
 // ─── ACCUEIL ──────────────────────────────────────────────────────────────────
 
-export function AccueilView({ data, isMobile, onOpenSession, onToggleCreatine, onSaveWeight, onAddHooper, onAddNutrition, onDeleteNutrition }) {
+// Wrapper qui isole l'early-return de loading sans casser l'ordre des hooks
+// du composant principal.
+export function AccueilView(props) {
+  if (props.isLoading) return <AccueilSkeleton />;
+  return <AccueilViewBody {...props} />;
+}
+
+function AccueilViewBody({ data, isMobile, onOpenSession, onToggleCreatine, onSaveWeight, onAddHooper, onAddNutrition, onDeleteNutrition }) {
   const { isDark } = useThemeCtx();
+
   const today = localDateStr(new Date());
   const todayObj = new Date(today + "T12:00:00");
 

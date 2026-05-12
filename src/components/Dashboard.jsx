@@ -4,6 +4,7 @@ import { BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 import { getMondayOf, addDays, weekKey, localDateStr, formatDate } from "../lib/helpers.js";
 import { ActivityHeatmap } from "./ActivityHeatmap.jsx";
 import { SleepSection } from "./SleepSection.jsx";
+import { DashboardSkeleton } from "./ui/Skeleton.jsx";
 
 function hooperLabel(total) {
   if (total <= 10) return "Bien récupéré";
@@ -83,7 +84,12 @@ function getChartData(data, range, refDate) {
   });
 }
 
-export function Dashboard({ data, onUpdateSleep }) {
+export function Dashboard(props) {
+  if (props.isLoading) return <DashboardSkeleton />;
+  return <DashboardBody {...props} />;
+}
+
+function DashboardBody({ data, onUpdateSleep }) {
   const { styles, isDark } = useThemeCtx();
   const [range, setRange] = useState("sem"); // "sem" | "mois" | "an"
   const [statsRefDate, setStatsRefDate] = useState(() => new Date());
