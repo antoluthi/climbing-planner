@@ -5,8 +5,9 @@ import { getChargeColor } from "../lib/charge.js";
 import { generateId } from "../lib/storage.js";
 
 // ─── NEW SESSION SHEET ────────────────────────────────────────────────────────
-// Bottom-sheet unifiée pour créer une séance, remplace AddSessionChoiceModal.
-// Permet 3 entrées rapides : démarrage rapide, récentes, composer en détail.
+// Bottom-sheet pour créer/insérer une séance. Remplace AddSessionChoiceModal.
+// L'input principal sert à la fois de titre (pour une nouvelle séance)
+// ET de recherche dans le catalogue (sessions_catalog DB).
 
 const QUICK_TEMPLATES = [
   {
@@ -64,6 +65,10 @@ const QUICK_TEMPLATES = [
   },
 ];
 
+function normalize(str) {
+  return (str || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 function formatRelativeDate(dateStr) {
   if (!dateStr) return "";
   const d = new Date(dateStr + "T12:00:00");
@@ -79,40 +84,35 @@ function formatRelativeDate(dateStr) {
 }
 
 export function NewSessionSheet({
-  // defaultDate disponible si nécessaire dans le futur (préfill heure, etc.)
-  // dayLabel — sous-titre affiché en header
   dayLabel,
   catalog,
   weeks,
-  onQuickInsert,    // (session) — insert immédiat (chip rapide / récente)
+  onQuickInsert,    // (session) — insert immédiat
   onCompose,        // (titlePrefill) — ouvre le composer détaillé
   onClose,
 }) {
   const { isDark } = useThemeCtx();
-  const [title, setTitle] = useState("");
+  const [query, setQuery] = useState("");
   const [closing, setClosing] = useState(false);
   const inputRef = useRef(null);
-  const sheetRef = useRef(null);
 
   const handleClose = () => {
     setClosing(true);
     setTimeout(onClose, 180);
   };
 
-  // Focus input on mount
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 80);
     return () => clearTimeout(t);
   }, []);
 
-  // Escape to close
   useEffect(() => {
     const h = e => { if (e.key === "Escape") handleClose(); };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   });
 
-  // Récentes : 3 dernières séances loggées dans data.weeks (excluant celles sans nom)
+  // ── Récentes (data.weeks) — top 5 dernières séances loggées uniques ──
   const recent = useMemo(() => {
     const all = [];
     Object.entries(weeks || {}).forEach(([wKey, days]) => {
@@ -124,48 +124,61 @@ export function NewSessionSheet({
           const d = new Date(monday);
           d.setDate(monday.getDate() + di);
           const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-          all.push({ ...s, _date: iso });
+          all.push({ ...s, _date: iso, _source: "recent" });
         });
       });
     });
-    // dédoubler par nom et garder la plus récente
     const byName = new Map();
     all.sort((a, b) => b._date.localeCompare(a._date));
     for (const s of all) {
-      const k = (s.title || s.name || "").trim().toLowerCase();
+      const k = normalize(s.title || s.name);
       if (!k) continue;
       if (!byName.has(k)) byName.set(k, s);
-      if (byName.size >= 5) break;
+      if (byName.size >= 8) break;
     }
-    return Array.from(byName.values()).slice(0, 3);
+    return Array.from(byName.values());
   }, [weeks]);
 
-  // Chips rapides : on prend les 4 templates de base mais on les remplace par
-  // les plus utilisés du catalogue si dispo.
-  const quickChips = useMemo(() => {
-    if (catalog && catalog.length >= 4) {
-      return catalog.slice(0, 4).map(s => ({
-        ...s,
-        description: [
-          s.estimatedTime ? `${s.estimatedTime} min` : null,
-          s.charge ? `charge ${s.charge}` : null,
-        ].filter(Boolean).join(" · "),
-        color: s.type === "Exercice" ? "#60a5fa" : "#8b4c20",
-      }));
-    }
-    return QUICK_TEMPLATES;
+  // ── Catalogue (sessions_catalog DB) ──
+  const catalogItems = useMemo(() => {
+    return (catalog || []).map(s => ({ ...s, _source: "catalog" }));
   }, [catalog]);
 
-  // Couleurs cohérentes avec le mockup "after" du audit
-  const sheetBg = isDark ? "#1a1f1c" : "#fcf8ef";
-  const headerBg = isDark ? "#1a1f1c" : "#fcf8ef";
+  // ── Liste fusionnée et filtrée par la recherche ──
+  // Priorité : catalogue d'abord, puis récentes non présentes dans le catalogue.
+  const results = useMemo(() => {
+    const q = normalize(query.trim());
+    const catalogNames = new Set(catalogItems.map(c => normalize(c.name || c.title)));
+    const recentFiltered = recent.filter(r => !catalogNames.has(normalize(r.name || r.title)));
+    const all = [...catalogItems, ...recentFiltered];
+    if (!q) return all.slice(0, 12);
+    // Match : commence par > contient > sous-chaîne
+    const scored = all
+      .map(s => {
+        const name = normalize(s.name || s.title);
+        if (!name) return null;
+        let score = 0;
+        if (name.startsWith(q)) score = 100;
+        else if (name.includes(" " + q)) score = 70;
+        else if (name.includes(q)) score = 50;
+        else return null;
+        return { s, score };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score);
+    return scored.slice(0, 20).map(x => x.s);
+  }, [catalogItems, recent, query]);
+
+  // ── Tokens ──
+  const sheetBg     = isDark ? "#1a1f1c" : "#fcf8ef";
   const surfaceCard = isDark ? "#222a23" : "#ffffff";
-  const border = isDark ? "#2a302a" : "#e6dfd1";
-  const borderSoft = isDark ? "#252b27" : "#ede5d4";
-  const text = isDark ? "#e8e4de" : "#2a2218";
-  const textLight = isDark ? "#7a7570" : "#8a7f70";
-  const accent = isDark ? "#c8906a" : "#8b4c20";
-  const grab = isDark ? "#3a4035" : "#c4beb0";
+  const surfaceInput= isDark ? "#1c2220" : "#ffffff";
+  const border      = isDark ? "#2a302a" : "#e6dfd1";
+  const borderSoft  = isDark ? "#252b27" : "#ede5d4";
+  const text        = isDark ? "#e8e4de" : "#2a2218";
+  const textLight   = isDark ? "#7a7570" : "#8a7f70";
+  const accent      = isDark ? "#c8906a" : "#8b4c20";
+  const grab        = isDark ? "#3a4035" : "#c4beb0";
 
   const sectionLabel = {
     fontSize: 11,
@@ -178,11 +191,12 @@ export function NewSessionSheet({
     paddingLeft: 18,
   };
 
-  const handleQuickInsert = (template) => {
+  // ── Actions ──
+  const handlePickTemplate = (template) => {
     onQuickInsert({
       id: generateId(),
-      name: title.trim() || template.name,
-      title: title.trim() || template.name,
+      name: query.trim() || template.name,
+      title: query.trim() || template.name,
       type: template.type || "Grimpe",
       charge: template.charge ?? 0,
       estimatedTime: template.estimatedTime ?? null,
@@ -191,14 +205,16 @@ export function NewSessionSheet({
     });
   };
 
-  const handleDuplicateRecent = (recentSession) => {
-    const { _date: _d, _origIdx: _oi, feedback: _fb, ...rest } = recentSession;
-    void _d; void _oi; void _fb;
+  const handlePickResult = (item) => {
+    const { _date: _d, _origIdx: _oi, _source: _src, feedback: _fb, ...rest } = item;
+    void _d; void _oi; void _src; void _fb;
     onQuickInsert({
       ...rest,
       id: generateId(),
-      name: title.trim() || rest.name,
-      title: title.trim() || rest.title || rest.name,
+      // si l'utilisateur a tapé un texte, on garde le nom d'origine du catalogue
+      // sauf si le texte ne match pas (auquel cas on garde l'override saisi)
+      name: rest.name || rest.title || query.trim(),
+      title: rest.title || rest.name || query.trim(),
       blocks: (rest.blocks || []).map(b => ({ ...b, id: generateId() })),
       isCustom: true,
     });
@@ -232,9 +248,11 @@ export function NewSessionSheet({
     borderBottom: "none",
   };
 
+  const showQuickStart = !query.trim();
+
   return (
     <div style={overlayStyle} onClick={handleClose}>
-      <div ref={sheetRef} style={sheetStyle} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Nouvelle séance">
+      <div style={sheetStyle} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Nouvelle séance">
         {/* Drag-grab */}
         <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 4, flexShrink: 0 }}>
           <div style={{ width: 36, height: 4, background: grab, borderRadius: 2 }} />
@@ -242,13 +260,12 @@ export function NewSessionSheet({
 
         {/* Header */}
         <div style={{
-          padding: "4px 18px 14px",
+          padding: "4px 18px 12px",
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
           gap: 12,
           flexShrink: 0,
-          background: headerBg,
         }}>
           <div>
             <div style={{ fontFamily: "'Newsreader', Georgia, serif", fontSize: 17, fontWeight: 500, color: text, lineHeight: 1.2 }}>
@@ -268,79 +285,115 @@ export function NewSessionSheet({
           >✕</button>
         </div>
 
-        {/* Scrollable body */}
-        <div style={{ flex: 1, overflowY: "auto", paddingBottom: 4 }}>
-          {/* Title input */}
-          <div style={{ padding: "0 18px 14px" }}>
+        {/* Search/title input — combine les deux usages */}
+        <div style={{ padding: "0 18px 14px", flexShrink: 0 }}>
+          <div style={{
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            background: surfaceInput,
+            border: `1px solid ${border}`,
+            borderRadius: 10,
+            transition: "border-color 0.15s",
+          }}>
+            <span aria-hidden="true" style={{
+              position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+              color: textLight, fontSize: 14, pointerEvents: "none", lineHeight: 1,
+            }}>⌕</span>
             <input
               ref={inputRef}
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="Nommer la séance…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Rechercher ou nommer une séance…"
               style={{
                 width: "100%",
                 boxSizing: "border-box",
-                background: surfaceCard,
-                border: `1px solid ${border}`,
+                background: "transparent",
+                border: "none",
                 borderRadius: 10,
-                padding: "12px 14px",
+                padding: "12px 14px 12px 36px",
                 fontSize: 15,
                 fontFamily: "inherit",
                 color: text,
                 outline: "none",
-                transition: "border-color 0.15s",
               }}
-              onFocus={e => (e.currentTarget.style.borderColor = accent + "88")}
-              onBlur={e => (e.currentTarget.style.borderColor = border)}
+              onFocus={e => (e.currentTarget.parentElement.style.borderColor = accent + "88")}
+              onBlur={e => (e.currentTarget.parentElement.style.borderColor = border)}
             />
-          </div>
-
-          {/* Quick start */}
-          <div style={sectionLabel}>Démarrage rapide</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: "0 18px 18px" }}>
-            {quickChips.map((q, i) => (
+            {query && (
               <button
-                key={q.id || i}
-                onClick={() => handleQuickInsert(q)}
+                onClick={() => { setQuery(""); inputRef.current?.focus(); }}
+                aria-label="Effacer la recherche"
                 style={{
-                  textAlign: "left",
-                  background: surfaceCard,
-                  border: `1px solid ${border}`,
-                  borderRadius: 10,
-                  padding: "10px 12px",
-                  cursor: "pointer",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
+                  position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                  background: "none", border: "none", color: textLight,
+                  fontSize: 14, padding: "4px 8px", cursor: "pointer", lineHeight: 1,
                   fontFamily: "inherit",
-                  transition: "border-color 0.12s, background 0.12s",
                 }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = accent + "88"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = border; }}
-              >
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: q.color || accent, marginBottom: 2 }} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: text, lineHeight: 1.3 }}>{q.name}</span>
-                <span style={{ fontSize: 11, color: textLight, lineHeight: 1.4 }}>{q.description || ""}</span>
-              </button>
-            ))}
+              >✕</button>
+            )}
           </div>
+        </div>
 
-          {/* Récentes */}
-          {recent.length > 0 && (
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: "auto", paddingBottom: 4 }}>
+          {/* Quick start chips — visibles seulement quand pas de recherche */}
+          {showQuickStart && (
             <>
-              <div style={sectionLabel}>Récentes</div>
+              <div style={sectionLabel}>Démarrage rapide</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: "0 18px 18px" }}>
+                {QUICK_TEMPLATES.map((q) => (
+                  <button
+                    key={q.id}
+                    onClick={() => handlePickTemplate(q)}
+                    style={{
+                      textAlign: "left",
+                      background: surfaceCard,
+                      border: `1px solid ${border}`,
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      fontFamily: "inherit",
+                      transition: "border-color 0.12s, background 0.12s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = accent + "88"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = border; }}
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: q.color || accent, marginBottom: 2 }} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: text, lineHeight: 1.3 }}>{q.name}</span>
+                    <span style={{ fontSize: 11, color: textLight, lineHeight: 1.4 }}>{q.description || ""}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Résultats — catalogue + récentes filtrés par la recherche */}
+          {results.length > 0 && (
+            <>
+              <div style={{ ...sectionLabel, display: "flex", alignItems: "baseline", justifyContent: "space-between", paddingRight: 18 }}>
+                <span>
+                  {query.trim()
+                    ? `Résultats (${results.length})`
+                    : `Bibliothèque (${catalogItems.length + recent.length})`}
+                </span>
+              </div>
               <div style={{ padding: "0 18px 14px" }}>
-                {recent.map((s, i) => {
+                {results.map((s, i) => {
                   const c = getChargeColor(s.charge ?? 0);
+                  const isCatalog = s._source === "catalog";
                   return (
                     <button
                       key={`${s.id || s.name}-${i}`}
-                      onClick={() => handleDuplicateRecent(s)}
+                      onClick={() => handlePickResult(s)}
                       style={{
                         display: "flex",
                         alignItems: "center",
                         gap: 10,
-                        padding: "10px 4px",
+                        padding: "10px 6px",
                         width: "100%",
                         background: "none",
                         border: "none",
@@ -348,21 +401,42 @@ export function NewSessionSheet({
                         cursor: "pointer",
                         textAlign: "left",
                         fontFamily: "inherit",
+                        borderRadius: 4,
                       }}
                       onMouseEnter={e => e.currentTarget.style.background = isDark ? "#202622" : "#f5efe0"}
                       onMouseLeave={e => e.currentTarget.style.background = "none"}
                     >
-                      <div style={{ width: 4, height: 28, borderRadius: 2, background: c, flexShrink: 0 }} />
+                      <div style={{ width: 4, height: 32, borderRadius: 2, background: c, flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {s.title || s.name}
+                        <div style={{
+                          display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap",
+                        }}>
+                          <span style={{
+                            fontSize: 13, fontWeight: 500, color: text,
+                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
+                          }}>
+                            {s.title || s.name}
+                          </span>
+                          {isCatalog && (
+                            <span style={{
+                              fontSize: 9, fontWeight: 600,
+                              color: accent, background: accent + "18",
+                              border: `1px solid ${accent}33`,
+                              padding: "1px 5px", borderRadius: 3,
+                              letterSpacing: "0.04em", textTransform: "uppercase",
+                              flexShrink: 0,
+                            }}>Catalogue</span>
+                          )}
                         </div>
                         <div style={{ fontSize: 11, color: textLight, marginTop: 1 }}>
-                          {formatRelativeDate(s._date)}
+                          {isCatalog
+                            ? (s.type || "Séance")
+                            : formatRelativeDate(s._date)}
                           {s.estimatedTime ? ` · ${s.estimatedTime} min` : ""}
+                          {s.blocks?.length ? ` · ${s.blocks.length} bloc${s.blocks.length > 1 ? "s" : ""}` : ""}
                         </div>
                       </div>
-                      {s.charge != null && (
+                      {s.charge != null && s.charge > 0 && (
                         <span style={{
                           fontSize: 11, fontWeight: 700,
                           padding: "2px 8px", borderRadius: 4,
@@ -377,17 +451,36 @@ export function NewSessionSheet({
               </div>
             </>
           )}
+
+          {/* État vide : pas de résultat pour la recherche */}
+          {query.trim() && results.length === 0 && (
+            <div style={{
+              margin: "0 18px 14px",
+              padding: "18px 14px",
+              background: surfaceCard,
+              border: `1px dashed ${border}`,
+              borderRadius: 10,
+              textAlign: "center",
+              color: textLight,
+              fontSize: 12,
+            }}>
+              <div style={{ marginBottom: 6 }}>Aucune séance trouvée pour "{query}"</div>
+              <div style={{ fontSize: 11 }}>
+                Tape <strong style={{ color: text }}>Composer en détail →</strong> ci-dessous pour en créer une.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer CTA */}
         <div style={{
           padding: "12px 18px 16px",
           borderTop: `1px solid ${border}`,
-          background: headerBg,
+          background: sheetBg,
           flexShrink: 0,
         }}>
           <button
-            onClick={() => onCompose(title.trim() || "")}
+            onClick={() => onCompose(query.trim() || "")}
             style={{
               width: "100%",
               background: accent,
@@ -405,7 +498,7 @@ export function NewSessionSheet({
             onMouseEnter={e => e.currentTarget.style.filter = "brightness(1.07)"}
             onMouseLeave={e => e.currentTarget.style.filter = "none"}
           >
-            Composer en détail →
+            {query.trim() ? `Composer "${query.trim()}" en détail →` : "Composer en détail →"}
           </button>
         </div>
       </div>
