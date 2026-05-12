@@ -1,6 +1,46 @@
+// ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
+// Système typographique, espacement, statuts, charge — utilisable par tous
+// les composants pour rester cohérent. Voir audit P06.
+
+export const TYPE = {
+  display:  { fontFamily: "'Newsreader', Georgia, serif", fontSize: 32, fontWeight: 500, lineHeight: 1.08, letterSpacing: "-0.01em" },
+  title:    { fontFamily: "'Newsreader', Georgia, serif", fontSize: 22, fontWeight: 500, lineHeight: 1.2 },
+  subtitle: { fontFamily: "'Newsreader', Georgia, serif", fontSize: 16, fontWeight: 500, lineHeight: 1.35 },
+  body:     { fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: 14, fontWeight: 400, lineHeight: 1.5 },
+  label:    { fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: 12, fontWeight: 500, lineHeight: 1.4 },
+  caption:  { fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: 11, fontWeight: 500, lineHeight: 1.4, letterSpacing: "0.06em", textTransform: "uppercase" },
+  mono:     { fontFamily: "'JetBrains Mono', Menlo, Consolas, monospace", fontSize: 12 },
+};
+
+export const SPACE = {
+  0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 7: 32, 8: 48,
+};
+
+export const STATUS = (isDark) => ({
+  done:     { bg: isDark ? "#1c2d20" : "#e3f0e5", fg: isDark ? "#7ab890" : "#2e6b3f" },
+  adapted:  { bg: isDark ? "#2a2410" : "#fef2dc", fg: isDark ? "#d4a843" : "#b8881a" },
+  moved:    { bg: isDark ? "#2a2410" : "#fef2dc", fg: isDark ? "#d4a843" : "#b8881a" },
+  missed:   { bg: isDark ? "#2a1313" : "#fbecec", fg: isDark ? "#e87878" : "#b83030" },
+});
+
+export const chargeTokenColor = (value, isDark) => {
+  if (!value || value < 4)  return { bg: isDark ? "#1c2d20" : "#e3f0e5", fg: isDark ? "#7ab890" : "#2e6b3f" };
+  if (value < 7)            return { bg: isDark ? "#2a2410" : "#fef2dc", fg: isDark ? "#d4a843" : "#b8881a" };
+  return                          { bg: isDark ? "#2a1a10" : "#fbecdc", fg: isDark ? "#c8906a" : "#b8651a" };
+};
+
 export function makeStyles(isDark) {
   const D = isDark;
   const t = {
+    // ── Design tokens partagés ──
+    type: TYPE,
+    space: SPACE,
+    status: STATUS(isDark),
+    chargeColor: (v) => chargeTokenColor(v, isDark),
+    serif: "'Newsreader', Georgia, serif",
+    sans: "'Inter', system-ui, -apple-system, sans-serif",
+    mono: "'JetBrains Mono', Menlo, Consolas, monospace",
+    // ── Existants ──
     bg:              D ? "#191e1b"   : "#f0ebe2",
     surface:         D ? "#1f2421"   : "#e8e2d8",
     surface2:        D ? "#252b27"   : "#ddd7cc",

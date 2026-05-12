@@ -1,2 +1,40 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { overflow-x: hidden; }
+
+/* ── Hover utility classes (P06 — extraction des onMouseEnter inline) ── */
+.cp-btn-hover {
+  transition: filter 0.12s, background 0.12s, border-color 0.12s;
+}
+.cp-btn-hover:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.cp-link {
+  transition: color 0.12s, border-color 0.12s;
+}
+.cp-link:hover {
+  filter: brightness(1.12);
+}
+
+/* ── Card hover (NewSessionSheet recent rows etc.) ── */
+.cp-card-row:hover {
+  background: rgba(139, 76, 32, 0.06);
+}
+
+/* ── Toast animations ── */
+@keyframes cp-toast-in {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes cp-toast-out {
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(20px); opacity: 0; }
+}
+
+/* ── Skeleton pulse ── */
+@keyframes cp-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.cp-skeleton {
+  animation: cp-pulse 1.4s ease-in-out infinite;
+}
