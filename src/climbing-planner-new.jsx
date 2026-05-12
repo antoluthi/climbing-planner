@@ -25,6 +25,7 @@ import { ClimbingPlannerLogo } from "./components/Logo.jsx";
 import { SyncButtons } from "./components/SyncButtons.jsx";
 import { AuthPanel } from "./components/AuthPanel.jsx";
 import { RoleOnboardingModal } from "./components/RoleOnboardingModal.jsx";
+import { OnboardingModal } from "./components/OnboardingModal.jsx";
 import { ConfirmModal } from "./components/ConfirmModal.jsx";
 import { CustomSessionModal } from "./components/CustomSessionModal.jsx";
 import { SessionComposer } from "./components/SessionComposer.jsx";
@@ -46,6 +47,7 @@ import { PublicPlanView } from "./components/PublicPlanView.jsx";
 import { NewSessionSheet } from "./components/NewSessionSheet.jsx";
 import { QuickSessionModal } from "./components/QuickSessionModal.jsx";
 import { ToastContainer } from "./components/ToastContainer.jsx";
+import { BottomNav } from "./components/BottomNav.jsx";
 import { toast } from "./lib/toast.js";
 
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
@@ -721,7 +723,14 @@ export default function ClimbingPlanner() {
 
   return (
     <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: data.mesocycles || [] }}>
-    <div style={{ ...styles.app, height: viewMode === "week" ? "100dvh" : undefined, minHeight: "100dvh", overflowY: viewMode === "week" ? "hidden" : "auto", overflowX: "hidden" }}>
+    <div style={{
+      ...styles.app,
+      height: viewMode === "week" ? "100dvh" : undefined,
+      minHeight: "100dvh",
+      overflowY: viewMode === "week" ? "hidden" : "auto",
+      overflowX: "hidden",
+      paddingBottom: isMobile ? "calc(56px + env(safe-area-inset-bottom))" : 0,
+    }}>
       <div style={styles.grain} />
 
       {/* ── HEADER MOBILE ── */}
@@ -742,8 +751,9 @@ export default function ClimbingPlanner() {
               )}
             </div>
           </div>
-          <div style={styles.headerMobileRow2}>
-            {viewToggle}
+          {/* Sur mobile la barre nav principale est en bas (BottomNav).
+              On garde seulement le bouton profil dans l'entête. */}
+          <div style={{ ...styles.headerMobileRow2, justifyContent: "flex-end" }}>
             <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
               {profileBtn}
             </div>
@@ -880,6 +890,7 @@ export default function ClimbingPlanner() {
         <AccueilView
           data={data}
           isMobile={isMobile}
+          isLoading={!!session && !cloudLoaded}
           onOpenSession={openSessionModal}
           onToggleCreatine={dateISO => setData(d => {
             const cr = { ...(d.creatine || {}) };
@@ -1080,6 +1091,7 @@ export default function ClimbingPlanner() {
       {viewMode === "dash" && (
         <Dashboard
           data={data}
+          isLoading={!!session && !cloudLoaded}
           onUpdateSleep={newRows => setData(d => {
             const map = Object.fromEntries((d.sleep || []).map(r => [r.date, r]));
             for (const r of newRows) map[r.date] = r;
@@ -1243,13 +1255,26 @@ export default function ClimbingPlanner() {
           })}
         />
       )}
-      {/* ── Role Onboarding ── */}
+      {/* ── Role Onboarding (1er login) ── */}
       {session && cloudLoaded && roleResolved && !("role" in (data.profile || {})) && (
         <RoleOnboardingModal
           onSelect={role => {
             setData(d => ({ ...d, profile: { ...(d.profile || {}), role } }));
             writeStatus(session.user.id, role);
           }}
+        />
+      )}
+
+      {/* ── Onboarding 3 écrans (après le choix du rôle) ── */}
+      {session && cloudLoaded && roleResolved
+        && ("role" in (data.profile || {}))
+        && !data.profile?.onboarded
+        && !viewingAthlete && (
+        <OnboardingModal
+          onComplete={() => setData(d => ({
+            ...d,
+            profile: { ...(d.profile || {}), onboarded: true },
+          }))}
         />
       )}
 
@@ -1356,6 +1381,13 @@ export default function ClimbingPlanner() {
         />
       )}
 
+      {isMobile && (
+        <BottomNav
+          viewMode={viewMode}
+          onChange={(k) => setViewMode(k)}
+          extraTabs={hasCoachFeatures ? [{ key: "library", label: "Bibli", glyph: "≣" }] : []}
+        />
+      )}
       <ToastContainer isMobile={isMobile} />
     </div>
     </ThemeContext.Provider>
