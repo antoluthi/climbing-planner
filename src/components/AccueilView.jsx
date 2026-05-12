@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getMesoForDate, getDayLogWarning } from "../lib/constants.js";
-import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions } from "../lib/helpers.js";
+import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, getLastKnownWeight } from "../lib/helpers.js";
 import { getChargeColor } from "../lib/charge.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { AccueilSkeleton } from "./ui/Skeleton.jsx";
@@ -1008,9 +1008,12 @@ function AccueilViewBody({
   // ── Créatine ──
   const hasCreatine = !!data.creatine?.[today];
 
-  // ── Poids (stepper inline) ──
+  // ── Poids (stepper inline, pré-rempli avec la dernière valeur connue) ──
   const todayWeight = data.weight?.[today] ?? null;
-  const [weightInput, setWeightInput] = useState(todayWeight != null ? String(todayWeight) : "");
+  const prefillWeight = todayWeight ?? getLastKnownWeight(data, today);
+  const [weightInput, setWeightInput] = useState(
+    prefillWeight != null ? String(prefillWeight) : ""
+  );
   const commitWeight = () => {
     const val = parseFloat(weightInput.replace(",", "."));
     if (!isNaN(val) && val > 0) onSaveWeight?.(today, Math.round(val * 10) / 10);

@@ -81,3 +81,17 @@ export function getMonthWeeks(year, month) {
   }
   return weeks;
 }
+
+// Renvoie la dernière valeur de poids connue (incluant today si présent),
+// ou null si aucune valeur n'a été enregistrée.
+export function getLastKnownWeight(data, todayISO) {
+  const w = data?.weight || {};
+  const dates = Object.keys(w).filter(d => w[d] != null);
+  if (dates.length === 0) return null;
+  // Préfère today si dispo, sinon la date la plus récente <= today.
+  if (todayISO && w[todayISO] != null) return w[todayISO];
+  const past = todayISO ? dates.filter(d => d <= todayISO) : dates;
+  const pool = past.length ? past : dates;
+  pool.sort((a, b) => b.localeCompare(a));
+  return w[pool[0]] ?? null;
+}

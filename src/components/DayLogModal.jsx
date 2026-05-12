@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { addDays, localDateStr } from "../lib/helpers.js";
+import { addDays, localDateStr, getLastKnownWeight } from "../lib/helpers.js";
 import { isDateInCustomCycle } from "../lib/constants.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { Z } from "../theme/makeStyles.js";
@@ -42,13 +42,17 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
   }, [dateISO]);
   const noteDirty = noteText !== noteSaved;
 
-  // ── Weight ──
-  const [weightInput, setWeightInput] = useState(
-    data.weight?.[dateISO] != null ? String(data.weight[dateISO]) : ""
-  );
+  // ── Weight (pré-rempli avec la dernière valeur connue) ──
+  const weightForDate = (iso) => {
+    if (data.weight?.[iso] != null) return String(data.weight[iso]);
+    const last = getLastKnownWeight(data, iso);
+    return last != null ? String(last) : "";
+  };
+  const [weightInput, setWeightInput] = useState(() => weightForDate(dateISO));
   useEffect(() => {
-    setWeightInput(data.weight?.[dateISO] != null ? String(data.weight[dateISO]) : "");
+    setWeightInput(weightForDate(dateISO));
   }, [dateISO]);
+  // Le "saved" reste la vraie valeur enregistrée pour cette date (sinon "").
   const weightSavedStr = data.weight?.[dateISO] != null ? String(data.weight[dateISO]) : "";
   const weightDirty = weightInput.trim() !== weightSavedStr;
 
