@@ -967,6 +967,15 @@ export default function ClimbingPlanner() {
             if (dayMeals.length === 0) delete nutrition[dateISO]; else nutrition[dateISO] = dayMeals;
             return { ...d, nutrition };
           })}
+          onOpenLog={(dateISO) => setLogDate(dateISO || localDateStr(new Date()))}
+          onAddSession={(dayIdxToday) => {
+            // AccueilView est toujours « aujourd'hui ». S'assurer que la
+            // semaine courante de la planification contient bien today
+            // avant d'ouvrir la NewSessionSheet sur le bon jour.
+            setCurrentDate(new Date());
+            setAddChoiceDay(dayIdxToday);
+          }}
+          onToggleSessionDone={(wKeyArg, dayIdx, si) => toggleSessionDone(wKeyArg, dayIdx, si)}
         />
       )}
 

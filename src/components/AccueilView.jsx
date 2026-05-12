@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { BLOCK_TYPES, getMesoForDate } from "../lib/constants.js";
+import { getMesoForDate, getDayLogWarning } from "../lib/constants.js";
 import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions } from "../lib/helpers.js";
 import { getChargeColor } from "../lib/charge.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { AccueilSkeleton } from "./ui/Skeleton.jsx";
+import { TodaySessionCard } from "./TodaySessionCard.jsx";
 
 // ─── GREETING BY TIME OF DAY ──────────────────────────────────────────────────
 
@@ -961,7 +962,17 @@ export function AccueilView(props) {
   return <AccueilViewBody {...props} />;
 }
 
-function AccueilViewBody({ data, isMobile, onOpenSession, onToggleCreatine, onSaveWeight, onAddHooper, onAddNutrition, onDeleteNutrition }) {
+function AccueilViewBody({
+  data, isMobile,
+  onOpenSession,
+  onToggleCreatine, onSaveWeight,
+  onAddNutrition, onDeleteNutrition,
+  onOpenLog,
+  onAddSession,
+  onToggleSessionDone,
+}) {
+  // onAddHooper n'est plus utilisé ici : l'édition Hooper se fait dans
+  // DayLogModal, ouvert via la carte "Journal du jour" ci-dessous.
   const { isDark } = useThemeCtx();
 
   const today = localDateStr(new Date());
@@ -974,40 +985,30 @@ function AccueilViewBody({ data, isMobile, onOpenSession, onToggleCreatine, onSa
   const dayIndex = dow === 0 ? 6 : dow - 1;
   const weekSessions = data.weeks[wKey] || Array(7).fill(null).map(() => []);
   const todaySessions = weekSessions[dayIndex] || [];
+  const todayCharge = todaySessions.reduce((s, x) => s + (x.charge || 0), 0);
 
   // Profile
   const firstName = data.profile?.firstName || "";
 
-  // Hooper
+  // ── Tokens partagés avec DayLogModal / DayListView ───────────────────────
+  const paper        = isDark ? "#1f2421" : "#fcf8ef";
+  const paperDim     = isDark ? "#1a1f1c" : "#f7f1e2";
+  const surfaceCard  = isDark ? "#1f2421" : "#ffffff";
+  const surfaceMuted = isDark ? "#222a23" : "#f0ebde";
+  const border       = isDark ? "#2a302a" : "#e6dfd1";
+  const text         = isDark ? "#e8e4de" : "#2a2218";
+  const textMid      = isDark ? "#a4a09a" : "#5a4d3c";
+  const textLight    = isDark ? "#7a7570" : "#8a7f70";
+  const accent       = isDark ? "#c8906a" : "#8b4c20";
+  const inkPrimary   = isDark ? "#c8c0b4" : "#2a2218";
+
+  // ── Hooper (read-only summary, édition complète dans DayLogModal) ────────
   const existingHooper = (data.hooper || []).find(h => h.date === today);
-  const [hOpen, setHOpen] = useState(false);
-  const [hForm, setHForm] = useState(
-    existingHooper
-      ? { fatigue: existingHooper.fatigue, stress: existingHooper.stress, soreness: existingHooper.soreness, sleep: existingHooper.sleep }
-      : { fatigue: null, stress: null, soreness: null, sleep: null }
-  );
-  const [hSaved, setHSaved] = useState(false);
-  const hAllFilled = hForm.fatigue && hForm.stress && hForm.soreness && hForm.sleep;
-  const hTotal = hAllFilled ? hForm.fatigue + hForm.stress + hForm.soreness + hForm.sleep : null;
 
-  const handleHooperSave = () => {
-    if (!hAllFilled) return;
-    onAddHooper({
-      id: existingHooper?.id || "h_" + Date.now().toString(36),
-      date: today,
-      time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
-      ...hForm,
-      total: hTotal,
-    });
-    setHSaved(true);
-    setHOpen(false);
-    setTimeout(() => setHSaved(false), 3000);
-  };
-
-  // Creatine
+  // ── Créatine ──
   const hasCreatine = !!data.creatine?.[today];
 
-  // Weight
+  // ── Poids (stepper inline) ──
   const todayWeight = data.weight?.[today] ?? null;
   const [weightInput, setWeightInput] = useState(todayWeight != null ? String(todayWeight) : "");
   const commitWeight = () => {
@@ -1016,7 +1017,7 @@ function AccueilViewBody({ data, isMobile, onOpenSession, onToggleCreatine, onSa
     else if (weightInput.trim() === "") onSaveWeight?.(today, null);
   };
 
-  // Nutrition
+  // ── Nutrition ──
   const todayMeals = data.nutrition?.[today] || [];
   const totalCalories = todayMeals.reduce((s, m) => s + (m.calories || 0), 0);
   const totalProteins = todayMeals.reduce((s, m) => s + (m.proteins || 0), 0);
@@ -1025,324 +1026,479 @@ function AccueilViewBody({ data, isMobile, onOpenSession, onToggleCreatine, onSa
   const nutrValid = nutrForm.name.trim() && (nutrForm.calories !== "" || nutrForm.proteins !== "");
   const handleAddMeal = () => {
     if (!nutrValid) return;
-    const meal = { id: "m_" + Date.now().toString(36), name: nutrForm.name.trim(), calories: nutrForm.calories !== "" ? Math.round(Number(nutrForm.calories)) : 0, proteins: nutrForm.proteins !== "" ? Math.round(Number(nutrForm.proteins)) : 0 };
+    const meal = {
+      id: "m_" + Date.now().toString(36),
+      name: nutrForm.name.trim(),
+      calories: nutrForm.calories !== "" ? Math.round(Number(nutrForm.calories)) : 0,
+      proteins: nutrForm.proteins !== "" ? Math.round(Number(nutrForm.proteins)) : 0,
+    };
     onAddNutrition(today, meal);
     setNutrForm({ name: "", calories: "", proteins: "" });
     setNutrOpen(false);
   };
 
-  // Mesocycle context
+  // ── Méso contexte ──
   const mesoCtx = getMesoForDate(data.mesocycles || [], todayObj);
+  const microIdx = mesoCtx?.meso && mesoCtx?.micro
+    ? (mesoCtx.meso.microcycles || []).findIndex(m => m.id === mesoCtx.micro.id)
+    : -1;
+  const microTotal = mesoCtx?.meso?.microcycles?.length || 0;
 
-  // Contextual phrase
+  // ── Phrase contextuelle (helper existant) ──
   const phraseCtx = buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayIndex, mesoCtx);
   const contextualPhrase = getContextualPhrase(phraseCtx);
 
-  // Colors
-  const accentGreen = isDark ? "#c8906a" : "#8b4c20";
-  const panelBg = isDark ? "#1e231f" : "#e8e3da";
-  const textMain = isDark ? "#e8e4de" : "#2a2218";
-  const textMuted = isDark ? "#9ca3af" : "#6b7280";
-  const panelBorder = isDark ? "#2a2f2a" : "#d0cbc3";
-  const btnNum = { width: 28, height: 28, borderRadius: 4, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "inherit", transition: "all 0.12s" };
-  const sectionLabel = { fontSize: 10, fontWeight: 700, color: textMuted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 };
+  // ── Journal du jour : état ──
+  const logWarning = getDayLogWarning(data, today, todayObj);
+  const journalState = logWarning?.hasWarning
+    ? "warn"
+    : (existingHooper && todayWeight != null && hasCreatine) ? "complete" : "empty";
+
+  const journalColors = (() => {
+    if (journalState === "warn")     return { bg: isDark ? "#2a1808" : "#fbecdc", border: isDark ? "#5a3a10" : "#f0c890", fg: isDark ? "#fbbf24" : "#8a4f10" };
+    if (journalState === "complete") return { bg: isDark ? "#1c2d20" : "#e7f2e0", border: isDark ? "#3a5a3a" : "#a8d0a8", fg: isDark ? "#7ab890" : "#2e6b3f" };
+    return { bg: surfaceCard, border, fg: accent };
+  })();
+
+  const journalText = journalState === "complete"
+    ? { title: "Journal complété", sub: "Tout est rempli pour aujourd'hui" }
+    : journalState === "warn"
+      ? { title: "Journal à compléter", sub: "Il manque encore des éléments" }
+      : { title: "Journal du jour", sub: "Note, poids, Hooper en un instant" };
+
+  // ── Styles partagés ──
+  const cardLabel = {
+    fontFamily: "'Newsreader', Georgia, serif",
+    fontSize: 13, fontWeight: 500, color: text, letterSpacing: "0.02em",
+  };
+  const sectionHeading = {
+    fontSize: 11,
+    fontWeight: 500,
+    color: textLight,
+    letterSpacing: "0.1em",
+    textTransform: "uppercase",
+    fontFamily: "'Newsreader', Georgia, serif",
+    margin: "0 0 10px",
+  };
 
   const dateFull = todayObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  const weekN = (() => {
+    const d = new Date(todayObj);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+    const w1 = new Date(d.getFullYear(), 0, 4);
+    return 1 + Math.round(((d - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7);
+  })();
 
-  const HCRIT = [
-    { key: "fatigue",  label: "Fatigue",    sub: "épuisement général" },
-    { key: "stress",   label: "Stress",      sub: "mental / émotionnel" },
-    { key: "soreness", label: "Courbatures", sub: "douleurs musculaires" },
-    { key: "sleep",    label: "Sommeil ↓",   sub: "1 = excellent · 7 = très mauvais" },
-  ];
+  const chargeColors = (() => {
+    if (todayCharge < 4)  return { bg: isDark ? "#1c2d20" : "#e3f0e5", fg: isDark ? "#7ab890" : "#2e6b3f" };
+    if (todayCharge < 7)  return { bg: isDark ? "#2a2410" : "#fef2dc", fg: isDark ? "#d4a843" : "#b8881a" };
+    return { bg: isDark ? "#2a1a10" : "#fbecdc", fg: isDark ? "#c8906a" : "#b8651a" };
+  })();
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "24px 16px" : "36px 40px", display: "flex", flexDirection: "column", gap: 28 }}>
+    <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+      {/* ── Hero header (gradient — même style que DayListView/DayLogModal) ── */}
+      <div
+        style={{
+          padding: isMobile ? "24px 18px 20px" : "40px 32px 28px",
+          background: isDark
+            ? `linear-gradient(180deg, ${paper}, ${paperDim})`
+            : `linear-gradient(180deg, ${paper} 0%, ${paperDim} 100%)`,
+          borderBottom: `1px solid ${border}`,
+        }}
+      >
+        {/* Eyebrow date · semaine */}
+        <div
+          style={{
+            fontSize: 11, fontWeight: 600, color: accent,
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            marginBottom: 8,
+          }}
+        >
+          {dateFull} · S{String(weekN).padStart(2, "0")}
+        </div>
 
-      {/* Greeting */}
-      <div>
-        <div style={{ fontSize: isMobile ? 36 : 52, fontWeight: 600, color: textMain, letterSpacing: "0.01em", lineHeight: 1.1, fontFamily: "'Newsreader', Georgia, serif" }}>
+        {/* Greeting */}
+        <div
+          style={{
+            fontFamily: "'Newsreader', Georgia, serif",
+            fontSize: isMobile ? 34 : 44,
+            fontWeight: 500, color: text,
+            lineHeight: 1.08, letterSpacing: "-0.01em",
+            textWrap: "balance",
+          }}
+        >
           {getGreeting(new Date().getHours(), firstName)}
         </div>
-        <div style={{ fontSize: 13, color: textMuted, marginTop: 5, textTransform: "capitalize" }}>
-          {dateFull}
-        </div>
-        <div style={{ fontSize: isMobile ? 14 : 15, color: textMuted, marginTop: 8, fontStyle: "italic", fontFamily: "'Newsreader', Georgia, serif", lineHeight: 1.4 }}>
+
+        {/* Contextual phrase */}
+        <div
+          style={{
+            fontFamily: "'Newsreader', Georgia, serif",
+            fontSize: isMobile ? 15 : 17,
+            color: textMid, fontStyle: "italic",
+            lineHeight: 1.5, marginTop: 8,
+            maxWidth: 640,
+          }}
+        >
           {contextualPhrase}
         </div>
-        {mesoCtx?.meso && (
-          <div style={{ marginTop: 10, display: "flex", gap: 6, alignItems: "center" }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: mesoCtx.meso.color, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-              {mesoCtx.meso.label}
-            </span>
-            {mesoCtx.micro && (
-              <>
-                <span style={{ fontSize: 10, color: mesoCtx.meso.color + "55" }}>›</span>
-                <span style={{ fontSize: 10, fontWeight: 600, color: mesoCtx.meso.color + "cc", letterSpacing: "0.06em", background: mesoCtx.meso.color + "22", padding: "1px 7px", borderRadius: 10, border: `1px solid ${mesoCtx.meso.color}44` }}>
-                  {mesoCtx.micro.label}
-                </span>
-              </>
+
+        {/* Meta row : meso chip + charge chip */}
+        {(mesoCtx?.meso || todayCharge > 0) && (
+          <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap", alignItems: "center" }}>
+            {mesoCtx?.meso && (
+              <span style={{
+                fontSize: 11, fontWeight: 600,
+                background: mesoCtx.meso.color + "22",
+                color: mesoCtx.meso.color,
+                border: `1px solid ${mesoCtx.meso.color}44`,
+                borderRadius: 14, padding: "3px 10px",
+                letterSpacing: "0.04em",
+              }}>
+                {mesoCtx.meso.label}
+                {mesoCtx.micro && microIdx >= 0 && microTotal > 1 && (
+                  <span style={{ marginLeft: 6, opacity: 0.85 }}>· S{microIdx + 1}/{microTotal}</span>
+                )}
+              </span>
+            )}
+            {todayCharge > 0 && (
+              <span style={{
+                fontSize: 11, fontWeight: 700,
+                background: chargeColors.bg,
+                color: chargeColors.fg,
+                border: `1px solid ${chargeColors.fg}55`,
+                borderRadius: 14, padding: "3px 10px",
+              }}>
+                Charge · {todayCharge}
+              </span>
+            )}
+            {todaySessions.length > 0 && (
+              <span style={{ fontSize: 12, color: textLight }}>
+                {todaySessions.length} séance{todaySessions.length > 1 ? "s" : ""}
+              </span>
             )}
           </div>
         )}
       </div>
 
-      {/* Content grid */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 24, alignItems: "start" }}>
-
-        {/* Left: Programme du jour */}
-        <div>
-          <div style={sectionLabel}>Programme du jour</div>
+      {/* ── Body ── */}
+      <div
+        style={{
+          flex: 1,
+          padding: isMobile ? "18px 16px 24px" : "24px 32px 40px",
+          maxWidth: 760,
+          width: "100%",
+          margin: "0 auto",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
+        {/* ── Programme du jour ───────────────────────────────────── */}
+        <section>
+          <div style={sectionHeading}>Programme du jour</div>
           {todaySessions.length === 0 ? (
-            <div style={{ fontSize: 13, color: textMuted, fontStyle: "italic", padding: "12px 0" }}>
-              Pas de séance prévue aujourd'hui
+            <div style={{
+              background: surfaceCard, border: `1px dashed ${border}`,
+              borderRadius: 12, padding: "22px 16px",
+              textAlign: "center", color: textLight, fontSize: 13,
+            }}>
+              Pas de séance prévue aujourd'hui.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {todaySessions.map((session, si) => (
-                <div
+                <TodaySessionCard
                   key={si}
-                  onClick={() => onOpenSession(wKey, dayIndex, si)}
-                  style={{ background: panelBg, borderRadius: 8, padding: "12px 14px", cursor: "pointer", display: "flex", gap: 10, alignItems: "flex-start", border: `1px solid ${panelBorder}` }}
-                >
-                  <div style={{ width: 3, borderRadius: 2, background: getChargeColor(session.charge), alignSelf: "stretch", flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    {session.startTime && (
-                      <div style={{ fontSize: 11, color: accentGreen, fontWeight: 600, marginBottom: 3 }}>
-                        {session.startTime}{session.endTime ? ` – ${session.endTime}` : ""}
-                      </div>
-                    )}
-                    <div style={{ fontSize: 14, fontWeight: 600, color: textMain }}>
-                      {session.title || session.name}
-                    </div>
-                    {session.blocks && session.blocks.length > 0 && (
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>
-                        {session.blocks.map((bl, bi) => {
-                          const cfg = BLOCK_TYPES[bl.type];
-                          if (!cfg) return null;
-                          return (
-                            <span key={bi} style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: cfg.color + "22", color: cfg.color, border: `1px solid ${cfg.color}44` }}>
-                              {bl.type === "Exercices" && bl.name ? bl.name.split(" ").slice(0, 2).join(" ") : bl.type}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                    {session.coachNote && (
-                      <div style={{ fontSize: 10, color: isDark ? "#a0b8a0" : "#4a7060", fontStyle: "italic", marginTop: 5, lineHeight: 1.4, borderLeft: `2px solid ${isDark ? "#3a6040" : "#a0c8a8"}`, paddingLeft: 5 }}>
-                        {session.coachNote}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
-                      <span style={{ fontSize: 10, color: getChargeColor(session.charge) }}>⚡{session.charge}</span>
-                      {session.estimatedTime && <span style={{ fontSize: 10, color: textMuted }}>{session.estimatedTime}min</span>}
-                      {session.feedback ? (
-                        <span style={{ fontSize: 10, color: session.feedback.done ? accentGreen : "#f87171", fontWeight: 600 }}>
-                          {session.feedback.done ? "✓ Fait" : "✗ Manqué"}
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: 10, color: textMuted, fontStyle: "italic" }}>Feedback →</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                  session={session}
+                  onTap={() => onOpenSession(wKey, dayIndex, si)}
+                  onToggleDone={() => onToggleSessionDone?.(wKey, dayIndex, si)}
+                />
               ))}
             </div>
           )}
-        </div>
+          {onAddSession && (
+            <button
+              onClick={() => onAddSession(dayIndex)}
+              style={{
+                marginTop: 10,
+                width: "100%",
+                background: inkPrimary,
+                color: isDark ? paper : "#fff",
+                border: "none", borderRadius: 12,
+                padding: "12px 16px",
+                fontSize: 14, fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+                letterSpacing: "0.02em",
+              }}
+            >+ Ajouter une séance</button>
+          )}
+        </section>
 
-        {/* Right: Infos à remplir */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={sectionLabel}>Infos du jour</div>
-
-          {/* Créatine */}
-          <div style={{ background: panelBg, borderRadius: 8, padding: "12px 14px", border: `1px solid ${panelBorder}` }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={hasCreatine}
-                onChange={() => onToggleCreatine(today)}
-                style={{ width: 16, height: 16, accentColor: accentGreen, cursor: "pointer" }}
-              />
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: textMain }}>Créatine</div>
-                <div style={{ fontSize: 10, color: textMuted }}>Prise de créatine du jour</div>
-              </div>
-              {hasCreatine && <span style={{ marginLeft: "auto", fontSize: 12, color: accentGreen, fontWeight: 700 }}>✓</span>}
-            </label>
-          </div>
-
-          {/* Poids */}
-          <div style={{ background: panelBg, borderRadius: 8, padding: "12px 14px", border: `1px solid ${panelBorder}` }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: textMain, marginBottom: 8 }}>
-              Poids
-              {todayWeight != null && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: accentGreen }}>✓ {todayWeight} kg</span>}
+        {/* ── Journal du jour (raccourci tappable) ─────────────────── */}
+        {onOpenLog && (
+          <button
+            onClick={() => onOpenLog(today)}
+            style={{
+              background: journalColors.bg,
+              border: `1px solid ${journalColors.border}`,
+              borderRadius: 12, padding: "12px 14px",
+              display: "flex", alignItems: "center", gap: 10,
+              width: "100%", textAlign: "left",
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <div style={{
+              width: 32, height: 32, borderRadius: "50%",
+              background: journalState === "complete" ? "#2e6b3f" : journalState === "warn" ? "#f0c890" : accent + "22",
+              color: journalState === "complete" ? "#fff" : journalState === "warn" ? "#8a4f10" : accent,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 14, fontWeight: 700, flexShrink: 0,
+            }}>
+              {journalState === "complete" ? "✓" : journalState === "warn" ? "!" : "✎"}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: text }}>{journalText.title}</div>
+              <div style={{ fontSize: 11, color: textLight, marginTop: 1 }}>{journalText.sub}</div>
+            </div>
+            <span style={{ color: textLight, fontSize: 16 }}>›</span>
+          </button>
+        )}
+
+        {/* ── Wellness grid (mêmes cards que DayLogModal) ──────────── */}
+        <section>
+          <div style={sectionHeading}>Aujourd'hui</div>
+
+          {/* Row 1 : Poids + Créatine */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            {/* Poids stepper */}
+            <div style={{
+              background: surfaceCard, border: `1px solid ${border}`,
+              borderRadius: 12, padding: "10px 12px",
+              flex: 1, display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <span style={{ fontSize: 11, color: textLight, flex: 1 }}>Poids</span>
+              <button
+                onClick={() => {
+                  const cur = parseFloat(weightInput.replace(",", ".")) || 0;
+                  const next = Math.max(0, Math.round((cur - 0.1) * 10) / 10);
+                  setWeightInput(String(next));
+                }}
+                aria-label="Diminuer"
+                style={{
+                  width: 24, height: 24, borderRadius: "50%",
+                  background: surfaceMuted, color: accent,
+                  border: "none", cursor: "pointer",
+                  fontSize: 14, fontWeight: 700, fontFamily: "inherit",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >−</button>
               <input
-                type="number"
-                step="0.1" min="20" max="300"
-                placeholder="—"
+                type="text" inputMode="decimal"
                 value={weightInput}
                 onChange={e => setWeightInput(e.target.value)}
                 onBlur={commitWeight}
                 onKeyDown={e => { if (e.key === "Enter") { commitWeight(); e.target.blur(); } }}
+                placeholder="—"
                 style={{
-                  background: isDark ? "#161a16" : "#f0ece4",
-                  border: `1px solid ${panelBorder}`,
-                  borderRadius: 6, color: textMain,
-                  fontSize: 18, fontFamily: "inherit", fontWeight: 700,
-                  padding: "5px 10px", outline: "none", width: 80,
-                  textAlign: "center", MozAppearance: "textfield",
+                  width: 50, textAlign: "center",
+                  background: "transparent", border: "none",
+                  fontSize: 14, fontWeight: 600, color: text,
+                  fontFamily: "inherit", outline: "none",
                 }}
               />
-              <span style={{ fontSize: 12, color: textMuted }}>kg</span>
-            </div>
-          </div>
-
-          {/* Hooper */}
-          <div style={{ background: panelBg, borderRadius: 8, padding: "12px 14px", border: `1px solid ${panelBorder}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: hOpen ? 14 : 0 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: textMain }}>Indice Hooper</div>
-                {existingHooper && !hOpen && (
-                  <div style={{ fontSize: 11, color: hooperColor(existingHooper.total, isDark), marginTop: 2, fontWeight: 600 }}>
-                    {existingHooper.total} — {hooperLabel(existingHooper.total)}
-                    <span style={{ fontSize: 10, color: textMuted, fontWeight: 400, marginLeft: 6 }}>{existingHooper.time}</span>
-                  </div>
-                )}
-                {!existingHooper && !hOpen && (
-                  <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>À remplir</div>
-                )}
-                {hSaved && <div style={{ fontSize: 10, color: accentGreen, marginTop: 2 }}>✓ Enregistré</div>}
-              </div>
               <button
                 onClick={() => {
-                  if (!hOpen && existingHooper) {
-                    setHForm({ fatigue: existingHooper.fatigue, stress: existingHooper.stress, soreness: existingHooper.soreness, sleep: existingHooper.sleep });
-                  }
-                  setHOpen(o => !o);
+                  const cur = parseFloat(weightInput.replace(",", ".")) || 0;
+                  const next = Math.round((cur + 0.1) * 10) / 10;
+                  setWeightInput(String(next));
                 }}
-                style={{ background: "none", border: `1px solid ${panelBorder}`, borderRadius: 5, color: textMain, padding: "3px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
-              >
-                {hOpen ? "✕ Fermer" : existingHooper ? "Modifier" : "+ Remplir"}
-              </button>
+                aria-label="Augmenter"
+                style={{
+                  width: 24, height: 24, borderRadius: "50%",
+                  background: surfaceMuted, color: accent,
+                  border: "none", cursor: "pointer",
+                  fontSize: 14, fontWeight: 700, fontFamily: "inherit",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >+</button>
             </div>
 
-            {hOpen && (
-              <div>
-                {HCRIT.map(({ key, label, sub }) => (
-                  <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <div style={{ width: 110, flexShrink: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 500, color: textMain }}>{label}</div>
-                      <div style={{ fontSize: 9, color: textMuted }}>{sub}</div>
-                    </div>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      {[1, 2, 3, 4, 5, 6, 7].map(v => {
-                        const active = hForm[key] === v;
-                        const btnBg = active
-                          ? (v <= 2 ? (isDark ? "#4ade80" : "#2a7d4f") : v <= 4 ? "#f97316" : "#f87171")
-                          : (isDark ? "#2a2f2a" : "#d8d3ca");
-                        return (
-                          <button key={v} onClick={() => setHForm(f => ({ ...f, [key]: v }))}
-                            style={{ ...btnNum, background: btnBg, color: active ? "#fff" : textMain, fontWeight: active ? 600 : 400 }}>
-                            {v}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-                {hTotal !== null && (
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: hooperColor(hTotal, isDark) }}>
-                    Indice : {hTotal} — {hooperLabel(hTotal)}
-                  </div>
-                )}
-                <button
-                  onClick={handleHooperSave}
-                  disabled={!hAllFilled}
-                  style={{ background: hAllFilled ? accentGreen : (isDark ? "#2a2f2a" : "#d0d0c0"), border: "none", borderRadius: 6, color: hAllFilled ? (isDark ? "#0a0f0a" : "#fff") : textMuted, padding: "6px 18px", cursor: hAllFilled ? "pointer" : "default", fontSize: 12, fontFamily: "inherit", fontWeight: 600 }}
-                >
-                  Enregistrer
-                </button>
-              </div>
-            )}
+            {/* Créatine toggle */}
+            <button
+              onClick={() => onToggleCreatine(today)}
+              style={{
+                background: hasCreatine ? (isDark ? "#1c2d20" : "#e3f0e5") : surfaceCard,
+                border: hasCreatine ? `1px solid ${isDark ? "#3a5a3a" : "#a8d0a8"}` : `1px solid ${border}`,
+                borderRadius: 12, padding: "10px 14px",
+                flex: 1, display: "flex", alignItems: "center", gap: 8,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <span style={{ fontSize: 11, color: hasCreatine ? (isDark ? "#7ab890" : "#2e6b3f") : textLight, flex: 1, textAlign: "left" }}>
+                Créatine
+              </span>
+              <span style={{
+                fontSize: 13, fontWeight: 700,
+                color: hasCreatine ? (isDark ? "#7ab890" : "#2e6b3f") : textLight,
+              }}>
+                {hasCreatine ? "✓ Prise" : "—"}
+              </span>
+            </button>
           </div>
 
-          {/* Nutrition */}
-          <div style={{ background: panelBg, borderRadius: 8, padding: "12px 14px", border: `1px solid ${panelBorder}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: nutrOpen ? 12 : 0 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: textMain }}>Nutrition</div>
-                {(totalCalories > 0 || totalProteins > 0) && !nutrOpen && (
-                  <div style={{ fontSize: 11, color: accentGreen, marginTop: 2, fontWeight: 600 }}>
-                    {totalCalories} kcal · {totalProteins} g prot
+          {/* Hooper (summary tappable, édition dans DayLogModal) */}
+          <button
+            onClick={() => onOpenLog?.(today)}
+            style={{
+              background: surfaceCard, border: `1px solid ${border}`,
+              borderRadius: 12, padding: 14, width: "100%",
+              display: "flex", alignItems: "center", gap: 12,
+              cursor: onOpenLog ? "pointer" : "default", fontFamily: "inherit",
+              textAlign: "left",
+              marginBottom: 10,
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <div style={{ ...cardLabel, marginBottom: 4 }}>Hooper</div>
+              {existingHooper ? (
+                <div style={{
+                  fontSize: 12, color: hooperColor(existingHooper.total, isDark),
+                  fontWeight: 600,
+                }}>
+                  {hooperLabel(existingHooper.total)}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: textLight }}>
+                  Pas encore rempli aujourd'hui
+                </div>
+              )}
+            </div>
+            <span style={{
+              fontFamily: "'Newsreader', Georgia, serif",
+              fontSize: 18, fontWeight: 700,
+              color: existingHooper ? hooperColor(existingHooper.total, isDark) : textLight,
+            }}>
+              {existingHooper ? `${existingHooper.total} / 28` : "—"}
+            </span>
+            <span style={{ color: textLight, fontSize: 16 }}>›</span>
+          </button>
+
+          {/* Nutrition card */}
+          <div style={{
+            background: surfaceCard, border: `1px solid ${border}`,
+            borderRadius: 12, padding: 14,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: nutrOpen ? 10 : 0 }}>
+              <div>
+                <div style={cardLabel}>Nutrition</div>
+                {(totalCalories > 0 || totalProteins > 0) ? (
+                  <div style={{ fontSize: 11, color: textMid, marginTop: 2 }}>
+                    {totalCalories} kcal · {totalProteins} g de protéines
                   </div>
-                )}
-                {totalCalories === 0 && totalProteins === 0 && !nutrOpen && (
-                  <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>Aucun repas enregistré</div>
+                ) : (
+                  <div style={{ fontSize: 11, color: textLight, marginTop: 2 }}>
+                    Aucun repas enregistré
+                  </div>
                 )}
               </div>
               <button
                 onClick={() => setNutrOpen(o => !o)}
-                style={{ background: "none", border: `1px solid ${panelBorder}`, borderRadius: 5, color: textMain, padding: "3px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+                style={{
+                  background: "transparent", border: `1px solid ${border}`,
+                  borderRadius: 6, color: textMid,
+                  padding: "4px 12px", cursor: "pointer",
+                  fontSize: 11, fontFamily: "inherit",
+                }}
               >
-                {nutrOpen ? "✕ Fermer" : "+ Ajouter"}
+                {nutrOpen ? "Fermer" : "+ Ajouter"}
               </button>
             </div>
 
             {nutrOpen && (
-              <div>
-                {/* Meal list */}
+              <div style={{ marginTop: 8 }}>
                 {todayMeals.length > 0 && (
-                  <div style={{ marginBottom: 10, display: "flex", flexDirection: "column", gap: 5 }}>
+                  <div style={{ marginBottom: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                     {todayMeals.map(m => (
-                      <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: textMain }}>
+                      <div key={m.id} style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        background: paperDim, borderRadius: 8, padding: "6px 10px",
+                        fontSize: 12, color: text,
+                      }}>
                         <span style={{ flex: 1, fontWeight: 500 }}>{m.name}</span>
-                        <span style={{ color: textMuted, fontSize: 11 }}>{m.calories} kcal · {m.proteins} g</span>
+                        <span style={{ color: textLight, fontSize: 11 }}>{m.calories} kcal · {m.proteins} g</span>
                         <button
                           onClick={() => onDeleteNutrition(today, m.id)}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "#f87171", fontSize: 13, padding: "0 2px", lineHeight: 1 }}
+                          aria-label="Supprimer"
+                          style={{
+                            background: "none", border: "none",
+                            cursor: "pointer", color: isDark ? "#e87878" : "#b83030",
+                            fontSize: 12, padding: "0 4px", lineHeight: 1,
+                            fontFamily: "inherit",
+                          }}
                         >✕</button>
                       </div>
                     ))}
-                    <div style={{ fontSize: 11, fontWeight: 700, color: accentGreen, marginTop: 4, borderTop: `1px solid ${panelBorder}`, paddingTop: 6 }}>
-                      Total : {totalCalories} kcal · {totalProteins} g protéines
-                    </div>
                   </div>
                 )}
 
-                {/* Add meal form */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                   <input
                     type="text"
-                    placeholder="Repas (ex : Déjeuner, Poulet riz…)"
+                    placeholder="Repas (Déjeuner, Poulet riz…)"
                     value={nutrForm.name}
                     onChange={e => setNutrForm(f => ({ ...f, name: e.target.value }))}
-                    style={{ background: isDark ? "#161a16" : "#f0ece4", border: `1px solid ${panelBorder}`, borderRadius: 5, color: textMain, padding: "6px 10px", fontSize: 12, fontFamily: "inherit", outline: "none" }}
+                    style={{
+                      background: paperDim, border: `1px solid ${border}`,
+                      borderRadius: 8, padding: "8px 10px",
+                      fontSize: 13, fontFamily: "inherit", color: text,
+                      outline: "none",
+                    }}
                   />
                   <div style={{ display: "flex", gap: 7 }}>
                     <input
-                      type="number"
-                      placeholder="Calories (kcal)"
-                      min={0}
+                      type="number" min={0}
+                      placeholder="Calories"
                       value={nutrForm.calories}
                       onChange={e => setNutrForm(f => ({ ...f, calories: e.target.value }))}
-                      style={{ flex: 1, background: isDark ? "#161a16" : "#f0ece4", border: `1px solid ${panelBorder}`, borderRadius: 5, color: textMain, padding: "6px 10px", fontSize: 12, fontFamily: "inherit", outline: "none" }}
+                      style={{
+                        flex: 1,
+                        background: paperDim, border: `1px solid ${border}`,
+                        borderRadius: 8, padding: "8px 10px",
+                        fontSize: 13, fontFamily: "inherit", color: text,
+                        outline: "none",
+                      }}
                     />
                     <input
-                      type="number"
+                      type="number" min={0}
                       placeholder="Protéines (g)"
-                      min={0}
                       value={nutrForm.proteins}
                       onChange={e => setNutrForm(f => ({ ...f, proteins: e.target.value }))}
-                      style={{ flex: 1, background: isDark ? "#161a16" : "#f0ece4", border: `1px solid ${panelBorder}`, borderRadius: 5, color: textMain, padding: "6px 10px", fontSize: 12, fontFamily: "inherit", outline: "none" }}
+                      style={{
+                        flex: 1,
+                        background: paperDim, border: `1px solid ${border}`,
+                        borderRadius: 8, padding: "8px 10px",
+                        fontSize: 13, fontFamily: "inherit", color: text,
+                        outline: "none",
+                      }}
                     />
                   </div>
                   <button
                     onClick={handleAddMeal}
                     disabled={!nutrValid}
-                    style={{ background: nutrValid ? accentGreen : (isDark ? "#2a2f2a" : "#d0d0c0"), border: "none", borderRadius: 6, color: nutrValid ? (isDark ? "#0a0f0a" : "#fff") : textMuted, padding: "6px 18px", cursor: nutrValid ? "pointer" : "default", fontSize: 12, fontFamily: "inherit", fontWeight: 600, alignSelf: "flex-start" }}
+                    style={{
+                      alignSelf: "flex-start",
+                      background: nutrValid ? inkPrimary : border,
+                      color: nutrValid ? (isDark ? paper : "#fff") : textLight,
+                      border: "none", borderRadius: 8,
+                      padding: "8px 16px",
+                      fontSize: 13, fontWeight: 600,
+                      cursor: nutrValid ? "pointer" : "not-allowed",
+                      fontFamily: "inherit",
+                    }}
                   >
                     Ajouter
                   </button>
@@ -1350,46 +1506,54 @@ function AccueilViewBody({ data, isMobile, onOpenSession, onToggleCreatine, onSa
               </div>
             )}
           </div>
+        </section>
 
-        {/* ── Objectifs ── */}
+        {/* ── Objectifs à venir ────────────────────────────────────── */}
         {(() => {
           const allObj = (data.quickSessions || []).filter(qs => qs.isObjective);
-          const upcoming = allObj.filter(o => (o.endDate || o.startDate) >= today).sort((a, b) => a.startDate.localeCompare(b.startDate));
+          const upcoming = allObj
+            .filter(o => (o.endDate || o.startDate) >= today)
+            .sort((a, b) => a.startDate.localeCompare(b.startDate));
           if (upcoming.length === 0) return null;
           return (
-            <div style={{ marginTop: 24 }}>
-              <span style={{ ...sectionLabel }}>Objectifs</span>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <section>
+              <div style={sectionHeading}>Objectifs à venir</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {upcoming.map(o => {
                   const daysUntil = Math.ceil((new Date(o.startDate + "T00:00:00") - new Date(today + "T12:00:00")) / 864e5);
                   const c = o.color || "#f59e0b";
                   return (
                     <div key={o.id} style={{
                       display: "flex", alignItems: "center", gap: 10,
-                      background: c + (isDark ? "15" : "10"),
-                      border: `1px solid ${c}44`,
+                      background: surfaceCard,
+                      border: `1px solid ${border}`,
                       borderLeft: `4px solid ${c}`,
-                      borderRadius: 7, padding: "8px 12px",
+                      borderRadius: 12, padding: "10px 14px",
                     }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: textMain, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.name}</div>
-                        <div style={{ fontSize: 11, color: c, marginTop: 2 }}>
+                        <div style={{
+                          fontSize: 13, fontWeight: 600, color: text,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>{o.name}</div>
+                        <div style={{ fontSize: 11, color: c, marginTop: 2, fontWeight: 500 }}>
                           {new Date(o.startDate + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}
                           {daysUntil > 0 ? ` — dans ${daysUntil} jour${daysUntil > 1 ? "s" : ""}` : daysUntil === 0 ? " — aujourd'hui" : ""}
                         </div>
                       </div>
-                      {o.content && <span style={{ fontSize: 10, color: textMuted, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.content}</span>}
+                      {o.content && (
+                        <span style={{
+                          fontSize: 11, color: textLight,
+                          maxWidth: 140, overflow: "hidden",
+                          textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>{o.content}</span>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            </div>
+            </section>
           );
         })()}
-
-
-
-        </div>
       </div>
     </div>
   );
