@@ -26,6 +26,7 @@ import { SyncButtons } from "./components/SyncButtons.jsx";
 import { AuthPanel } from "./components/AuthPanel.jsx";
 import { RoleOnboardingModal } from "./components/RoleOnboardingModal.jsx";
 import { OnboardingModal } from "./components/OnboardingModal.jsx";
+import { SessionScheduleModal } from "./components/SessionScheduleModal.jsx";
 import { ConfirmModal } from "./components/ConfirmModal.jsx";
 import { CustomSessionModal } from "./components/CustomSessionModal.jsx";
 import { SessionComposer } from "./components/SessionComposer.jsx";
@@ -71,6 +72,7 @@ export default function ClimbingPlanner() {
   const [showPublicPlan, setShowPublicPlan] = useState(false);
   const [addChoiceDay, setAddChoiceDay] = useState(null);
   const [quickSessionForm, setQuickSessionForm] = useState(null);
+  const [pendingSchedule, setPendingSchedule] = useState(null);
   const [mobileDayIdx, setMobileDayIdx] = useState(() => {
     const dow = new Date().getDay();
     return dow === 0 ? 6 : dow - 1;
@@ -282,6 +284,31 @@ export default function ClimbingPlanner() {
   const addSession = (dayIndex, session) => {
     const updated = weekSessions.map((d, i) => i === dayIndex ? [...d, { ...session, feedback: null }] : d);
     updateWeekSessions(updated);
+  };
+
+  // Ajoute une séance ET ouvre la modale de programmation (heure + lieu).
+  // À utiliser pour les flux où ces infos ne sont pas déjà demandées
+  // (NewSessionSheet quick-insert, SessionComposer save, etc.).
+  const addSessionAndPromptSchedule = (dayIndex, session, targetWKey = wKey) => {
+    const currentLen = (data.weeks[targetWKey] || [])[dayIndex]?.length ?? 0;
+    if (targetWKey === wKey) {
+      addSession(dayIndex, session);
+    } else {
+      setData(d => {
+        const ws = d.weeks[targetWKey] ? d.weeks[targetWKey].map(day => [...day]) : Array(7).fill(null).map(() => []);
+        ws[dayIndex] = [...(ws[dayIndex] || []), { ...session, feedback: null }];
+        return { ...d, weeks: { ...d.weeks, [targetWKey]: ws } };
+      });
+    }
+    setPendingSchedule({
+      weekKey: targetWKey,
+      dayIndex,
+      sessionIndex: currentLen,
+      sessionName: session.name || session.title || "",
+      defaultStartTime: session.startTime || "",
+      defaultLocation: session.location || session.address || "",
+      estimatedTime: session.estimatedTime ?? null,
+    });
   };
 
   const removeSession = (dayIndex, sessionIndex) => {
@@ -539,6 +566,20 @@ export default function ClimbingPlanner() {
     }
     saveUserSession(customSession);
     syncPlannedSessions(customSession);
+    // Capture l'index d'insertion AVANT setData pour la modale schedule.
+    let scheduleInfo = null;
+    if (targetDayIndex !== undefined && targetDayIndex !== null) {
+      const mon = getMondayOf(currentDate);
+      const key = weekKey(mon);
+      const currentLen = (data.weeks[key] || [])[targetDayIndex]?.length ?? 0;
+      scheduleInfo = {
+        weekKey: key, dayIndex: targetDayIndex, sessionIndex: currentLen,
+        sessionName: customSession.name || customSession.title || "",
+        defaultStartTime: customSession.startTime || "",
+        defaultLocation: customSession.location || customSession.address || "",
+        estimatedTime: customSession.estimatedTime ?? null,
+      };
+    }
     setData(d => {
       let weeks = d.weeks;
       if (targetDayIndex !== undefined && targetDayIndex !== null) {
@@ -571,6 +612,7 @@ export default function ClimbingPlanner() {
       pushToCommunity(customSession, session.user.id);
     }
     setCustomSessionForm(null);
+    if (scheduleInfo) setPendingSchedule(scheduleInfo);
   };
 
   // ── Handler SessionBuilder ──
@@ -580,17 +622,26 @@ export default function ClimbingPlanner() {
       : sessionBuilderDay;
     saveUserSession(builtSession);
     syncPlannedSessions(builtSession);
-    setData(d => {
-      let weeks = d.weeks;
-      if (dayIndex !== null && dayIndex !== undefined) {
-        const mon = getMondayOf(currentDate);
-        const key = weekKey(mon);
+    const hasDay = dayIndex !== null && dayIndex !== undefined;
+    const mon = getMondayOf(currentDate);
+    const key = weekKey(mon);
+    if (hasDay) {
+      const currentLen = (data.weeks[key] || [])[dayIndex]?.length ?? 0;
+      setData(d => {
         const ws = d.weeks[key] ? [...d.weeks[key]] : Array(7).fill(null).map(() => []);
         ws[dayIndex] = [...(ws[dayIndex] || []), { ...builtSession, feedback: null }];
-        weeks = { ...d.weeks, [key]: ws };
-      }
-      return { ...d, weeks };
-    });
+        return { ...d, weeks: { ...d.weeks, [key]: ws } };
+      });
+      setPendingSchedule({
+        weekKey: key,
+        dayIndex,
+        sessionIndex: currentLen,
+        sessionName: builtSession.name || builtSession.title || "",
+        defaultStartTime: builtSession.startTime || "",
+        defaultLocation: builtSession.location || builtSession.address || "",
+        estimatedTime: builtSession.estimatedTime ?? null,
+      });
+    }
     if (session?.user?.id) {
       pushToCommunity(builtSession, session.user.id);
     }
@@ -1278,6 +1329,61 @@ export default function ClimbingPlanner() {
         />
       )}
 
+      {/* ── Programmer la séance (heure + lieu après ajout) ── */}
+      {pendingSchedule && (() => {
+        const { weekKey: psKey, dayIndex: psDi, sessionIndex: psSi, sessionName: psName, defaultStartTime, defaultLocation, estimatedTime } = pendingSchedule;
+        const psMonday = new Date(psKey + "T00:00:00");
+        const psDate = addDays(psMonday, psDi);
+        const psDayLabel = `${DAYS[psDi]} ${formatDate(psDate)}`;
+        // Lieux déjà utilisés sur les 8 dernières semaines (uniques, par ordre de récence)
+        const recentLocations = (() => {
+          const all = [];
+          Object.entries(data.weeks || {}).forEach(([wk, days]) => {
+            (days || []).forEach(dayArr => {
+              (dayArr || []).forEach(s => {
+                const loc = s?.location || s?.address;
+                if (loc && typeof loc === "string") all.push({ loc: loc.trim(), wk });
+              });
+            });
+          });
+          all.sort((a, b) => b.wk.localeCompare(a.wk));
+          const seen = new Set();
+          const out = [];
+          for (const { loc } of all) {
+            if (!seen.has(loc.toLowerCase())) {
+              seen.add(loc.toLowerCase());
+              out.push(loc);
+            }
+            if (out.length >= 8) break;
+          }
+          return out;
+        })();
+        return (
+          <SessionScheduleModal
+            sessionName={psName}
+            dayLabel={psDayLabel}
+            dayDate={psDate}
+            defaultStartTime={defaultStartTime}
+            defaultLocation={defaultLocation}
+            estimatedTime={estimatedTime}
+            recentLocations={recentLocations}
+            onConfirm={({ startTime, endTime, location }) => {
+              setData(d => {
+                const ws = (d.weeks[psKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
+                if (!ws[psDi] || !ws[psDi][psSi]) return d;
+                ws[psDi] = ws[psDi].map((sx, j) => j === psSi
+                  ? { ...sx, startTime, endTime: endTime || sx.endTime || null, location }
+                  : sx);
+                return { ...d, weeks: { ...d.weeks, [psKey]: ws } };
+              });
+              setPendingSchedule(null);
+              toast.success("Séance programmée");
+            }}
+            onSkip={() => setPendingSchedule(null)}
+          />
+        );
+      })()}
+
       {/* ── Session Modal ── */}
       {sessionModal && (() => {
         const { weekKey: smKey, dayIndex: smDi, sessionIndex: smSi } = sessionModal;
@@ -1355,10 +1461,11 @@ export default function ClimbingPlanner() {
             weeks={data.weeks}
             onQuickInsert={session => {
               const di = addChoiceDay;
-              addSession(di, session);
+              const insertIndex = (data.weeks[wKey] || [])[di]?.length ?? 0;
+              addSessionAndPromptSchedule(di, session);
               setAddChoiceDay(null);
               toast.success("Séance ajoutée", {
-                undo: () => removeSession(di, (data.weeks[wKey] || [])[di]?.length ?? 0),
+                undo: () => { removeSession(di, insertIndex); setPendingSchedule(null); },
               });
             }}
             onCompose={titlePrefill => {
