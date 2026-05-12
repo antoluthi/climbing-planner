@@ -16,6 +16,22 @@ export const SPACE = {
   0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 7: 32, 8: 48,
 };
 
+// ─── Z-INDEX SCALE ────────────────────────────────────────────────────────────
+// Hiérarchie unifiée pour éviter les conflits d'overlays.
+// modal (100) → confirm/nested (200) → popover (300) → toast (500).
+export const Z = {
+  base:     0,
+  sticky:   10,   // header sticky d'une modal
+  popover:  20,   // kebab menus
+  dropdown: 50,   // dropdowns globaux
+  modal:    100,  // modale principale (1 seule à la fois)
+  sheet:    110,  // bottom-sheets (NewSessionSheet)
+  daylog:   150,  // DayLog modal
+  nested:   200,  // confirm dialogs au-dessus d'une modal
+  popoverHi:300,  // popovers globaux
+  toast:    500,  // toasts toujours au-dessus
+};
+
 export const STATUS = (isDark) => ({
   done:     { bg: isDark ? "#1c2d20" : "#e3f0e5", fg: isDark ? "#7ab890" : "#2e6b3f" },
   adapted:  { bg: isDark ? "#2a2410" : "#fef2dc", fg: isDark ? "#d4a843" : "#b8881a" },
@@ -35,6 +51,7 @@ export function makeStyles(isDark) {
     // ── Design tokens partagés ──
     type: TYPE,
     space: SPACE,
+    z: Z,
     status: STATUS(isDark),
     chargeColor: (v) => chargeTokenColor(v, isDark),
     serif: "'Newsreader', Georgia, serif",
@@ -332,7 +349,7 @@ export function makeStyles(isDark) {
     profileRow: { display: "flex", gap: 12, marginBottom: 10, alignItems: "center" },
     profileSaveBtn: { background: t.accentBg, border: `1px solid ${t.accentBorder}`, color: t.accent, padding: "7px 18px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", letterSpacing: "0.06em" },
     profileCancelBtn: { background: "none", border: `1px solid ${t.btnBorder}`, color: t.textDim, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" },
-    cropOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(6px)" },
+    cropOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: Z.nested, backdropFilter: "blur(6px)" },
     cropModal: { background: t.surface, border: `1px solid ${t.border2}`, borderRadius: 12, padding: "20px", width: "min(360px, 94vw)", boxShadow: "0 32px 96px rgba(0,0,0,0.5)" },
 
     // ── Cycles view ──
@@ -351,7 +368,7 @@ export function makeStyles(isDark) {
     cycleMicroLabelInput: { flex: "1 1 140px", background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "4px 8px", color: t.text, fontSize: 12, fontFamily: "inherit" },
     cycleMicroDurInput: { width: 44, background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "4px 6px", color: t.textDim, fontSize: 11, fontFamily: "inherit", textAlign: "center" },
     cycleDeleteBtn: { background: "none", border: "none", color: t.textMuted, cursor: "pointer", fontSize: 14, padding: "2px 6px", borderRadius: 4 },
-    confirmOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(4px)" },
+    confirmOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: Z.nested, backdropFilter: "blur(4px)" },
     confirmModal: { background: t.surface, border: `1px solid ${t.border}`, borderRadius: 10, padding: "20px 24px", width: "min(300px, 90vw)", boxShadow: "0 8px 32px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column", gap: 14 },
     confirmTitle: { fontSize: 14, fontWeight: 600, color: t.text, textAlign: "center" },
     confirmSub: { fontSize: 12, color: t.textDim, textAlign: "center", marginTop: -6 },
@@ -393,7 +410,7 @@ export function makeStyles(isDark) {
     timelineCustomRow: { display: "flex", alignItems: "center", marginBottom: 7, gap: 0 },
     timelineCustomBar: { height: 20, borderRadius: 4, display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden", border: "1px solid" },
     timelineSectionSep: { borderTop: `1px solid ${t.border}`, paddingTop: 16, marginTop: 20, marginBottom: 14, fontSize: 10, fontWeight: 700, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.1em" },
-    timelinePopoverWrap: { position: "fixed", inset: 0, zIndex: 300 },
+    timelinePopoverWrap: { position: "fixed", inset: 0, zIndex: Z.popoverHi },
     timelinePopover: { position: "fixed", background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: "12px 16px", minWidth: 160, maxWidth: 240, boxShadow: "0 8px 28px rgba(0,0,0,0.35)", zIndex: 301 },
     timelinePopoverTitle: { fontSize: 13, fontWeight: 600, color: t.text, marginBottom: 4 },
     timelinePopoverMeta: { fontSize: 11, color: t.textDim },
@@ -401,7 +418,7 @@ export function makeStyles(isDark) {
     cycleDateEnd: { fontSize: 10, color: t.textMuted, whiteSpace: "nowrap", flexShrink: 0 },
     cycleMicroDate: { fontSize: 10, color: t.textDim, whiteSpace: "nowrap", flexShrink: 0, minWidth: 52 },
     // ── Custom session form ──
-    customFormOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 250, backdropFilter: "blur(4px)" },
+    customFormOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: Z.nested, backdropFilter: "blur(4px)" },
     customForm: { background: t.modalBg, border: `1px solid ${t.border2}`, borderRadius: 10, width: "min(680px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)" },
     customFormBody: { overflowY: "auto", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, flex: 1 },
     customFormRow: { display: "flex", gap: 10, alignItems: "center" },
@@ -431,7 +448,7 @@ export function makeStyles(isDark) {
     calcApplyBtn: { fontSize: 12, padding: "5px 14px", borderRadius: 5, border: "none", background: t.accent, color: "#fff", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
     calcVolumeHint: { fontSize: 10, color: t.textDim, fontStyle: "italic" },
     // ── Info panel (reference tables) ──
-    infoOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(4px)" },
+    infoOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: Z.nested, backdropFilter: "blur(4px)" },
     infoPanel: { background: t.modalBg, border: `1px solid ${t.border2}`, borderRadius: 10, width: "min(720px, 96vw)", maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)" },
     infoPanelBody: { overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 20 },
     infoTableTitle: { fontSize: 11, fontWeight: 700, color: t.accent, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 },
@@ -468,7 +485,7 @@ export function makeStyles(isDark) {
     overlay: {
       position: "fixed", inset: 0, background: t.overlayBg,
       display: "flex", alignItems: "center", justifyContent: "center",
-      zIndex: 100, backdropFilter: "blur(4px)",
+      zIndex: Z.modal, backdropFilter: "blur(4px)",
     },
     modal: {
       background: t.modalBg, border: `1px solid ${t.border2}`,

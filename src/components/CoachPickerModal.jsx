@@ -114,7 +114,7 @@ export function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
   const endTime = selected ? getEndTime(startTime, selDuration) : null;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={e => e.target === e.currentTarget && onClose()}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{ background: surface, borderRadius: 12, width: "100%", maxWidth: 420, maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px #0009", overflow: "hidden" }}>
 
         {/* Header */}

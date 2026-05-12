@@ -53,7 +53,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
   const computed = nbMouvements ? volZone * calcZone * calcComplexity : null;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div style={{ background: surface, borderRadius: 12, width: "100%", maxWidth: 480, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 50px #0009", overflow: "hidden" }}>
 
         {/* ── Header ── */}

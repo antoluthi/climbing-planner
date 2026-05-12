@@ -1,5 +1,6 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { TodaySessionCard } from "./TodaySessionCard.jsx";
+import { SessionCardSkeleton } from "./ui/Skeleton.jsx";
 import { getChargeColor } from "../lib/charge.js";
 import { DAYS, getMesoColor } from "../lib/constants.js";
 import { addDays } from "../lib/helpers.js";
@@ -27,6 +28,7 @@ export function DayListView({
   onToggleSessionDone,
   quickSessions,
   onOpenQuickSession,
+  isLoading,
 }) {
   const { isDark, mesocycles } = useThemeCtx();
 
@@ -174,7 +176,9 @@ export function DayListView({
         </button>
 
         {/* Sessions list */}
-        {sortedSessions.length === 0 ? (
+        {isLoading ? (
+          <SessionCardSkeleton count={3} />
+        ) : sortedSessions.length === 0 ? (
           <div style={{
             textAlign: "center", padding: "32px 16px",
             color: textLight, fontSize: 13,

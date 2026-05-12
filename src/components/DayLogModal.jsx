@@ -3,6 +3,8 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { addDays, localDateStr } from "../lib/helpers.js";
 import { isDateInCustomCycle } from "../lib/constants.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
+import { Z } from "../theme/makeStyles.js";
+import { toast } from "../lib/toast.js";
 
 // ─── DAYLOG MODAL — refonte cards intelligentes ──────────────────────────────
 // Header avec progress bar, sections en cards, Hooper en grid 2×2,
@@ -124,16 +126,19 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
   const anyDirty = noteDirty || weightDirty || hCanSave;
   const handleSaveAll = () => {
     if (!anyDirty) return;
-    if (noteDirty) { onSaveNote(dateISO, noteText); setNoteSaved(noteText); }
+    const saved = [];
+    if (noteDirty) { onSaveNote(dateISO, noteText); setNoteSaved(noteText); saved.push("note"); }
     if (weightDirty) {
       const val = parseFloat(weightInput.replace(",", "."));
-      if (!isNaN(val) && val > 0) onSaveWeight(dateISO, Math.round(val * 10) / 10);
+      if (!isNaN(val) && val > 0) { onSaveWeight(dateISO, Math.round(val * 10) / 10); saved.push("poids"); }
       else if (weightInput.trim() === "") onSaveWeight(dateISO, null);
     }
     if (hCanSave) {
       onAddHooper({ date: dateISO, time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), ...hForm, total: hTotal });
+      saved.push("Hooper");
     }
     setSavedAnim(true);
+    toast.success(`Journal enregistré${saved.length ? ` · ${saved.join(", ")}` : ""}`);
     setTimeout(() => onClose(), 700);
   };
 
@@ -174,7 +179,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
         background: "rgba(0,0,0,0.55)",
         backdropFilter: "blur(3px)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 150, padding: "20px 12px",
+        zIndex: Z.daylog, padding: "20px 12px",
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >

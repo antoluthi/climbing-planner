@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
+import { Z } from "../theme/makeStyles.js";
 import { getChargeColor } from "../lib/charge.js";
 import { generateId } from "../lib/storage.js";
 
@@ -210,7 +211,7 @@ export function NewSessionSheet({
     display: "flex",
     alignItems: "flex-end",
     justifyContent: "center",
-    zIndex: 200,
+    zIndex: Z.sheet,
     transition: "background 0.18s ease-out",
     backdropFilter: "blur(2px)",
   };

@@ -6,6 +6,7 @@ import { getMondayOf, addDays, weekKey } from "../lib/helpers.js";
 import { RichText } from "./RichText.jsx";
 import { SuspensionInfoCard } from "./SuspensionInfoCard.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
+import { Z } from "../theme/makeStyles.js";
 
 // ─── SESSION MODAL — refonte sans onglets ─────────────────────────────────────
 // Le ressenti est la vue par défaut (le moment le plus fréquent d'ouverture).
@@ -191,7 +192,7 @@ export function SessionModal({
         position: "fixed", inset: 0,
         background: "rgba(0,0,0,0.55)",
         backdropFilter: "blur(3px)",
-        zIndex: 100,
+        zIndex: Z.modal,
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: 12,
       }}

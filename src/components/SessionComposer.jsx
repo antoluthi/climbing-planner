@@ -4,6 +4,7 @@ import { BLOCK_TYPES } from "../lib/constants.js";
 import { generateId } from "../lib/storage.js";
 import { getChargeColor } from "../lib/charge.js";
 import { BlockEditor } from "./BlockEditor.jsx";
+import { Z } from "../theme/makeStyles.js";
 
 // ─── SESSION COMPOSER ─────────────────────────────────────────────────────────
 // Composant unifié pour créer/modifier une séance.
@@ -229,7 +230,7 @@ export function SessionComposer({
         inset: 0,
         background: "rgba(0,0,0,0.55)",
         backdropFilter: "blur(3px)",
-        zIndex: 200,
+        zIndex: Z.modal,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

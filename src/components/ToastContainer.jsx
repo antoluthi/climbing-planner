@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "../lib/toast.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
+import { Z } from "../theme/makeStyles.js";
 
 // ─── TOAST CONTAINER ──────────────────────────────────────────────────────────
 // S'abonne au store et affiche en bas, avec UNDO et auto-dismiss.
@@ -28,7 +29,7 @@ export function ToastContainer({ isMobile }) {
         bottom: isMobile ? 16 : 20,
         left: isMobile ? 16 : "auto",
         right: isMobile ? 16 : 20,
-        zIndex: 500,
+        zIndex: Z.toast,
         display: "flex",
         flexDirection: "column",
         gap: 8,
