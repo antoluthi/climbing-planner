@@ -924,13 +924,21 @@ export default function ClimbingPlanner() {
               const dy = e.changedTouches[0].clientY - swipeRef.current.y;
               swipeRef.current = null;
               if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-                // Swipe horizontal : passer au jour suivant/précédent
+                // Swipe horizontal — un jour à la fois, sans skip de semaine
                 if (dx > 0) {
+                  // → vers le passé
                   if (mobileDayIdx > 0) setMobileDayIdx(i => i - 1);
-                  else handlePrev();
+                  else {
+                    handlePrev();          // recule d'une semaine
+                    setMobileDayIdx(6);    // atterrit sur dimanche
+                  }
                 } else {
+                  // → vers le futur
                   if (mobileDayIdx < 6) setMobileDayIdx(i => i + 1);
-                  else handleNext();
+                  else {
+                    handleNext();          // avance d'une semaine
+                    setMobileDayIdx(0);    // atterrit sur lundi
+                  }
                 }
               }
             }}
