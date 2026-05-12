@@ -835,18 +835,39 @@ export default function ClimbingPlanner() {
         </div>
       )}
 
-      {/* ── Méta semaine ── */}
-      {viewMode === "week" && !isMobile && (() => {
+      {/* ── Méta semaine — visible aussi sur mobile (TL;DR 10) ── */}
+      {(viewMode === "week" || viewMode === "month") && (() => {
         const detected = getMesoForDate(data.mesocycles, monday);
         const color = detected?.meso?.color || (weekMeta.mesocycle ? getMesoColor(data.mesocycles, weekMeta.mesocycle) : null);
         if (!detected && !weekMeta.mesocycle) return null;
+        // Index "semaine X / N" du microcycle dans le mésocycle
+        const microIdx = detected?.meso && detected?.micro
+          ? (detected.meso.microcycles || []).findIndex(m => m.id === detected.micro.id)
+          : -1;
+        const microTotal = detected?.meso?.microcycles?.length || 0;
         return (
-          <div style={{ background: (color || "#888") + "14", borderBottom: `1px solid ${color || "#888"}28`, borderLeft: `3px solid ${color || "#888"}`, padding: "5px 20px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            {detected?.meso && <span style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: "0.09em", textTransform: "uppercase" }}>{detected.meso.label}</span>}
+          <div style={{
+            background: (color || "#888") + "14",
+            borderBottom: `1px solid ${color || "#888"}28`,
+            borderLeft: `3px solid ${color || "#888"}`,
+            padding: isMobile ? "6px 14px" : "5px 20px",
+            display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+            flexShrink: 0,
+          }}>
+            {detected?.meso && (
+              <span style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: "0.09em", textTransform: "uppercase" }}>
+                {detected.meso.label}
+              </span>
+            )}
             {detected?.micro && (
               <>
                 <span style={{ fontSize: 10, color: color + "55" }}>›</span>
-                <span style={{ fontSize: 10, fontWeight: 600, color: color + "cc", letterSpacing: "0.06em", background: color + "22", padding: "1px 7px", borderRadius: 10, border: `1px solid ${color}44` }}>{detected.micro.label}</span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: color + "cc", letterSpacing: "0.06em", background: color + "22", padding: "1px 7px", borderRadius: 10, border: `1px solid ${color}44` }}>
+                  {detected.micro.label}
+                  {microIdx >= 0 && microTotal > 1 && (
+                    <span style={{ marginLeft: 5, opacity: 0.8, fontWeight: 500 }}>· S{microIdx + 1}/{microTotal}</span>
+                  )}
+                </span>
               </>
             )}
             {weekMeta.note && <span style={{ fontSize: 10, fontStyle: "italic", color: isDark ? "#9ca3af" : "#6b7280" }}>"{weekMeta.note}"</span>}
@@ -922,6 +943,7 @@ export default function ClimbingPlanner() {
               isToday={isToday}
               weekMeta={weekMeta}
               logWarning={logWarning}
+              isLoading={!!session && !cloudLoaded}
               onOpenSession={(si) => openSessionModal(wKey, mobileDayIdx, si)}
               onOpenLog={() => setLogDate(dateISO)}
               onAddSession={() => setAddChoiceDay(mobileDayIdx)}
