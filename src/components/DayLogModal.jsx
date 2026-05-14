@@ -5,6 +5,7 @@ import { isDateInCustomCycle } from "../lib/constants.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { Z } from "../theme/makeStyles.js";
 import { toast } from "../lib/toast.js";
+import { ConfirmModal } from "./ConfirmModal.jsx";
 
 // ─── DAYLOG MODAL — refonte cards intelligentes ──────────────────────────────
 // Header avec progress bar, sections en cards, Hooper en grid 2×2,
@@ -27,11 +28,16 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
   const isToday = dateISO === today;
   const isFutureDay = dateISO > today;
 
+  // ── Confirm-on-close si modifications non-enregistrées ────────────────────
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  // (anyDirty calculé plus bas)
+  const requestCloseRef = useRef(null);
+
   useEffect(() => {
-    const h = e => { if (e.key === "Escape") onClose(); };
+    const h = e => { if (e.key === "Escape") requestCloseRef.current?.(); };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
+  }, []);
 
   // ── Note state ──
   const [noteText, setNoteText] = useState(data.notes?.[dateISO] || "");
@@ -128,6 +134,12 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
 
   // Unified save: flush all
   const anyDirty = noteDirty || weightDirty || hCanSave;
+  // Demande de fermeture protégée : si dirty, ouvre la confirm modal.
+  const requestClose = () => {
+    if (anyDirty) setConfirmCloseOpen(true);
+    else onClose();
+  };
+  requestCloseRef.current = requestClose;
   const handleSaveAll = () => {
     if (!anyDirty) return;
     const saved = [];
@@ -185,7 +197,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
         display: "flex", alignItems: "center", justifyContent: "center",
         zIndex: Z.daylog, padding: "20px 12px",
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) requestClose(); }}
     >
       <div
         style={{
@@ -232,7 +244,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
                 aria-label="Jour suivant"
               >›</button>
               <button
-                onClick={onClose}
+                onClick={requestClose}
                 aria-label="Fermer"
                 style={{ background: "none", border: "none", color: textLight, cursor: "pointer", fontSize: 18, padding: "0 4px", lineHeight: 1, fontFamily: "inherit", marginLeft: 4 }}
               >✕</button>
@@ -474,6 +486,16 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
           </button>
         </div>
       </div>
+      {confirmCloseOpen && (
+        <ConfirmModal
+          title="Abandonner les modifications ?"
+          sub="Tes modifications du journal seront perdues."
+          confirmLabel="Abandonner"
+          cancelLabel="Continuer"
+          onConfirm={onClose}
+          onClose={() => setConfirmCloseOpen(false)}
+        />
+      )}
     </div>
   );
 }

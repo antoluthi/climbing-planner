@@ -5,6 +5,8 @@ import { generateId } from "../lib/storage.js";
 import { getChargeColor } from "../lib/charge.js";
 import { BlockEditor } from "./BlockEditor.jsx";
 import { Z } from "../theme/makeStyles.js";
+import { useConfirmClose } from "../hooks/useConfirmClose.js";
+import { ConfirmModal } from "./ConfirmModal.jsx";
 
 // ─── SESSION COMPOSER ─────────────────────────────────────────────────────────
 // Composant unifié pour créer/modifier une séance.
@@ -32,11 +34,17 @@ export function SessionComposer({
   const { isDark } = useThemeCtx();
   const titleRef = useRef(null);
 
+  // ── Confirm-on-close (protège des miss-clicks) ────────────────────────────
+  const { requestClose, markDirty, markPristine, confirmOpen, confirmProps } = useConfirmClose(onClose);
+
   // ── State ─────────────────────────────────────────────────────────────────
-  const [title, setTitle] = useState(initial?.title || initial?.name || titlePrefill || "");
-  const [estimatedTime, setEstimatedTime] = useState(initial?.estimatedTime != null ? String(initial.estimatedTime) : "");
-  const [note, setNote] = useState(initial?.note || "");
-  const [blocks, setBlocks] = useState(() => {
+  const [title, _setTitle] = useState(initial?.title || initial?.name || titlePrefill || "");
+  const setTitle = v => { markDirty(); _setTitle(v); };
+  const [estimatedTime, _setEstimatedTime] = useState(initial?.estimatedTime != null ? String(initial.estimatedTime) : "");
+  const setEstimatedTime = v => { markDirty(); _setEstimatedTime(v); };
+  const [note, _setNote] = useState(initial?.note || "");
+  const setNote = v => { markDirty(); _setNote(v); };
+  const [blocks, _setBlocks] = useState(() => {
     if (initial?.blocks?.length) {
       return initial.blocks.map(b => ({
         ...b,
@@ -51,6 +59,7 @@ export function SessionComposer({
       { id: generateId(), type: "Retour au calme", blockType: "Retour au calme", charge: 3, duration: 10, location: "", notes: "" },
     ];
   });
+  const setBlocks = (updater) => { markDirty(); _setBlocks(updater); };
   const [addingType, setAddingType] = useState(false);
   const [communityOpen, setCommunityOpen] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
@@ -67,7 +76,7 @@ export function SessionComposer({
   const handleSaveRef = useRef(null);
   useEffect(() => {
     const h = e => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") requestClose();
       if ((e.key === "Enter") && (e.metaKey || e.ctrlKey)) {
         handleSaveRef.current?.();
       }
@@ -172,6 +181,8 @@ export function SessionComposer({
 
   const handleSave = () => {
     if (!canSave) return;
+    // On a explicitement validé : plus de modifications "perdues"
+    markPristine();
     const cleanBlocks = blocks.map(({ id: bid, ...rest }) => ({
       ...rest,
       id: bid,
@@ -236,7 +247,7 @@ export function SessionComposer({
         justifyContent: "center",
         padding: 12,
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) requestClose(); }}
     >
       <div
         role="dialog"
@@ -274,7 +285,7 @@ export function SessionComposer({
               {dayLabel && <div style={{ fontSize: 12, color: textLight, marginTop: 3 }}>{dayLabel}</div>}
             </div>
             <button
-              onClick={onClose}
+              onClick={requestClose}
               aria-label="Fermer"
               style={{ background: "none", border: "none", color: textLight, cursor: "pointer", fontSize: 18, padding: "0 4px", lineHeight: 1, fontFamily: "inherit" }}
             >✕</button>
@@ -593,7 +604,7 @@ export function SessionComposer({
           }}
         >
           <button
-            onClick={onClose}
+            onClick={requestClose}
             style={{
               background: "transparent",
               border: `1px solid ${borderStrong}`,
@@ -631,6 +642,7 @@ export function SessionComposer({
           </button>
         </div>
       </div>
+      {confirmOpen && <ConfirmModal {...confirmProps} />}
     </div>
   );
 }

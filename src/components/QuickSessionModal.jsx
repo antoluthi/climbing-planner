@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { generateId } from "../lib/storage.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
+import { useConfirmClose } from "../hooks/useConfirmClose.js";
 
 // ─── QUICK SESSION MODAL ──────────────────────────────────────────────────────
 // Séance rapide : non enregistrée en base, stockée dans data.quickSessions[]
@@ -22,31 +23,44 @@ function addMinutes(timeStr, minutes) {
 
 export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onClose }) {
   const { styles, isDark } = useThemeCtx();
+  const { requestClose, markDirty, markPristine, confirmOpen, confirmProps } = useConfirmClose(onClose);
+  const wrap = (setter) => (v) => { markDirty(); setter(v); };
 
   const today = defaultDate || new Date().toISOString().slice(0, 10);
 
-  const [name, setName]         = useState(initial?.name || "");
-  const [color, setColor]       = useState(initial?.color || "#60a5fa");
-  const [startDate, setStartDate] = useState(initial?.startDate || today);
-  const [multiDay, setMultiDay] = useState(!!(initial?.endDate));
-  const [endDate, setEndDate]   = useState(initial?.endDate || today);
-  const [allDay, setAllDay]     = useState(initial?.allDay ?? true);
-  const [startTime, setStartTime] = useState(initial?.startTime || "09:00");
-  const [duration, setDuration] = useState(initial?.duration ?? 90);
-  const [content, setContent]   = useState(initial?.content || "");
-  const [isObjective, setIsObjective] = useState(initial?.isObjective ?? false);
+  const [name, _setName]               = useState(initial?.name || "");
+  const setName = wrap(_setName);
+  const [color, _setColor]             = useState(initial?.color || "#60a5fa");
+  const setColor = wrap(_setColor);
+  const [startDate, _setStartDate]     = useState(initial?.startDate || today);
+  const setStartDate = wrap(_setStartDate);
+  const [multiDay, _setMultiDay]       = useState(!!(initial?.endDate));
+  const setMultiDay = wrap(_setMultiDay);
+  const [endDate, _setEndDate]         = useState(initial?.endDate || today);
+  const setEndDate = wrap(_setEndDate);
+  const [allDay, _setAllDay]           = useState(initial?.allDay ?? true);
+  const setAllDay = wrap(_setAllDay);
+  const [startTime, _setStartTime]     = useState(initial?.startTime || "09:00");
+  const setStartTime = wrap(_setStartTime);
+  const [duration, _setDuration]       = useState(initial?.duration ?? 90);
+  const setDuration = wrap(_setDuration);
+  const [content, _setContent]         = useState(initial?.content || "");
+  const setContent = wrap(_setContent);
+  const [isObjective, _setIsObjective] = useState(initial?.isObjective ?? false);
+  const setIsObjective = wrap(_setIsObjective);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    const h = e => { if (e.key === "Escape") onClose(); };
+    const h = e => { if (e.key === "Escape") requestClose(); };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
+  }, [requestClose]);
 
   const canSave = name.trim() && startDate;
 
   const handleSave = () => {
     if (!canSave) return;
+    markPristine();
     onSave({
       id: initial?.id || generateId(),
       name: name.trim(),
@@ -93,7 +107,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
   };
 
   return (
-    <div style={styles.confirmOverlay} onClick={onClose}>
+    <div style={styles.confirmOverlay} onClick={requestClose}>
       <div
         style={{ ...styles.confirmModal, width: "min(440px, 96vw)", gap: 0, padding: 0, overflow: "hidden", maxHeight: "90vh", display: "flex", flexDirection: "column" }}
         onClick={e => e.stopPropagation()}
@@ -103,7 +117,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
           <span style={{ fontSize: 16, fontWeight: 700, color: textMain, fontFamily: "'Newsreader', Georgia, serif" }}>
             {initial ? "Modifier la séance" : "Séance personnalisée"}
           </span>
-          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+          <button style={styles.closeBtn} onClick={requestClose}>✕</button>
         </div>
 
         {/* Body */}
@@ -267,7 +281,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
               Supprimer
             </button>
           )}
-          <button style={styles.confirmCancelBtn} onClick={onClose}>Annuler</button>
+          <button style={styles.confirmCancelBtn} onClick={requestClose}>Annuler</button>
           <button
             style={{ ...styles.confirmDeleteBtn, background: canSave ? color : (isDark ? "#3a3028" : "#ccc"), cursor: canSave ? "pointer" : "default", opacity: canSave ? 1 : 0.6 }}
             onClick={handleSave}
@@ -281,10 +295,11 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
         <ConfirmModal
           title="Supprimer cette séance personnalisée ?"
           sub={name}
-          onConfirm={() => { onDelete?.(initial?.id); onClose(); }}
+          onConfirm={() => { markPristine(); onDelete?.(initial?.id); onClose(); }}
           onClose={() => setConfirmDelete(false)}
         />
       )}
+      {confirmOpen && <ConfirmModal {...confirmProps} />}
     </div>
   );
 }

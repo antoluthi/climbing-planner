@@ -3,21 +3,38 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { generateId } from "../lib/storage.js";
 import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "../lib/charge.js";
 import { RichText } from "./RichText.jsx";
+import { useConfirmClose } from "../hooks/useConfirmClose.js";
+import { ConfirmModal } from "./ConfirmModal.jsx";
 
 // ─── MODAL: CRÉER / MODIFIER UNE SÉANCE PERSONNALISÉE ─────────────────────────
 
 export function CustomSessionModal({ initial, data, onSave, onClose }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
-  const [name, setName] = useState(initial?.name ?? "");
-  const [type, setType] = useState(initial?.type ?? "Grimpe");
-  const [charge, setCharge] = useState(initial?.charge ?? 24);
-  const [estimatedTime, setEstimatedTime] = useState(initial?.estimatedTime ?? "");
-  const [location, setLocation] = useState(initial?.location ?? "");
+  const { requestClose, markDirty, markPristine, confirmOpen, confirmProps } = useConfirmClose(onClose);
 
-  const [minRecovery, setMinRecovery] = useState(initial?.minRecovery ?? "");
-  const [warmup, setWarmup] = useState(initial?.warmup ?? "");
-  const [main, setMain] = useState(initial?.main ?? "");
-  const [cooldown, setCooldown] = useState(initial?.cooldown ?? "");
+  // Wrappers : tout changement user marque la modale dirty.
+  const wrap = (setter) => (v) => { markDirty(); setter(v); };
+
+  const [name, _setName] = useState(initial?.name ?? "");
+  const setName = wrap(_setName);
+  const [type, _setType] = useState(initial?.type ?? "Grimpe");
+  const setType = wrap(_setType);
+  const [charge, _setCharge] = useState(initial?.charge ?? 24);
+  const setCharge = wrap(_setCharge);
+  const [estimatedTime, _setEstimatedTime] = useState(initial?.estimatedTime ?? "");
+  const setEstimatedTime = wrap(_setEstimatedTime);
+  const [location, _setLocation] = useState(initial?.location ?? "");
+  const setLocation = wrap(_setLocation);
+
+  const [minRecovery, _setMinRecovery] = useState(initial?.minRecovery ?? "");
+  const setMinRecovery = wrap(_setMinRecovery);
+  const [warmup, _setWarmup] = useState(initial?.warmup ?? "");
+  const setWarmup = wrap(_setWarmup);
+  const [main, _setMain] = useState(initial?.main ?? "");
+  const setMain = wrap(_setMain);
+  const [cooldown, _setCooldown] = useState(initial?.cooldown ?? "");
+  const setCooldown = wrap(_setCooldown);
+  // États purement visuels (pas dirty)
   const [section, setSection] = useState("main");
   const [preview, setPreview] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
@@ -33,6 +50,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
 
   const handleSave = () => {
     if (!name.trim()) return;
+    markPristine();
     const session = {
       id: initial?.id ?? generateId(),
       type, name: name.trim(), charge,
@@ -52,7 +70,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
       <div style={styles.customForm}>
         <div style={styles.modalHeader}>
           <span style={styles.modalTitle}>{initial ? "Modifier la séance" : "Nouvelle séance personnalisée"}</span>
-          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+          <button style={styles.closeBtn} onClick={requestClose}>✕</button>
         </div>
 
         <div style={styles.customFormBody}>
@@ -283,10 +301,11 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
         </div>
 
         <div style={styles.feedbackFooter}>
-          <button style={styles.cancelBtn} onClick={onClose}>Annuler</button>
+          <button style={styles.cancelBtn} onClick={requestClose}>Annuler</button>
           <button style={{ ...styles.saveBtn, opacity: name.trim() ? 1 : 0.4 }} onClick={handleSave} disabled={!name.trim()}>Enregistrer</button>
         </div>
       </div>
+      {confirmOpen && <ConfirmModal {...confirmProps} />}
     </div>
   );
 }
