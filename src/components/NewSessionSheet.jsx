@@ -83,6 +83,12 @@ function formatRelativeDate(dateStr) {
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
+/**
+ * @deprecated Remplacé par SessionComposer (qui ouvre directement la composition).
+ * Le picker de modèle est désormais accessible via le lien "Charger un modèle…"
+ * en haut du composer. Conservé 1 cycle pour rétro-compat.
+ */
+let _newSessionSheetWarned = false;
 export function NewSessionSheet({
   dayLabel,
   catalog,
@@ -91,6 +97,11 @@ export function NewSessionSheet({
   onCompose,        // (titlePrefill) — ouvre le composer détaillé
   onClose,
 }) {
+  if (!_newSessionSheetWarned) {
+    _newSessionSheetWarned = true;
+    // eslint-disable-next-line no-console
+    console.warn("[deprecated] NewSessionSheet → utilise SessionComposer (mode detailed).");
+  }
   const { isDark } = useThemeCtx();
   const [query, setQuery] = useState("");
   const [closing, setClosing] = useState(false);
