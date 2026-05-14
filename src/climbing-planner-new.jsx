@@ -5,7 +5,7 @@ import supabase from "./lib/supabase.js";
 import { MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, BLOCK_TYPES, DEFAULT_SUSPENSION_CONFIG, GRIP_TYPES, CUSTOM_CYCLE_COLORS, isDateInCustomCycle, getCustomCyclesForDate, getDayLogWarning, getMesoColor, getMesoForDate } from "./lib/constants.js";
 import { getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime, migrateWeekKeys, getDaySessions, getDayCharge, getMonthWeeks } from "./lib/helpers.js";
 import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "./lib/charge.js";
-import { generateId, loadData, saveData } from "./lib/storage.js";
+import { generateId, loadData, saveData, migrateData } from "./lib/storage.js";
 import { parseGarminSleepCSV } from "./lib/garmin-csv.js";
 
 // ── Theme ──
@@ -116,9 +116,11 @@ export default function ClimbingPlanner() {
         setCloudLoaded(true);
         if (cloudData) {
           const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
+          // Migration schemaVersion 2 : discipline/mode/chargePlanned
+          const migrated = migrateData(cleanData);
           isCloudSetRef.current = true; // skip the auto-save that will be triggered by setData
-          setData(cleanData);
-          saveData(cleanData);
+          setData(migrated);
+          saveData(migrated);
         } else {
           uploadNow(data, session.user.id);
         }
@@ -137,11 +139,12 @@ export default function ClimbingPlanner() {
         const cloudData = await loadFromCloud();
         if (cloudData) {
           const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
+          const migrated = migrateData(cleanData);
           isCloudSetRef.current = true;
-          setData(cleanData);
-          saveData(cleanData);
+          setData(migrated);
+          saveData(migrated);
         }
-      } catch {}
+      } catch { /* realtime fail = ignore */ }
     });
     return unsubscribe;
   }, [session?.user?.id, cloudLoaded]); // eslint-disable-line
@@ -971,9 +974,9 @@ export default function ClimbingPlanner() {
           onAddSession={(dayIdxToday) => {
             // AccueilView est toujours « aujourd'hui ». S'assurer que la
             // semaine courante de la planification contient bien today
-            // avant d'ouvrir la NewSessionSheet sur le bon jour.
+            // avant d'ouvrir le SessionComposer sur le bon jour.
             setCurrentDate(new Date());
-            setAddChoiceDay(dayIdxToday);
+            setSessionBuilderDay({ dayIndex: dayIdxToday });
           }}
           onToggleSessionDone={(wKeyArg, dayIdx, si) => toggleSessionDone(wKeyArg, dayIdx, si)}
         />
@@ -1025,14 +1028,14 @@ export default function ClimbingPlanner() {
               isLoading={!!session && !cloudLoaded}
               onOpenSession={(si) => openSessionModal(wKey, mobileDayIdx, si)}
               onOpenLog={() => setLogDate(dateISO)}
-              onAddSession={() => setAddChoiceDay(mobileDayIdx)}
+              onAddSession={() => setSessionBuilderDay({ dayIndex: mobileDayIdx })}
               onToggleSessionDone={(si) => toggleSessionDone(wKey, mobileDayIdx, si)}
               quickSessions={(data.quickSessions || []).filter(qs => {
                 if (qs.startDate === dateISO) return true;
                 if (qs.endDate && qs.startDate <= dateISO && qs.endDate >= dateISO) return true;
                 return false;
               })}
-              onOpenQuickSession={qs => setQuickSessionForm({ initial: qs })}
+              onOpenQuickSession={qs => setSessionBuilderDay({ initial: { ...qs, mode: "event" } })}
               pendingSuggestionsIds={pendingSuggestionsIds}
             />
           </div>
@@ -1057,14 +1060,14 @@ export default function ClimbingPlanner() {
                   sessions={weekSessions[i] || []}
                   isToday={isToday}
                   weekMeta={weekMeta}
-                  onAddSession={() => setAddChoiceDay(i)}
+                  onAddSession={() => setSessionBuilderDay({ dayIndex: i })}
                   quickSessions={(data.quickSessions || []).filter(qs => {
                     if (qs.startDate === dateISO) return true;
                     if (qs.endDate && qs.startDate <= dateISO && qs.endDate >= dateISO) return true;
                     return false;
                   })}
                   dateISO={dateISO}
-                  onOpenQuickSession={qs => setQuickSessionForm({ initial: qs })}
+                  onOpenQuickSession={qs => setSessionBuilderDay({ initial: { ...qs, mode: "event" } })}
                   onRemoveQuickSession={id => removeQuickSession(id)}
                   onOpenSession={(si) => openSessionModal(wKey, i, si)}
                   onRemove={(si) => removeSession(i, si)}
@@ -1217,19 +1220,32 @@ export default function ClimbingPlanner() {
         />
       )}
 
-      {/* ── Modals ── */}
+      {/* ── SessionComposer (unifié) ── */}
       {sessionBuilderDay !== null && (() => {
-        const dayIndex = sessionBuilderDay && typeof sessionBuilderDay === "object"
-          ? sessionBuilderDay.dayIndex
-          : sessionBuilderDay;
-        const titlePrefill = sessionBuilderDay && typeof sessionBuilderDay === "object"
-          ? sessionBuilderDay.titlePrefill
-          : "";
+        const sbd = sessionBuilderDay;
+        const dayIndex = sbd && typeof sbd === "object" ? sbd.dayIndex : sbd;
+        const titlePrefill = sbd && typeof sbd === "object" ? sbd.titlePrefill : "";
+        const initial = sbd && typeof sbd === "object" ? sbd.initial : null;
         const dDay = dayIndex !== null && dayIndex !== undefined ? addDays(monday, dayIndex) : null;
         const dayLabelStr = dDay ? `${DAYS[dayIndex]} ${formatDate(dDay)}` : null;
+        const defaultDateISO = dDay
+          ? `${dDay.getFullYear()}-${String(dDay.getMonth()+1).padStart(2,'0')}-${String(dDay.getDate()).padStart(2,'0')}`
+          : localDateStr(new Date());
         return (
           <SessionComposer
-            onSave={saveBuiltSession}
+            initial={initial}
+            onSave={(payload) => {
+              // Route selon le mode : event → quickSessions, sinon weeks.
+              if (payload.mode === "event") {
+                const qs = { ...payload };
+                if (initial) editQuickSession(qs); else addQuickSession(qs);
+                toast.success(initial ? "Événement modifié" : "Événement ajouté");
+                setSessionBuilderDay(null);
+              } else {
+                // dayIndex doit être set (sinon save catalogue pur)
+                saveBuiltSession(payload);
+              }
+            }}
             onClose={() => setSessionBuilderDay(null)}
             communitySessions={communitySessions}
             allSessions={catalog}
@@ -1238,6 +1254,7 @@ export default function ClimbingPlanner() {
             onSaveBlock={saveBlock}
             titlePrefill={titlePrefill}
             dayLabel={dayLabelStr}
+            defaultDate={defaultDateISO}
           />
         );
       })()}
@@ -1458,10 +1475,12 @@ export default function ClimbingPlanner() {
         );
       })()}
 
-      {/* ── NewSessionSheet (remplace AddSessionChoiceModal) ── */}
-      {addChoiceDay !== null && (() => {
-        const d2 = addDays(monday, addChoiceDay);
-        const dayLabelStr = `${DAYS[addChoiceDay]} ${formatDate(d2)}`;
+      {/* NewSessionSheet n'est plus utilisé : "+" ouvre directement
+         SessionComposer via setSessionBuilderDay (cf. setAddChoiceDay
+         remplacé en amont aux call-sites). */}
+      {false && (() => {
+        const d2 = addDays(monday, addChoiceDay || 0);
+        const dayLabelStr = `${DAYS[addChoiceDay || 0]} ${formatDate(d2)}`;
         return (
           <NewSessionSheet
             defaultDate={`${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}`}

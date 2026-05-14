@@ -21,7 +21,17 @@ function addMinutes(timeStr, minutes) {
   return `${fmt2(Math.floor(total / 60) % 24)}:${fmt2(total % 60)}`;
 }
 
+/**
+ * @deprecated Utilise SessionComposer (mode "event").
+ * Conservé pour 1 cycle, sera supprimé au prochain.
+ */
+let _quickSessionWarned = false;
 export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onClose }) {
+  if (!_quickSessionWarned) {
+    _quickSessionWarned = true;
+    // eslint-disable-next-line no-console
+    console.warn("[deprecated] QuickSessionModal → utilise SessionComposer (mode event).");
+  }
   const { styles, isDark } = useThemeCtx();
   const { requestClose, markDirty, markPristine, confirmOpen, confirmProps } = useConfirmClose(onClose);
   const wrap = (setter) => (v) => { markDirty(); setter(v); };

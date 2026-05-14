@@ -283,7 +283,24 @@ export function SessionModal({
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
             {session.estimatedTime ? chip(`${session.estimatedTime} min`) : null}
             {hasBlocks ? chip(`${effectiveBlocks.length} bloc${effectiveBlocks.length > 1 ? "s" : ""}`) : null}
-            {session.charge != null && chip(`Charge ${session.charge}`, chargeColors.fg, chargeColors.bg)}
+            {/* Charge planifiée vs ressentie */}
+            {(() => {
+              const planned = session.chargePlanned != null
+                ? session.chargePlanned
+                : (session.charge != null
+                  ? (session.charge > 10 ? Math.round(session.charge / 21.6) : session.charge)
+                  : null);
+              const felt = session.feedback?.rpe ?? null;
+              if (planned == null && felt == null) return null;
+              const items = [];
+              if (planned != null) items.push(chip(`Planifiée ${planned}/10`, chargeColors.fg, chargeColors.bg));
+              if (felt != null) {
+                const diff = planned != null ? felt - planned : 0;
+                const arrow = diff > 2 ? " ↑" : diff < -2 ? " ↓" : "";
+                items.push(chip(`Ressentie ${felt}/10${arrow}`, chargeColors.fg, chargeColors.bg + "55"));
+              }
+              return items;
+            })()}
             {session.location && chip(session.location)}
             {mesoLabel && chip(mesoLabel, mesoColor, mesoColor + "22")}
             {weekMeta?.microcycle && chip(weekMeta.microcycle)}
@@ -373,7 +390,7 @@ export function SessionModal({
                 pointerEvents: sessionDone ? "auto" : sessionMissed ? "none" : "auto",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: textMid }}>RPE perçu</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: textMid }}>Charge ressentie (1-10)</span>
                   <span style={{
                     fontFamily: "'Newsreader', Georgia, serif", fontSize: 18, fontWeight: 700,
                     color: rpe ? getChargeColor((rpe || 0) * 3) : textLight,
@@ -384,7 +401,7 @@ export function SessionModal({
                 <div
                   ref={rpeGridRef}
                   role="radiogroup"
-                  aria-label="RPE 1 à 10"
+                  aria-label="Charge ressentie 1 à 10"
                   tabIndex={0}
                   onKeyDown={handleRpeKey}
                   style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 4, outline: "none" }}

@@ -9,8 +9,69 @@ const DEFAULT_DATA = {
   weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES,
   sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {},
   profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [],
-  quickSessions: [],
+  quickSessions: [], schemaVersion: 2,
 };
+
+// ─── Migration schemaVersion 2 ────────────────────────────────────────────────
+// Ajoute discipline / mode / chargePlanned aux sessions et quickSessions
+// existantes. Normalise la charge (0-216) en chargePlanned (0-10).
+const SCHEMA_VERSION = 2;
+
+function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+function normalizeCharge(legacyCharge) {
+  // L'ancienne échelle escalade allait de 0 à ~216 (vol × int × compl).
+  // Si la valeur tient déjà dans 0-10, on garde telle quelle.
+  const c = Number(legacyCharge) || 0;
+  if (c <= 10) return clamp(Math.round(c), 0, 10);
+  return clamp(Math.round(c / 21.6), 0, 10);
+}
+
+function inferSessionMode(s) {
+  if (s.mode) return s.mode;
+  if (s.endDate || s.isObjective || s.isQuick) return "event";
+  if (Array.isArray(s.blocks) && s.blocks.length > 0) return "detailed";
+  if ((s.warmup || s.main || s.cooldown)?.toString().trim()) return "simple";
+  return "detailed";
+}
+
+function migrateSession(s) {
+  if (!s || typeof s !== "object") return s;
+  if (s.schemaVersion === SCHEMA_VERSION) return s;
+  const mode = inferSessionMode(s);
+  const out = { ...s, schemaVersion: SCHEMA_VERSION };
+  if (!out.discipline) out.discipline = "climbing";
+  if (!out.mode) out.mode = mode;
+  if (out.chargePlanned == null) out.chargePlanned = normalizeCharge(s.charge);
+  // En mode 'simple' historique : concatène warmup/main/cooldown dans notes.
+  if (mode === "simple" && !out.notes && (s.warmup || s.main || s.cooldown)) {
+    out.notes = [s.warmup, s.main, s.cooldown].filter(Boolean).join("\n\n").trim();
+  }
+  return out;
+}
+
+export function migrateData(data) {
+  if (!data || data.schemaVersion === SCHEMA_VERSION) return data;
+  const weeks = { ...(data.weeks || {}) };
+  for (const wKey of Object.keys(weeks)) {
+    const days = weeks[wKey];
+    if (!Array.isArray(days)) continue;
+    weeks[wKey] = days.map(daySessions =>
+      Array.isArray(daySessions) ? daySessions.map(migrateSession) : daySessions
+    );
+  }
+  const quickSessions = (data.quickSessions || []).map(qs => ({
+    ...migrateSession({ ...qs, mode: "event" }),
+  }));
+  const customSessions = (data.customSessions || []).map(migrateSession);
+  return {
+    ...data,
+    weeks,
+    quickSessions,
+    customSessions,
+    schemaVersion: SCHEMA_VERSION,
+  };
+}
 
 export function loadData() {
   try {
@@ -25,7 +86,7 @@ export function loadData() {
       }
     }
     if (result.profile) delete result.profile.role;
-    return migrateWeekKeys(result);
+    return migrateData(migrateWeekKeys(result));
   } catch {
     return { ...DEFAULT_DATA };
   }

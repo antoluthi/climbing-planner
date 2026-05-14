@@ -7,8 +7,19 @@ import { useConfirmClose } from "../hooks/useConfirmClose.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 
 // ─── MODAL: CRÉER / MODIFIER UNE SÉANCE PERSONNALISÉE ─────────────────────────
+/**
+ * @deprecated Utilise SessionComposer (mode "simple" ou "detailed").
+ * Conservé pour la rétro-compatibilité des flows d'édition de séances custom
+ * existantes. Sera supprimé au prochain cycle de refonte.
+ */
 
+let _customSessionWarned = false;
 export function CustomSessionModal({ initial, data, onSave, onClose }) {
+  if (!_customSessionWarned) {
+    _customSessionWarned = true;
+    // eslint-disable-next-line no-console
+    console.warn("[deprecated] CustomSessionModal → utilise SessionComposer (mode simple/detailed).");
+  }
   const { styles, isDark, mesocycles } = useThemeCtx();
   const { requestClose, markDirty, markPristine, confirmOpen, confirmProps } = useConfirmClose(onClose);
 

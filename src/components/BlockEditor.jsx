@@ -2,13 +2,24 @@ import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { BLOCK_TYPES, GRIP_TYPES, DEFAULT_SUSPENSION_CONFIG } from "../lib/constants.js";
 import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "../lib/charge.js";
+import { getDiscipline } from "../lib/disciplines.js";
 import { RichText } from "./RichText.jsx";
 
 // ─── COMPOSANT: Éditeur de bloc ───────────────────────────────────────────────
+// discipline (default 'climbing') change le comportement :
+//   - climbing : UI complète (presets, Suspension, calc volume×intensité)
+//   - autres   : UI simplifiée, slider charge 0-10, pas de presets ni suspension
 
-export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, allSessions, onCreateCustom, onSaveAsBlock }) {
+export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown, onMoveUp, onMoveDown, allSessions, onCreateCustom, onSaveAsBlock, discipline = "climbing" }) {
   const { styles, isDark } = useThemeCtx();
-  const cfg = BLOCK_TYPES[block.type] || BLOCK_TYPES["Grimpe"];
+  const isClimbing = discipline === "climbing";
+  const disciplineCfg = getDiscipline(discipline);
+  const cfg = BLOCK_TYPES[block.type] || {
+    color: disciplineCfg.color,
+    hasCharge: true,
+    defaultCharge: 5,
+    defaultDuration: 30,
+  };
   const [open, setOpen] = useState(true);
   const [calcOpen, setCalcOpen] = useState(false);
   const [nbMouvements, setNbMouvements] = useState("");
@@ -95,7 +106,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
           </div>
 
           {/* Preset picker pour Grimpe */}
-          {block.type === "Grimpe" && grimpePresets.length > 0 && (
+          {isClimbing && block.type === "Grimpe" && grimpePresets.length > 0 && (
             <div>
               <div style={labelStyle}>Modèle de grimpe (optionnel)</div>
               <div style={{ display: "flex", gap: 6 }}>
@@ -121,7 +132,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
           )}
 
           {/* Exercice picker */}
-          {block.type === "Exercices" && exercicePresets.length > 0 && (
+          {isClimbing && block.type === "Exercices" && exercicePresets.length > 0 && (
             <div>
               <div style={labelStyle}>Exercice</div>
               <div style={{ display: "flex", gap: 6 }}>
@@ -147,7 +158,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
           )}
 
           {/* ── Suspension config ── */}
-          {block.type === "Suspension" && suspCfg && (
+          {isClimbing && block.type === "Suspension" && suspCfg && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, background: isDark ? "#141a16" : "#f3f7f4", borderRadius: 6, padding: "10px 12px", border: `1px solid ${"#a78bfa"}44` }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.1em", textTransform: "uppercase" }}>Paramètres suspension</div>
 
@@ -259,7 +270,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
           )}
 
           {/* Initialize suspension config if missing */}
-          {block.type === "Suspension" && !suspCfg && (
+          {isClimbing && block.type === "Suspension" && !suspCfg && (
             <button onClick={() => onUpdate({ config: { ...DEFAULT_SUSPENSION_CONFIG } })}
               style={{ padding: "6px 12px", background: "#a78bfa22", border: `1px solid #a78bfa55`, borderRadius: 5, color: "#a78bfa", cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: 600 }}>
               Configurer la suspension
@@ -271,19 +282,30 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                 <span style={labelStyle}>Charge ⚡</span>
-                <button style={styles.calcBtn} onClick={() => setCalcOpen(o => !o)}>
-                  {calcOpen ? "Fermer calc." : "Calculateur"}
-                </button>
+                {isClimbing && (
+                  <button style={styles.calcBtn} onClick={() => setCalcOpen(o => !o)}>
+                    {calcOpen ? "Fermer calc." : "Calculateur"}
+                  </button>
+                )}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: getChargeColor(block.charge || 0), minWidth: 28 }}>{block.charge || 0}</span>
-                <input type="range" min="0" max="216" style={styles.customFormSlider}
-                  value={block.charge ?? 0} onChange={e => onUpdate({ charge: +e.target.value })} />
-                <input type="number" min="0" max="216" style={{ ...inputStyle, width: 52, textAlign: "center" }}
-                  value={block.charge ?? ""} onChange={e => onUpdate({ charge: +e.target.value })} />
-              </div>
+              {isClimbing ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: getChargeColor(block.charge || 0), minWidth: 28 }}>{block.charge || 0}</span>
+                  <input type="range" min="0" max="216" style={styles.customFormSlider}
+                    value={block.charge ?? 0} onChange={e => onUpdate({ charge: +e.target.value })} />
+                  <input type="number" min="0" max="216" style={{ ...inputStyle, width: 52, textAlign: "center" }}
+                    value={block.charge ?? ""} onChange={e => onUpdate({ charge: +e.target.value })} />
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: disciplineCfg.color, minWidth: 28 }}>{block.charge || 0}</span>
+                  <input type="range" min="0" max="10" step="1" style={{ ...styles.customFormSlider, accentColor: disciplineCfg.color }}
+                    value={block.charge ?? 0} onChange={e => onUpdate({ charge: +e.target.value })} />
+                  <span style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7060", whiteSpace: "nowrap" }}>/ 10</span>
+                </div>
+              )}
 
-              {calcOpen && (() => {
+              {isClimbing && calcOpen && (() => {
                 const volZone = getNbMouvementsZone(+nbMouvements);
                 const volLabel = VOLUME_ZONES[volZone - 1].label;
                 const computed = nbMouvements ? volZone * calcZone * calcComplexity : null;
