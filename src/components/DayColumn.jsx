@@ -262,12 +262,13 @@ export function DayColumn({
   const rangeHours = rangeEnd - rangeStart;
 
   // Compute dynamic hour height based on visible range
-  // On mobile: force-fit to container (no scroll), minimum 8px/hour
-  // On desktop: minimum 56px/hour (scrolls if needed) — augmenté de 20→56 pour lisibilité
-  const hourHeight = isMobile
-    ? Math.max(timelineHeight / rangeHours, 8)
-    : Math.max(timelineHeight / rangeHours, 56);
-  const totalHeight = hourHeight * rangeHours;
+  // Mobile & desktop : fit-to-container, plus de scroll vertical.
+  // Min 8px/h sur mobile, 16px/h sur desktop pour éviter l'absurde sur
+  // fenêtre minuscule.
+  const hourHeight = Math.max(
+    timelineHeight / rangeHours,
+    isMobile ? 8 : 16,
+  );
   const minutesToPx = (minutes) => ((minutes / 60) - rangeStart) * hourHeight;
   const gutter = isCompact ? 10 : isNarrow ? 16 : isMobile ? GUTTER_WIDTH_MOBILE : GUTTER_WIDTH;
 
@@ -348,14 +349,16 @@ export function DayColumn({
         onScroll={handleTimelineScroll}
         style={{
           flex: 1,
-          overflowY: isMobile ? "hidden" : "auto",
+          // Fit-to-screen sur mobile ET desktop : pas de scroll vertical
+          // pour montrer la journée entière en un coup d'œil.
+          overflowY: "hidden",
           overflowX: "hidden",
           scrollbarWidth: "none",
           position: "relative",
           minHeight: 0,
         }}
       >
-        <div style={{ position: "relative", height: isMobile ? "100%" : totalHeight }}>
+        <div style={{ position: "relative", height: "100%" }}>
 
           {/* Lignes horaires */}
           {Array.from({ length: rangeHours + 1 }, (_, i) => {

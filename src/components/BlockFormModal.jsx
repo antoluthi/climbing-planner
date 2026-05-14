@@ -3,19 +3,29 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { BLOCK_TYPES, GRIP_TYPES, DEFAULT_SUSPENSION_CONFIG } from "../lib/constants.js";
 import { VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, getNbMouvementsZone, getChargeColor } from "../lib/charge.js";
 import { RichText } from "./RichText.jsx";
+import { useConfirmClose } from "../hooks/useConfirmClose.js";
+import { ConfirmModal } from "./ConfirmModal.jsx";
 
 export function BlockFormModal({ initial, onSave, onClose }) {
   const { styles, isDark } = useThemeCtx();
   const blockTypeKeys = Object.keys(BLOCK_TYPES);
 
-  const [blockType,      setBlockType]      = useState(initial?.blockType ?? "Grimpe");
-  const [name,           setName]           = useState(initial?.name      ?? "");
-  const [duration,       setDuration]       = useState(initial?.duration  ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultDuration);
-  const [charge,         setCharge]         = useState(initial?.charge    ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultCharge);
-  const [desc,           setDesc]           = useState(initial?.description ?? "");
+  // ── Confirm-on-close (protège des miss-clicks) ────────────────────────────
+  const { requestClose, markDirty, markPristine, confirmOpen, confirmProps } = useConfirmClose(onClose);
+
+  const [blockType,      _setBlockType]      = useState(initial?.blockType ?? "Grimpe");
+  const setBlockType = v => { markDirty(); _setBlockType(v); };
+  const [name,           _setName]           = useState(initial?.name      ?? "");
+  const setName = v => { markDirty(); _setName(v); };
+  const [duration,       _setDuration]       = useState(initial?.duration  ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultDuration);
+  const setDuration = v => { markDirty(); _setDuration(v); };
+  const [charge,         _setCharge]         = useState(initial?.charge    ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultCharge);
+  const setCharge = v => { markDirty(); _setCharge(v); };
+  const [desc,           _setDesc]           = useState(initial?.description ?? "");
+  const setDesc = v => { markDirty(); _setDesc(v); };
   const [preview,        setPreview]        = useState(false);
 
-  // Calculateur de charge
+  // Calculateur de charge (état purement visuel — pas dirty)
   const [calcOpen,       setCalcOpen]       = useState(false);
   const [infoOpen,       setInfoOpen]       = useState(false);
   const [nbMouvements,   setNbMouvements]   = useState("");
@@ -23,8 +33,8 @@ export function BlockFormModal({ initial, onSave, onClose }) {
   const [calcComplexity, setCalcComplexity] = useState(3);
 
   // Config Suspension
-  const [suspCfg, setSuspCfg] = useState(() => ({ ...DEFAULT_SUSPENSION_CONFIG, ...(initial?.config ?? {}) }));
-  const patchSusp = (patch) => setSuspCfg(prev => ({ ...prev, ...patch }));
+  const [suspCfg, _setSuspCfg] = useState(() => ({ ...DEFAULT_SUSPENSION_CONFIG, ...(initial?.config ?? {}) }));
+  const patchSusp = (patch) => { markDirty(); _setSuspCfg(prev => ({ ...prev, ...patch })); };
 
   const cfg    = BLOCK_TYPES[blockType] || BLOCK_TYPES["Grimpe"];
   const bg     = isDark ? "#141a16" : "#f3f7f4";
@@ -35,6 +45,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
 
   const handleSave = () => {
     if (!name.trim()) return;
+    markPristine();
     onSave({
       id: initial?.id ?? ("blk_" + Math.random().toString(36).slice(2) + Date.now()),
       blockType,
@@ -59,7 +70,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
         {/* ── Header ── */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{initial ? "Modifier le bloc" : "Nouveau bloc"}</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: muted, fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
+          <button onClick={requestClose} style={{ background: "none", border: "none", color: muted, fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
         </div>
 
         {/* ── Corps scrollable ── */}
@@ -340,13 +351,14 @@ export function BlockFormModal({ initial, onSave, onClose }) {
 
         {/* ── Footer ── */}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "12px 20px", borderTop: `1px solid ${border}`, flexShrink: 0 }}>
-          <button onClick={onClose} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, color: muted, padding: "8px 16px", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Annuler</button>
+          <button onClick={requestClose} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, color: muted, padding: "8px 16px", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Annuler</button>
           <button onClick={handleSave} disabled={!name.trim()}
             style={{ background: name.trim() ? cfg.color : (isDark ? "#1e2b22" : "#c8e6d4"), border: "none", borderRadius: 6, color: name.trim() ? "#fff" : muted, padding: "8px 20px", cursor: name.trim() ? "pointer" : "not-allowed", fontSize: 12, fontFamily: "inherit", fontWeight: 700 }}>
             {initial ? "Enregistrer" : "Créer le bloc"}
           </button>
         </div>
       </div>
+      {confirmOpen && <ConfirmModal {...confirmProps} />}
     </div>
   );
 }
