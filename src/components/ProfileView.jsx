@@ -5,6 +5,8 @@ import { CoachAthletesSection } from "./CoachAthletesSection.jsx";
 import { PhotoCropModal } from "./PhotoCropModal.jsx";
 import { CalendarSyncSection } from "./CalendarSyncSection.jsx";
 import supabase from "../lib/supabase.js";
+import { uploadAvatar, deleteAvatar } from "../lib/avatar-storage.js";
+import { toast } from "../lib/toast.js";
 
 // ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
 
@@ -14,17 +16,48 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
   const profile = data.profile || {};
 
   const [showCrop, setShowCrop] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [editName, setEditName] = useState(false);
   const [firstName, setFirstName] = useState(profile.firstName || "");
   const [lastName, setLastName] = useState(profile.lastName || "");
   const importRef = useRef(null);
 
-  // Photo stored in data.profile.avatarDataUrl — syncs via Supabase automatically
-  const photoUrl = profile.avatarDataUrl || "";
+  // Photo : nouveau modèle = profile.avatarUrl (URL Supabase Storage).
+  // Legacy = profile.avatarDataUrl (base64 stocké dans le JSONB). On garde
+  // un fallback pour la rétro-compat des comptes non encore migrés.
+  const photoUrl = profile.avatarUrl || profile.avatarDataUrl || "";
 
-  const handleSavePhoto = (dataUrl) => {
-    onUpdateProfile({ ...profile, avatarDataUrl: dataUrl });
-    setShowCrop(false);
+  const handleSavePhoto = async (dataUrl) => {
+    // Pas authentifié → fallback localStorage base64 (mode hors-ligne).
+    if (!session?.user?.id) {
+      onUpdateProfile({ ...profile, avatarDataUrl: dataUrl, avatarUrl: undefined });
+      setShowCrop(false);
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadAvatar(session.user.id, dataUrl);
+      // On vide avatarDataUrl pour ne plus polluer le JSONB cloud.
+      onUpdateProfile({ ...profile, avatarUrl: url, avatarDataUrl: undefined });
+      toast.success("Photo de profil enregistrée");
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[avatar] upload error:", e);
+      // Fallback : on garde en local pour ne pas perdre la photo.
+      onUpdateProfile({ ...profile, avatarDataUrl: dataUrl });
+      toast.error("Upload échoué — photo sauvée en local. Vérifie le bucket Supabase « avatars ».");
+    } finally {
+      setUploadingPhoto(false);
+      setShowCrop(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    if (session?.user?.id) {
+      await deleteAvatar(session.user.id);
+    }
+    onUpdateProfile({ ...profile, avatarUrl: undefined, avatarDataUrl: undefined });
+    toast.success("Photo retirée");
   };
 
   const handleSaveName = () => {
@@ -78,15 +111,38 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
         <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
           {/* Avatar */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ ...styles.profileAvatar, borderColor: accent + "55" }} onClick={() => setShowCrop(true)}>
+            <div
+              style={{ ...styles.profileAvatar, borderColor: accent + "55", position: "relative" }}
+              onClick={() => !uploadingPhoto && setShowCrop(true)}
+            >
               {photoUrl
                 ? <img src={photoUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
                 : <span style={{ fontSize: 28, color: mutedColor }}>?</span>
               }
+              {uploadingPhoto && (
+                <div style={{
+                  position: "absolute", inset: 0,
+                  background: "rgba(0,0,0,0.55)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  borderRadius: "50%",
+                  fontSize: 11, color: "#fff", fontWeight: 600,
+                  letterSpacing: "0.05em",
+                }}>
+                  Upload…
+                </div>
+              )}
             </div>
-            <span style={styles.profileAvatarHint} onClick={() => setShowCrop(true)}>
-              {photoUrl ? "Modifier" : "Ajouter une photo"}
-            </span>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <span style={styles.profileAvatarHint} onClick={() => !uploadingPhoto && setShowCrop(true)}>
+                {photoUrl ? "Modifier" : "Ajouter une photo"}
+              </span>
+              {photoUrl && !uploadingPhoto && (
+                <span
+                  style={{ ...styles.profileAvatarHint, color: mutedColor }}
+                  onClick={handleRemovePhoto}
+                >Retirer</span>
+              )}
+            </div>
           </div>
 
           {/* Nom */}
