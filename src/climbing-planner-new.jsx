@@ -1049,6 +1049,22 @@ export default function ClimbingPlanner() {
               dayIndex={mobileDayIdx}
               setDayIndex={setMobileDayIdx}
               sessions={weekSessions[mobileDayIdx] || []}
+              weekSessions={weekSessions}
+              weekQuickSessions={(() => {
+                // Map { isoDate: [QuickSession, …] } pour les 7 jours de la semaine
+                const map = {};
+                const qs = data.quickSessions || [];
+                for (let i = 0; i < 7; i++) {
+                  const dd = addDays(monday, i);
+                  const iso = `${dd.getFullYear()}-${String(dd.getMonth()+1).padStart(2,'0')}-${String(dd.getDate()).padStart(2,'0')}`;
+                  map[iso] = qs.filter(x => {
+                    if (x.startDate === iso) return true;
+                    if (x.endDate && x.startDate <= iso && x.endDate >= iso) return true;
+                    return false;
+                  });
+                }
+                return map;
+              })()}
               isToday={isToday}
               weekMeta={weekMeta}
               logWarning={logWarning}

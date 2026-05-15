@@ -304,6 +304,7 @@ Règles de sync (refonte mars 2026) :
 | `supabase/migrations/20260313_coach_athletes.sql` | Table `coach_athletes` + RLS, policies coach sur `climbing_plans`, RPC `search_athletes` | ✅ appliquée |
 | `supabase/migrations/20260315_public_anto_plan.sql` | Policy RLS `anon` lecture-seule sur la ligne Anto dans `climbing_plans` | ✅ appliquée |
 | `supabase/migrations/20260512_avatars_bucket.sql` | Bucket Storage `avatars` (public read, 2MB max, jpeg/png/webp) + policies INSERT/UPDATE/DELETE par owner sur `{auth.uid()}.{ext}` | ⏳ à appliquer |
+| `supabase/migrations/20260513_shared_sessions_catalog.sql` | Bibliothèque commune : `sessions_catalog` + `session_blocks` → tout user authentifié peut SELECT/INSERT/UPDATE/DELETE toutes les rows. `user_id` / `created_by` conservés pour la traçabilité. | ⏳ à appliquer |
 
 ## Commandes
 
