@@ -40,8 +40,10 @@ export function useSessionsCatalog(userId) {
     if (session.cooldown) extra.cooldown = session.cooldown;
     if (session.location) extra.location = session.location;
     if (session.blocks?.length) extra.blocks = session.blocks;  // composition de blocs
-    const row = {
-      user_id: uid,
+    // Base : ne contient PAS user_id ; on l'ajoute seulement sur INSERT pour
+    // ne pas écraser le créateur original lors d'un edit par un autre
+    // utilisateur (catalogue partagé).
+    const base = {
       type: session.type,
       name: session.name,
       charge: session.charge,
@@ -53,14 +55,14 @@ export function useSessionsCatalog(userId) {
     };
     let dbError;
     if (session.isCustom && typeof session.id === "number") {
-      const { error } = await supabase.from("sessions_catalog").update(row).eq("id", session.id);
+      const { error } = await supabase.from("sessions_catalog").update(base).eq("id", session.id);
       dbError = error;
     } else {
-      const { error } = await supabase.from("sessions_catalog").insert(row);
+      const { error } = await supabase.from("sessions_catalog").insert({ ...base, user_id: uid });
       dbError = error;
     }
     if (dbError) {
-      console.error("[sessions_catalog] erreur DB:", dbError.code, dbError.message, dbError.details, "\nrow envoyé:", row);
+      console.error("[sessions_catalog] erreur DB:", dbError.code, dbError.message, dbError.details, "\nrow envoyé:", base);
       return null;
     }
     fetchCatalog();

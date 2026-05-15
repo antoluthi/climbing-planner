@@ -20,6 +20,8 @@ export function DayListView({
   dayIndex,
   setDayIndex,
   sessions,
+  weekSessions,        // [[Session, …], …] sur 7 jours — pour les dots
+  weekQuickSessions,   // { dateISO: [QuickSession, …] } — events visibles dans le picker
   weekMeta,
   logWarning,
   onOpenSession,
@@ -88,13 +90,21 @@ export function DayListView({
           const di = addDays(monday, i);
           const isI = di.toDateString() === new Date().toDateString();
           const active = dayIndex === i;
+          // Compteur de séances pour ce jour : sessions planifiées +
+          // événements (multi-jour inclus). Max 3 dots visibles, sinon
+          // un "+N" en chiffre.
+          const daySessionsCount = Array.isArray(weekSessions?.[i]) ? weekSessions[i].length : 0;
+          const iso = `${di.getFullYear()}-${String(di.getMonth()+1).padStart(2,'0')}-${String(di.getDate()).padStart(2,'0')}`;
+          const dayQuickCount = (weekQuickSessions?.[iso]?.length) || 0;
+          const totalCount = daySessionsCount + dayQuickCount;
+          const dotColor = active ? "#fff" : (isI ? accent : textLight);
           return (
             <button
               key={i}
               onClick={() => setDayIndex(i)}
               style={{
                 flex: 1, minWidth: 42,
-                padding: "8px 4px", borderRadius: 8,
+                padding: "6px 4px 4px", borderRadius: 8,
                 background: active ? accent : "transparent",
                 color: active ? "#fff" : (isI ? accent : textMid),
                 border: active ? "none" : `1px solid ${border}`,
@@ -106,6 +116,23 @@ export function DayListView({
                 {d.slice(0, 3)}
               </span>
               <span style={{ fontSize: 14, fontWeight: 600 }}>{di.getDate()}</span>
+              {/* Dots : 1 point par séance, max 3 + "·+N" si plus */}
+              <span style={{ display: "flex", alignItems: "center", gap: 2, height: 6, marginTop: 2 }}>
+                {totalCount === 0 ? null : totalCount <= 3 ? (
+                  Array.from({ length: totalCount }, (_, k) => (
+                    <span
+                      key={k}
+                      style={{ width: 4, height: 4, borderRadius: "50%", background: dotColor }}
+                    />
+                  ))
+                ) : (
+                  <>
+                    <span style={{ width: 4, height: 4, borderRadius: "50%", background: dotColor }} />
+                    <span style={{ width: 4, height: 4, borderRadius: "50%", background: dotColor }} />
+                    <span style={{ fontSize: 8, fontWeight: 600, color: dotColor, lineHeight: 1, marginLeft: 1 }}>+{totalCount - 2}</span>
+                  </>
+                )}
+              </span>
             </button>
           );
         })}

@@ -6,6 +6,39 @@ import { ActivityHeatmap } from "./ActivityHeatmap.jsx";
 import { SleepSection } from "./SleepSection.jsx";
 import { DashboardSkeleton } from "./ui/Skeleton.jsx";
 
+// ─── Régression linéaire (least-squares) ─────────────────────────────────────
+// Ajoute un champ `trendKey` à chaque point du chart, dérivé d'une droite
+// y = a·x + b ajustée sur les points non-null. x = index (pas de timestamp,
+// les points peuvent être non-uniformes mais le rendu reste visuellement
+// correct vu que l'axe X de Recharts est catégoriel).
+function fitTrend(data, valueKey, trendKey = "trend") {
+  if (!Array.isArray(data) || data.length < 2) return data;
+  const pts = [];
+  data.forEach((d, i) => {
+    const y = d?.[valueKey];
+    if (y != null && !Number.isNaN(y)) pts.push({ x: i, y });
+  });
+  if (pts.length < 2) return data.map(d => ({ ...d, [trendKey]: null }));
+
+  const n = pts.length;
+  const sumX  = pts.reduce((s, p) => s + p.x, 0);
+  const sumY  = pts.reduce((s, p) => s + p.y, 0);
+  const sumXY = pts.reduce((s, p) => s + p.x * p.y, 0);
+  const sumX2 = pts.reduce((s, p) => s + p.x * p.x, 0);
+  const denom = n * sumX2 - sumX * sumX;
+  if (denom === 0) return data.map(d => ({ ...d, [trendKey]: null }));
+  const a = (n * sumXY - sumX * sumY) / denom;
+  const b = (sumY - a * sumX) / n;
+
+  // Restreint la droite à la plage des x effectivement renseignés.
+  const minX = pts[0].x;
+  const maxX = pts[pts.length - 1].x;
+  return data.map((d, i) => ({
+    ...d,
+    [trendKey]: i >= minX && i <= maxX ? Math.round((a * i + b) * 100) / 100 : null,
+  }));
+}
+
 function hooperLabel(total) {
   if (total <= 10) return "Bien récupéré";
   if (total <= 14) return "Récupération normale";
@@ -331,13 +364,14 @@ function DashboardBody({ data, onUpdateSleep }) {
       <div style={styles.dashSection}>
         <div style={styles.dashSectionTitle}>RPE moyen — {rangeLabel}</div>
         <ResponsiveContainer width="100%" height={160}>
-          <LineChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+          <LineChart data={fitTrend(chartData, "avgRpe", "rpeTrend")} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
             <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
               interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
             <YAxis domain={[0, 10]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={tooltipStyle} />
             <Line type="monotone" dataKey="avgRpe" name="RPE" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} connectNulls={false} />
+            <Line type="linear" dataKey="rpeTrend" name="Tendance" stroke="#f97316" strokeWidth={1.5} strokeOpacity={0.55} strokeDasharray="5 5" dot={false} connectNulls />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -346,14 +380,16 @@ function DashboardBody({ data, onUpdateSleep }) {
         <div style={styles.dashSection}>
           <div style={styles.dashSectionTitle}>Poids — {rangeLabel}</div>
           <ResponsiveContainer width="100%" height={160}>
-            <LineChart data={weightChartData} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
+            <LineChart data={fitTrend(weightChartData, "kg", "kgTrend")} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
               <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
                 interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
               <YAxis domain={["auto", "auto"]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} formatter={v => v != null ? [`${v} kg`, "Poids"] : null} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => v != null ? [`${v} kg`, n] : null} />
               <Line type="monotone" dataKey="kg" name="Poids" stroke={isDark ? "#60a5fa" : "#2563eb"}
                 strokeWidth={2} dot={{ r: 3, fill: isDark ? "#60a5fa" : "#2563eb" }} connectNulls={false} />
+              <Line type="linear" dataKey="kgTrend" name="Tendance"
+                stroke={isDark ? "#60a5fa" : "#2563eb"} strokeWidth={1.5} strokeOpacity={0.55} strokeDasharray="5 5" dot={false} connectNulls />
             </LineChart>
           </ResponsiveContainer>
         </div>
