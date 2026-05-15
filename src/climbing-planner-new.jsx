@@ -189,6 +189,31 @@ export default function ClimbingPlanner() {
     });
   }, [session?.user?.id, data?.customSessions?.length, saveUserSession]);
 
+  // ── Migration one-shot : avatarDataUrl base64 → Supabase Storage ──
+  // Pour les comptes qui ont une photo base64 stockée dans le JSONB,
+  // on l'upload une fois dans le bucket `avatars` et on la nettoie.
+  const avatarMigratedRef = useRef(false);
+  useEffect(() => {
+    if (avatarMigratedRef.current) return;
+    if (!session?.user?.id) return;
+    if (!cloudLoaded) return;
+    const legacy = data?.profile?.avatarDataUrl;
+    if (!legacy || data?.profile?.avatarUrl) return;
+    avatarMigratedRef.current = true;
+    import("./lib/avatar-storage.js")
+      .then(({ uploadAvatar }) => uploadAvatar(session.user.id, legacy))
+      .then(url => {
+        setData(d => ({
+          ...d,
+          profile: { ...(d.profile || {}), avatarUrl: url, avatarDataUrl: undefined },
+        }));
+      })
+      .catch(e => {
+        // eslint-disable-next-line no-console
+        console.warn("[avatar] migration legacy → storage failed:", e);
+      });
+  }, [session?.user?.id, cloudLoaded, data?.profile?.avatarDataUrl, data?.profile?.avatarUrl]);
+
   const pullFromCloud = async () => {
     const cloudData = await loadFromCloud();
     if (cloudData) { setData(cloudData); saveData(cloudData); }
@@ -704,7 +729,7 @@ export default function ClimbingPlanner() {
     </div>
   );
 
-  const profilePhoto = data.profile?.avatarDataUrl || "";
+  const profilePhoto = data.profile?.avatarUrl || data.profile?.avatarDataUrl || "";
   const profileBtn = (
     <button
       style={{ ...styles.profileBtn, ...(viewMode === "profil" ? { borderColor: isDark ? "#c8906a" : "#8b4c20", background: isDark ? "#2a1a10" : "#ecddd4" } : {}) }}

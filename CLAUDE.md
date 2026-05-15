@@ -113,7 +113,8 @@ src/
   creatine: {},        // { "2026-03-09": true }
   weight: {},          // { "2026-03-09": 70.5 }
   profile: {           // avatar, nom, objectif, thème, rôle, etc.
-    avatarDataUrl: "",
+    avatarUrl: "",     // URL publique Supabase Storage (bucket `avatars`)
+    avatarDataUrl: "", // legacy base64 (migré au boot vers avatarUrl)
     role: null,        // null | "coach" | "athlete" | "auto"
     firstName: "",
     lastName: "",
@@ -136,7 +137,7 @@ src/
 
 - Auth : magic link email + password, `persistSession: true`, `storageKey: "climbing-planner-auth"`
 - Sync : debounce 1500ms, upsert on conflict user_id
-- Photo stockée dans `data.profile.avatarDataUrl` (base64) → sync automatique via upsert
+- Photo : URL dans `data.profile.avatarUrl` (uploaded vers le bucket Supabase Storage `avatars`, path `{userId}.{ext}`). Legacy `data.profile.avatarDataUrl` (base64) migré au 1er login authentifié vers Storage.
 - Colonne `status` de `climbing_plans` = rôle de l'utilisateur (écrit via `writeStatus()`, jamais écrasé par `saveToCloud`)
 
 ### Supabase — RPC
@@ -302,6 +303,7 @@ Règles de sync (refonte mars 2026) :
 |---|---|---|
 | `supabase/migrations/20260313_coach_athletes.sql` | Table `coach_athletes` + RLS, policies coach sur `climbing_plans`, RPC `search_athletes` | ✅ appliquée |
 | `supabase/migrations/20260315_public_anto_plan.sql` | Policy RLS `anon` lecture-seule sur la ligne Anto dans `climbing_plans` | ✅ appliquée |
+| `supabase/migrations/20260512_avatars_bucket.sql` | Bucket Storage `avatars` (public read, 2MB max, jpeg/png/webp) + policies INSERT/UPDATE/DELETE par owner sur `{auth.uid()}.{ext}` | ⏳ à appliquer |
 
 ## Commandes
 
@@ -315,7 +317,7 @@ npm run lint     # ESLint
 
 - Lazy-load des vues lourdes (Dashboard/Recharts) avec `React.lazy`
 - Code-splitting via `manualChunks` (Recharts séparé du bundle principal)
-- Migrer le stockage avatar base64 → Supabase Storage (URL)
+- ~~Migrer le stockage avatar base64 → Supabase Storage (URL)~~ ✅ fait (avatar-storage.js + bucket `avatars`)
 - Tests unitaires (helpers, charge, storage) + CI GitHub Actions
 - Sync Garmin Connect pour le sommeil (voir `garmin-sync-notes.md` — bloqué auth)
 - Import CSV sommeil Garmin (bouton déjà présent dans stats)
