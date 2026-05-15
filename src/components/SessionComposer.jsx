@@ -475,7 +475,7 @@ export function SessionComposer({
           {/* Discipline chips */}
           <div>
             <span style={labelStyle}>Discipline</span>
-            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, msOverflowStyle: "none", scrollbarWidth: "none" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {disciplineList().map(d => {
                 const active = d.id === discipline;
                 return (

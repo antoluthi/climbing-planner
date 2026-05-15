@@ -4,6 +4,7 @@
 // Auth: token in URL path (no HTTP Basic Auth needed)
 
 import { createClient } from "@supabase/supabase-js";
+import { buildEventDescription, getEventLocation } from "../_event-fields.js";
 
 // ─── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -142,14 +143,13 @@ function extractEvents(planData) {
       ? new Date(qs.endDate + "T12:00:00Z")
       : null;
     const uid = `climbing-quick-${qs.id || qs.startDate + "-" + qs.name}@climbing-planner`;
+    // Garde TOUS les champs (discipline, chargePlanned, notes, content, etc.)
+    // pour que buildEventDescription puisse les utiliser.
     const session = {
-      id: qs.id,
-      name: qs.name,
+      ...qs,
       startTime: qs.allDay ? null : (qs.startTime || null),
-      endTime: qs.allDay ? null : (qs.endTime || null),
-      duration: qs.allDay ? null : (qs.duration || null),
-      description: qs.content || null,
-      address: qs.location || null,
+      endTime:   qs.allDay ? null : (qs.endTime   || null),
+      duration:  qs.allDay ? null : (qs.duration  || null),
       isQuick: true,
       isObjective: !!qs.isObjective,
     };
@@ -163,11 +163,8 @@ function extractEvents(planData) {
 
 function buildVEVENT(uid, session, date, endDateOverride) {
   const now = toICSDateTimeUTC(new Date());
-  const descParts = [];
-  if (session.blockType) descParts.push(session.blockType);
-  if (session.duration) descParts.push(`${session.duration} min`);
-  if (session.charge) descParts.push(`Charge : ${session.charge}`);
-  if (session.description) descParts.push(session.description);
+  const description = buildEventDescription(session);
+  const location = getEventLocation(session);
 
   const lines = [];
   lines.push("BEGIN:VEVENT");
@@ -207,12 +204,12 @@ function buildVEVENT(uid, session, date, endDateOverride) {
     lines.push(`DTEND;VALUE=DATE:${toICSDate(addDays(lastDay, 1))}`);
   }
 
-  lines.push(`SUMMARY:${escapeICS(session.name)}`);
-  if (session.address) {
-    lines.push(`LOCATION:${escapeICS(session.address)}`);
+  lines.push(`SUMMARY:${escapeICS(session.name || session.title || "Séance")}`);
+  if (location) {
+    lines.push(`LOCATION:${escapeICS(location)}`);
   }
-  if (descParts.length) {
-    lines.push(`DESCRIPTION:${escapeICS(descParts.join(" · "))}`);
+  if (description) {
+    lines.push(`DESCRIPTION:${escapeICS(description)}`);
   }
   lines.push("END:VEVENT");
 
