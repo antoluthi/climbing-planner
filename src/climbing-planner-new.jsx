@@ -60,6 +60,8 @@ export default function ClimbingPlanner() {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState("accueil");
   const [sessionBuilderDay, setSessionBuilderDay] = useState(null);
+  // Édition d'une séance existante : remplace en place à (weekKey, dayIndex, sessionIndex).
+  const [sessionEditCtx, setSessionEditCtx] = useState(null);
   const [picker, setPicker] = useState(null);
   const [metaEditing, setMetaEditing] = useState(false);
   const [tempMeta, setTempMeta] = useState({});
@@ -1258,6 +1260,55 @@ export default function ClimbingPlanner() {
           />
         );
       })()}
+
+      {/* ── SessionComposer en mode édition : remplace en place ── */}
+      {sessionEditCtx && (() => {
+        const { weekKey: ek, dayIndex: edi, sessionIndex: esi, initial } = sessionEditCtx;
+        const emonday = new Date(ek + "T00:00:00");
+        const eday = addDays(emonday, edi);
+        const edayLabel = `${DAYS[edi]} ${formatDate(eday)}`;
+        const edateISO = `${eday.getFullYear()}-${String(eday.getMonth()+1).padStart(2,'0')}-${String(eday.getDate()).padStart(2,'0')}`;
+        return (
+          <SessionComposer
+            initial={initial}
+            dayLabel={edayLabel}
+            defaultDate={edateISO}
+            communitySessions={communitySessions}
+            allSessions={catalog}
+            availableBlocks={dbBlocks}
+            onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
+            onSaveBlock={saveBlock}
+            onClose={() => setSessionEditCtx(null)}
+            onSave={(payload) => {
+              // Event : route vers quickSessions (replace by id).
+              if (payload.mode === "event") {
+                editQuickSession(payload);
+                toast.success("Événement modifié");
+                setSessionEditCtx(null);
+                return;
+              }
+              // Sinon : remplace en place dans data.weeks, préserve le feedback.
+              setData(d => {
+                const ws = (d.weeks[ek] || Array(7).fill(null).map(() => [])).map(day => [...day]);
+                if (!ws[edi]) return d;
+                const prev = ws[edi][esi];
+                ws[edi] = ws[edi].map((sx, j) =>
+                  j === esi
+                    ? { ...payload, isCustom: true, feedback: prev?.feedback ?? null }
+                    : sx
+                );
+                return { ...d, weeks: { ...d.weeks, [ek]: ws } };
+              });
+              // Si la séance est aussi dans le catalogue (saveAsTemplate), sync DB.
+              if (payload.saveAsTemplate) {
+                saveUserSession(payload);
+              }
+              toast.success("Séance modifiée");
+              setSessionEditCtx(null);
+            }}
+          />
+        );
+      })()}
       {picker && hasCoachFeatures && (
         <CoachPickerModal
           sessions={catalog}
@@ -1451,23 +1502,14 @@ export default function ClimbingPlanner() {
               });
             }}
             onEdit={() => {
-              if (smSession.isCustom) {
-                setCustomSessionForm({ initial: smSession, targetDay: null });
-              } else {
-                setCustomSessionForm({
-                  initial: { ...smSession, isCustom: true },
-                  targetDay: null,
-                  onSave: (edited) => {
-                    setData(d => {
-                      const ws = d.weeks[smKey] ? d.weeks[smKey].map(day => [...day]) : Array(7).fill(null).map(() => []);
-                      ws[smDi] = [...(ws[smDi] || [])];
-                      ws[smDi][smSi] = { ...edited, isCustom: true, feedback: ws[smDi][smSi]?.feedback ?? null };
-                      return { ...d, weeks: { ...d.weeks, [smKey]: ws } };
-                    });
-                    setCustomSessionForm(null);
-                  },
-                });
-              }
+              // Réouvre SessionComposer avec la séance pré-chargée.
+              // Le save remplace en place (préserve feedback).
+              setSessionEditCtx({
+                weekKey: smKey,
+                dayIndex: smDi,
+                sessionIndex: smSi,
+                initial: { ...smSession, isCustom: true },
+              });
               setSessionModal(null);
             }}
             onSave={saveSessionFeedback}
