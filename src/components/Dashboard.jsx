@@ -6,37 +6,65 @@ import { ActivityHeatmap } from "./ActivityHeatmap.jsx";
 import { SleepSection } from "./SleepSection.jsx";
 import { DashboardSkeleton } from "./ui/Skeleton.jsx";
 
-// ─── Régression linéaire (least-squares) ─────────────────────────────────────
-// Ajoute un champ `trendKey` à chaque point du chart, dérivé d'une droite
-// y = a·x + b ajustée sur les points non-null. x = index (pas de timestamp,
-// les points peuvent être non-uniformes mais le rendu reste visuellement
-// correct vu que l'axe X de Recharts est catégoriel).
-function fitTrend(data, valueKey, trendKey = "trend") {
+// ─── Polyfit polynomial (least-squares) ───────────────────────────────────────
+// Lisse une série temporelle en ajustant un polynôme de degré N par
+// least-squares. Les points peuvent être non-uniformément espacés (les
+// gaps n'ont pas de y). x = index dans le chart.
+// Renvoie le data enrichi d'un champ `fitKey` interpolé sur TOUTE la plage
+// pour produire une courbe continue sans discontinuité.
+function polyfit(data, valueKey, fitKey, degree = 3) {
   if (!Array.isArray(data) || data.length < 2) return data;
   const pts = [];
   data.forEach((d, i) => {
     const y = d?.[valueKey];
     if (y != null && !Number.isNaN(y)) pts.push({ x: i, y });
   });
-  if (pts.length < 2) return data.map(d => ({ ...d, [trendKey]: null }));
+  if (pts.length < 2) return data.map(d => ({ ...d, [fitKey]: null }));
 
-  const n = pts.length;
-  const sumX  = pts.reduce((s, p) => s + p.x, 0);
-  const sumY  = pts.reduce((s, p) => s + p.y, 0);
-  const sumXY = pts.reduce((s, p) => s + p.x * p.y, 0);
-  const sumX2 = pts.reduce((s, p) => s + p.x * p.x, 0);
-  const denom = n * sumX2 - sumX * sumX;
-  if (denom === 0) return data.map(d => ({ ...d, [trendKey]: null }));
-  const a = (n * sumXY - sumX * sumY) / denom;
-  const b = (sumY - a * sumX) / n;
+  // Réduit le degré si trop peu de points (évite overfit).
+  const deg = Math.min(degree, pts.length - 1);
+  const m = deg + 1;
 
-  // Restreint la droite à la plage des x effectivement renseignés.
+  // Normal equations : (X^T X) c = X^T y
+  const XTX = Array.from({ length: m }, () => new Array(m).fill(0));
+  const XTy = new Array(m).fill(0);
+  for (const { x, y } of pts) {
+    for (let i = 0; i < m; i++) {
+      for (let j = 0; j < m; j++) XTX[i][j] += Math.pow(x, i + j);
+      XTy[i] += Math.pow(x, i) * y;
+    }
+  }
+
+  // Gauss elimination
+  const A = XTX.map((row, i) => [...row, XTy[i]]);
+  for (let i = 0; i < m; i++) {
+    let maxRow = i;
+    for (let k = i + 1; k < m; k++) {
+      if (Math.abs(A[k][i]) > Math.abs(A[maxRow][i])) maxRow = k;
+    }
+    [A[i], A[maxRow]] = [A[maxRow], A[i]];
+    if (Math.abs(A[i][i]) < 1e-12) return data.map(d => ({ ...d, [fitKey]: null }));
+    for (let k = i + 1; k < m; k++) {
+      const factor = A[k][i] / A[i][i];
+      for (let j = i; j <= m; j++) A[k][j] -= factor * A[i][j];
+    }
+  }
+  const c = new Array(m).fill(0);
+  for (let i = m - 1; i >= 0; i--) {
+    c[i] = A[i][m];
+    for (let j = i + 1; j < m; j++) c[i] -= A[i][j] * c[j];
+    c[i] /= A[i][i];
+  }
+
+  // Évalue le polynôme sur toute la plage (continuité de la courbe).
   const minX = pts[0].x;
   const maxX = pts[pts.length - 1].x;
-  return data.map((d, i) => ({
-    ...d,
-    [trendKey]: i >= minX && i <= maxX ? Math.round((a * i + b) * 100) / 100 : null,
-  }));
+  return data.map((d, i) => {
+    if (i < minX || i > maxX) return { ...d, [fitKey]: null };
+    let y = 0;
+    for (let k = 0; k < m; k++) y += c[k] * Math.pow(i, k);
+    return { ...d, [fitKey]: Math.round(y * 100) / 100 };
+  });
 }
 
 function hooperLabel(total) {
@@ -364,14 +392,16 @@ function DashboardBody({ data, onUpdateSleep }) {
       <div style={styles.dashSection}>
         <div style={styles.dashSectionTitle}>RPE moyen — {rangeLabel}</div>
         <ResponsiveContainer width="100%" height={160}>
-          <LineChart data={fitTrend(chartData, "avgRpe", "rpeTrend")} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+          <LineChart data={polyfit(chartData, "avgRpe", "rpeFit")} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
             <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
               interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
             <YAxis domain={[0, 10]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={tooltipStyle} />
-            <Line type="monotone" dataKey="avgRpe" name="RPE" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} connectNulls={false} />
-            <Line type="linear" dataKey="rpeTrend" name="Tendance" stroke="#f97316" strokeWidth={1.5} strokeOpacity={0.55} strokeDasharray="5 5" dot={false} connectNulls />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => v != null ? [v, n] : null} />
+            {/* Courbe polyfit lisse */}
+            <Line type="monotone" dataKey="rpeFit" name="RPE" stroke="#f97316" strokeWidth={2} dot={false} connectNulls />
+            {/* Points mesurés (pas de ligne entre eux — la ligne, c'est le polyfit) */}
+            <Line type="linear" dataKey="avgRpe" name="Mesures" stroke="transparent" dot={{ r: 3, fill: "#f97316" }} activeDot={{ r: 4 }} legendType="none" />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -380,16 +410,18 @@ function DashboardBody({ data, onUpdateSleep }) {
         <div style={styles.dashSection}>
           <div style={styles.dashSectionTitle}>Poids — {rangeLabel}</div>
           <ResponsiveContainer width="100%" height={160}>
-            <LineChart data={fitTrend(weightChartData, "kg", "kgTrend")} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
+            <LineChart data={polyfit(weightChartData, "kg", "kgFit")} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
               <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
                 interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
               <YAxis domain={["auto", "auto"]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => v != null ? [`${v} kg`, n] : null} />
-              <Line type="monotone" dataKey="kg" name="Poids" stroke={isDark ? "#60a5fa" : "#2563eb"}
-                strokeWidth={2} dot={{ r: 3, fill: isDark ? "#60a5fa" : "#2563eb" }} connectNulls={false} />
-              <Line type="linear" dataKey="kgTrend" name="Tendance"
-                stroke={isDark ? "#60a5fa" : "#2563eb"} strokeWidth={1.5} strokeOpacity={0.55} strokeDasharray="5 5" dot={false} connectNulls />
+              {/* Courbe polyfit lisse */}
+              <Line type="monotone" dataKey="kgFit" name="Poids"
+                stroke={isDark ? "#60a5fa" : "#2563eb"} strokeWidth={2} dot={false} connectNulls />
+              {/* Points mesurés (dots seulement) */}
+              <Line type="linear" dataKey="kg" name="Mesures"
+                stroke="transparent" dot={{ r: 3, fill: isDark ? "#60a5fa" : "#2563eb" }} activeDot={{ r: 4 }} legendType="none" />
             </LineChart>
           </ResponsiveContainer>
         </div>
