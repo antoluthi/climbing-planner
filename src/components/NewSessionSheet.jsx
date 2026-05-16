@@ -44,7 +44,7 @@ const QUICK_TEMPLATES = [
     type: "Exercices",
     estimatedTime: 25,
     charge: 3,
-    color: "#d4a843",
+    color: "#e6c46a",
     description: "25 min · charge 3",
     blocks: [
       { id: "_qt-w", blockType: "Échauffement", name: "Échauffement doigts", duration: 8, charge: 0, description: "" },
@@ -181,15 +181,15 @@ export function NewSessionSheet({
   }, [catalogItems, recent, query]);
 
   // ── Tokens ──
-  const sheetBg     = isDark ? "#1a1f1c" : "#fcf8ef";
-  const surfaceCard = isDark ? "#222a23" : "#ffffff";
-  const surfaceInput= isDark ? "#1c2220" : "#ffffff";
-  const border      = isDark ? "#2a302a" : "#e6dfd1";
-  const borderSoft  = isDark ? "#252b27" : "#ede5d4";
-  const text        = isDark ? "#e8e4de" : "#2a2218";
-  const textLight   = isDark ? "#7a7570" : "#8a7f70";
-  const accent      = isDark ? "#c8906a" : "#8b4c20";
-  const grab        = isDark ? "#3a4035" : "#c4beb0";
+  const sheetBg     = isDark ? "#15100b" : "#fcf8ef";
+  const surfaceCard = isDark ? "#2e2419" : "#ffffff";
+  const surfaceInput= isDark ? "#1f1812" : "#ffffff";
+  const border      = isDark ? "#3a2e22" : "#e6dfd1";
+  const borderSoft  = isDark ? "#2e2419" : "#ede5d4";
+  const text        = isDark ? "#f0e6d0" : "#2a2218";
+  const textLight   = isDark ? "#a89a82" : "#8a7f70";
+  const accent      = isDark ? "#e0a875" : "#8b4c20";
+  const grab        = isDark ? "#3a2e22" : "#c4beb0";
 
   const sectionLabel = {
     fontSize: 11,
@@ -414,7 +414,7 @@ export function NewSessionSheet({
                         fontFamily: "inherit",
                         borderRadius: 4,
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = isDark ? "#202622" : "#f5efe0"}
+                      onMouseEnter={e => e.currentTarget.style.background = isDark ? "#2a2018" : "#f5efe0"}
                       onMouseLeave={e => e.currentTarget.style.background = "none"}
                     >
                       <div style={{ width: 4, height: 32, borderRadius: 2, background: c, flexShrink: 0 }} />

@@ -10,9 +10,9 @@ const DEADLINE_TYPE_LABELS = { competition: "Compétition", sortie: "Sortie", ob
 const PRIORITY_LABELS = { A: "A — Principale", B: "B — Secondaire", C: "C — Indicatif" };
 
 const DEADLINE_COLORS = [
-  "#f43f5e", "#f97316", "#f59e0b", "#22d3ee",
-  "#a78bfa", "#60a5fa", "#34d399", "#e879f9",
-  "#c8906a", "#94a3b8", "#fb923c", "#facc15",
+  "#f0805a", "#f0a060", "#f59e0b", "#22d3ee",
+  "#a78bfa", "#7da7f0", "#82c894", "#e879f9",
+  "#e0a875", "#94a3b8", "#f0a060", "#f0c46a",
 ];
 
 export function DeadlineModal({ initial, onSave, onClose }) {
@@ -42,7 +42,7 @@ export function DeadlineModal({ initial, onSave, onClose }) {
     });
   };
 
-  const labelColor = isDark ? "#8a9090" : "#6b7060";
+  const labelColor = isDark ? "#a89a82" : "#6b7060";
   const inputStyle = { ...styles.customFormInput, width: "100%", boxSizing: "border-box" };
   const fieldStyle = { ...styles.customFormField, flex: 1 };
 
@@ -87,9 +87,9 @@ export function DeadlineModal({ initial, onSave, onClose }) {
                   style={{
                     width: 32, height: 32, borderRadius: 5, fontFamily: "inherit",
                     fontSize: 12, fontWeight: 700, cursor: "pointer",
-                    border: priority === p ? `2px solid ${color}` : `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
-                    background: priority === p ? color + "33" : (isDark ? "#252b27" : "#ddd7cc"),
-                    color: priority === p ? color : (isDark ? "#8a9090" : "#6b7060"),
+                    border: priority === p ? `2px solid ${color}` : `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
+                    background: priority === p ? color + "33" : (isDark ? "#2e2419" : "#ddd7cc"),
+                    color: priority === p ? color : (isDark ? "#a89a82" : "#6b7060"),
                   }}
                 >
                   {p}

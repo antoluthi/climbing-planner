@@ -8,9 +8,9 @@ import { useConfirmClose } from "../hooks/useConfirmClose.js";
 // Séance rapide : non enregistrée en base, stockée dans data.quickSessions[]
 
 const COLOR_PALETTE = [
-  "#f43f5e", "#f97316", "#f59e0b", "#84cc16",
-  "#22d3ee", "#60a5fa", "#a78bfa", "#e879f9",
-  "#34d399", "#c8906a", "#94a3b8", "#ffffff",
+  "#f0805a", "#f0a060", "#f59e0b", "#84cc16",
+  "#22d3ee", "#7da7f0", "#a78bfa", "#e879f9",
+  "#82c894", "#e0a875", "#94a3b8", "#ffffff",
 ];
 
 function fmt2(n) { return String(n).padStart(2, "0"); }
@@ -40,7 +40,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
 
   const [name, _setName]               = useState(initial?.name || "");
   const setName = wrap(_setName);
-  const [color, _setColor]             = useState(initial?.color || "#60a5fa");
+  const [color, _setColor]             = useState(initial?.color || "#7da7f0");
   const setColor = wrap(_setColor);
   const [startDate, _setStartDate]     = useState(initial?.startDate || today);
   const setStartDate = wrap(_setStartDate);
@@ -88,11 +88,11 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
     onClose();
   };
 
-  const textMain = isDark ? "#e8e4de" : "#2a2218";
-  const textMuted = isDark ? "#7a8080" : "#8a8070";
-  const inputBg = isDark ? "#1a1f1c" : "#f5f2ec";
-  const inputBorder = isDark ? "#2e3430" : "#d0cbc2";
-  const surface = isDark ? "#161a17" : "#ffffff";
+  const textMain = isDark ? "#f0e6d0" : "#2a2218";
+  const textMuted = isDark ? "#a89a82" : "#8a8070";
+  const inputBg = isDark ? "#15100b" : "#f5f2ec";
+  const inputBorder = isDark ? "#3a2e22" : "#d0cbc2";
+  const surface = isDark ? "#15100b" : "#ffffff";
 
   const inputStyle = {
     ...styles.customFormInput,
@@ -156,7 +156,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
                   style={{
                     width: 22, height: 22, borderRadius: "50%",
                     background: c,
-                    border: color === c ? `2.5px solid ${isDark ? "#fff" : "#333"}` : `2px solid ${isDark ? "#2a2f2a" : "#ccc"}`,
+                    border: color === c ? `2.5px solid ${isDark ? "#fff" : "#333"}` : `2px solid ${isDark ? "#3a2e22" : "#ccc"}`,
                     cursor: "pointer", flexShrink: 0,
                     boxShadow: color === c ? `0 0 0 2px ${c}66` : "none",
                     transition: "transform 0.1s",
@@ -178,7 +178,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
                   onClick={() => setMultiDay(v => !v)}
                   style={{
                     width: 34, height: 18, borderRadius: 9,
-                    background: multiDay ? color : (isDark ? "#2a3028" : "#ccc"),
+                    background: multiDay ? color : (isDark ? "#463826" : "#ccc"),
                     position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
                   }}
                 >
@@ -206,7 +206,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
                 onClick={() => setAllDay(v => !v)}
                 style={{
                   width: 34, height: 18, borderRadius: 9,
-                  background: allDay ? color : (isDark ? "#2a3028" : "#ccc"),
+                  background: allDay ? color : (isDark ? "#463826" : "#ccc"),
                   position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
                 }}
               >
@@ -246,7 +246,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
                 onClick={() => setIsObjective(v => !v)}
                 style={{
                   width: 34, height: 18, borderRadius: 9,
-                  background: isObjective ? color : (isDark ? "#2a3028" : "#ccc"),
+                  background: isObjective ? color : (isDark ? "#463826" : "#ccc"),
                   position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 0.2s",
                 }}
               >
@@ -282,8 +282,8 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
               style={{
                 marginRight: "auto",
                 background: "none",
-                border: `1px solid ${isDark ? "#4a2a2a" : "#e0c0c0"}`,
-                color: isDark ? "#c87070" : "#b05050",
+                border: `1px solid ${isDark ? "#5a3a18" : "#e0c0c0"}`,
+                color: isDark ? "#f08070" : "#b05050",
                 borderRadius: 6, padding: "6px 12px",
                 fontSize: 12, fontFamily: "inherit", cursor: "pointer",
               }}
@@ -293,7 +293,7 @@ export function QuickSessionModal({ initial, defaultDate, onSave, onDelete, onCl
           )}
           <button style={styles.confirmCancelBtn} onClick={requestClose}>Annuler</button>
           <button
-            style={{ ...styles.confirmDeleteBtn, background: canSave ? color : (isDark ? "#3a3028" : "#ccc"), cursor: canSave ? "pointer" : "default", opacity: canSave ? 1 : 0.6 }}
+            style={{ ...styles.confirmDeleteBtn, background: canSave ? color : (isDark ? "#3a2e22" : "#ccc"), cursor: canSave ? "pointer" : "default", opacity: canSave ? 1 : 0.6 }}
             onClick={handleSave}
             disabled={!canSave}
           >

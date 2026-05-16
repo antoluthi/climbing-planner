@@ -58,7 +58,7 @@ export function CyclesTimeline({ mesocycles, customCycles, objectives, onEdit })
   });
 
   const fmtDate = d => d ? d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : null;
-  const accent = isDark ? "#c8906a" : "#8b4c20";
+  const accent = isDark ? "#e0a875" : "#8b4c20";
 
   const handleMicroClick = (e, meso, micro) => {
     e.stopPropagation();
@@ -76,7 +76,7 @@ export function CyclesTimeline({ mesocycles, customCycles, objectives, onEdit })
 
       {/* Empty state */}
       {mesocycles.length === 0 && (
-        <div style={{ color: isDark ? "#5a6060" : "#9a9890", fontSize: 13, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>
+        <div style={{ color: isDark ? "#8a7d68" : "#9a9890", fontSize: 13, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>
           {onEdit ? "Aucun mésocycle défini. Cliquez sur Modifier pour commencer." : "Aucun mésocycle défini."}
         </div>
       )}
@@ -123,7 +123,7 @@ export function CyclesTimeline({ mesocycles, customCycles, objectives, onEdit })
               </div>
               <div style={styles.timelineLabelMeta}>
                 {meso.durationWeeks} sem.
-                {startLabel && <span style={{ color: isDark ? "#4a5050" : "#b0a898" }}> · {startLabel}</span>}
+                {startLabel && <span style={{ color: isDark ? "#a89a82" : "#c4b69c" }}> · {startLabel}</span>}
               </div>
             </div>
 
@@ -140,7 +140,7 @@ export function CyclesTimeline({ mesocycles, customCycles, objectives, onEdit })
                   <div style={{
                     position: "absolute", left: `${todayPct}%`,
                     top: -1, bottom: -1, width: 2,
-                    background: "#ef4444",
+                    background: "#f08070",
                     boxShadow: "0 0 4px #ef444488",
                     borderRadius: 1, zIndex: 5, pointerEvents: "none",
                   }} />
@@ -166,7 +166,7 @@ export function CyclesTimeline({ mesocycles, customCycles, objectives, onEdit })
                       <div style={{
                         position: "absolute", bottom: -14,
                         fontSize: 7, fontWeight: 700, color: objColor, whiteSpace: "nowrap",
-                        background: isDark ? "#191e1bee" : "#f0ebe2ee",
+                        background: isDark ? "#1a1410ee" : "#f0ebe2ee",
                         padding: "1px 4px", borderRadius: 3, border: `1px solid ${objColor}44`,
                         letterSpacing: "0.02em", lineHeight: 1.3,
                         transform: "translateX(-50%)",
@@ -279,7 +279,7 @@ export function CyclesTimeline({ mesocycles, customCycles, objectives, onEdit })
             </div>
             {popover.micro ? (
               <>
-                <div style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#d0d8d0" : "#4a5050", marginBottom: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#e6d8bc" : "#a89a82", marginBottom: 4 }}>
                   {popover.micro.label}
                 </div>
                 <div style={styles.timelinePopoverMeta}>{popover.micro.durationWeeks} semaine{popover.micro.durationWeeks > 1 ? "s" : ""}</div>

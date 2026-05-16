@@ -7,9 +7,9 @@ export function CoachAthletesSection({ athletes, onSearch, onAdd, onRemove, view
   const [results, setResults] = useState(null);   // null = pas encore cherché
   const [loading, setLoading] = useState(false);
 
-  const bg      = isDark ? "#141a16" : "#f3f7f4";
-  const surface = isDark ? "#1c2820" : "#ffffff";
-  const border  = isDark ? "#263228" : "#daeade";
+  const bg      = isDark ? "#241b13" : "#f3f7f4";
+  const surface = isDark ? "#241b13" : "#ffffff";
+  const border  = isDark ? "#3a2e22" : "#daeade";
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -31,7 +31,7 @@ export function CoachAthletesSection({ athletes, onSearch, onAdd, onRemove, view
           {athletes.map(a => {
             const isViewing = viewingAthlete?.userId === a.userId;
             return (
-              <div key={a.relationId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: isViewing ? (isDark ? "#1f3327" : "#e4f5ea") : surface, border: `1px solid ${isViewing ? accent + "88" : border}`, borderRadius: 7, transition: "all 0.15s" }}>
+              <div key={a.relationId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: isViewing ? (isDark ? "#3a2616" : "#e4f5ea") : surface, border: `1px solid ${isViewing ? accent + "88" : border}`, borderRadius: 7, transition: "all 0.15s" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: isViewing ? accent : textColor }}>
                     {a.firstName} {a.lastName}
@@ -46,7 +46,7 @@ export function CoachAthletesSection({ athletes, onSearch, onAdd, onRemove, view
                 <button
                   onClick={() => onRemove(a.relationId)}
                   title="Retirer cet athlète"
-                  style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: isDark ? "#f87171" : "#dc2626", padding: "4px 8px", cursor: "pointer", fontSize: 12, lineHeight: 1 }}
+                  style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: isDark ? "#f08070" : "#f08070", padding: "4px 8px", cursor: "pointer", fontSize: 12, lineHeight: 1 }}
                 >
                   ✕
                 </button>
@@ -96,7 +96,7 @@ export function CoachAthletesSection({ athletes, onSearch, onAdd, onRemove, view
               ) : (
                 <button
                   onClick={() => { onAdd(r.userId); setResults(null); setQuery(""); }}
-                  style={{ background: isDark ? "#263228" : "#d4e8db", border: `1px solid ${accent}66`, borderRadius: 5, color: accent, padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 700 }}
+                  style={{ background: isDark ? "#3a2e22" : "#d4e8db", border: `1px solid ${accent}66`, borderRadius: 5, color: accent, padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 700 }}
                 >
                   ＋ Ajouter
                 </button>

@@ -42,11 +42,11 @@ export function WeightSection({ weightData, onSave }) {
 
   const fmtDate = d => new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
   const todayKg = weightData[today];
-  const accent = isDark ? "#60a5fa" : "#2563eb";
+  const accent = isDark ? "#7da7f0" : "#2563eb";
   const tooltipStyle = {
-    background: isDark ? "#1a1f1b" : "#f0ebe2",
+    background: isDark ? "#1a1410" : "#f0ebe2",
     border: "none", borderRadius: 6,
-    color: isDark ? "#e8e4de" : "#2a2218", fontSize: 11,
+    color: isDark ? "#f0e6d0" : "#2a2218", fontSize: 11,
   };
 
   return (
@@ -67,17 +67,17 @@ export function WeightSection({ weightData, onSave }) {
           onBlur={commit}
           onKeyDown={e => { if (e.key === "Enter") { commit(); e.target.blur(); } }}
           style={{
-            background: isDark ? "#1e231f" : "#e8e3da",
-            border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
-            borderRadius: 6, color: isDark ? "#e8e4de" : "#2a2218",
+            background: isDark ? "#241b13" : "#e8e3da",
+            border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
+            borderRadius: 6, color: isDark ? "#f0e6d0" : "#2a2218",
             fontSize: 22, fontFamily: "inherit", fontWeight: 700,
             padding: "6px 10px", outline: "none", width: 90,
             textAlign: "center", MozAppearance: "textfield",
           }}
         />
-        <span style={{ fontSize: 13, color: isDark ? "#9ca3af" : "#6b7280" }}>kg</span>
+        <span style={{ fontSize: 13, color: isDark ? "#a89a82" : "#a89a82" }}>kg</span>
         {todayKg != null && (
-          <span style={{ fontSize: 11, color: isDark ? "#c8906a" : "#8b4c20", fontWeight: 600 }}>✓ enregistré</span>
+          <span style={{ fontSize: 11, color: isDark ? "#e0a875" : "#8b4c20", fontWeight: 600 }}>✓ enregistré</span>
         )}
       </div>
       {chartData.length >= 2 && (
@@ -94,9 +94,9 @@ export function WeightSection({ weightData, onSave }) {
       {recent.length > 0 && (
         <div style={{ marginTop: chartData.length >= 2 ? 8 : 0 }}>
           {recent.map(([d, kg]) => (
-            <div key={d} style={{ marginBottom: 4, fontSize: 11, color: isDark ? "#9ca3af" : "#6b7280", display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontWeight: 600, color: isDark ? "#707870" : "#8a7060" }}>{fmtDate(d)}</span>
-              <span style={{ fontWeight: 700, color: isDark ? "#cbd5e1" : "#374151" }}>{kg} kg</span>
+            <div key={d} style={{ marginBottom: 4, fontSize: 11, color: isDark ? "#a89a82" : "#a89a82", display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontWeight: 600, color: isDark ? "#a89a82" : "#8a7060" }}>{fmtDate(d)}</span>
+              <span style={{ fontWeight: 700, color: isDark ? "#e6d8bc" : "#e6d8bc" }}>{kg} kg</span>
             </div>
           ))}
         </div>

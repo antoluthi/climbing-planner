@@ -159,17 +159,17 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
   };
 
   // ── Tokens ──
-  const paper        = isDark ? "#1f2421" : "#fcf8ef";
-  const paperDim     = isDark ? "#1a1f1c" : "#f7f1e2";
-  const surfaceCard  = isDark ? "#1f2421" : "#ffffff";
-  const surfaceMuted = isDark ? "#222a23" : "#f0ebde";
-  const border       = isDark ? "#2a302a" : "#e6dfd1";
-  const borderStrong = isDark ? "#3a4035" : "#d8d0bf";
-  const text         = isDark ? "#e8e4de" : "#2a2218";
-  const textMid      = isDark ? "#a4a09a" : "#5a4d3c";
-  const textLight    = isDark ? "#7a7570" : "#8a7f70";
-  const accent       = isDark ? "#c8906a" : "#8b4c20";
-  const inkPrimary   = isDark ? "#c8c0b4" : "#2a2218";
+  const paper        = isDark ? "#241b13" : "#fcf8ef";
+  const paperDim     = isDark ? "#15100b" : "#f7f1e2";
+  const surfaceCard  = isDark ? "#241b13" : "#ffffff";
+  const surfaceMuted = isDark ? "#2e2419" : "#f0ebde";
+  const border       = isDark ? "#3a2e22" : "#e6dfd1";
+  const borderStrong = isDark ? "#3a2e22" : "#d8d0bf";
+  const text         = isDark ? "#f0e6d0" : "#2a2218";
+  const textMid      = isDark ? "#c4b69c" : "#5a4d3c";
+  const textLight    = isDark ? "#a89a82" : "#8a7f70";
+  const accent       = isDark ? "#e0a875" : "#8b4c20";
+  const inkPrimary   = isDark ? "#e6d8bc" : "#2a2218";
 
   const dateFull = dateObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   const weekN = (() => {
@@ -335,19 +335,19 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
               style={{
                 ...cardStyle({ surfaceCard, border }),
                 padding: "10px 14px", flex: 1,
-                background: hasCreatine ? (isDark ? "#1c2d20" : "#e3f0e5") : surfaceCard,
-                border: hasCreatine ? `1px solid ${isDark ? "#3a5a3a" : "#a8d0a8"}` : `1px solid ${border}`,
+                background: hasCreatine ? (isDark ? "#1a2a1d" : "#e3f0e5") : surfaceCard,
+                border: hasCreatine ? `1px solid ${isDark ? "#5a3a18" : "#a8d0a8"}` : `1px solid ${border}`,
                 display: "flex", alignItems: "center", gap: 8,
                 cursor: "pointer", fontFamily: "inherit", textAlign: "left",
                 width: "auto",
               }}
             >
-              <span style={{ fontSize: 11, color: hasCreatine ? (isDark ? "#7ab890" : "#2e6b3f") : textLight, flex: 1 }}>
+              <span style={{ fontSize: 11, color: hasCreatine ? (isDark ? "#82c894" : "#2e6b3f") : textLight, flex: 1 }}>
                 Créatine
               </span>
               <span style={{
                 fontSize: 13, fontWeight: 700,
-                color: hasCreatine ? (isDark ? "#7ab890" : "#2e6b3f") : (isInCreatineCycle ? "#ef4444" : textLight),
+                color: hasCreatine ? (isDark ? "#82c894" : "#2e6b3f") : (isInCreatineCycle ? "#f08070" : textLight),
               }}>
                 {hasCreatine ? "✓ Prise" : (isInCreatineCycle ? "⚠ —" : "—")}
               </span>
@@ -394,8 +394,8 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
                 // mais standard Hooper : tous les indicateurs vont dans le même sens (1 = bon, 7 = mauvais)
                 const colorForVal = (v) => {
                   if (!v) return null;
-                  if (v <= 3) return "#7ab890";
-                  if (v <= 5) return "#d4a843";
+                  if (v <= 3) return "#82c894";
+                  if (v <= 5) return "#e6c46a";
                   return "#b83030";
                 };
                 const valColor = colorForVal(val);
@@ -424,7 +424,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
                             style={{
                               flex: 1, height: 6, borderRadius: 3,
                               background: on
-                                ? (isWarn ? "#b83030" : (v >= 4 ? "#d4a843" : "#7ab890"))
+                                ? (isWarn ? "#b83030" : (v >= 4 ? "#e6c46a" : "#82c894"))
                                 : border,
                               border: "none", cursor: "pointer", padding: 0,
                               transition: "background 0.1s",

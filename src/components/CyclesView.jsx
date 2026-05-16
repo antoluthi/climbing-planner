@@ -152,7 +152,7 @@ export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, 
         </div>
 
         {(customCycles || []).length === 0 && (
-          <div style={{ color: isDark ? "#5a6060" : "#9a9890", fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 4 }}>
+          <div style={{ color: isDark ? "#8a7d68" : "#9a9890", fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 4 }}>
             Aucun cycle personnalisé. Ex : créatine, décharge, compétition…
           </div>
         )}

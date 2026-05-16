@@ -16,7 +16,7 @@ function PublicWeekView({ data, currentDate }) {
   const isMobile = useWindowWidth() < 768;
   const monday = getMondayOf(currentDate);
   const today = new Date();
-  const accent = themeIsDark ? "#c8906a" : "#8b4c20";
+  const accent = themeIsDark ? "#e0a875" : "#8b4c20";
 
   const days = DAYS_SHORT.map((dayLabel, di) => {
     const date = addDays(monday, di);
@@ -37,40 +37,40 @@ function PublicWeekView({ data, currentDate }) {
               <div key={di} style={{
                 display: "flex", alignItems: "center", gap: 12,
                 padding: "8px 12px",
-                background: themeIsDark ? "#181e1a" : "#eee8dc",
+                background: themeIsDark ? "#1a1410" : "#eee8dc",
                 borderRadius: 8,
-                border: `1px solid ${themeIsDark ? "#222826" : "#d8d0c4"}`,
+                border: `1px solid ${themeIsDark ? "#2a2018" : "#d8d0c4"}`,
                 opacity: 0.55,
               }}>
-                <div style={{ fontSize: 13, color: themeIsDark ? "#555a55" : "#aaa89e", flex: 1 }}>{capitalized}</div>
-                <div style={{ fontSize: 12, color: themeIsDark ? "#2e332e" : "#ccc8be" }}>Repos</div>
+                <div style={{ fontSize: 13, color: themeIsDark ? "#8a7d68" : "#aaa89e", flex: 1 }}>{capitalized}</div>
+                <div style={{ fontSize: 12, color: themeIsDark ? "#3a2e22" : "#ccc8be" }}>Repos</div>
               </div>
             );
           }
           return (
             <div key={di} style={{
-              background: themeIsDark ? "#1f2421" : "#e8e2d8",
+              background: themeIsDark ? "#241b13" : "#e8e2d8",
               borderRadius: 10,
-              border: isToday ? `2px solid ${accent}` : `1px solid ${themeIsDark ? "#252b27" : "#ccc6b8"}`,
+              border: isToday ? `2px solid ${accent}` : `1px solid ${themeIsDark ? "#2e2419" : "#ccc6b8"}`,
               overflow: "hidden",
             }}>
               <div style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "10px 14px",
-                background: isToday ? (themeIsDark ? "#1a2e1a" : "#d4edda") : "transparent",
-                borderBottom: hasSessions ? `1px solid ${themeIsDark ? "#252b27" : "#d0c8bc"}` : "none",
+                background: isToday ? (themeIsDark ? "#1a2a1d" : "#d4edda") : "transparent",
+                borderBottom: hasSessions ? `1px solid ${themeIsDark ? "#2e2419" : "#d0c8bc"}` : "none",
               }}>
                 <div>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: isToday ? accent : (themeIsDark ? "#d0ccc6" : "#2a2218") }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: isToday ? accent : (themeIsDark ? "#f0e6d0" : "#2a2218") }}>
                     {capitalized}
                   </span>
                   {isToday && (
-                    <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: accent, background: themeIsDark ? "#1f3a1f" : "#c8f0cc", borderRadius: 4, padding: "1px 6px" }}>
+                    <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: accent, background: themeIsDark ? "#1a2a1d" : "#c8f0cc", borderRadius: 4, padding: "1px 6px" }}>
                       Aujourd'hui
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 12, color: themeIsDark ? "#5a7a5a" : "#8aaa8a", fontWeight: 600 }}>
+                <div style={{ fontSize: 12, color: themeIsDark ? "#a89a82" : "#8aaa8a", fontWeight: 600 }}>
                   {hasSessions ? `${sessions.length} séance${sessions.length > 1 ? "s" : ""}` : ""}
                 </div>
               </div>
@@ -78,16 +78,16 @@ function PublicWeekView({ data, currentDate }) {
                 <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
                   {sessions.map((s, si) => (
                     <div key={si} style={{
-                      background: themeIsDark ? "#161a17" : "#f4ede0",
+                      background: themeIsDark ? "#15100b" : "#f4ede0",
                       borderRadius: 8, padding: "10px 12px",
                       borderLeft: `4px solid ${getChargeColor(s.charge)}`,
                     }}>
                       {s.startTime && (
-                        <div style={{ fontSize: 12, color: themeIsDark ? "#5a9060" : "#5a8a60", fontWeight: 700, marginBottom: 3 }}>
+                        <div style={{ fontSize: 12, color: themeIsDark ? "#82c894" : "#5a8a60", fontWeight: 700, marginBottom: 3 }}>
                           {s.startTime}{s.endTime ? ` – ${s.endTime}` : ""}
                         </div>
                       )}
-                      <div style={{ fontSize: 14, fontWeight: 600, color: themeIsDark ? "#d0ccc6" : "#2a2218", lineHeight: 1.3 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: themeIsDark ? "#f0e6d0" : "#2a2218", lineHeight: 1.3 }}>
                         {s.title || s.name}
                       </div>
                     </div>
@@ -107,30 +107,30 @@ function PublicWeekView({ data, currentDate }) {
       {days.map(({ dayLabel, date, sessions, isToday }, di) => (
         <div key={di} style={{
           flex: 1, minWidth: 110,
-          background: themeIsDark ? "#1f2421" : "#e8e2d8",
+          background: themeIsDark ? "#241b13" : "#e8e2d8",
           borderRadius: 10, padding: "10px 8px",
-          border: isToday ? `2px solid ${accent}` : `1px solid ${themeIsDark ? "#252b27" : "#ccc6b8"}`,
+          border: isToday ? `2px solid ${accent}` : `1px solid ${themeIsDark ? "#2e2419" : "#ccc6b8"}`,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: themeIsDark ? "#9aaa9a" : "#7a7060", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: themeIsDark ? "#c4b69c" : "#7a7060", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             {dayLabel}
           </div>
-          <div style={{ fontSize: 11, color: themeIsDark ? "#555a55" : "#aaa89e", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: themeIsDark ? "#8a7d68" : "#aaa89e", marginBottom: 8 }}>
             {formatDate(date)}
           </div>
           {sessions.length === 0
-            ? <div style={{ fontSize: 10, color: themeIsDark ? "#2e332e" : "#ccc8be" }}>—</div>
+            ? <div style={{ fontSize: 10, color: themeIsDark ? "#3a2e22" : "#ccc8be" }}>—</div>
             : sessions.map((s, si) => (
               <div key={si} style={{
-                background: themeIsDark ? "#161a17" : "#f2ece0",
+                background: themeIsDark ? "#15100b" : "#f2ece0",
                 borderRadius: 6, padding: "7px 8px", marginBottom: 5,
                 borderLeft: `3px solid ${getChargeColor(s.charge)}`,
               }}>
                 {s.startTime && (
-                  <div style={{ fontSize: 9, color: themeIsDark ? "#5a7860" : "#7a9a80", fontWeight: 600, marginBottom: 2 }}>
+                  <div style={{ fontSize: 9, color: themeIsDark ? "#82c894" : "#a89a82", fontWeight: 600, marginBottom: 2 }}>
                     {s.startTime}{s.endTime ? ` – ${s.endTime}` : ""}
                   </div>
                 )}
-                <div style={{ fontSize: 11, color: themeIsDark ? "#d0ccc6" : "#2a2218", lineHeight: 1.3 }}>
+                <div style={{ fontSize: 11, color: themeIsDark ? "#f0e6d0" : "#2a2218", lineHeight: 1.3 }}>
                   {s.title || s.name}
                 </div>
               </div>
@@ -155,7 +155,7 @@ export function PublicPlanView({ onBack }) {
   });
 
   const styles = makeStyles(isDark);
-  const accent = isDark ? "#c8906a" : "#8b4c20";
+  const accent = isDark ? "#e0a875" : "#8b4c20";
   const mesocycles = planData?.mesocycles || [];
 
   useEffect(() => {
@@ -193,8 +193,8 @@ export function PublicPlanView({ onBack }) {
       onClick={() => setViewMode(mode)}
       style={{
         background: viewMode === mode ? accent : "none",
-        border: `1px solid ${viewMode === mode ? accent : isDark ? "#2e342e" : "#ccc6b8"}`,
-        color: viewMode === mode ? (isDark ? "#0f1a0f" : "#fff") : isDark ? "#9aaa9a" : "#6a6258",
+        border: `1px solid ${viewMode === mode ? accent : isDark ? "#3a2e22" : "#ccc6b8"}`,
+        color: viewMode === mode ? (isDark ? "#0f1a0f" : "#fff") : isDark ? "#c4b69c" : "#6a6258",
         borderRadius: 6, padding: "5px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
       }}
     >
@@ -209,7 +209,7 @@ export function PublicPlanView({ onBack }) {
         <div style={{ ...styles.header, justifyContent: "flex-start", gap: 16 }}>
           <button
             onClick={onBack}
-            style={{ background: "none", border: `1px solid ${isDark ? "#2e342e" : "#ccc6b8"}`, borderRadius: 8, padding: "6px 14px", color: isDark ? "#9aaa9a" : "#6a6258", cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}
+            style={{ background: "none", border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`, borderRadius: 8, padding: "6px 14px", color: isDark ? "#c4b69c" : "#6a6258", cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}
           >
             ← Retour
           </button>
@@ -220,14 +220,14 @@ export function PublicPlanView({ onBack }) {
           <button
             onClick={toggleThemePub}
             title={isDark ? "Passer en mode clair" : "Passer en mode sombre"}
-            style={{ background: "none", border: `1px solid ${isDark ? "#2e342e" : "#ccc6b8"}`, borderRadius: 8, padding: "6px 12px", color: isDark ? "#9aaa9a" : "#6a6258", cursor: "pointer", fontFamily: "inherit", fontSize: 15 }}
+            style={{ background: "none", border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`, borderRadius: 8, padding: "6px 12px", color: isDark ? "#c4b69c" : "#6a6258", cursor: "pointer", fontFamily: "inherit", fontSize: 15 }}
           >
             {isDark ? "\u2600\uFE0F" : "\uD83C\uDF19"}
           </button>
         </div>
 
         {/* Nav bar */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: `1px solid ${isDark ? "#252b27" : "#d8d3ca"}`, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: `1px solid ${isDark ? "#2e2419" : "#d8d3ca"}`, flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 6 }}>
             {tabBtn("week", "Semaine")}
             {tabBtn("month", "Mois")}

@@ -30,9 +30,9 @@ export function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine })
 
   const taStyle = {
     width: "100%", boxSizing: "border-box",
-    background: isDark ? "#1e231f" : "#e8e3da",
-    border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
-    borderRadius: 6, color: isDark ? "#e8e4de" : "#2a2218",
+    background: isDark ? "#241b13" : "#e8e3da",
+    border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
+    borderRadius: 6, color: isDark ? "#f0e6d0" : "#2a2218",
     fontSize: 12, fontFamily: "inherit", lineHeight: 1.5,
     padding: "10px 12px", resize: "vertical", minHeight: 72,
     outline: "none", transition: "border-color 0.15s",
@@ -58,18 +58,18 @@ export function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine })
             type="checkbox"
             checked={!!creatine?.[today]}
             onChange={() => onToggleCreatine?.(today)}
-            style={{ cursor: "pointer", width: 14, height: 14, accentColor: isDark ? "#c8906a" : "#8b4c20" }}
+            style={{ cursor: "pointer", width: 14, height: 14, accentColor: isDark ? "#e0a875" : "#8b4c20" }}
           />
-          <span style={{ fontSize: 12, color: isDark ? "#9ca3af" : "#6b7280" }}>
+          <span style={{ fontSize: 12, color: isDark ? "#a89a82" : "#a89a82" }}>
             Créatine prise
-            {creatine?.[today] && <span style={{ marginLeft: 6, fontSize: 10, color: isDark ? "#c8906a" : "#8b4c20" }}>▲</span>}
+            {creatine?.[today] && <span style={{ marginLeft: 6, fontSize: 10, color: isDark ? "#e0a875" : "#8b4c20" }}>▲</span>}
           </span>
         </label>
       {recent.length > 0 && (
         <div style={{ marginTop: 10 }}>
           {recent.map(([d, t]) => (
-            <div key={d} style={{ marginBottom: 6, fontSize: 11, color: isDark ? "#9ca3af" : "#6b7280" }}>
-              <span style={{ fontWeight: 600, marginRight: 6, color: isDark ? "#707870" : "#8a7060" }}>{fmtDate(d)}</span>
+            <div key={d} style={{ marginBottom: 6, fontSize: 11, color: isDark ? "#a89a82" : "#a89a82" }}>
+              <span style={{ fontWeight: 600, marginRight: 6, color: isDark ? "#a89a82" : "#8a7060" }}>{fmtDate(d)}</span>
               {t.length > 100 ? t.slice(0, 100) + "…" : t}
             </div>
           ))}

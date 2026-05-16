@@ -124,9 +124,9 @@ export function PhotoCropModal({ onSave, onClose }) {
     img.src = imgSrc;
   };
 
-  const accent = isDark ? "#c8906a" : "#8b4c20";
-  const mutedColor = isDark ? "#707870" : "#8a7f70";
-  const textColor = isDark ? "#e8e4de" : "#2a2218";
+  const accent = isDark ? "#e0a875" : "#8b4c20";
+  const mutedColor = isDark ? "#a89a82" : "#8a7f70";
+  const textColor = isDark ? "#f0e6d0" : "#2a2218";
 
   return (
     <div style={styles.cropOverlay}>
@@ -165,11 +165,11 @@ export function PhotoCropModal({ onSave, onClose }) {
             <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: mutedColor }}>Glisser · Molette ou pincer pour zoomer</div>
             <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
               <button
-                style={{ flex: 1, background: "none", border: `1px solid ${isDark ? "#2e3430" : "#bfb9aa"}`, color: mutedColor, padding: "8px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+                style={{ flex: 1, background: "none", border: `1px solid ${isDark ? "#3a2e22" : "#bfb9aa"}`, color: mutedColor, padding: "8px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
                 onClick={() => fileRef.current?.click()}
               >Changer</button>
               <button
-                style={{ flex: 2, background: isDark ? "#263228" : "#d4e8db", border: `1px solid ${accent}66`, color: accent, padding: "8px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
+                style={{ flex: 2, background: isDark ? "#3a2e22" : "#d4e8db", border: `1px solid ${accent}66`, color: accent, padding: "8px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
                 onClick={handleConfirm}
               >Confirmer</button>
             </div>

@@ -41,14 +41,14 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
   const setDesc = (val) => onUpdate({ description: val, notes: val });
 
   const inputStyle = {
-    background: isDark ? "#181d1a" : "#f5f0e8",
-    border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
-    borderRadius: 4, color: isDark ? "#d8d4ce" : "#2a2218",
+    background: isDark ? "#1a1410" : "#f5f0e8",
+    border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
+    borderRadius: 4, color: isDark ? "#f0e6d0" : "#2a2218",
     fontSize: 11, fontFamily: "inherit", padding: "3px 6px", outline: "none",
   };
-  const labelStyle = { fontSize: 9, color: isDark ? "#606860" : "#9a9080", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 2 };
-  const muted = isDark ? "#6a8870" : "#6b8c72";
-  const accent = isDark ? "#c8906a" : "#8b4c20";
+  const labelStyle = { fontSize: 9, color: isDark ? "#a89a82" : "#a89a82", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 2 };
+  const muted = isDark ? "#a89a82" : "#6b8c72";
+  const accent = isDark ? "#e0a875" : "#8b4c20";
 
   const handleSaveAsBlock = () => {
     if (!onSaveAsBlock) return;
@@ -76,7 +76,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", cursor: "pointer" }} onClick={() => setOpen(o => !o)}>
         <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, flex: 0, flexShrink: 0 }}>{block.type}</span>
         {(block.name || block.presetName) && (
-          <span style={{ fontSize: 10, color: isDark ? "#8a9090" : "#6b7060", fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 10, color: isDark ? "#a89a82" : "#6b7060", fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
             {block.name || block.presetName}
           </span>
         )}
@@ -84,11 +84,11 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
         {hasCharge && (
           <span style={{ fontSize: 10, color: getChargeColor(block.charge || 0), fontWeight: 700, flexShrink: 0 }}>⚡{block.charge || 0}</span>
         )}
-        <span style={{ fontSize: 10, color: isDark ? "#555" : "#aaa", flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
+        <span style={{ fontSize: 10, color: isDark ? "#4a3d2d" : "#8a7d68", flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
         <div style={{ display: "flex", gap: 2, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-          <button style={{ background: "none", border: "none", cursor: canMoveUp ? "pointer" : "default", opacity: canMoveUp ? 0.7 : 0.2, fontSize: 11, color: isDark ? "#aaa" : "#666", padding: "0 2px" }} onClick={onMoveUp} disabled={!canMoveUp}>↑</button>
-          <button style={{ background: "none", border: "none", cursor: canMoveDown ? "pointer" : "default", opacity: canMoveDown ? 0.7 : 0.2, fontSize: 11, color: isDark ? "#aaa" : "#666", padding: "0 2px" }} onClick={onMoveDown} disabled={!canMoveDown}>↓</button>
-          <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: isDark ? "#f87171" : "#dc2626", padding: "0 4px" }} onClick={onRemove}>✕</button>
+          <button style={{ background: "none", border: "none", cursor: canMoveUp ? "pointer" : "default", opacity: canMoveUp ? 0.7 : 0.2, fontSize: 11, color: isDark ? "#8a7d68" : "#666", padding: "0 2px" }} onClick={onMoveUp} disabled={!canMoveUp}>↑</button>
+          <button style={{ background: "none", border: "none", cursor: canMoveDown ? "pointer" : "default", opacity: canMoveDown ? 0.7 : 0.2, fontSize: 11, color: isDark ? "#8a7d68" : "#666", padding: "0 2px" }} onClick={onMoveDown} disabled={!canMoveDown}>↓</button>
+          <button style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: isDark ? "#f08070" : "#f08070", padding: "0 4px" }} onClick={onRemove}>✕</button>
         </div>
       </div>
 
@@ -159,7 +159,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
 
           {/* ── Suspension config ── */}
           {isClimbing && block.type === "Suspension" && suspCfg && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, background: isDark ? "#141a16" : "#f3f7f4", borderRadius: 6, padding: "10px 12px", border: `1px solid ${"#a78bfa"}44` }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, background: isDark ? "#241b13" : "#f3f7f4", borderRadius: 6, padding: "10px 12px", border: `1px solid ${"#a78bfa"}44` }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.1em", textTransform: "uppercase" }}>Paramètres suspension</div>
 
               {/* Mode bras + Support */}
@@ -169,7 +169,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
                   <div style={{ display: "flex", gap: 4 }}>
                     {[["two", "2 mains"], ["one", "1 main"]].map(([v, l]) => (
                       <button key={v} onClick={() => patchSusp({ armMode: v })}
-                        style={{ flex: 1, padding: "4px 6px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: suspCfg.armMode === v ? 700 : 400, border: `1px solid ${suspCfg.armMode === v ? "#a78bfa" : (isDark ? "#2e342f" : "#ccc6b8")}`, background: suspCfg.armMode === v ? "#a78bfa28" : "none", color: suspCfg.armMode === v ? "#a78bfa" : muted }}>
+                        style={{ flex: 1, padding: "4px 6px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: suspCfg.armMode === v ? 700 : 400, border: `1px solid ${suspCfg.armMode === v ? "#a78bfa" : (isDark ? "#3a2e22" : "#ccc6b8")}`, background: suspCfg.armMode === v ? "#a78bfa28" : "none", color: suspCfg.armMode === v ? "#a78bfa" : muted }}>
                         {l}
                       </button>
                     ))}
@@ -180,7 +180,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
                   <div style={{ display: "flex", gap: 4 }}>
                     {[["wall", "Mur"], ["floor", "Sol"]].map(([v, l]) => (
                       <button key={v} onClick={() => patchSusp({ supportType: v })}
-                        style={{ flex: 1, padding: "4px 6px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: suspCfg.supportType === v ? 700 : 400, border: `1px solid ${suspCfg.supportType === v ? "#a78bfa" : (isDark ? "#2e342f" : "#ccc6b8")}`, background: suspCfg.supportType === v ? "#a78bfa28" : "none", color: suspCfg.supportType === v ? "#a78bfa" : muted }}>
+                        style={{ flex: 1, padding: "4px 6px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: suspCfg.supportType === v ? 700 : 400, border: `1px solid ${suspCfg.supportType === v ? "#a78bfa" : (isDark ? "#3a2e22" : "#ccc6b8")}`, background: suspCfg.supportType === v ? "#a78bfa28" : "none", color: suspCfg.supportType === v ? "#a78bfa" : muted }}>
                         {l}
                       </button>
                     ))}
@@ -242,7 +242,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
                     <input type="number" step="0.5" value={suspCfg.targetWeight} onChange={e => patchSusp({ targetWeight: +e.target.value })}
                       style={{ ...inputStyle, width: 70 }} />
                     <span style={{ fontSize: 10, color: muted }}>kg</span>
-                    {suspCfg.supportType === "wall" && suspCfg.targetWeight < 0 && <span style={{ fontSize: 9, color: "#fbbf24" }}>délestage</span>}
+                    {suspCfg.supportType === "wall" && suspCfg.targetWeight < 0 && <span style={{ fontSize: 9, color: "#e6c46a" }}>délestage</span>}
                     {suspCfg.supportType === "wall" && suspCfg.targetWeight > 0 && <span style={{ fontSize: 9, color: "#a78bfa" }}>lest</span>}
                   </div>
                 ) : (
@@ -301,7 +301,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
                   <span style={{ fontSize: 16, fontWeight: 700, color: disciplineCfg.color, minWidth: 28 }}>{block.charge || 0}</span>
                   <input type="range" min="0" max="10" step="1" style={{ ...styles.customFormSlider, accentColor: disciplineCfg.color }}
                     value={block.charge ?? 0} onChange={e => onUpdate({ charge: +e.target.value })} />
-                  <span style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7060", whiteSpace: "nowrap" }}>/ 10</span>
+                  <span style={{ fontSize: 11, color: isDark ? "#a89a82" : "#8a7060", whiteSpace: "nowrap" }}>/ 10</span>
                 </div>
               )}
 
@@ -342,7 +342,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
                     {computed !== null && (
                       <div style={styles.calcResultRow}>
                         <span style={{ ...styles.calcResultVal, color: getChargeColor(computed) }}>{computed}</span>
-                        <span style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7060" }}>
+                        <span style={{ fontSize: 11, color: isDark ? "#a89a82" : "#8a7060" }}>
                           = Vol.{volZone} × Int.{calcZone} × Compl.{calcComplexity}
                         </span>
                         <button style={styles.calcApplyBtn} onClick={() => { onUpdate({ charge: computed }); setCalcOpen(false); setNbMouvements(""); }}>
@@ -379,7 +379,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
               <div style={labelStyle}>Consignes / Notes</div>
               {desc && (
                 <button onClick={() => setDescPreview(p => !p)}
-                  style={{ background: "none", border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`, borderRadius: 3, color: muted, padding: "1px 6px", cursor: "pointer", fontSize: 9, fontFamily: "inherit" }}>
+                  style={{ background: "none", border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`, borderRadius: 3, color: muted, padding: "1px 6px", cursor: "pointer", fontSize: 9, fontFamily: "inherit" }}>
                   {descPreview ? "Éditer" : "Aperçu"}
                 </button>
               )}
@@ -400,7 +400,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
           {/* Save as block template */}
           {onSaveAsBlock && (
             <button onClick={handleSaveAsBlock}
-              style={{ alignSelf: "flex-start", padding: "4px 12px", background: "none", border: `1px solid ${accent}55`, borderRadius: 5, color: blockSaved ? (isDark ? "#4ade80" : "#16a34a") : accent, cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: 600 }}>
+              style={{ alignSelf: "flex-start", padding: "4px 12px", background: "none", border: `1px solid ${accent}55`, borderRadius: 5, color: blockSaved ? (isDark ? "#82c894" : "#82c894") : accent, cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: 600 }}>
               {blockSaved ? "✓ Bloc sauvegardé" : "Sauver ce bloc comme modèle"}
             </button>
           )}

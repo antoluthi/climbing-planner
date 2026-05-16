@@ -11,7 +11,7 @@ export function Skeleton({
   style: extra,
 }) {
   const { isDark } = useThemeCtx();
-  const baseBg = isDark ? "#2a302a" : "#e6dfd1";
+  const baseBg = isDark ? "#3a2e22" : "#e6dfd1";
   return (
     <div
       className="cp-skeleton"
@@ -30,8 +30,8 @@ export function Skeleton({
 // Dashboard stats skeleton : 3 cards de chiffres + 2 zones graphique
 export function DashboardSkeleton() {
   const { isDark } = useThemeCtx();
-  const surface = isDark ? "#1f2421" : "#ffffff";
-  const border  = isDark ? "#2a302a" : "#e6dfd1";
+  const surface = isDark ? "#241b13" : "#ffffff";
+  const border  = isDark ? "#3a2e22" : "#e6dfd1";
   return (
     <div
       role="status"
@@ -83,8 +83,8 @@ export function DashboardSkeleton() {
 // AccueilView skeleton : header + grosse phrase + liste de séances du jour
 export function AccueilSkeleton() {
   const { isDark } = useThemeCtx();
-  const surface = isDark ? "#1f2421" : "#ffffff";
-  const border  = isDark ? "#2a302a" : "#e6dfd1";
+  const surface = isDark ? "#241b13" : "#ffffff";
+  const border  = isDark ? "#3a2e22" : "#e6dfd1";
   return (
     <div
       role="status"
@@ -118,8 +118,8 @@ export function AccueilSkeleton() {
 // Card-shaped skeleton pour les listes de séances
 export function SessionCardSkeleton({ count = 3 }) {
   const { isDark } = useThemeCtx();
-  const surface = isDark ? "#1f2421" : "#ffffff";
-  const border  = isDark ? "#2a302a" : "#e6dfd1";
+  const surface = isDark ? "#241b13" : "#ffffff";
+  const border  = isDark ? "#3a2e22" : "#e6dfd1";
 
   return (
     <div

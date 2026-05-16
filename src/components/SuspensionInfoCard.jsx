@@ -2,10 +2,10 @@ import { DEFAULT_SUSPENSION_CONFIG } from "../lib/constants.js";
 
 export function SuspensionInfoCard({ config, isDark }) {
   const c = config ?? DEFAULT_SUSPENSION_CONFIG;
-  const text  = isDark ? "#d0dcc8" : "#2a3828";
-  const muted = isDark ? "#7a9a80" : "#6a7a62";
-  const bg    = isDark ? "#181c20" : "#f4f0ff";
-  const bdr   = isDark ? "#2e2848" : "#d0c4f4";
+  const text  = isDark ? "#f0e6d0" : "#2a3828";
+  const muted = isDark ? "#a89a82" : "#6a7a62";
+  const bg    = isDark ? "#1a1410" : "#f4f0ff";
+  const bdr   = isDark ? "#3a2e22" : "#d0c4f4";
   const weightStr = c.armMode === "one"
     ? `G: ${c.targetWeightLeft >= 0 ? "+" : ""}${c.targetWeightLeft} kg  /  D: ${c.targetWeightRight >= 0 ? "+" : ""}${c.targetWeightRight} kg`
     : `${c.targetWeight >= 0 ? "+" : ""}${c.targetWeight} kg`;

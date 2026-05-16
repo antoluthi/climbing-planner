@@ -991,16 +991,16 @@ function AccueilViewBody({
   const firstName = data.profile?.firstName || "";
 
   // ── Tokens partagés avec DayLogModal / DayListView ───────────────────────
-  const paper        = isDark ? "#1f2421" : "#fcf8ef";
-  const paperDim     = isDark ? "#1a1f1c" : "#f7f1e2";
-  const surfaceCard  = isDark ? "#1f2421" : "#ffffff";
-  const surfaceMuted = isDark ? "#222a23" : "#f0ebde";
-  const border       = isDark ? "#2a302a" : "#e6dfd1";
-  const text         = isDark ? "#e8e4de" : "#2a2218";
-  const textMid      = isDark ? "#a4a09a" : "#5a4d3c";
-  const textLight    = isDark ? "#7a7570" : "#8a7f70";
-  const accent       = isDark ? "#c8906a" : "#8b4c20";
-  const inkPrimary   = isDark ? "#c8c0b4" : "#2a2218";
+  const paper        = isDark ? "#241b13" : "#fcf8ef";
+  const paperDim     = isDark ? "#15100b" : "#f7f1e2";
+  const surfaceCard  = isDark ? "#241b13" : "#ffffff";
+  const surfaceMuted = isDark ? "#2e2419" : "#f0ebde";
+  const border       = isDark ? "#3a2e22" : "#e6dfd1";
+  const text         = isDark ? "#f0e6d0" : "#2a2218";
+  const textMid      = isDark ? "#c4b69c" : "#5a4d3c";
+  const textLight    = isDark ? "#a89a82" : "#8a7f70";
+  const accent       = isDark ? "#e0a875" : "#8b4c20";
+  const inkPrimary   = isDark ? "#e6d8bc" : "#2a2218";
 
   // ── Hooper (read-only summary, édition complète dans DayLogModal) ────────
   const existingHooper = (data.hooper || []).find(h => h.date === today);
@@ -1058,8 +1058,8 @@ function AccueilViewBody({
     : (existingHooper && todayWeight != null && hasCreatine) ? "complete" : "empty";
 
   const journalColors = (() => {
-    if (journalState === "warn")     return { bg: isDark ? "#2a1808" : "#fbecdc", border: isDark ? "#5a3a10" : "#f0c890", fg: isDark ? "#fbbf24" : "#8a4f10" };
-    if (journalState === "complete") return { bg: isDark ? "#1c2d20" : "#e7f2e0", border: isDark ? "#3a5a3a" : "#a8d0a8", fg: isDark ? "#7ab890" : "#2e6b3f" };
+    if (journalState === "warn")     return { bg: isDark ? "#2a1612" : "#fbecdc", border: isDark ? "#5a3a18" : "#f0c890", fg: isDark ? "#e6c46a" : "#8a4f10" };
+    if (journalState === "complete") return { bg: isDark ? "#1a2a1d" : "#e7f2e0", border: isDark ? "#5a3a18" : "#a8d0a8", fg: isDark ? "#82c894" : "#2e6b3f" };
     return { bg: surfaceCard, border, fg: accent };
   })();
 
@@ -1094,9 +1094,9 @@ function AccueilViewBody({
   })();
 
   const chargeColors = (() => {
-    if (todayCharge < 4)  return { bg: isDark ? "#1c2d20" : "#e3f0e5", fg: isDark ? "#7ab890" : "#2e6b3f" };
-    if (todayCharge < 7)  return { bg: isDark ? "#2a2410" : "#fef2dc", fg: isDark ? "#d4a843" : "#b8881a" };
-    return { bg: isDark ? "#2a1a10" : "#fbecdc", fg: isDark ? "#c8906a" : "#b8651a" };
+    if (todayCharge < 4)  return { bg: isDark ? "#1a2a1d" : "#e3f0e5", fg: isDark ? "#82c894" : "#2e6b3f" };
+    if (todayCharge < 7)  return { bg: isDark ? "#2a2010" : "#fef2dc", fg: isDark ? "#e6c46a" : "#b8881a" };
+    return { bg: isDark ? "#2a1d11" : "#fbecdc", fg: isDark ? "#e0a875" : "#b8651a" };
   })();
 
   return (
@@ -1334,19 +1334,19 @@ function AccueilViewBody({
             <button
               onClick={() => onToggleCreatine(today)}
               style={{
-                background: hasCreatine ? (isDark ? "#1c2d20" : "#e3f0e5") : surfaceCard,
-                border: hasCreatine ? `1px solid ${isDark ? "#3a5a3a" : "#a8d0a8"}` : `1px solid ${border}`,
+                background: hasCreatine ? (isDark ? "#1a2a1d" : "#e3f0e5") : surfaceCard,
+                border: hasCreatine ? `1px solid ${isDark ? "#5a3a18" : "#a8d0a8"}` : `1px solid ${border}`,
                 borderRadius: 12, padding: "10px 14px",
                 flex: 1, display: "flex", alignItems: "center", gap: 8,
                 cursor: "pointer", fontFamily: "inherit",
               }}
             >
-              <span style={{ fontSize: 11, color: hasCreatine ? (isDark ? "#7ab890" : "#2e6b3f") : textLight, flex: 1, textAlign: "left" }}>
+              <span style={{ fontSize: 11, color: hasCreatine ? (isDark ? "#82c894" : "#2e6b3f") : textLight, flex: 1, textAlign: "left" }}>
                 Créatine
               </span>
               <span style={{
                 fontSize: 13, fontWeight: 700,
-                color: hasCreatine ? (isDark ? "#7ab890" : "#2e6b3f") : textLight,
+                color: hasCreatine ? (isDark ? "#82c894" : "#2e6b3f") : textLight,
               }}>
                 {hasCreatine ? "✓ Prise" : "—"}
               </span>
@@ -1438,7 +1438,7 @@ function AccueilViewBody({
                           aria-label="Supprimer"
                           style={{
                             background: "none", border: "none",
-                            cursor: "pointer", color: isDark ? "#e87878" : "#b83030",
+                            cursor: "pointer", color: isDark ? "#f08070" : "#b83030",
                             fontSize: 12, padding: "0 4px", lineHeight: 1,
                             fontFamily: "inherit",
                           }}

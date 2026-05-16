@@ -170,7 +170,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
                   {computed !== null && (
                     <div style={styles.calcResultRow}>
                       <span style={{ ...styles.calcResultVal, color: getChargeColor(computed) }}>{computed}</span>
-                      <span style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7060" }}>
+                      <span style={{ fontSize: 11, color: isDark ? "#a89a82" : "#8a7060" }}>
                         = Zone vol.{volZone} × Int.{calcZone} × Compl.{calcComplexity}
                       </span>
                       <button style={styles.calcApplyBtn} onClick={() => { setCharge(computed); setCalcOpen(false); }}>
@@ -272,7 +272,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
                     </table>
                   </div>
 
-                  <div style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7060", fontStyle: "italic" }}>
+                  <div style={{ fontSize: 11, color: isDark ? "#a89a82" : "#8a7060", fontStyle: "italic" }}>
                     Formule : Charge = Zone volume × Zone intensité × Index complexité (max 216)
                   </div>
                 </div>

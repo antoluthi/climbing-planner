@@ -6,7 +6,7 @@ export function hooperLabel(total) {
 }
 
 export function hooperColor(total, isDark) {
-  if (total <= 14) return isDark ? "#4ade80" : "#2a7d4f";
-  if (total <= 17) return "#f97316";
-  return "#f87171";
+  if (total <= 14) return isDark ? "#82c894" : "#82c894";
+  if (total <= 17) return "#f0a060";
+  return "#f08070";
 }

@@ -21,10 +21,10 @@ export function DeadlineDetailModal({ deadline: dl, onClose, onEdit }) {
     return () => window.removeEventListener("keydown", h);
   }, [onClose]);
 
-  const textMain = isDark ? "#e8e4de" : "#2a2218";
-  const textMuted = isDark ? "#7a8080" : "#8a8070";
-  const surfaceAlt = isDark ? "#1a1f1c" : "#f0ece4";
-  const border = isDark ? "#2a2f2a" : "#d8d3ca";
+  const textMain = isDark ? "#f0e6d0" : "#2a2218";
+  const textMuted = isDark ? "#a89a82" : "#8a8070";
+  const surfaceAlt = isDark ? "#15100b" : "#f0ece4";
+  const border = isDark ? "#3a2e22" : "#d8d3ca";
 
   const dateStr = dl.endDate
     ? `${fmtDate(dl.startDate)} → ${fmtDate(dl.endDate)}`

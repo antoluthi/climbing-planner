@@ -90,16 +90,16 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
     e.target.value = "";
   };
 
-  const accent = isDark ? "#c8906a" : "#8b4c20";
-  const mutedColor = isDark ? "#707870" : "#8a7f70";
-  const textColor = isDark ? "#e8e4de" : "#2a2218";
-  const surfaceBg = isDark ? "#1f2421" : "#e8e2d8";
-  const borderColor = isDark ? "#252b27" : "#ccc6b8";
-  const inputBg = isDark ? "#252b27" : "#ddd7cc";
-  const btnBorder = isDark ? "#2e3430" : "#bfb9aa";
+  const accent = isDark ? "#e0a875" : "#8b4c20";
+  const mutedColor = isDark ? "#a89a82" : "#8a7f70";
+  const textColor = isDark ? "#f0e6d0" : "#2a2218";
+  const surfaceBg = isDark ? "#241b13" : "#e8e2d8";
+  const borderColor = isDark ? "#2e2419" : "#ccc6b8";
+  const inputBg = isDark ? "#2e2419" : "#ddd7cc";
+  const btnBorder = isDark ? "#3a2e22" : "#bfb9aa";
 
   const syncIcon = syncStatus === "saving" ? "⟳" : syncStatus === "saved" ? "✓" : syncStatus === "offline" ? "⚡" : null;
-  const syncColor = syncStatus === "saved" ? accent : syncStatus === "offline" ? "#f97316" : mutedColor;
+  const syncColor = syncStatus === "saved" ? accent : syncStatus === "offline" ? "#f0a060" : mutedColor;
 
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || null;
 
@@ -188,7 +188,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
         <div style={styles.profileSection}>
           <div style={styles.profileSectionTitle}>Rôle</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ background: isDark ? "#263228" : "#d4e8db", border: `1px solid ${accent}88`, color: accent, padding: "7px 16px", borderRadius: 5, fontSize: 11, fontWeight: 600, letterSpacing: "0.04em" }}>
+            <span style={{ background: isDark ? "#3a2e22" : "#d4e8db", border: `1px solid ${accent}88`, color: accent, padding: "7px 16px", borderRadius: 5, fontSize: 11, fontWeight: 600, letterSpacing: "0.04em" }}>
               {profile.role === "coach" ? "Coach" : profile.role === "athlete" ? "Athlète suivi" : profile.role === "auto" ? "Athlète autonome ✦" : "Athlète solo"}
             </span>
             <span style={{ fontSize: 11, color: mutedColor, fontStyle: "italic" }}>
@@ -304,7 +304,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
             )}
             {onPull && (
               <button
-                style={{ background: "none", border: `1px solid ${btnBorder}`, color: isDark ? "#60a5fa" : "#2563eb", padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+                style={{ background: "none", border: `1px solid ${btnBorder}`, color: isDark ? "#7da7f0" : "#2563eb", padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
                 onClick={onPull} title="Charger les données depuis le cloud (écraser local)"
               >↓ Charger depuis le cloud</button>
             )}

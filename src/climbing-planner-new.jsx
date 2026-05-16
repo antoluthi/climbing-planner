@@ -507,7 +507,7 @@ export default function ClimbingPlanner() {
 
   // ── Mesocycle CRUD ──
   const updateMesocycles = updater => setData(d => ({ ...d, mesocycles: updater(d.mesocycles || []) }));
-  const addMesocycle = () => updateMesocycles(m => [...m, { id: generateId(), label: "Nouveau mésocycle", color: "#c8906a", durationWeeks: 4, startDate: "", description: "", microcycles: [] }]);
+  const addMesocycle = () => updateMesocycles(m => [...m, { id: generateId(), label: "Nouveau mésocycle", color: "#e0a875", durationWeeks: 4, startDate: "", description: "", microcycles: [] }]);
   const updateMesocycle = (id, changes) => updateMesocycles(m => m.map(x => x.id === id ? { ...x, ...changes } : x));
   const deleteMesocycle = id => updateMesocycles(m => m.filter(x => x.id !== id));
   const addMicrocycle = mesoId => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: [...x.microcycles, { id: generateId(), label: "Nouveau microcycle", durationWeeks: 1, description: "" }] } : x));
@@ -732,27 +732,27 @@ export default function ClimbingPlanner() {
   const profilePhoto = data.profile?.avatarUrl || data.profile?.avatarDataUrl || "";
   const profileBtn = (
     <button
-      style={{ ...styles.profileBtn, ...(viewMode === "profil" ? { borderColor: isDark ? "#c8906a" : "#8b4c20", background: isDark ? "#2a1a10" : "#ecddd4" } : {}) }}
+      style={{ ...styles.profileBtn, ...(viewMode === "profil" ? { borderColor: isDark ? "#e0a875" : "#8b4c20", background: isDark ? "#3a2616" : "#ecddd4" } : {}) }}
       onClick={() => setViewMode("profil")}
       title="Profil"
     >
       {profilePhoto
         ? <img src={profilePhoto} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
-        : <span style={{ fontSize: 11, color: isDark ? "#707870" : "#8a7f70" }}>—</span>
+        : <span style={{ fontSize: 11, color: isDark ? "#a89a82" : "#8a7f70" }}>—</span>
       }
     </button>
   );
 
-  const syncDot = syncStatus === "saving" ? <span style={{ fontSize: 11, color: "#888" }} title="Synchronisation…">⟳</span>
-    : syncStatus === "saved" ? <span style={{ fontSize: 11, color: isDark ? "#c8906a" : "#8b4c20" }} title="Synchronisé">✓</span>
-    : syncStatus === "offline" ? <span style={{ fontSize: 11, color: "#f97316" }} title="Hors ligne">—</span>
+  const syncDot = syncStatus === "saving" ? <span style={{ fontSize: 11, color: "#a89a82" }} title="Synchronisation…">⟳</span>
+    : syncStatus === "saved" ? <span style={{ fontSize: 11, color: isDark ? "#e0a875" : "#8b4c20" }} title="Synchronisé">✓</span>
+    : syncStatus === "offline" ? <span style={{ fontSize: 11, color: "#f0a060" }} title="Hors ligne">—</span>
     : null;
 
   // ── Auth gate ──
-  const accent = isDark ? "#c8906a" : "#8b4c20";
+  const accent = isDark ? "#e0a875" : "#8b4c20";
   if (!authChecked) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: isDark ? "#0f0f0f" : "#f0f0f0" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: isDark ? "#1a1410" : "#f0f0f0" }}>
         <div style={{ color: accent, fontSize: 28, fontWeight: 300, letterSpacing: "0.1em" }}>…</div>
       </div>
     );
@@ -761,28 +761,28 @@ export default function ClimbingPlanner() {
     return <PublicPlanView onBack={() => setShowPublicPlan(false)} />;
   }
   if (supabase && !session) {
-    const loginBrown = isDark ? "#c8906a" : "#5c3317";
-    const loginBrownMid = isDark ? "#a0601a" : "#8b4c20";
-    const loginBrownBg = isDark ? "rgba(160,96,26,0.12)" : "rgba(139,76,32,0.08)";
-    const loginBrownBorder = isDark ? "rgba(160,96,26,0.5)" : "rgba(139,76,32,0.4)";
+    const loginBrown = isDark ? "#e0a875" : "#5c3317";
+    const loginBrownMid = isDark ? "#b8651a" : "#8b4c20";
+    const loginBrownBg = isDark ? "rgba(184,101,26,0.18)" : "rgba(139,76,32,0.08)";
+    const loginBrownBorder = isDark ? "rgba(184,101,26,0.55)" : "rgba(139,76,32,0.4)";
     const loginStyles = {
       ...styles,
       authBtn: { ...styles.authBtn, background: loginBrownBg, border: `1px solid ${loginBrownBorder}`, color: loginBrown },
-      authLogoutBtn: { ...styles.authLogoutBtn, color: isDark ? "#a08070" : "#8b6650" },
+      authLogoutBtn: { ...styles.authLogoutBtn, color: isDark ? "#c4b69c" : "#8b6650" },
     };
     return (
       <ThemeContext.Provider value={{ styles: loginStyles, isDark, toggleTheme, mesocycles: [] }}>
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 24, background: isDark ? "#18120c" : "#ede7de" }}>
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 24, background: isDark ? "#1a1410" : "#ede7de" }}>
           <div style={{
             fontFamily: "'Newsreader', Georgia, serif",
             fontSize: 22, fontWeight: 500, fontStyle: "italic",
             color: loginBrown, letterSpacing: "0.08em",
           }}>Climbing Planner</div>
           <div style={{
-            background: isDark ? "#211810" : "#faf6f1",
+            background: isDark ? "#241b13" : "#faf6f1",
             borderRadius: 12, padding: "28px 24px",
             boxShadow: `0 4px 28px rgba(92, 51, 23, ${isDark ? "0.35" : "0.10"})`,
-            minWidth: 300, border: `1px solid ${isDark ? "#3d2510" : "#ddd0c2"}`,
+            minWidth: 300, border: `1px solid ${isDark ? "#3a2e22" : "#ddd0c2"}`,
           }}>
             <AuthPanel session={null} onAuthChange={setSession} fullWidth />
           </div>
@@ -908,17 +908,17 @@ export default function ClimbingPlanner() {
 
       {/* ── Bandeau vue athlète ── */}
       {viewingAthlete && (
-        <div style={{ background: isDark ? "#2a1a10" : "#f0e4d8", borderBottom: `1px solid ${isDark ? "#4a2a14" : "#c8a080"}`, padding: "7px 18px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: isDark ? "#c8906a" : "#8b4c20", fontWeight: 700, letterSpacing: "0.05em" }}>
+        <div style={{ background: isDark ? "#3a2616" : "#f0e4d8", borderBottom: `1px solid ${isDark ? "#5a3a18" : "#c8a080"}`, padding: "7px 18px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: isDark ? "#e0a875" : "#8b4c20", fontWeight: 700, letterSpacing: "0.05em" }}>
             VUE ATHLÈTE
           </span>
-          <span style={{ fontSize: 12, color: isDark ? "#e0c0a0" : "#5c3010", fontWeight: 600 }}>
+          <span style={{ fontSize: 12, color: isDark ? "#f0d8b8" : "#5c3010", fontWeight: 600 }}>
             {viewingAthlete.firstName} {viewingAthlete.lastName}
           </span>
           <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
             <button
               onClick={switchBackToCoach}
-              style={{ background: isDark ? "#2a1a10" : "#ecddd4", border: `1px solid ${isDark ? "#c8906a66" : "#8b4c2066"}`, borderRadius: 5, color: isDark ? "#c8906a" : "#8b4c20", padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
+              style={{ background: isDark ? "#3a2616" : "#ecddd4", border: `1px solid ${isDark ? "#e0a87566" : "#8b4c2066"}`, borderRadius: 5, color: isDark ? "#e0a875" : "#8b4c20", padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
             >
               ← Retour à ma vue
             </button>
@@ -938,9 +938,9 @@ export default function ClimbingPlanner() {
         const microTotal = detected?.meso?.microcycles?.length || 0;
         return (
           <div style={{
-            background: (color || "#888") + "14",
-            borderBottom: `1px solid ${color || "#888"}28`,
-            borderLeft: `3px solid ${color || "#888"}`,
+            background: (color || "#a89a82") + "14",
+            borderBottom: `1px solid ${color || "#a89a82"}28`,
+            borderLeft: `3px solid ${color || "#a89a82"}`,
             padding: isMobile ? "6px 14px" : "5px 20px",
             display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
             flexShrink: 0,
@@ -961,7 +961,7 @@ export default function ClimbingPlanner() {
                 </span>
               </>
             )}
-            {weekMeta.note && <span style={{ fontSize: 10, fontStyle: "italic", color: isDark ? "#9ca3af" : "#6b7280" }}>"{weekMeta.note}"</span>}
+            {weekMeta.note && <span style={{ fontSize: 10, fontStyle: "italic", color: isDark ? "#a89a82" : "#a89a82" }}>"{weekMeta.note}"</span>}
           </div>
         );
       })()}
@@ -1603,7 +1603,7 @@ export default function ClimbingPlanner() {
         <BottomNav
           viewMode={viewMode}
           onChange={(k) => setViewMode(k)}
-          extraTabs={hasCoachFeatures ? [{ key: "library", label: "Bibli", glyph: "≣" }] : []}
+          extraTabs={hasCoachFeatures ? [{ key: "library", label: "Bibli", icon: "library" }] : []}
         />
       )}
       <ToastContainer isMobile={isMobile} />

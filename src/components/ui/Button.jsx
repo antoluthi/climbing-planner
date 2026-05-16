@@ -23,13 +23,13 @@ export function Button({
 }) {
   const { isDark } = useThemeCtx();
 
-  const accent     = isDark ? "#c8906a" : "#8b4c20";
-  const ink        = isDark ? "#c8c0b4" : "#2a2218";
-  const paper      = isDark ? "#1f2421" : "#fcf8ef";
-  const border     = isDark ? "#3a4035" : "#d8d0bf";
-  const textMid    = isDark ? "#a4a09a" : "#5a4d3c";
+  const accent     = isDark ? "#e0a875" : "#8b4c20";
+  const ink        = isDark ? "#e6d8bc" : "#2a2218";
+  const paper      = isDark ? "#241b13" : "#fcf8ef";
+  const border     = isDark ? "#3a2e22" : "#d8d0bf";
+  const textMid    = isDark ? "#c4b69c" : "#5a4d3c";
   const dangerBg   = isDark ? "#b83030" : "#b83030";
-  const ghostHover = isDark ? "#222a23" : "#f0ebde";
+  const ghostHover = isDark ? "#2e2419" : "#f0ebde";
 
   const sz = SIZE_STYLES[size] || SIZE_STYLES.md;
 

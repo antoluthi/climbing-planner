@@ -56,7 +56,7 @@ export function SleepSection({ sleepData, onImport, range }) {
       </div>
 
       {importMsg && (
-        <div style={{ fontSize: 11, color: importMsg.startsWith("⚠") ? "#f87171" : "#c8906a", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: importMsg.startsWith("⚠") ? "#f08070" : "#e0a875", marginBottom: 8 }}>
           {importMsg}
         </div>
       )}
@@ -71,7 +71,7 @@ export function SleepSection({ sleepData, onImport, range }) {
       ) : (
         <>
           {lastDate && (
-            <div style={{ fontSize: 10, color: isDark ? "#707870" : "#8a7060", marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: isDark ? "#a89a82" : "#8a7060", marginBottom: 10 }}>
               Dernière nuit : {lastDate} · {filtered.length} nuits chargées
             </div>
           )}
@@ -92,7 +92,7 @@ export function SleepSection({ sleepData, onImport, range }) {
             </div>
             {avgScore != null && (
               <div style={styles.sleepCard}>
-                <span style={{ ...styles.dashCardVal, fontSize: 17, color: avgScore >= 80 ? "#4ade80" : avgScore >= 60 ? "#fbbf24" : "#f87171" }}>{avgScore}</span>
+                <span style={{ ...styles.dashCardVal, fontSize: 17, color: avgScore >= 80 ? "#82c894" : avgScore >= 60 ? "#e6c46a" : "#f08070" }}>{avgScore}</span>
                 <span style={styles.dashCardLabel}>Score moy.</span>
               </div>
             )}
@@ -101,7 +101,7 @@ export function SleepSection({ sleepData, onImport, range }) {
           {/* Légende */}
           <div style={styles.sleepLegend}>
             {[["#6366f1","Profond"],["#a855f7","REM"],["#22d3ee","Léger"],["#f9731666","Éveil"]].map(([c,l]) => (
-              <span key={l} style={{ fontSize: 10, color: isDark ? "#9ca3af" : "#6b7280", display: "flex", alignItems: "center" }}>
+              <span key={l} style={{ fontSize: 10, color: isDark ? "#a89a82" : "#a89a82", display: "flex", alignItems: "center" }}>
                 <span style={{ ...styles.sleepLegendDot, background: c }} />{l}
               </span>
             ))}
@@ -131,7 +131,7 @@ export function SleepSection({ sleepData, onImport, range }) {
                   <XAxis dataKey="date" tick={{ fill: styles.dashText, fontSize: 9 }} axisLine={false} tickLine={false} interval={Math.floor(chartData.length / 6)} />
                   <YAxis domain={[40, 100]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="score" name="Score" stroke={isDark ? "#c8906a" : "#8b4c20"} strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="score" name="Score" stroke={isDark ? "#e0a875" : "#8b4c20"} strokeWidth={2} dot={false} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </div>

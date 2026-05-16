@@ -16,12 +16,12 @@ export function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
   const [address,    setAddress]    = useState("");
   const [sort,       setSort]       = useState("date"); // "date" | "charge"
 
-  const surface = isDark ? "#1c2820" : "#ffffff";
-  const bg2     = isDark ? "#141a16" : "#f3f7f4";
-  const border  = isDark ? "#263228" : "#daeade";
-  const text    = isDark ? "#d8e8d0" : "#1a2e1f";
-  const muted   = isDark ? "#6a8870" : "#6b8c72";
-  const accent  = isDark ? "#c8906a" : "#8b4c20";
+  const surface = isDark ? "#241b13" : "#ffffff";
+  const bg2     = isDark ? "#241b13" : "#f3f7f4";
+  const border  = isDark ? "#3a2e22" : "#daeade";
+  const text    = isDark ? "#f0e6d0" : "#1a2e1f";
+  const muted   = isDark ? "#a89a82" : "#6b8c72";
+  const accent  = isDark ? "#e0a875" : "#8b4c20";
 
   const isSessionTab = tab === "sessions";
 
@@ -72,14 +72,14 @@ export function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
   const ItemRow = ({ item, type }) => {
     const isSel = selected?.item.id === item.id && selected?.type === type;
     const cfg   = type === "block" ? (BLOCK_TYPES[item.blockType] || {}) : null;
-    const color = type === "block" ? (cfg?.color || "#888") : getChargeColor(item.charge);
+    const color = type === "block" ? (cfg?.color || "#a89a82") : getChargeColor(item.charge);
     const dur   = type === "session" ? item.estimatedTime : item.duration;
     return (
       <div
         onClick={() => setSelected({ type, item })}
         style={{
           padding: "10px 14px", cursor: "pointer",
-          background: isSel ? (isDark ? "#1b3026" : "#e2f5e8") : "transparent",
+          background: isSel ? (isDark ? "#3a2616" : "#e2f5e8") : "transparent",
           borderLeft: `3px solid ${isSel ? accent : "transparent"}`,
           borderBottom: `1px solid ${border}`,
           display: "flex", alignItems: "center", gap: 10,
@@ -159,7 +159,7 @@ export function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
                     padding: "3px 9px", borderRadius: 4, cursor: "pointer", fontSize: 10,
                     fontFamily: "inherit",
                     border: `1px solid ${typeFilter === f ? accent + "88" : border}`,
-                    background: typeFilter === f ? (isDark ? "#263228" : "#d4e8db") : "none",
+                    background: typeFilter === f ? (isDark ? "#3a2e22" : "#d4e8db") : "none",
                     color: typeFilter === f ? accent : muted,
                   }}
                 >
@@ -176,7 +176,7 @@ export function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
                   style={{
                     padding: "3px 8px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit",
                     border: `1px solid ${sort === key ? accent + "88" : border}`,
-                    background: sort === key ? (isDark ? "#263228" : "#d4e8db") : "none",
+                    background: sort === key ? (isDark ? "#3a2e22" : "#d4e8db") : "none",
                     color: sort === key ? accent : muted,
                   }}
                 >{label}</button>

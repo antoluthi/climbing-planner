@@ -14,11 +14,11 @@ export function ToastContainer({ isMobile }) {
 
   if (items.length === 0) return null;
 
-  const text = isDark ? "#e8e4de" : "#fcf8ef";
+  const text = isDark ? "#f0e6d0" : "#fcf8ef";
   const surface = isDark ? "#2a2218" : "#2a2218";
-  const accent = isDark ? "#c8906a" : "#c8906a";
-  const success = "#7ab890";
-  const error = "#e87878";
+  const accent = isDark ? "#e0a875" : "#e0a875";
+  const success = "#82c894";
+  const error = "#f08070";
 
   return (
     <div

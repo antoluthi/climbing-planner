@@ -8,12 +8,12 @@ import { BLOCK_TYPES } from "../lib/constants.js";
 export function TodaySessionCard({ session, onTap, onToggleDone }) {
   const { isDark } = useThemeCtx();
 
-  const surfaceCard  = isDark ? "#1f2421" : "#ffffff";
-  const border       = isDark ? "#2a302a" : "#e6dfd1";
-  const text         = isDark ? "#e8e4de" : "#2a2218";
-  const textMid      = isDark ? "#a4a09a" : "#5a4d3c";
-  const textLight    = isDark ? "#7a7570" : "#8a7f70";
-  const accent       = isDark ? "#c8906a" : "#8b4c20";
+  const surfaceCard  = isDark ? "#241b13" : "#ffffff";
+  const border       = isDark ? "#3a2e22" : "#e6dfd1";
+  const text         = isDark ? "#f0e6d0" : "#2a2218";
+  const textMid      = isDark ? "#c4b69c" : "#5a4d3c";
+  const textLight    = isDark ? "#a89a82" : "#8a7f70";
+  const accent       = isDark ? "#e0a875" : "#8b4c20";
 
   const fb = session.feedback;
   const status = fb?.status ?? (fb?.done ? "done" : null);
@@ -73,22 +73,22 @@ export function TodaySessionCard({ session, onTap, onToggleDone }) {
         </div>
         <div style={{ display: "flex", gap: 5, marginTop: 8, flexWrap: "wrap" }}>
           {session.type && (
-            <span style={tagStyle({ bg: isDark ? "#2a2410" : "#fef2dc", fg: isDark ? "#d4a843" : "#b8881a" })}>
+            <span style={tagStyle({ bg: isDark ? "#2a2010" : "#fef2dc", fg: isDark ? "#e6c46a" : "#b8881a" })}>
               {session.type}
             </span>
           )}
           {done && fb?.rpe != null && (
-            <span style={tagStyle({ bg: isDark ? "#1c2d20" : "#e7f2e0", fg: isDark ? "#7ab890" : "#4a7050" })}>
+            <span style={tagStyle({ bg: isDark ? "#1a2a1d" : "#e7f2e0", fg: isDark ? "#82c894" : "#4a7050" })}>
               Fait · RPE {fb.rpe}
             </span>
           )}
           {missed && (
-            <span style={tagStyle({ bg: isDark ? "#2a1313" : "#fbecec", fg: isDark ? "#e87878" : "#b83030" })}>
+            <span style={tagStyle({ bg: isDark ? "#2a1612" : "#fbecec", fg: isDark ? "#f08070" : "#b83030" })}>
               Manquée
             </span>
           )}
           {!done && !missed && session.blocks?.length > 0 && (
-            <span style={tagStyle({ bg: isDark ? "#222a23" : "#f0ebde", fg: textMid })}>
+            <span style={tagStyle({ bg: isDark ? "#2e2419" : "#f0ebde", fg: textMid })}>
               {session.blocks.length} bloc{session.blocks.length > 1 ? "s" : ""}
             </span>
           )}
