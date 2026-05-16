@@ -973,10 +973,11 @@ export default function ClimbingPlanner() {
           isMobile={isMobile}
           isLoading={!!session && !cloudLoaded}
           onOpenSession={openSessionModal}
-          onToggleCreatine={dateISO => setData(d => {
-            const cr = { ...(d.creatine || {}) };
-            if (cr[dateISO]) delete cr[dateISO]; else cr[dateISO] = true;
-            return { ...d, creatine: cr };
+          onToggleReminder={(reminderId, dateStr) => setData(d => {
+            const prev = d.reminderState || {};
+            const forR = prev[reminderId] ? { ...prev[reminderId] } : {};
+            if (forR[dateStr]) delete forR[dateStr]; else forR[dateStr] = true;
+            return { ...d, reminderState: { ...prev, [reminderId]: forR } };
           })}
           onSaveWeight={(date, kg) => setData(d => {
             const w = { ...(d.weight || {}) };
@@ -1224,6 +1225,16 @@ export default function ClimbingPlanner() {
           onSetLocked={val => setData(d => ({ ...d, cyclesLocked: val }))}
           canEdit={(data.profile?.role ?? null) !== "athlete"}
           objectives={(data.quickSessions || []).filter(qs => qs.isObjective)}
+          reminders={data.reminders || []}
+          reminderState={data.reminderState || {}}
+          onAddReminder={r => setData(d => ({ ...d, reminders: [...(d.reminders || []), r] }))}
+          onUpdateReminder={r => setData(d => ({ ...d, reminders: (d.reminders || []).map(x => x.id === r.id ? r : x) }))}
+          onDeleteReminder={id => setData(d => {
+            const reminders = (d.reminders || []).filter(r => r.id !== id);
+            const reminderState = { ...(d.reminderState || {}) };
+            delete reminderState[id];
+            return { ...d, reminders, reminderState };
+          })}
         />
       )}
 
@@ -1408,10 +1419,11 @@ export default function ClimbingPlanner() {
           data={data}
           onClose={() => setLogDate(null)}
           onSaveNote={(date, text) => setData(d => ({ ...d, notes: { ...(d.notes || {}), [date]: text } }))}
-          onToggleCreatine={date => setData(d => {
-            const c = { ...(d.creatine || {}) };
-            if (c[date]) delete c[date]; else c[date] = true;
-            return { ...d, creatine: c };
+          onToggleReminder={(reminderId, dateStr) => setData(d => {
+            const prev = d.reminderState || {};
+            const forR = prev[reminderId] ? { ...prev[reminderId] } : {};
+            if (forR[dateStr]) delete forR[dateStr]; else forR[dateStr] = true;
+            return { ...d, reminderState: { ...prev, [reminderId]: forR } };
           })}
           onSaveWeight={(date, kg) => setData(d => {
             const w = { ...(d.weight || {}) };

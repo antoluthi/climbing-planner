@@ -9,13 +9,14 @@ const DEFAULT_DATA = {
   weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES,
   sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {},
   profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [],
-  quickSessions: [], schemaVersion: 2,
+  quickSessions: [], reminders: [], reminderState: {}, schemaVersion: 3,
 };
 
-// ─── Migration schemaVersion 2 ────────────────────────────────────────────────
+// ─── Migration schemaVersion 2 → 3 ────────────────────────────────────────────
 // Ajoute discipline / mode / chargePlanned aux sessions et quickSessions
-// existantes. Normalise la charge (0-216) en chargePlanned (0-10).
-const SCHEMA_VERSION = 2;
+// existantes (v2), puis data.reminders / data.reminderState avec migration
+// auto de data.creatine vers un rappel "Créatine" daily (v3).
+const SCHEMA_VERSION = 3;
 
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
@@ -50,6 +51,34 @@ function migrateSession(s) {
   return out;
 }
 
+// ── Migration v3 : reminders/reminderState + créatine héritée ──
+function migrateReminders(data) {
+  if (data.reminders && data.reminderState) return data;
+  const reminders     = Array.isArray(data.reminders) ? [...data.reminders] : [];
+  const reminderState = (typeof data.reminderState === "object" && data.reminderState) ? { ...data.reminderState } : {};
+
+  const oldCreatine = data.creatine || {};
+  const hasAnyCreatine = Object.keys(oldCreatine).length > 0;
+
+  // Crée un rappel "Créatine" par défaut si aucun rappel n'existe encore.
+  // Si l'utilisateur a déjà coché de la créatine, on importe l'historique.
+  if (reminders.length === 0) {
+    const creatineId = "rem_creatine_" + Date.now().toString(36);
+    reminders.push({
+      id: creatineId,
+      name: "Créatine",
+      color: "#e0a875",
+      recurrence: { kind: "daily" },
+      createdAt: new Date().toISOString(),
+    });
+    if (hasAnyCreatine) {
+      reminderState[creatineId] = { ...oldCreatine };
+    }
+  }
+  // data.creatine est laissé en place pour rollback safety (read-only désormais).
+  return { ...data, reminders, reminderState };
+}
+
 export function migrateData(data) {
   if (!data || data.schemaVersion === SCHEMA_VERSION) return data;
   const weeks = { ...(data.weeks || {}) };
@@ -64,11 +93,17 @@ export function migrateData(data) {
     ...migrateSession({ ...qs, mode: "event" }),
   }));
   const customSessions = (data.customSessions || []).map(migrateSession);
-  return {
+
+  // v3 : ajoute reminders / reminderState (+ rapatrie l'ancien data.creatine).
+  const withReminders = migrateReminders({
     ...data,
     weeks,
     quickSessions,
     customSessions,
+  });
+
+  return {
+    ...withReminders,
     schemaVersion: SCHEMA_VERSION,
   };
 }

@@ -6,6 +6,7 @@ import { getChargeColor } from "../lib/charge.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { AccueilSkeleton } from "./ui/Skeleton.jsx";
 import { TodaySessionCard } from "./TodaySessionCard.jsx";
+import { getActiveRemindersForDate, isReminderCheckedOn } from "../lib/reminders.js";
 
 // ─── GREETING BY TIME OF DAY ──────────────────────────────────────────────────
 
@@ -965,7 +966,7 @@ export function AccueilView(props) {
 function AccueilViewBody({
   data, isMobile,
   onOpenSession,
-  onToggleCreatine, onSaveWeight,
+  onToggleReminder, onSaveWeight,
   onAddNutrition, onDeleteNutrition,
   onOpenLog,
   onAddSession,
@@ -1005,8 +1006,9 @@ function AccueilViewBody({
   // ── Hooper (read-only summary, édition complète dans DayLogModal) ────────
   const existingHooper = (data.hooper || []).find(h => h.date === today);
 
-  // ── Créatine ──
-  const hasCreatine = !!data.creatine?.[today];
+  // ── Rappels du jour ──
+  const activeReminders = getActiveRemindersForDate(data.reminders || [], todayObj);
+  const checkedReminders = activeReminders.filter(r => isReminderCheckedOn(data.reminderState, r.id, today));
 
   // ── Poids (stepper inline, pré-rempli avec la dernière valeur connue) ──
   const todayWeight = data.weight?.[today] ?? null;
@@ -1053,9 +1055,10 @@ function AccueilViewBody({
 
   // ── Journal du jour : état ──
   const logWarning = getDayLogWarning(data, today, todayObj);
+  const allRemindersDone = activeReminders.length === 0 || checkedReminders.length === activeReminders.length;
   const journalState = logWarning?.hasWarning
     ? "warn"
-    : (existingHooper && todayWeight != null && hasCreatine) ? "complete" : "empty";
+    : (existingHooper && todayWeight != null && allRemindersDone) ? "complete" : "empty";
 
   const journalColors = (() => {
     if (journalState === "warn")     return { bg: isDark ? "#2a1612" : "#fbecdc", border: isDark ? "#5a3a18" : "#f0c890", fg: isDark ? "#e6c46a" : "#8a4f10" };
@@ -1329,29 +1332,51 @@ function AccueilViewBody({
                 }}
               >+</button>
             </div>
-
-            {/* Créatine toggle */}
-            <button
-              onClick={() => onToggleCreatine(today)}
-              style={{
-                background: hasCreatine ? (isDark ? "#1a2a1d" : "#e3f0e5") : surfaceCard,
-                border: hasCreatine ? `1px solid ${isDark ? "#5a3a18" : "#a8d0a8"}` : `1px solid ${border}`,
-                borderRadius: 12, padding: "10px 14px",
-                flex: 1, display: "flex", alignItems: "center", gap: 8,
-                cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              <span style={{ fontSize: 11, color: hasCreatine ? (isDark ? "#82c894" : "#2e6b3f") : textLight, flex: 1, textAlign: "left" }}>
-                Créatine
-              </span>
-              <span style={{
-                fontSize: 13, fontWeight: 700,
-                color: hasCreatine ? (isDark ? "#82c894" : "#2e6b3f") : textLight,
-              }}>
-                {hasCreatine ? "✓ Prise" : "—"}
-              </span>
-            </button>
           </div>
+
+          {/* Rappels du jour (chips) */}
+          {activeReminders.length > 0 && (
+            <div style={{
+              background: surfaceCard, border: `1px solid ${border}`,
+              borderRadius: 12, padding: 14, marginBottom: 10,
+            }}>
+              <div style={{ ...cardLabel, marginBottom: 8 }}>Rappels du jour</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {activeReminders.map(rem => {
+                  const checked = isReminderCheckedOn(data.reminderState, rem.id, today);
+                  const doneBg     = isDark ? "#1a2a1d" : "#e3f0e5";
+                  const doneBorder = isDark ? "#2a4a30" : "#a8d0a8";
+                  const doneFg     = isDark ? "#82c894" : "#2e6b3f";
+                  return (
+                    <button
+                      key={rem.id}
+                      onClick={() => onToggleReminder?.(rem.id, today)}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "6px 11px", borderRadius: 999,
+                        background: checked ? doneBg : surfaceMuted,
+                        border: `1px solid ${checked ? doneBorder : border}`,
+                        color: checked ? doneFg : textMid,
+                        fontSize: 12, fontWeight: checked ? 600 : 500,
+                        cursor: "pointer", fontFamily: "inherit",
+                        transition: "background 0.12s, border-color 0.12s",
+                      }}
+                    >
+                      {checked && <span style={{ fontWeight: 700 }}>✓</span>}
+                      <span style={{
+                        width: 6, height: 6, borderRadius: "50%",
+                        background: rem.color, flexShrink: 0,
+                      }} />
+                      {rem.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: textLight, marginTop: 8 }}>
+                Tape pour cocher · {checkedReminders.length} / {activeReminders.length} aujourd'hui
+              </div>
+            </div>
+          )}
 
           {/* Hooper (summary tappable, édition dans DayLogModal) */}
           <button

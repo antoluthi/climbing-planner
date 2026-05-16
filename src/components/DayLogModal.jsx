@@ -1,11 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { addDays, localDateStr, getLastKnownWeight } from "../lib/helpers.js";
-import { isDateInCustomCycle } from "../lib/constants.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { Z } from "../theme/makeStyles.js";
 import { toast } from "../lib/toast.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
+import {
+  getActiveRemindersForDate,
+  isReminderCheckedOn,
+  formatRecurrence,
+} from "../lib/reminders.js";
 
 // ─── DAYLOG MODAL — refonte cards intelligentes ──────────────────────────────
 // Header avec progress bar, sections en cards, Hooper en grid 2×2,
@@ -20,7 +24,7 @@ const HCRIT = [
 
 const HOOPER_HELP = "Le score Hooper évalue ta forme du jour sur 4 dimensions (sommeil, fatigue, stress, courbatures). Suivi sur la durée, il aide à détecter le surentraînement.";
 
-export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCreatine, onSaveWeight, onAddHooper }) {
+export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleReminder, onSaveWeight, onAddHooper }) {
   const { isDark } = useThemeCtx();
   const today = localDateStr(new Date());
   const [dateISO, setDateISO] = useState(initialDate);
@@ -62,12 +66,10 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
   const weightSavedStr = data.weight?.[dateISO] != null ? String(data.weight[dateISO]) : "";
   const weightDirty = weightInput.trim() !== weightSavedStr;
 
-  // ── Creatine ──
-  const hasCreatine = !!data.creatine?.[dateISO];
-  const creatineCycles = (data.customCycles || []).filter(c =>
-    c.name?.toLowerCase().includes("créatine") || c.name?.toLowerCase().includes("creatine")
-  );
-  const isInCreatineCycle = creatineCycles.some(c => isDateInCustomCycle(c, dateObj));
+  // ── Rappels du jour ──
+  const activeReminders = getActiveRemindersForDate(data.reminders || [], dateObj);
+  const checkedReminders = activeReminders.filter(r => isReminderCheckedOn(data.reminderState, r.id, dateISO));
+  const allRemindersChecked = activeReminders.length > 0 && checkedReminders.length === activeReminders.length;
 
   // ── Hooper ──
   const existingH = (data.hooper || []).find(h => h.date === dateISO);
@@ -96,15 +98,19 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
   const [microToast, setMicroToast] = useState("");
   const microToastTimer = useRef(null);
 
-  // Progress segments: notes, weight, creatine (if cycle active OR taken), hooper
+  // Progress segments: notes, weight, rappels (si applicables), hooper
   const progress = useMemo(() => {
     const segs = [];
-    segs.push({ key: "notes",    on: !!noteSaved.trim() || !!noteText.trim() });
-    segs.push({ key: "weight",   on: !!weightSavedStr.trim() });
-    segs.push({ key: "creatine", on: hasCreatine || !isInCreatineCycle });
-    segs.push({ key: "hooper",   on: !!existingH });
+    segs.push({ key: "notes",  on: !!noteSaved.trim() || !!noteText.trim() });
+    segs.push({ key: "weight", on: !!weightSavedStr.trim() });
+    segs.push({
+      key: "reminders",
+      // OK si aucun rappel actif ce jour, ou si tout est coché
+      on: activeReminders.length === 0 || allRemindersChecked,
+    });
+    segs.push({ key: "hooper", on: !!existingH });
     return segs;
-  }, [noteSaved, noteText, weightSavedStr, hasCreatine, isInCreatineCycle, existingH]);
+  }, [noteSaved, noteText, weightSavedStr, activeReminders.length, allRemindersChecked, existingH]);
   const filledCount = progress.filter(s => s.on).length;
 
   // ── Auto-save on blur (debounced via blur events) ──
@@ -329,30 +335,34 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleCr
               </div>
             </div>
 
-            {/* Créatine */}
-            <button
-              onClick={() => onToggleCreatine(dateISO)}
-              style={{
-                ...cardStyle({ surfaceCard, border }),
-                padding: "10px 14px", flex: 1,
-                background: hasCreatine ? (isDark ? "#1a2a1d" : "#e3f0e5") : surfaceCard,
-                border: hasCreatine ? `1px solid ${isDark ? "#5a3a18" : "#a8d0a8"}` : `1px solid ${border}`,
-                display: "flex", alignItems: "center", gap: 8,
-                cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-                width: "auto",
-              }}
-            >
-              <span style={{ fontSize: 11, color: hasCreatine ? (isDark ? "#82c894" : "#2e6b3f") : textLight, flex: 1 }}>
-                Créatine
-              </span>
-              <span style={{
-                fontSize: 13, fontWeight: 700,
-                color: hasCreatine ? (isDark ? "#82c894" : "#2e6b3f") : (isInCreatineCycle ? "#f08070" : textLight),
-              }}>
-                {hasCreatine ? "✓ Prise" : (isInCreatineCycle ? "⚠ —" : "—")}
-              </span>
-            </button>
           </div>
+
+          {/* Rappels du jour */}
+          {activeReminders.length > 0 && (
+            <div style={cardStyle({ surfaceCard, border })}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <span style={{ ...cardLabel }}>Rappels du jour</span>
+                <span style={{ fontSize: 11, color: textLight }}>
+                  {checkedReminders.length} / {activeReminders.length} cochés
+                </span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {activeReminders.map(rem => {
+                  const checked = isReminderCheckedOn(data.reminderState, rem.id, dateISO);
+                  return (
+                    <ReminderCheckRow
+                      key={rem.id}
+                      reminder={rem}
+                      checked={checked}
+                      onToggle={() => onToggleReminder?.(rem.id, dateISO)}
+                      isDark={isDark}
+                      tokens={{ surfaceCard, paperDim, border, text, textMid, textLight }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Card Hooper */}
           <div style={cardStyle({ surfaceCard, border })}>
@@ -526,4 +536,50 @@ function stepperBtn({ surfaceMuted, accent }) {
     display: "flex", alignItems: "center", justifyContent: "center",
     fontFamily: "inherit",
   };
+}
+
+// ─── ReminderCheckRow ────────────────────────────────────────────────────────
+function ReminderCheckRow({ reminder, checked, onToggle, isDark, tokens }) {
+  const { surfaceCard, paperDim, border, text, textMid, textLight } = tokens;
+  const doneBg = isDark ? "#1a2a1d" : "#e3f0e5";
+  const doneBorder = isDark ? "#2a4a30" : "#a8d0a8";
+  const doneFg = isDark ? "#82c894" : "#2e6b3f";
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        background: checked ? doneBg : surfaceCard,
+        border: `1px solid ${checked ? doneBorder : border}`,
+        borderRadius: 10, padding: "10px 12px",
+        cursor: "pointer", fontFamily: "inherit",
+        textAlign: "left", width: "100%",
+        transition: "background 0.12s, border-color 0.12s",
+      }}
+    >
+      <div style={{
+        width: 3, height: 22, borderRadius: 2,
+        background: reminder.color, flexShrink: 0,
+      }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: checked ? doneFg : text }}>
+          {reminder.name}
+        </div>
+        <div style={{ fontSize: 11, color: textLight, marginTop: 2 }}>
+          {formatRecurrence(reminder.recurrence)}
+          {reminder.endDate ? ` · jusqu'au ${reminder.endDate}` : ""}
+        </div>
+      </div>
+      <span
+        style={{
+          width: 22, height: 22, borderRadius: 6,
+          background: checked ? doneFg : "transparent",
+          border: `1.5px solid ${checked ? doneFg : border}`,
+          color: "#fff", fontSize: 13, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >{checked ? "✓" : ""}</span>
+    </button>
+  );
 }
