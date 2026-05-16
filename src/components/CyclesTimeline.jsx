@@ -1,12 +1,24 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { addDays } from "../lib/helpers.js";
+import { ReminderModal } from "./ReminderModal.jsx";
+import {
+  getReminderCompletionRate,
+  formatRecurrence,
+  DAY_NAMES_SHORT,
+} from "../lib/reminders.js";
 
 // ─── CYCLES TIMELINE ─────────────────────────────────────────────────────────
 
-export function CyclesTimeline({ mesocycles, customCycles, objectives, onEdit }) {
+export function CyclesTimeline({
+  mesocycles, customCycles, objectives, onEdit,
+  reminders = [], reminderState = {},
+  onAddReminder, onUpdateReminder, onDeleteReminder,
+  canEditReminders = true,
+}) {
   const { styles, isDark } = useThemeCtx();
   const [popover, setPopover] = useState(null); // { meso, micro, x, y }
+  const [editingReminder, setEditingReminder] = useState(null); // null | {} | reminder
 
   // Measure actual container width to compute pixel-accurate text truncation
   const containerRef = useRef(null);
@@ -266,6 +278,45 @@ export function CyclesTimeline({ mesocycles, customCycles, objectives, onEdit })
       )}
 
 
+      {/* ── Rappels journaliers (lecture + édition rapide) ── */}
+      <div style={styles.timelineSectionSep}>Rappels journaliers</div>
+      {reminders.length === 0 && (
+        <div style={{ color: isDark ? "#8a7d68" : "#9a9890", fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 8 }}>
+          {canEditReminders
+            ? "Aucun rappel. Tape « + Nouveau rappel » pour en créer un."
+            : "Aucun rappel."}
+        </div>
+      )}
+      {reminders.map(rem => (
+        <TimelineReminderRow
+          key={rem.id}
+          reminder={rem}
+          completionRate={getReminderCompletionRate(rem, reminderState, new Date())}
+          isDark={isDark}
+          disabled={!canEditReminders}
+          onClick={() => canEditReminders && setEditingReminder(rem)}
+        />
+      ))}
+      {canEditReminders && (
+        <button
+          style={{ ...styles.cycleAddMesoBtn, marginTop: 8 }}
+          onClick={() => setEditingReminder({})}
+        >＋ Nouveau rappel</button>
+      )}
+
+      {editingReminder && (
+        <ReminderModal
+          reminder={editingReminder.id ? editingReminder : null}
+          onSave={r => {
+            if (editingReminder.id) onUpdateReminder?.(r);
+            else onAddReminder?.(r);
+            setEditingReminder(null);
+          }}
+          onDelete={onDeleteReminder ? id => { onDeleteReminder(id); setEditingReminder(null); } : undefined}
+          onClose={() => setEditingReminder(null)}
+        />
+      )}
+
       {/* Popover */}
       {popover && (
         <div style={styles.timelinePopoverWrap} onClick={() => setPopover(null)}>
@@ -295,5 +346,92 @@ export function CyclesTimeline({ mesocycles, customCycles, objectives, onEdit })
         </div>
       )}
     </div>
+  );
+}
+
+// ─── TimelineReminderRow ─────────────────────────────────────────────────────
+function TimelineReminderRow({ reminder, completionRate, isDark, disabled, onClick }) {
+  const text     = isDark ? "#f0e6d0" : "#2a2218";
+  const textMid  = isDark ? "#c4b69c" : "#5a4d3c";
+  const textLight= isDark ? "#a89a82" : "#8a7f70";
+  const border   = isDark ? "#3a2e22" : "#e6dfd1";
+  const surface  = isDark ? "#241b13" : "#ffffff";
+  const surface2 = isDark ? "#2e2419" : "#f0ebde";
+  const accent   = isDark ? "#e0a875" : "#8b4c20";
+
+  const isDaily = reminder.recurrence?.kind !== "weekdays";
+  const activeDays = isDaily ? [0, 1, 2, 3, 4, 5, 6] : (reminder.recurrence?.days || []);
+  const pct = Math.round((completionRate || 0) * 100);
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: "flex", alignItems: "center", gap: 14,
+        background: surface,
+        border: `1px solid ${border}`,
+        borderRadius: 10,
+        padding: "10px 14px",
+        marginBottom: 6,
+        cursor: disabled ? "default" : "pointer",
+        fontFamily: "inherit",
+        textAlign: "left", width: "100%",
+        transition: "border-color 0.12s",
+      }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.borderColor = accent + "88"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = border; }}
+    >
+      <div style={{ width: 6, height: 44, borderRadius: 3, background: reminder.color, flexShrink: 0 }} />
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: text, lineHeight: 1.2 }}>
+          {reminder.name}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+          <div style={{ display: "flex", gap: 2 }}>
+            {[1, 2, 3, 4, 5, 6, 0].map(d => {
+              const active = activeDays.includes(d);
+              return (
+                <span
+                  key={d}
+                  style={{
+                    width: 14, height: 14, borderRadius: 3,
+                    background: active ? reminder.color + (isDark ? "" : "cc") : surface2,
+                    color: active ? (isDark ? "#1a1f1c" : "#fff") : textLight,
+                    fontSize: 8, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >{DAY_NAMES_SHORT[d]}</span>
+              );
+            })}
+          </div>
+          <span style={{ fontSize: 11, color: textMid }}>{formatRecurrence(reminder.recurrence)}</span>
+        </div>
+        {(reminder.startDate || reminder.endDate) && (
+          <div style={{ fontSize: 10, color: textLight, marginTop: 3 }}>
+            {reminder.startDate ? `Du ${reminder.startDate}` : "Sans début"}
+            {reminder.endDate   ? ` au ${reminder.endDate}` : reminder.startDate ? " · sans fin" : ""}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
+        <span style={{
+          fontFamily: "'Newsreader', Georgia, serif",
+          fontSize: 17, fontWeight: 700, color: reminder.color,
+          lineHeight: 1,
+        }}>
+          {pct}%
+        </span>
+        <span style={{
+          fontSize: 9, fontWeight: 600, color: textLight,
+          letterSpacing: "0.06em", textTransform: "uppercase",
+          marginTop: 4,
+        }}>
+          30 derniers j.
+        </span>
+      </div>
+    </button>
   );
 }

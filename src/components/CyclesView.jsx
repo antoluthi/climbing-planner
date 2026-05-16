@@ -33,6 +33,12 @@ export function CyclesView({
         customCycles={customCycles || []}
         objectives={objectives}
         onEdit={canEdit === false ? null : () => onSetLocked(false)}
+        reminders={reminders}
+        reminderState={reminderState}
+        onAddReminder={onAddReminder}
+        onUpdateReminder={onUpdateReminder}
+        onDeleteReminder={onDeleteReminder}
+        canEditReminders /* rappels = données perso, gérables même en lecture seule */
       />
     );
   }
