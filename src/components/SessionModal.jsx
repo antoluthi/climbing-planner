@@ -7,6 +7,7 @@ import { RichText } from "./RichText.jsx";
 import { SuspensionInfoCard } from "./SuspensionInfoCard.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { Z } from "../theme/makeStyles.js";
+import { getDiscipline, METRIC_LABELS } from "../lib/disciplines.js";
 
 // ─── SESSION MODAL — refonte sans onglets ─────────────────────────────────────
 // Le ressenti est la vue par défaut (le moment le plus fréquent d'ouverture).
@@ -71,6 +72,13 @@ export function SessionModal({
   const hasMain     = !!session.main?.trim();
   const hasCooldown = !!session.cooldown?.trim();
   const hasContent  = hasWarmup || hasMain || hasCooldown;
+  // Mode simple / event : champs additionnels à afficher dans le détail.
+  const hasSessionNotes   = !!session.notes?.toString().trim();
+  const hasDescription    = !!session.description?.toString().trim();
+  const hasEventContent   = !!session.content?.toString().trim();
+  const hasMetrics        = session.metrics && Object.values(session.metrics).some(v => v != null && v !== "");
+  // Le détail est désormais TOUJOURS disponible : on affichera au moins
+  // un récap (discipline, charge, durée, lieu) même quand rien n'est saisi.
 
   // ── Feedback state ──
   const initStatus = () => {
@@ -601,25 +609,25 @@ export function SessionModal({
                 </div>
               )}
 
-              {/* Lien détail de la séance */}
-              {(hasBlocks || hasContent) && (
-                <div style={{ paddingTop: 4 }}>
-                  <button
-                    onClick={() => setShowDetails(v => !v)}
-                    style={{
-                      background: "none", border: "none", padding: 0,
-                      color: accent, fontSize: 13, fontWeight: 500,
-                      cursor: "pointer", fontFamily: "inherit",
-                    }}
-                  >
-                    {showDetails ? "▲ Masquer le détail de la séance" : `Voir le détail de la séance →`}
-                  </button>
-                </div>
-              )}
+              {/* Lien détail de la séance — toujours visible */}
+              <div style={{ paddingTop: 4 }}>
+                <button
+                  onClick={() => setShowDetails(v => !v)}
+                  style={{
+                    background: "none", border: "none", padding: 0,
+                    color: accent, fontSize: 13, fontWeight: 500,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  {showDetails ? "▲ Masquer le détail de la séance" : `Voir le détail de la séance →`}
+                </button>
+              </div>
 
-              {/* Détail technique (accordion) */}
+              {/* Détail technique (accordion) — toujours quelque chose à montrer */}
               {showDetails && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 8 }}>
+
+                  {/* Mode détaillé : liste des blocs */}
                   {hasBlocks && effectiveBlocks.map((bl, i) => {
                     const cfg = BLOCK_TYPES[bl.blockType] || {};
                     const color = cfg.color || "#a89a82";
@@ -663,6 +671,8 @@ export function SessionModal({
                       </div>
                     );
                   })}
+
+                  {/* Legacy warmup/main/cooldown (séances anciennes sans blocs) */}
                   {!hasBlocks && hasContent && (
                     <div style={{ padding: "10px 14px", background: surfaceCard, border: `1px solid ${border}`, borderRadius: 10 }}>
                       {hasWarmup && <><div style={{ fontSize: 10, fontWeight: 700, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 4 }}>Échauffement</div><RichText text={session.warmup} /></>}
@@ -670,6 +680,89 @@ export function SessionModal({
                       {hasCooldown && <><div style={{ fontSize: 10, fontWeight: 700, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginTop: 12, marginBottom: 4 }}>Retour au calme</div><RichText text={session.cooldown} /></>}
                     </div>
                   )}
+
+                  {/* Notes (mode simple) — texte libre saisi à la création */}
+                  {hasSessionNotes && (
+                    <div style={{ padding: "10px 14px", background: surfaceCard, border: `1px solid ${border}`, borderRadius: 10 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6 }}>
+                        Notes de la séance
+                      </div>
+                      <div style={{ fontSize: 13, color: text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+                        {session.notes}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Description legacy */}
+                  {hasDescription && !hasSessionNotes && (
+                    <div style={{ padding: "10px 14px", background: surfaceCard, border: `1px solid ${border}`, borderRadius: 10 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6 }}>
+                        Description
+                      </div>
+                      <RichText text={session.description} />
+                    </div>
+                  )}
+
+                  {/* Contenu événement */}
+                  {hasEventContent && (
+                    <div style={{ padding: "10px 14px", background: surfaceCard, border: `1px solid ${border}`, borderRadius: 10 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6 }}>
+                        Description de l'événement
+                      </div>
+                      <div style={{ fontSize: 13, color: text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+                        {session.content}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Métriques (course, vélo, renforcement…) */}
+                  {hasMetrics && (
+                    <div style={{ padding: "10px 14px", background: surfaceCard, border: `1px solid ${border}`, borderRadius: 10 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>
+                        Métriques
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {Object.entries(session.metrics).map(([key, value]) => {
+                          if (value == null || value === "") return null;
+                          const m = METRIC_LABELS[key] || { label: key, suffix: "" };
+                          return (
+                            <div key={key} style={{
+                              background: paperDim, border: `1px solid ${border}`,
+                              borderRadius: 8, padding: "6px 10px",
+                              display: "flex", flexDirection: "column", gap: 1,
+                              minWidth: 70,
+                            }}>
+                              <span style={{ fontSize: 9, color: textLight, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                                {m.label}
+                              </span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: text }}>
+                                {value}{m.suffix ? ` ${m.suffix}` : ""}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Récap discipline / charge / durée — fallback minimal */}
+                  {!hasBlocks && !hasContent && !hasSessionNotes && !hasDescription && !hasEventContent && !hasMetrics && (() => {
+                    const disc = getDiscipline(session.discipline || "climbing");
+                    const planned = session.chargePlanned ?? (session.charge != null ? (session.charge > 10 ? Math.round(session.charge / 21.6) : session.charge) : null);
+                    return (
+                      <div style={{ padding: "12px 14px", background: surfaceCard, border: `1px dashed ${border}`, borderRadius: 10 }}>
+                        <div style={{ fontSize: 12, color: textMid, lineHeight: 1.6 }}>
+                          <strong style={{ color: text }}>{disc.label}</strong>
+                          {planned != null && <> · charge planifiée <strong style={{ color: text }}>{planned}/10</strong></>}
+                          {session.estimatedTime && <> · {session.estimatedTime} min</>}
+                          {(session.location || session.address) && <> · {session.location || session.address}</>}
+                        </div>
+                        <div style={{ fontSize: 11, color: textLight, marginTop: 6, fontStyle: "italic" }}>
+                          Aucune description ni bloc renseigné. Tu peux en ajouter via « Modifier la séance ».
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
