@@ -22,7 +22,7 @@ import { ConfirmModal } from "./ConfirmModal.jsx";
 //   - 'simple' | 'detailed' → addSession (data.weeks)
 //   - 'event'               → addQuickSession (data.quickSessions)
 
-const EVENT_COLORS = ["#c0392b", "#f97316", "#d4a843", "#2e6b3f", "#0891b2", "#2563eb", "#6d28d9", "#8a7f70"];
+const EVENT_COLORS = ["#c0392b", "#f0a060", "#e6c46a", "#2e6b3f", "#0891b2", "#2563eb", "#6d28d9", "#8a7f70"];
 
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 function todayISO() {
@@ -348,17 +348,17 @@ export function SessionComposer({
   useEffect(() => { handleSaveRef.current = handleSave; });
 
   // ── Tokens visuels (alignés avec les autres modales) ─────────────────────
-  const paper        = isDark ? "#1f2421" : "#fcf8ef";
-  const paperDim     = isDark ? "#1a1f1c" : "#f7f1e2";
-  const surfaceCard  = isDark ? "#1f2421" : "#ffffff";
-  const surfaceInput = isDark ? "#1a1f1c" : "#fcf8ef";
-  const border       = isDark ? "#2a302a" : "#e6dfd1";
-  const borderStrong = isDark ? "#3a4035" : "#d8d0bf";
-  const text         = isDark ? "#e8e4de" : "#2a2218";
-  const textMid      = isDark ? "#a4a09a" : "#5a4d3c";
-  const textLight    = isDark ? "#7a7570" : "#8a7f70";
-  const accent       = isDark ? "#c8906a" : "#8b4c20";
-  const inkPrimary   = isDark ? "#c8c0b4" : "#2a2218";
+  const paper        = isDark ? "#241b13" : "#fcf8ef";
+  const paperDim     = isDark ? "#15100b" : "#f7f1e2";
+  const surfaceCard  = isDark ? "#241b13" : "#ffffff";
+  const surfaceInput = isDark ? "#15100b" : "#fcf8ef";
+  const border       = isDark ? "#3a2e22" : "#e6dfd1";
+  const borderStrong = isDark ? "#3a2e22" : "#d8d0bf";
+  const text         = isDark ? "#f0e6d0" : "#2a2218";
+  const textMid      = isDark ? "#c4b69c" : "#5a4d3c";
+  const textLight    = isDark ? "#a89a82" : "#8a7f70";
+  const accent       = isDark ? "#e0a875" : "#8b4c20";
+  const inkPrimary   = isDark ? "#e6d8bc" : "#2a2218";
 
   const disciplineCfg = getDiscipline(discipline);
   const labelStyle = {
@@ -605,7 +605,7 @@ export function SessionComposer({
             disabled={!canSave}
             style={{
               background: canSave ? inkPrimary : border,
-              color: canSave ? (isDark ? "#1a1f1c" : "#fff") : textLight,
+              color: canSave ? (isDark ? "#15100b" : "#fff") : textLight,
               border: "none", padding: "9px 22px",
               fontSize: 13, fontWeight: 600, borderRadius: 8,
               cursor: canSave ? "pointer" : "not-allowed",

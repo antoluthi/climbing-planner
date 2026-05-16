@@ -89,7 +89,7 @@ export function YearView({ data, currentDate, onSelectMonth, isMobile, creatine,
                           style={{
                             ...styles.yearHeatmapCell,
                             background: "transparent",
-                            outline: isToday ? `1px solid ${isDark ? "#c8906a" : "#8b4c20"}` : "none",
+                            outline: isToday ? `1px solid ${isDark ? "#e0a875" : "#8b4c20"}` : "none",
                             outlineOffset: 0,
                             display: "flex",
                             alignItems: "center",

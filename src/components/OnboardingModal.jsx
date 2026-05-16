@@ -44,7 +44,7 @@ const SCREENS = [
       "Plus le score est haut, plus tu es en zone de fatigue.",
     ],
     glyph: "⚇",
-    color: "#d4a843",
+    color: "#e6c46a",
   },
   {
     key: "creatine",
@@ -63,7 +63,7 @@ const SCREENS = [
       "Tout est privé, stocké sur ton compte uniquement.",
     ],
     glyph: "◍",
-    color: "#7ab890",
+    color: "#82c894",
   },
 ];
 
@@ -83,14 +83,14 @@ export function OnboardingModal({ onComplete }) {
     return () => window.removeEventListener("keydown", h);
   }, [step, isLast, onComplete]);
 
-  const paper        = isDark ? "#1f2421" : "#fcf8ef";
-  const paperDim     = isDark ? "#1a1f1c" : "#f7f1e2";
-  const border       = isDark ? "#2a302a" : "#e6dfd1";
-  const borderStrong = isDark ? "#3a4035" : "#d8d0bf";
-  const text         = isDark ? "#e8e4de" : "#2a2218";
-  const textMid      = isDark ? "#a4a09a" : "#5a4d3c";
-  const textLight    = isDark ? "#7a7570" : "#8a7f70";
-  const accent       = isDark ? "#c8906a" : "#8b4c20";
+  const paper        = isDark ? "#241b13" : "#fcf8ef";
+  const paperDim     = isDark ? "#15100b" : "#f7f1e2";
+  const border       = isDark ? "#3a2e22" : "#e6dfd1";
+  const borderStrong = isDark ? "#3a2e22" : "#d8d0bf";
+  const text         = isDark ? "#f0e6d0" : "#2a2218";
+  const textMid      = isDark ? "#c4b69c" : "#5a4d3c";
+  const textLight    = isDark ? "#a89a82" : "#8a7f70";
+  const accent       = isDark ? "#e0a875" : "#8b4c20";
 
   return (
     <div

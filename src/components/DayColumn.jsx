@@ -45,13 +45,13 @@ function JournalButton({ logWarning, isToday, isMobile, isCompact, isDark, onOpe
   const future = logWarning?.isFuture;
   const btnStyle = warn
     ? isToday
-      ? { background: "#ef444418", border: "2px solid #ef4444", color: "#ef4444", fontWeight: 700 }
-      : { background: "#f9731618", border: "2px solid #f97316", color: "#f97316", fontWeight: 700 }
+      ? { background: "#ef444418", border: "2px solid #ef4444", color: "#f08070", fontWeight: 700 }
+      : { background: "#f9731618", border: "2px solid #f97316", color: "#f0a060", fontWeight: 700 }
     : future
-    ? { background: "transparent", border: `1px solid ${isDark ? "#1e221e" : "#e5e0d8"}`, color: isDark ? "#252a25" : "#ccc8c0", fontWeight: 400 }
+    ? { background: "transparent", border: `1px solid ${isDark ? "#2a2018" : "#e5e0d8"}`, color: isDark ? "#2e2419" : "#ccc8c0", fontWeight: 400 }
     : isToday
-    ? { background: isDark ? "#221510" : "#ecddd4", border: `1px solid ${isDark ? "#4a2a10" : "#c8a080"}`, color: isDark ? "#c8906a" : "#8b4c20", fontWeight: 600 }
-    : { background: "transparent", border: `1px solid ${isDark ? "#252a25" : "#d8d3ca"}`, color: isDark ? "#333833" : "#c0bbb2", fontWeight: 400 };
+    ? { background: isDark ? "#2a1d11" : "#ecddd4", border: `1px solid ${isDark ? "#5a3a18" : "#c8a080"}`, color: isDark ? "#e0a875" : "#8b4c20", fontWeight: 600 }
+    : { background: "transparent", border: `1px solid ${isDark ? "#2e2419" : "#d8d3ca"}`, color: isDark ? "#3a2e22" : "#c0bbb2", fontWeight: 400 };
 
   return (
     <button
@@ -275,10 +275,10 @@ export function DayColumn({
   const noteAreaStyle = {
     width: "100%",
     boxSizing: "border-box",
-    background: isDark ? "#1a1f1c" : "#e4dfd6",
-    border: `1px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
+    background: isDark ? "#15100b" : "#e4dfd6",
+    border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
     borderRadius: 4,
-    color: isDark ? "#d8d4ce" : "#2a2218",
+    color: isDark ? "#f0e6d0" : "#2a2218",
     fontSize: 10,
     fontFamily: "inherit",
     lineHeight: 1.45,
@@ -379,7 +379,7 @@ export function DayColumn({
               >
                 {gutter > 0 && <span style={{
                   fontSize: sz.hourLabel,
-                  color: isDark ? "#3a4040" : "#bcb8b0",
+                  color: isDark ? "#3a2e22" : "#bcb8b0",
                   width: gutter,
                   textAlign: "right",
                   paddingRight: isCompact ? 1 : isNarrow ? 2 : 5,
@@ -394,8 +394,8 @@ export function DayColumn({
                 <div style={{
                   flex: 1,
                   borderTop: h % 6 === 0
-                    ? `1px solid ${isDark ? "#2a302a" : "#ccc6b8"}`
-                    : `1px solid ${isDark ? "#1e221e" : "#e5e0da"}`,
+                    ? `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`
+                    : `1px solid ${isDark ? "#2a2018" : "#e5e0da"}`,
                 }} />
               </div>
             );
@@ -412,7 +412,7 @@ export function DayColumn({
                   top: i * hourHeight + hourHeight / 2,
                   left: gutter,
                   right: 0,
-                  borderTop: `1px dashed ${isDark ? "#191d19" : "#eae6e0"}`,
+                  borderTop: `1px dashed ${isDark ? "#1a1410" : "#eae6e0"}`,
                   pointerEvents: "none",
                 }}
               />
@@ -436,7 +436,7 @@ export function DayColumn({
                   alignItems: "center",
                 }}
               >
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#f08070", flexShrink: 0 }} />
                 <div style={{ flex: 1, borderTop: "1.5px solid #ef4444" }} />
               </div>
             );
@@ -470,7 +470,7 @@ export function DayColumn({
                     height,
                     background: ev.isAllDay
                       ? (isDark ? chargeColor + "15" : chargeColor + "10")
-                      : (isDark ? "#1c211d" : "#f2ede5"),
+                      : (isDark ? "#241b13" : "#f2ede5"),
                     border: `1px solid ${chargeColor}44`,
                     borderLeft: `3px solid ${chargeColor}`,
                     borderRadius: 4,
@@ -490,7 +490,7 @@ export function DayColumn({
                         {!isShort && !isNarrow && !ev.isAllDay && (
                           <span style={{
                             fontSize: sz.sessionTime,
-                            color: isDark ? "#5a7860" : "#7a9a80",
+                            color: isDark ? "#82c894" : "#a89a82",
                             fontWeight: 600, display: "block", lineHeight: 1.3,
                           }}>
                             {s.startTime}{s.endTime ? ` → ${s.endTime}` : ""}
@@ -499,7 +499,7 @@ export function DayColumn({
                         {!isNarrow && (
                           <span style={{
                             fontSize: isShort ? Math.max(sz.sessionTitle - 1, 6) : sz.sessionTitle,
-                            fontWeight: 600, color: isDark ? "#c8c4be" : "#3a3028",
+                            fontWeight: 600, color: isDark ? "#f0e6d0" : "#3a2e22",
                             display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3,
                           }}>
                             {s.title || s.name}
@@ -539,7 +539,7 @@ export function DayColumn({
 
             // QuickSession
             const qs = ev.data;
-            const accent = qs.color || "#60a5fa";
+            const accent = qs.color || "#7da7f0";
             return (
               <div
                 key={ev.key}
@@ -575,7 +575,7 @@ export function DayColumn({
                     )}
                     <span style={{
                       fontSize: sz.sessionTitle, fontWeight: 600,
-                      color: isDark ? "#c8c4be" : "#3a3028",
+                      color: isDark ? "#f0e6d0" : "#3a2e22",
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1,
                     }}>
                       {qs.name}
@@ -589,7 +589,7 @@ export function DayColumn({
       </div>
 
       {/* ── Pied : bouton ajouter ── */}
-      <div style={{ padding: isCompact ? "1px 1px 2px" : isNarrow ? "3px 2px 4px" : "4px 6px 6px", flexShrink: 0, borderTop: `1px solid ${isDark ? "#1e221e" : "#e5e0da"}` }}>
+      <div style={{ padding: isCompact ? "1px 1px 2px" : isNarrow ? "3px 2px 4px" : "4px 6px 6px", flexShrink: 0, borderTop: `1px solid ${isDark ? "#2a2018" : "#e5e0da"}` }}>
         {!isNarrow && !isCompact && (
           <div style={{ marginBottom: 4 }}>
             {noteOpen ? (
@@ -606,13 +606,13 @@ export function DayColumn({
                 onClick={() => setNoteOpen(true)}
                 style={{
                   fontSize: 10,
-                  color: isDark ? "#8a9090" : "#6b7060",
+                  color: isDark ? "#a89a82" : "#6b7060",
                   lineHeight: 1.4,
                   cursor: "text",
                   padding: "3px 5px",
                   borderRadius: 4,
-                  borderLeft: `2px solid ${isDark ? "#2e342f" : "#ccc6b8"}`,
-                  background: isDark ? "#1a1f1c55" : "#e4dfd655",
+                  borderLeft: `2px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
+                  background: isDark ? "#1a141055" : "#e4dfd655",
                   wordBreak: "break-word",
                 }}
               >
@@ -621,7 +621,7 @@ export function DayColumn({
             ) : (
               <div
                 onClick={() => setNoteOpen(true)}
-                style={{ fontSize: 9, color: isDark ? "#303530" : "#ccc8c0", cursor: "text", padding: "2px 3px", letterSpacing: "0.03em" }}
+                style={{ fontSize: 9, color: isDark ? "#3a2e22" : "#ccc8c0", cursor: "text", padding: "2px 3px", letterSpacing: "0.03em" }}
               >
                 note
               </div>

@@ -86,14 +86,14 @@ export function ActivityHeatmap({ data }) {
 
   // Color per metric
   const getColor = (day) => {
-    const empty = isDark ? "#1c2a22" : "#eaefec";
-    const future = isDark ? "#161e1a" : "#f3f5f4";
+    const empty = isDark ? "#2e2419" : "#eaefec";
+    const future = isDark ? "#1a1410" : "#f3f5f4";
     if (day.isFuture) return future;
     if (metric === "charge") {
       const v = day.charge || 0;
       if (v === 0) return empty;
       const lvls = isDark
-        ? ["#3a1e0a", "#5a3010", "#8a5020", "#c8906a", "#e8c0a0"]
+        ? ["#3a2616", "#5a3a18", "#8a5a28", "#e0a875", "#f0c896"]
         : ["#e8d8c8", "#d0a878", "#b07840", "#8b4c20", "#5c3010"];
       if (v <= 5) return lvls[0];
       if (v <= 12) return lvls[1];
@@ -105,8 +105,8 @@ export function ActivityHeatmap({ data }) {
       const v = day.avgRpe;
       if (v == null) return empty;
       const lvls = isDark
-        ? ["#3a2010", "#6b3a10", "#b45309", "#f97316", "#fbbf24"]
-        : ["#fde8c8", "#fbc87a", "#f97316", "#ea580c", "#c2410c"];
+        ? ["#3a2616", "#6b3a10", "#b86509", "#f0a060", "#e6c46a"]
+        : ["#fde8c8", "#fbc87a", "#f0a060", "#f0a060", "#f0a060"];
       if (v <= 4) return lvls[0];
       if (v <= 6) return lvls[1];
       if (v <= 7.5) return lvls[2];
@@ -117,11 +117,11 @@ export function ActivityHeatmap({ data }) {
       const v = day.hooper;
       if (v == null) return empty;
       // Hooper: low=good (green), high=bad (red)
-      if (v <= 10) return isDark ? "#14532d" : "#bbf7d0";
-      if (v <= 14) return isDark ? "#4ade80" : "#4abe80";
-      if (v <= 17) return isDark ? "#ca8a04" : "#fbbf24";
-      if (v <= 20) return isDark ? "#ea580c" : "#f97316";
-      return isDark ? "#dc2626" : "#ef4444";
+      if (v <= 10) return isDark ? "#1a2a1d" : "#bbf7d0";
+      if (v <= 14) return isDark ? "#82c894" : "#4abe80";
+      if (v <= 17) return isDark ? "#e6c46a" : "#e6c46a";
+      if (v <= 20) return isDark ? "#f0a060" : "#f0a060";
+      return isDark ? "#f08070" : "#f08070";
     }
     if (metric === "reminders") {
       // Aucun rappel actif ce jour-là → vide (rien à montrer)
@@ -147,20 +147,20 @@ export function ActivityHeatmap({ data }) {
   // Legend colors per metric
   const legendColors = {
     charge: isDark
-      ? ["#1c1612", "#3a1e0a", "#5a3010", "#8a5020", "#c8906a"]
+      ? ["#1c1612", "#3a2616", "#5a3a18", "#8a5a28", "#e0a875"]
       : ["#f0ebe2", "#e8d8c8", "#d0a878", "#b07840", "#8b4c20"],
     rpe: isDark
-      ? ["#1c2a22", "#3a2010", "#6b3a10", "#b45309", "#f97316"]
-      : ["#eaefec", "#fde8c8", "#fbc87a", "#f97316", "#ea580c"],
+      ? ["#2e2419", "#3a2616", "#6b3a10", "#b86509", "#f0a060"]
+      : ["#eaefec", "#fde8c8", "#fbc87a", "#f0a060", "#f0a060"],
     hooper: isDark
-      ? ["#1c2a22", "#14532d", "#4ade80", "#ca8a04", "#dc2626"]
-      : ["#eaefec", "#bbf7d0", "#4abe80", "#fbbf24", "#ef4444"],
+      ? ["#2e2419", "#1a2a1d", "#82c894", "#e6c46a", "#f08070"]
+      : ["#eaefec", "#bbf7d0", "#4abe80", "#e6c46a", "#f08070"],
     reminders: isDark
       ? ["#2e2419", "#82c894", "#e6c46a", "#f0a060", "#f08070"]
       : ["#eaefec", "#bbf7d0", "#fbbf24", "#f97316", "#ef4444"],
   };
 
-  const muted = isDark ? "#5a7a62" : "#8a9e90";
+  const muted = isDark ? "#a89a82" : "#8a9e90";
 
   const visibleWeeks = weeks.slice(-maxWeeks);
   // Recompute month labels for the visible slice
@@ -259,12 +259,12 @@ export function ActivityHeatmap({ data }) {
           position: "fixed",
           left: tooltip.x + 14,
           top: tooltip.y - 10,
-          background: isDark ? "#1e2820" : "#ffffff",
-          border: `1px solid ${isDark ? "#2a3a2e" : "#d4e8db"}`,
+          background: isDark ? "#241b13" : "#ffffff",
+          border: `1px solid ${isDark ? "#3a2e22" : "#d4e8db"}`,
           borderRadius: 6,
           padding: "6px 10px",
           fontSize: 11,
-          color: isDark ? "#e2ead5" : "#1a2e1f",
+          color: isDark ? "#f0e6d0" : "#1a2e1f",
           pointerEvents: "none",
           zIndex: 9999,
           boxShadow: "0 2px 8px rgba(0,0,0,0.25)",

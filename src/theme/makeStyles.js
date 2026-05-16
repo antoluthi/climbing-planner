@@ -33,16 +33,16 @@ export const Z = {
 };
 
 export const STATUS = (isDark) => ({
-  done:     { bg: isDark ? "#1c2d20" : "#e3f0e5", fg: isDark ? "#7ab890" : "#2e6b3f" },
-  adapted:  { bg: isDark ? "#2a2410" : "#fef2dc", fg: isDark ? "#d4a843" : "#b8881a" },
-  moved:    { bg: isDark ? "#2a2410" : "#fef2dc", fg: isDark ? "#d4a843" : "#b8881a" },
-  missed:   { bg: isDark ? "#2a1313" : "#fbecec", fg: isDark ? "#e87878" : "#b83030" },
+  done:     { bg: isDark ? "#1a2a1d" : "#e3f0e5", fg: isDark ? "#82c894" : "#2e6b3f" },
+  adapted:  { bg: isDark ? "#2a2010" : "#fef2dc", fg: isDark ? "#e6c46a" : "#b8881a" },
+  moved:    { bg: isDark ? "#2a2010" : "#fef2dc", fg: isDark ? "#e6c46a" : "#b8881a" },
+  missed:   { bg: isDark ? "#2a1612" : "#fbecec", fg: isDark ? "#f08070" : "#b83030" },
 });
 
 export const chargeTokenColor = (value, isDark) => {
-  if (!value || value < 4)  return { bg: isDark ? "#1c2d20" : "#e3f0e5", fg: isDark ? "#7ab890" : "#2e6b3f" };
-  if (value < 7)            return { bg: isDark ? "#2a2410" : "#fef2dc", fg: isDark ? "#d4a843" : "#b8881a" };
-  return                          { bg: isDark ? "#2a1a10" : "#fbecdc", fg: isDark ? "#c8906a" : "#b8651a" };
+  if (!value || value < 4)  return { bg: isDark ? "#1a2a1d" : "#e3f0e5", fg: isDark ? "#82c894" : "#2e6b3f" };
+  if (value < 7)            return { bg: isDark ? "#2a2010" : "#fef2dc", fg: isDark ? "#e6c46a" : "#b8881a" };
+  return                          { bg: isDark ? "#2a1d11" : "#fbecdc", fg: isDark ? "#e0a875" : "#b8651a" };
 };
 
 export function makeStyles(isDark) {
@@ -58,40 +58,40 @@ export function makeStyles(isDark) {
     sans: "'Inter', system-ui, -apple-system, sans-serif",
     mono: "'JetBrains Mono', Menlo, Consolas, monospace",
     // ── Existants ──
-    bg:              D ? "#191e1b"   : "#f0ebe2",
-    surface:         D ? "#1f2421"   : "#e8e2d8",
-    surface2:        D ? "#252b27"   : "#ddd7cc",
-    border:          D ? "#252b27"   : "#ccc6b8",
-    border2:         D ? "#2a3028"   : "#c4beb0",
-    headerGrad:      D ? "linear-gradient(180deg, #1c2220 0%, #191e1b 100%)" : "linear-gradient(180deg, #e0d9ce 0%, #eae4da 100%)",
-    text:            D ? "#e8e4de"   : "#2a2218",
-    textTitle:       D ? "#c8c0b4"   : "#3a3028",
-    textMuted:       D ? "#707870"   : "#8a7f70",
-    textDim:         D ? "#7a8480"   : "#7a7060",
-    textCard:        D ? "#b0a898"   : "#4a3f32",
-    accent:          D ? "#c8906a"   : "#8b4c20",
-    accentBg:        D ? "#2a1a10"   : "#ecddd4",
-    accentBorder:    D ? "#c8906a66" : "#8b4c2066",
-    accentFaint:     D ? "#c8906a44" : "#8b4c2044",
-    accentSolid:     D ? "#c8906a55" : "#8b4c2055",
-    btnBorder:       D ? "#2e3430"   : "#bfb9aa",
-    navColor:        D ? "#909898"   : "#7a7060",
-    gridGap:         D ? "#1f2421"   : "#d0c9bf",
-    todayBg:         D ? "#221510"   : "#ecddd4",
-    metabarBg:       D ? "#161b18"   : "#ece6dc",
-    subtleBorder:    D ? "#222927"   : "#ccc6b8",
-    modalBg:         D ? "#191e1b"   : "#ede8de",
-    overlayBg:       D ? "rgba(0,0,0,0.70)" : "rgba(0,0,0,0.45)",
-    actionColor:     D ? "#4a5450"   : "#8a7f70",
-    dashedBorder:    D ? "#2a3028"   : "#c4beb0",
-    sessionBorder:   D ? "#1e2421"   : "#d4cec4",
-    negativeBg:      D ? "#301a1a"   : "#f8d8dc",
-    negativeBorder:  D ? "#f43f5e66" : "#c0394e55",
-    negativeColor:   D ? "#f43f5e"   : "#c0394e",
-    inputBg:         D ? "#252b27"   : "#ddd7cc",
-    starEmpty:       D ? "#555"      : "#bbb",
-    badgeText:       D ? "#8a9898"   : "#5a6878",
-    dayEmpty:        D ? "#252b27"   : "#ccc7bc",
+    bg:              D ? "#1a1410"   : "#f0ebe2",
+    surface:         D ? "#241b13"   : "#e8e2d8",
+    surface2:        D ? "#2e2419"   : "#ddd7cc",
+    border:          D ? "#3a2e22"   : "#ccc6b8",
+    border2:         D ? "#463826"   : "#c4beb0",
+    headerGrad:      D ? "linear-gradient(180deg, #1f1812 0%, #1a1410 100%)" : "linear-gradient(180deg, #e0d9ce 0%, #eae4da 100%)",
+    text:            D ? "#f0e6d0"   : "#2a2218",
+    textTitle:       D ? "#e6d8bc"   : "#3a2e22",
+    textMuted:       D ? "#a89a82"   : "#8a7f70",
+    textDim:         D ? "#8a7d68"   : "#7a7060",
+    textCard:        D ? "#c4b69c"   : "#4a3f32",
+    accent:          D ? "#e0a875"   : "#8b4c20",
+    accentBg:        D ? "#2a1d11"   : "#ecddd4",
+    accentBorder:    D ? "#e0a87566" : "#8b4c2066",
+    accentFaint:     D ? "#e0a87528" : "#8b4c2044",
+    accentSolid:     D ? "#e0a87555" : "#8b4c2055",
+    btnBorder:       D ? "#3a2e22"   : "#bfb9aa",
+    navColor:        D ? "#a89a82"   : "#7a7060",
+    gridGap:         D ? "#0d0905"   : "#d0c9bf",
+    todayBg:         D ? "#2a1d11"   : "#ecddd4",
+    metabarBg:       D ? "#15100b"   : "#ece6dc",
+    subtleBorder:    D ? "#2a2018"   : "#ccc6b8",
+    modalBg:         D ? "#1c160f"   : "#ede8de",
+    overlayBg:       D ? "rgba(0,0,0,0.78)" : "rgba(0,0,0,0.45)",
+    actionColor:     D ? "#6a5d4c"   : "#8a7f70",
+    dashedBorder:    D ? "#463826"   : "#c4beb0",
+    sessionBorder:   D ? "#2a2018"   : "#d4cec4",
+    negativeBg:      D ? "#2a1612"   : "#f8d8dc",
+    negativeBorder:  D ? "#f0805a66" : "#c0394e55",
+    negativeColor:   D ? "#f0805a"   : "#c0394e",
+    inputBg:         D ? "#15100b"   : "#ddd7cc",
+    starEmpty:       D ? "#4a3d2d"   : "#bbb",
+    badgeText:       D ? "#b8a87a"   : "#5a6878",
+    dayEmpty:        D ? "#2e2419"   : "#ccc7bc",
   };
 
   return {
@@ -103,7 +103,7 @@ export function makeStyles(isDark) {
     grain: {
       position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0,
       backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E\")",
-      opacity: D ? 0.4 : 0.15,
+      opacity: D ? 0.22 : 0.15,
     },
     header: {
       display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -193,7 +193,7 @@ export function makeStyles(isDark) {
       padding: "4px 10px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit", letterSpacing: "0.06em",
     },
     authSentMsg: { fontSize: 11, color: t.accent, letterSpacing: "0.06em" },
-    authErrorMsg: { fontSize: 11, color: "#f97316", letterSpacing: "0.04em" },
+    authErrorMsg: { fontSize: 11, color: "#f0a060", letterSpacing: "0.04em" },
     headerMobileRow3: { padding: "4px 16px 10px", borderTop: `1px solid ${t.subtleBorder}` },
 
     metaBar: {
@@ -515,7 +515,7 @@ export function makeStyles(isDark) {
     sessionItemLeft: { display: "flex", alignItems: "center", gap: 10 },
     sessionTypeBadge: { fontSize: 9, padding: "2px 7px", borderRadius: 3, color: t.badgeText, letterSpacing: "0.08em", textTransform: "uppercase" },
     seanceBadgeBg: D ? "#1e3a5f" : "#c4d8ee",
-    exerciceBadgeBg: D ? "#1a2e1a" : "#c4e0c8",
+    exerciceBadgeBg: D ? "#1a2a1d" : "#c4e0c8",
     sessionItemName: { fontSize: 12, color: t.textCard },
     chargePill: { fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4 },
     emptySearch: { padding: 20, textAlign: "center", color: t.textMuted, fontSize: 12 },

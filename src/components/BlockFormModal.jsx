@@ -37,11 +37,11 @@ export function BlockFormModal({ initial, onSave, onClose }) {
   const patchSusp = (patch) => { markDirty(); _setSuspCfg(prev => ({ ...prev, ...patch })); };
 
   const cfg    = BLOCK_TYPES[blockType] || BLOCK_TYPES["Grimpe"];
-  const bg     = isDark ? "#141a16" : "#f3f7f4";
-  const surface= isDark ? "#1c2820" : "#ffffff";
-  const border = isDark ? "#263228" : "#daeade";
-  const text   = isDark ? "#d8e8d0" : "#1a2e1f";
-  const muted  = isDark ? "#6a8870" : "#6b8c72";
+  const bg     = isDark ? "#241b13" : "#f3f7f4";
+  const surface= isDark ? "#241b13" : "#ffffff";
+  const border = isDark ? "#3a2e22" : "#daeade";
+  const text   = isDark ? "#f0e6d0" : "#1a2e1f";
+  const muted  = isDark ? "#a89a82" : "#6b8c72";
 
   const handleSave = () => {
     if (!name.trim()) return;
@@ -109,7 +109,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
 
           {/* ── Config Suspension ── */}
           {blockType === "Suspension" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, background: isDark ? "#141a16" : "#f3f7f4", borderRadius: 8, padding: "14px 16px", border: `1px solid ${"#a78bfa"}44` }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, background: isDark ? "#241b13" : "#f3f7f4", borderRadius: 8, padding: "14px 16px", border: `1px solid ${"#a78bfa"}44` }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.12em", textTransform: "uppercase" }}>Paramètres de suspension</div>
 
               {/* Mode de bras + Type de support */}
@@ -188,7 +188,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input style={{ ...inputStyle, width: 80 }} type="number" step="0.5" value={suspCfg.targetWeight} onChange={e => patchSusp({ targetWeight: +e.target.value })} />
                     <span style={{ fontSize: 11, color: muted }}>kg</span>
-                    {suspCfg.supportType === "wall" && suspCfg.targetWeight < 0 && <span style={{ fontSize: 10, color: "#fbbf24" }}>délestage</span>}
+                    {suspCfg.supportType === "wall" && suspCfg.targetWeight < 0 && <span style={{ fontSize: 10, color: "#e6c46a" }}>délestage</span>}
                     {suspCfg.supportType === "wall" && suspCfg.targetWeight > 0 && <span style={{ fontSize: 10, color: "#a78bfa" }}>lest</span>}
                   </div>
                 ) : (
@@ -353,7 +353,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "12px 20px", borderTop: `1px solid ${border}`, flexShrink: 0 }}>
           <button onClick={requestClose} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, color: muted, padding: "8px 16px", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Annuler</button>
           <button onClick={handleSave} disabled={!name.trim()}
-            style={{ background: name.trim() ? cfg.color : (isDark ? "#1e2b22" : "#c8e6d4"), border: "none", borderRadius: 6, color: name.trim() ? "#fff" : muted, padding: "8px 20px", cursor: name.trim() ? "pointer" : "not-allowed", fontSize: 12, fontFamily: "inherit", fontWeight: 700 }}>
+            style={{ background: name.trim() ? cfg.color : (isDark ? "#2a2018" : "#c8e6d4"), border: "none", borderRadius: 6, color: name.trim() ? "#fff" : muted, padding: "8px 20px", cursor: name.trim() ? "pointer" : "not-allowed", fontSize: 12, fontFamily: "inherit", fontWeight: 700 }}>
             {initial ? "Enregistrer" : "Créer le bloc"}
           </button>
         </div>

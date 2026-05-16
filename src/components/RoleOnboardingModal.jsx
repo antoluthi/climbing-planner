@@ -3,12 +3,12 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 
 export function RoleOnboardingModal({ onSelect }) {
   const { isDark } = useThemeCtx();
-  const bg       = isDark ? "#181f1b" : "#f6f9f7";
-  const surface  = isDark ? "#1e2820" : "#ffffff";
-  const border   = isDark ? "#2a3a2e" : "#d4e8db";
-  const text     = isDark ? "#e2ead5" : "#1a2e1f";
-  const muted    = isDark ? "#7a9880" : "#6b8c72";
-  const accent   = isDark ? "#c8906a" : "#8b4c20";
+  const bg       = isDark ? "#1a1410" : "#f6f9f7";
+  const surface  = isDark ? "#241b13" : "#ffffff";
+  const border   = isDark ? "#3a2e22" : "#d4e8db";
+  const text     = isDark ? "#f0e6d0" : "#1a2e1f";
+  const muted    = isDark ? "#a89a82" : "#6b8c72";
+  const accent   = isDark ? "#e0a875" : "#8b4c20";
   const [selected, setSelected] = useState(null);
 
   const roles = [
@@ -61,7 +61,7 @@ export function RoleOnboardingModal({ onSelect }) {
                 onClick={() => setSelected(opt.value)}
                 style={{
                   display: "flex", alignItems: "flex-start", gap: 14,
-                  background: isSelected ? (isDark ? "#1f3327" : "#e8f5ed") : bg,
+                  background: isSelected ? (isDark ? "#3a2616" : "#e8f5ed") : bg,
                   border: `1.5px solid ${isSelected ? accent : border}`,
                   borderRadius: 9, padding: "14px 16px",
                   cursor: "pointer", textAlign: "left",
@@ -84,7 +84,7 @@ export function RoleOnboardingModal({ onSelect }) {
           onClick={() => selected !== undefined && onSelect(selected)}
           style={{
             width: "100%",
-            background: selected !== undefined ? accent : (isDark ? "#2a3a2e" : "#e0ebe3"),
+            background: selected !== undefined ? accent : (isDark ? "#3a2e22" : "#e0ebe3"),
             border: "none", borderRadius: 8,
             color: selected !== undefined ? "#fff" : muted,
             padding: "12px 20px",

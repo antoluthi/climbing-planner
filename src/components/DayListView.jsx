@@ -34,15 +34,15 @@ export function DayListView({
 }) {
   const { isDark, mesocycles } = useThemeCtx();
 
-  const paper        = isDark ? "#1f2421" : "#fcf8ef";
-  const paperDim     = isDark ? "#1a1f1c" : "#f7f1e2";
-  const surfaceCard  = isDark ? "#1f2421" : "#ffffff";
-  const border       = isDark ? "#2a302a" : "#e6dfd1";
-  const text         = isDark ? "#e8e4de" : "#2a2218";
-  const textMid      = isDark ? "#a4a09a" : "#5a4d3c";
-  const textLight    = isDark ? "#7a7570" : "#8a7f70";
-  const accent       = isDark ? "#c8906a" : "#8b4c20";
-  const inkPrimary   = isDark ? "#c8c0b4" : "#2a2218";
+  const paper        = isDark ? "#241b13" : "#fcf8ef";
+  const paperDim     = isDark ? "#15100b" : "#f7f1e2";
+  const surfaceCard  = isDark ? "#241b13" : "#ffffff";
+  const border       = isDark ? "#3a2e22" : "#e6dfd1";
+  const text         = isDark ? "#f0e6d0" : "#2a2218";
+  const textMid      = isDark ? "#c4b69c" : "#5a4d3c";
+  const textLight    = isDark ? "#a89a82" : "#8a7f70";
+  const accent       = isDark ? "#e0a875" : "#8b4c20";
+  const inkPrimary   = isDark ? "#e6d8bc" : "#2a2218";
 
   const day = addDays(monday, dayIndex);
   const dayLabelFull = day.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
@@ -73,8 +73,8 @@ export function DayListView({
   })();
 
   const journalColors = (() => {
-    if (journalState === "warn")     return { bg: isDark ? "#2a1808" : "#fbecdc", border: isDark ? "#5a3a10" : "#f0c890", fg: isDark ? "#fbbf24" : "#8a4f10" };
-    if (journalState === "complete") return { bg: isDark ? "#1c2d20" : "#e7f2e0", border: isDark ? "#3a5a3a" : "#a8d0a8", fg: isDark ? "#7ab890" : "#2e6b3f" };
+    if (journalState === "warn")     return { bg: isDark ? "#2a1612" : "#fbecdc", border: isDark ? "#5a3a18" : "#f0c890", fg: isDark ? "#e6c46a" : "#8a4f10" };
+    if (journalState === "complete") return { bg: isDark ? "#1a2a1d" : "#e7f2e0", border: isDark ? "#5a3a18" : "#a8d0a8", fg: isDark ? "#82c894" : "#2e6b3f" };
     return { bg: surfaceCard, border: border, fg: accent };
   })();
 

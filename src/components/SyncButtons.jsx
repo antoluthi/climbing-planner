@@ -40,8 +40,8 @@ export function SyncButtons({ data, onImport, compact, syncStatus, session, onUp
     : syncStatus === "saved" ? "✓"
     : syncStatus === "offline" ? "—"
     : null;
-  const syncColor = syncStatus === "saved" ? "#c8906a"
-    : syncStatus === "offline" ? "#f97316"
+  const syncColor = syncStatus === "saved" ? "#e0a875"
+    : syncStatus === "offline" ? "#f0a060"
     : "#555";
 
   return (
@@ -54,12 +54,12 @@ export function SyncButtons({ data, onImport, compact, syncStatus, session, onUp
         }>{syncIcon}</span>
       )}
       {session && onUpload && (
-        <button style={{ ...btnStyle, color: "#c8906a" }} onClick={onUpload} title="Envoyer mes données vers le cloud (écraser)">
+        <button style={{ ...btnStyle, color: "#e0a875" }} onClick={onUpload} title="Envoyer mes données vers le cloud (écraser)">
           ↑
         </button>
       )}
       {session && onPull && (
-        <button style={{ ...btnStyle, color: "#60a5fa" }} onClick={onPull} title="Charger les données depuis le cloud (écraser local)">
+        <button style={{ ...btnStyle, color: "#7da7f0" }} onClick={onPull} title="Charger les données depuis le cloud (écraser local)">
           ↓
         </button>
       )}

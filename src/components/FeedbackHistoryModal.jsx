@@ -33,12 +33,12 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
     load();
   }, [type, id, name]);
 
-  const surface = isDark ? "#1c2820" : "#ffffff";
-  const bg      = isDark ? "#141a16" : "#f3f7f4";
-  const border  = isDark ? "#263228" : "#daeade";
-  const text    = isDark ? "#d8e8d0" : "#1a2e1f";
-  const muted   = isDark ? "#6a8870" : "#6b8c72";
-  const accent  = isDark ? "#c8906a" : "#8b4c20";
+  const surface = isDark ? "#241b13" : "#ffffff";
+  const bg      = isDark ? "#241b13" : "#f3f7f4";
+  const border  = isDark ? "#3a2e22" : "#daeade";
+  const text    = isDark ? "#f0e6d0" : "#1a2e1f";
+  const muted   = isDark ? "#a89a82" : "#6b8c72";
+  const accent  = isDark ? "#e0a875" : "#8b4c20";
 
   const fmtDate = (ds) => {
     if (!ds) return "";
@@ -105,7 +105,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
             </div>
             <ResponsiveContainer width="100%" height={140}>
               <LineChart data={suspChartData.points} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#263228" : "#daeade"} />
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#3a2e22" : "#daeade"} />
                 <XAxis dataKey="date" tick={{ fontSize: 9, fill: muted }} />
                 <YAxis tick={{ fontSize: 9, fill: muted }} unit="kg" />
                 <ReferenceLine y={0} stroke={muted} strokeDasharray="2 2" />
@@ -138,7 +138,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
           {feedbacks === null ? (
             <div style={{ padding: "40px 0", textAlign: "center", color: muted, fontSize: 12 }}>Chargement…</div>
           ) : error ? (
-            <div style={{ padding: "20px 0", textAlign: "center", color: isDark ? "#f87171" : "#dc2626", fontSize: 12 }}>{error}</div>
+            <div style={{ padding: "20px 0", textAlign: "center", color: isDark ? "#f08070" : "#f08070", fontSize: 12 }}>{error}</div>
           ) : feedbacks.length === 0 ? (
             <div style={{ padding: "48px 20px", textAlign: "center", color: muted }}>
               <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.4 }}>—</div>
@@ -167,7 +167,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                         </div>
                       </div>
                       {fb.done !== null && fb.done !== undefined && (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 4, background: fb.done ? "#4ade8020" : "#f8717120", color: fb.done ? "#4ade80" : "#f87171", border: `1px solid ${fb.done ? "#4ade8044" : "#f8717144"}` }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 4, background: fb.done ? "#4ade8020" : "#f8717120", color: fb.done ? "#82c894" : "#f08070", border: `1px solid ${fb.done ? "#4ade8044" : "#f8717144"}` }}>
                           {fb.done ? "✓ Réalisée" : "✗ Non réalisée"}
                         </span>
                       )}
@@ -187,7 +187,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                           {fb.quality != null && (
                             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                               <span style={{ fontSize: 10, color: muted }}>Qualité</span>
-                              <span style={{ fontSize: 12, color: "#fbbf24", letterSpacing: 1 }}>{"★".repeat(fb.quality)}{"☆".repeat(5 - fb.quality)}</span>
+                              <span style={{ fontSize: 12, color: "#e6c46a", letterSpacing: 1 }}>{"★".repeat(fb.quality)}{"☆".repeat(5 - fb.quality)}</span>
                             </div>
                           )}
                         </div>
@@ -225,7 +225,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           {/* Données de suspension */}
                           {blockFb.suspensionData && (
-                            <div style={{ background: isDark ? "#1a1f1b" : "#f0ede8", borderRadius: 6, padding: "8px 10px" }}>
+                            <div style={{ background: isDark ? "#1a1410" : "#f0ede8", borderRadius: 6, padding: "8px 10px" }}>
                               <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", marginBottom: 4 }}>Poids réel</div>
                               {blockFb.suspensionData.actualWeight != null ? (
                                 <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>

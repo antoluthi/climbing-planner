@@ -165,16 +165,16 @@ export function TemplateEditorModal({
   };
 
   // ── Styles ──
-  const surface = isDark ? "#1c2820" : "#ffffff";
-  const bg2     = isDark ? "#141a16" : "#f3f7f4";
-  const border  = isDark ? "#263228" : "#daeade";
-  const text    = isDark ? "#d8e8d0" : "#1a2e1f";
-  const muted   = isDark ? "#6a8870" : "#6b8c72";
-  const accent  = isDark ? "#c8906a" : "#8b4c20";
+  const surface = isDark ? "#241b13" : "#ffffff";
+  const bg2     = isDark ? "#241b13" : "#f3f7f4";
+  const border  = isDark ? "#3a2e22" : "#daeade";
+  const text    = isDark ? "#f0e6d0" : "#1a2e1f";
+  const muted   = isDark ? "#a89a82" : "#6b8c72";
+  const accent  = isDark ? "#e0a875" : "#8b4c20";
 
   const inputBase = { background: bg2, border: `1px solid ${border}`, borderRadius: 6, padding: "7px 11px", color: text, fontSize: 12, fontFamily: "inherit", outline: "none" };
   const labelStyle = { fontSize: 9, color: muted, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 2 };
-  const sectionStyle = { padding: "10px 12px", background: isDark ? "#141918" : "#f5f0e8", borderRadius: 8, border: `1px solid ${isDark ? "#222927" : "#ccc6b8"}` };
+  const sectionStyle = { padding: "10px 12px", background: isDark ? "#1a1410" : "#f5f0e8", borderRadius: 8, border: `1px solid ${isDark ? "#2a2018" : "#ccc6b8"}` };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
@@ -285,7 +285,7 @@ export function TemplateEditorModal({
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <span style={labelStyle}>Charge ⚡</span>
                   <button onClick={() => setCalcOpen(o => !o)}
-                    style={{ fontSize: 9, background: isDark ? "#1a2018" : "#e8e0d4", border: `1px solid ${border}`, borderRadius: 4, color: accent, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                    style={{ fontSize: 9, background: isDark ? "#241b13" : "#e8e0d4", border: `1px solid ${border}`, borderRadius: 4, color: accent, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}>
                     {calcOpen ? "Fermer calc." : "Calculateur"}
                   </button>
                 </div>
@@ -303,7 +303,7 @@ export function TemplateEditorModal({
                   const volLabel = VOLUME_ZONES[volZone - 1].label;
                   const computed = nbMouvements ? volZone * calcZone * calcComplexity : null;
                   return (
-                    <div style={{ marginTop: 8, padding: 8, background: isDark ? "#0e120f" : "#f0ece4", borderRadius: 6, border: `1px solid ${border}` }}>
+                    <div style={{ marginTop: 8, padding: 8, background: isDark ? "#100c08" : "#f0ece4", borderRadius: 6, border: `1px solid ${border}` }}>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <div style={{ flex: "1 1 80px" }}>
                           <div style={labelStyle}>Nb mouvements</div>
@@ -345,7 +345,7 @@ export function TemplateEditorModal({
                 <div style={{ display: "flex", gap: 2, marginBottom: 6 }}>
                   {["warmup", "main", "cooldown"].map(s => (
                     <button key={s} onClick={() => setSection(s)}
-                      style={{ flex: 1, padding: "6px 0", border: "none", borderRadius: "6px 6px 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: section === s ? 700 : 400, background: section === s ? (isDark ? "#1a2018" : "#e8e0d4") : "transparent", color: section === s ? accent : muted }}>
+                      style={{ flex: 1, padding: "6px 0", border: "none", borderRadius: "6px 6px 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: section === s ? 700 : 400, background: section === s ? (isDark ? "#241b13" : "#e8e0d4") : "transparent", color: section === s ? accent : muted }}>
                       {sectionLabels[s]}
                     </button>
                   ))}

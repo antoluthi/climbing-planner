@@ -16,13 +16,13 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
   const [blockForm,       setBlockForm]       = useState(null); // null | { initial? }
   const [feedbackHistory, setFeedbackHistory] = useState(null); // null | { type, id, name }
 
-  const bg      = isDark ? "#141a16" : "#f3f7f4";
-  const surface = isDark ? "#1a2320" : "#ffffff";
-  const border  = isDark ? "#263228" : "#daeade";
-  const text    = isDark ? "#d8e8d0" : "#1a2e1f";
-  const muted   = isDark ? "#6a8870" : "#6b8c72";
-  const accent  = isDark ? "#c8906a" : "#8b4c20";
-  const danger  = isDark ? "#f87171" : "#dc2626";
+  const bg      = isDark ? "#241b13" : "#f3f7f4";
+  const surface = isDark ? "#241b13" : "#ffffff";
+  const border  = isDark ? "#3a2e22" : "#daeade";
+  const text    = isDark ? "#f0e6d0" : "#1a2e1f";
+  const muted   = isDark ? "#a89a82" : "#6b8c72";
+  const accent  = isDark ? "#e0a875" : "#8b4c20";
+  const danger  = isDark ? "#f08070" : "#f08070";
 
   // ── Shared item row ──
   const ItemActions = ({ id, onEdit: doEdit, onDel, onHistory }) => confirmId === id ? (
@@ -80,7 +80,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
               style={{
                 flex: 1, padding: "8px 0", border: "none", borderRadius: 6, cursor: "pointer",
                 fontFamily: "inherit", fontSize: 12, fontWeight: 600,
-                background: subTab === key ? (isDark ? "#263228" : "#d4e8db") : "none",
+                background: subTab === key ? (isDark ? "#3a2e22" : "#d4e8db") : "none",
                 color: subTab === key ? accent : muted,
               }}
             >{label}</button>
@@ -124,7 +124,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
                   style={{
                     padding: "5px 10px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit",
                     fontWeight: filter === f ? 600 : 400,
-                    background: filter === f ? (isDark ? "#263228" : "#d4e8db") : "none",
+                    background: filter === f ? (isDark ? "#3a2e22" : "#d4e8db") : "none",
                     border: `1px solid ${filter === f ? accent + "88" : border}`,
                     color: filter === f ? accent : muted,
                   }}
@@ -140,7 +140,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
                   style={{
                     padding: "4px 9px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit",
                     fontWeight: sort === key ? 600 : 400,
-                    background: sort === key ? (isDark ? "#263228" : "#d4e8db") : "none",
+                    background: sort === key ? (isDark ? "#3a2e22" : "#d4e8db") : "none",
                     border: `1px solid ${sort === key ? accent + "88" : border}`,
                     color: sort === key ? accent : muted,
                   }}
@@ -205,7 +205,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {blist.map(b => (
-                      <div key={b.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${cfg.color || "#888"}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                      <div key={b.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${cfg.color || "#a89a82"}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</div>
                           <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10, flexWrap: "wrap" }}>

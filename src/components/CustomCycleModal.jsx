@@ -35,7 +35,7 @@ export function CustomCycleModal({ initial, onSave, onClose }) {
 
   const inputStyle = { ...styles.customFormInput, width: "100%", boxSizing: "border-box" };
   const fieldStyle = { ...styles.customFormField, flex: 1 };
-  const labelColor = isDark ? "#8a9090" : "#6b7060";
+  const labelColor = isDark ? "#a89a82" : "#6b7060";
 
   return (
     <div style={styles.confirmOverlay}>
