@@ -4,7 +4,7 @@ import { localDateStr } from "../lib/helpers.js";
 
 // ─── NOTES JOURNALIÈRES ──────────────────────────────────────────────────────
 
-export function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine }) {
+export function DailyNotesSection({ notes, onSave }) {
   const { styles, isDark } = useThemeCtx();
   const today = localDateStr(new Date());
   const [text, setText] = useState(notes[today] || "");
@@ -53,18 +53,8 @@ export function DailyNotesSection({ notes, onSave, creatine, onToggleCreatine })
         onChange={e => setText(e.target.value)}
         onBlur={handleBlur}
       />
-      <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer", userSelect: "none" }}>
-          <input
-            type="checkbox"
-            checked={!!creatine?.[today]}
-            onChange={() => onToggleCreatine?.(today)}
-            style={{ cursor: "pointer", width: 14, height: 14, accentColor: isDark ? "#c8906a" : "#8b4c20" }}
-          />
-          <span style={{ fontSize: 12, color: isDark ? "#9ca3af" : "#6b7280" }}>
-            Créatine prise
-            {creatine?.[today] && <span style={{ marginLeft: 6, fontSize: 10, color: isDark ? "#c8906a" : "#8b4c20" }}>▲</span>}
-          </span>
-        </label>
+      {/* La case "Créatine" a été remplacée par le système de rappels
+          journaliers configurables (voir Cycles → Rappels journaliers). */}
       {recent.length > 0 && (
         <div style={{ marginTop: 10 }}>
           {recent.map(([d, t]) => (

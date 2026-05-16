@@ -4,10 +4,24 @@ import { addDays } from "../lib/helpers.js";
 import { CyclesTimeline } from "./CyclesTimeline.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { CustomCycleModal } from "./CustomCycleModal.jsx";
+import { ReminderModal } from "./ReminderModal.jsx";
+import {
+  getReminderCompletionRate,
+  formatRecurrence,
+  DAY_NAMES_SHORT,
+} from "../lib/reminders.js";
 
-export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAddMicro, onUpdateMicro, onDeleteMicro, customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle, locked, onSetLocked, canEdit, objectives }) {
+export function CyclesView({
+  mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso,
+  onAddMicro, onUpdateMicro, onDeleteMicro,
+  customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle,
+  locked, onSetLocked, canEdit, objectives,
+  reminders = [], reminderState = {},
+  onAddReminder, onUpdateReminder, onDeleteReminder,
+}) {
   const { styles, isDark } = useThemeCtx();
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [editingReminder, setEditingReminder] = useState(null); // null | {} | reminder
   const [showCustomCycleForm, setShowCustomCycleForm] = useState(false);
   const [editingCustomCycle, setEditingCustomCycle] = useState(null);
 
@@ -177,6 +191,55 @@ export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, 
         })}
       </div>
 
+      {/* ── Rappels journaliers ── */}
+      <div style={styles.customCyclesSection}>
+        <div style={styles.customCyclesSectionHeader}>
+          <div>
+            <div style={styles.customCyclesSectionTitle}>Rappels journaliers</div>
+            <div style={{ fontSize: 11, color: isDark ? "#8a9090" : "#8a7f70", marginTop: 2, fontStyle: "italic" }}>
+              Affichés dans le journal du jour quand applicables.
+            </div>
+          </div>
+          {canEdit && (
+            <button
+              style={styles.cycleAddMesoBtn}
+              onClick={() => setEditingReminder({})}
+            >＋ Nouveau rappel</button>
+          )}
+        </div>
+
+        {reminders.length === 0 && (
+          <div style={{ color: isDark ? "#5a6060" : "#9a9890", fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 4 }}>
+            Aucun rappel. Ex : créatine, étirements, vitamine D…
+          </div>
+        )}
+
+        {reminders.map(rem => (
+          <ReminderCard
+            key={rem.id}
+            reminder={rem}
+            completionRate={getReminderCompletionRate(rem, reminderState, new Date())}
+            isDark={isDark}
+            styles={styles}
+            disabled={!canEdit}
+            onClick={() => canEdit && setEditingReminder(rem)}
+          />
+        ))}
+      </div>
+
+      {editingReminder && (
+        <ReminderModal
+          reminder={editingReminder.id ? editingReminder : null}
+          onSave={(r) => {
+            if (editingReminder.id) onUpdateReminder?.(r);
+            else onAddReminder?.(r);
+            setEditingReminder(null);
+          }}
+          onDelete={onDeleteReminder ? (id) => { onDeleteReminder(id); setEditingReminder(null); } : undefined}
+          onClose={() => setEditingReminder(null)}
+        />
+      )}
+
       {pendingDelete && (
         <ConfirmModal
           title={
@@ -214,5 +277,92 @@ export function CyclesView({ mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, 
         </button>
       )}
     </div>
+  );
+}
+
+// ─── ReminderCard ────────────────────────────────────────────────────────────
+function ReminderCard({ reminder, completionRate, isDark, styles, disabled, onClick }) {
+  const text     = isDark ? "#e8e4de" : "#2a2218";
+  const textMid  = isDark ? "#a4a09a" : "#5a4d3c";
+  const textLight= isDark ? "#7a7570" : "#8a7f70";
+  const border   = isDark ? "#2a302a" : "#e6dfd1";
+  const accent   = isDark ? "#c8906a" : "#8b4c20";
+  const surface  = isDark ? "#1f2421" : "#ffffff";
+  const surface2 = isDark ? "#222a23" : "#f0ebde";
+
+  const isDaily = reminder.recurrence?.kind !== "weekdays";
+  const activeDays = isDaily ? [0, 1, 2, 3, 4, 5, 6] : (reminder.recurrence?.days || []);
+  const pct = Math.round((completionRate || 0) * 100);
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: "flex", alignItems: "center", gap: 14,
+        background: surface,
+        border: `1px solid ${border}`,
+        borderRadius: 10,
+        padding: "10px 14px",
+        marginBottom: 6,
+        cursor: disabled ? "default" : "pointer",
+        fontFamily: "inherit",
+        textAlign: "left", width: "100%",
+        transition: "border-color 0.12s, transform 0.12s",
+      }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.borderColor = accent + "88"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = border; }}
+    >
+      <div style={{ width: 6, height: 44, borderRadius: 3, background: reminder.color, flexShrink: 0 }} />
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: text, lineHeight: 1.2 }}>
+          {reminder.name}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+          <div style={{ display: "flex", gap: 2 }}>
+            {[1, 2, 3, 4, 5, 6, 0].map(d => {
+              const active = activeDays.includes(d);
+              return (
+                <span
+                  key={d}
+                  style={{
+                    width: 14, height: 14, borderRadius: 3,
+                    background: active ? reminder.color + (isDark ? "" : "cc") : surface2,
+                    color: active ? (isDark ? "#1a1f1c" : "#fff") : textLight,
+                    fontSize: 8, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >{DAY_NAMES_SHORT[d]}</span>
+              );
+            })}
+          </div>
+          <span style={{ fontSize: 11, color: textMid }}>{formatRecurrence(reminder.recurrence)}</span>
+        </div>
+        {(reminder.startDate || reminder.endDate) && (
+          <div style={{ fontSize: 10, color: textLight, marginTop: 3 }}>
+            {reminder.startDate ? `Du ${reminder.startDate}` : "Sans début"}
+            {reminder.endDate   ? ` au ${reminder.endDate}` : reminder.startDate ? " · sans fin" : ""}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
+        <span style={{
+          fontFamily: "'Newsreader', Georgia, serif",
+          fontSize: 17, fontWeight: 700, color: reminder.color,
+          lineHeight: 1,
+        }}>
+          {pct}%
+        </span>
+        <span style={{
+          fontSize: 9, fontWeight: 600, color: textLight,
+          letterSpacing: "0.06em", textTransform: "uppercase",
+          marginTop: 4,
+        }}>
+          30 derniers j.
+        </span>
+      </div>
+    </button>
   );
 }

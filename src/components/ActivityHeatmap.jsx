@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getMondayOf, addDays, localDateStr } from "../lib/helpers.js";
+import {
+  getActiveRemindersForDate,
+  isReminderCheckedOn,
+  countMissedRemindersOn,
+} from "../lib/reminders.js";
 
 function hooperLabel(total) {
   if (total <= 10) return "Bien récupéré";
@@ -14,7 +19,7 @@ function hooperLabel(total) {
 
 export function ActivityHeatmap({ data }) {
   const { styles, isDark } = useThemeCtx();
-  const [metric, setMetric] = useState("charge"); // "charge" | "rpe" | "hooper"
+  const [metric, setMetric] = useState("charge"); // "charge" | "rpe" | "hooper" | "reminders"
   const [tooltip, setTooltip] = useState(null);
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -54,12 +59,28 @@ export function ActivityHeatmap({ data }) {
   const startMonday = getMondayOf(addDays(endMonday, -52 * 7));
   const WEEKS = 53;
 
+  const reminders = data.reminders || [];
+  const reminderState = data.reminderState || {};
+
   const weeks = Array.from({ length: WEEKS }, (_, w) => {
     return Array.from({ length: 7 }, (_, d) => {
       const date = addDays(startMonday, w * 7 + d);
       const dateStr = localDateStr(date);
       const entry = dayData[dateStr] || { charge: 0, avgRpe: null, sessionCount: 0, hooper: null };
-      return { date, dateStr, isFuture: date > today, ...entry };
+      // Rappels du jour (actifs ce jour-là)
+      const active = getActiveRemindersForDate(reminders, date);
+      const remindersActive = active.length;
+      const remindersMissed = active.filter(r => !isReminderCheckedOn(reminderState, r.id, dateStr)).length;
+      const remindersDetail = active.map(r => ({
+        id: r.id, name: r.name, color: r.color,
+        checked: isReminderCheckedOn(reminderState, r.id, dateStr),
+      }));
+      return {
+        date, dateStr,
+        isFuture: date > today,
+        remindersActive, remindersMissed, remindersDetail,
+        ...entry,
+      };
     });
   });
 
@@ -102,6 +123,15 @@ export function ActivityHeatmap({ data }) {
       if (v <= 20) return isDark ? "#ea580c" : "#f97316";
       return isDark ? "#dc2626" : "#ef4444";
     }
+    if (metric === "reminders") {
+      // Aucun rappel actif ce jour-là → vide (rien à montrer)
+      if (day.remindersActive === 0) return empty;
+      const m = day.remindersMissed;
+      if (m === 0) return isDark ? "#82c894" : "#bbf7d0";  // tout coché → vert
+      if (m === 1) return isDark ? "#e6c46a" : "#fbbf24";  // 1 manqué → ambre
+      if (m === 2) return isDark ? "#f0a060" : "#f97316";  // 2 manqués → orange
+      return isDark ? "#f08070" : "#ef4444";               // 3+ → corail
+    }
     return empty;
   };
 
@@ -125,6 +155,9 @@ export function ActivityHeatmap({ data }) {
     hooper: isDark
       ? ["#1c2a22", "#14532d", "#4ade80", "#ca8a04", "#dc2626"]
       : ["#eaefec", "#bbf7d0", "#4abe80", "#fbbf24", "#ef4444"],
+    reminders: isDark
+      ? ["#2e2419", "#82c894", "#e6c46a", "#f0a060", "#f08070"]
+      : ["#eaefec", "#bbf7d0", "#fbbf24", "#f97316", "#ef4444"],
   };
 
   const muted = isDark ? "#5a7a62" : "#8a9e90";
@@ -147,7 +180,7 @@ export function ActivityHeatmap({ data }) {
       <div style={styles.dashSectionTitle}>Activité</div>
       {/* Metric selector — own row, below title */}
       <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-        {[["charge", "Charge"], ["rpe", "RPE"], ["hooper", "Hooper"]].map(([k, l]) => (
+        {[["charge", "Charge"], ["rpe", "RPE"], ["hooper", "Hooper"], ["reminders", "Rappels"]].map(([k, l]) => (
           <button key={k} onClick={() => setMetric(k)}
             style={{ ...styles.viewToggleBtn, ...(metric === k ? styles.viewToggleBtnActive : {}), padding: "3px 9px", fontSize: 10 }}>
             {l}
@@ -235,7 +268,8 @@ export function ActivityHeatmap({ data }) {
           pointerEvents: "none",
           zIndex: 9999,
           boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-          whiteSpace: "nowrap",
+          whiteSpace: metric === "reminders" ? "normal" : "nowrap",
+          maxWidth: metric === "reminders" ? 220 : undefined,
         }}>
           <div style={{ fontWeight: 600, marginBottom: 2 }}>
             {tooltip.day.date.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
@@ -250,6 +284,30 @@ export function ActivityHeatmap({ data }) {
           )}
           {metric === "hooper" && (
             <div>Hooper : {tooltip.day.hooper != null ? `${tooltip.day.hooper} — ${hooperLabel(tooltip.day.hooper)}` : <span style={{ color: muted }}>aucune donnée</span>}</div>
+          )}
+          {metric === "reminders" && (
+            <div>
+              {tooltip.day.remindersActive === 0 ? (
+                <span style={{ color: muted }}>aucun rappel actif</span>
+              ) : (
+                <>
+                  <div>
+                    {tooltip.day.remindersActive} rappel{tooltip.day.remindersActive > 1 ? "s" : ""} actif{tooltip.day.remindersActive > 1 ? "s" : ""}
+                    {tooltip.day.remindersMissed > 0 && <> · {tooltip.day.remindersMissed} manqué{tooltip.day.remindersMissed > 1 ? "s" : ""}</>}
+                  </div>
+                  <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+                    {tooltip.day.remindersDetail.map(r => (
+                      <div key={r.id} style={{ fontSize: 10 }}>
+                        <span style={{ color: r.checked ? "#82c894" : "#f08070", marginRight: 4 }}>
+                          {r.checked ? "✓" : "✗"}
+                        </span>
+                        {r.name}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}
