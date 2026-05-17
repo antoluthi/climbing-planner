@@ -56,13 +56,15 @@ export function migrateWeekKeys(data) {
 }
 
 export function getDaySessions(data, date) {
+  const dateStr = localDateStr(date);
   const monday = getMondayOf(date);
   const wKey = weekKey(monday);
-  const ws = data.weeks[wKey];
-  if (!ws) return [];
+  const ws = data.weeks?.[wKey];
   const day = date.getDay();
   const idx = day === 0 ? 6 : day - 1;
-  return ws[idx] || [];
+  const weekSessions = ws?.[idx] || [];
+  const quickSessions = (data.quickSessions || []).filter(s => s.startDate === dateStr);
+  return [...weekSessions, ...quickSessions];
 }
 
 export function getDayCharge(data, date) {
