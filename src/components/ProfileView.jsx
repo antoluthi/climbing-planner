@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { AuthPanel } from "./AuthPanel.jsx";
 import { CoachAthletesSection } from "./CoachAthletesSection.jsx";
@@ -21,6 +21,30 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
   const [editName, setEditName] = useState(false);
   const [firstName, setFirstName] = useState(profile.firstName || "");
   const [lastName, setLastName] = useState(profile.lastName || "");
+  const [isPublic, setIsPublic] = useState(null); // null = loading
+  const [savingPublic, setSavingPublic] = useState(false);
+
+  useEffect(() => {
+    if (!supabase || !session?.user?.id) return;
+    supabase
+      .from("climbing_plans")
+      .select("is_public")
+      .eq("user_id", session.user.id)
+      .single()
+      .then(({ data: row }) => setIsPublic(row?.is_public ?? false));
+  }, [session?.user?.id]);
+
+  const togglePublic = async () => {
+    if (!supabase || !session?.user?.id || savingPublic) return;
+    const next = !isPublic;
+    setIsPublic(next);
+    setSavingPublic(true);
+    await supabase
+      .from("climbing_plans")
+      .update({ is_public: next })
+      .eq("user_id", session.user.id);
+    setSavingPublic(false);
+  };
   const importRef = useRef(null);
 
   // Photo : nouveau modèle = profile.avatarUrl (URL Supabase Storage).
@@ -290,6 +314,45 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
         </div>
       </div>
 
+
+      {/* ── Confidentialité ── */}
+      {session && (
+        <div style={styles.profileSection}>
+          <div style={styles.profileSectionTitle}>Confidentialité</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 12, color: textColor, fontWeight: 500 }}>Planning public</div>
+              <div style={{ fontSize: 11, color: mutedColor, marginTop: 3, maxWidth: 240, lineHeight: 1.4 }}>
+                Permet à n'importe qui de voir ton planning depuis l'écran de connexion, sans compte.
+              </div>
+            </div>
+            {/* Toggle slider */}
+            <button
+              onClick={togglePublic}
+              disabled={isPublic === null || savingPublic}
+              title={isPublic ? "Désactiver le partage" : "Activer le partage"}
+              style={{
+                flexShrink: 0,
+                width: 44, height: 24, borderRadius: 12, border: "none",
+                background: isPublic ? accent : (isDark ? "#2a2018" : "#ccc6ba"),
+                position: "relative", cursor: isPublic === null ? "default" : "pointer",
+                transition: "background 0.25s",
+                opacity: isPublic === null ? 0.4 : 1,
+                padding: 0,
+              }}
+            >
+              <div style={{
+                position: "absolute",
+                top: 3, left: isPublic ? 23 : 3,
+                width: 18, height: 18, borderRadius: "50%",
+                background: "#fff",
+                transition: "left 0.25s",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+              }} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Données ── */}
       <div style={styles.profileSection}>
