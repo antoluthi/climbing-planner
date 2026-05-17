@@ -4,6 +4,7 @@ import { AuthPanel } from "./AuthPanel.jsx";
 import { CoachAthletesSection } from "./CoachAthletesSection.jsx";
 import { PhotoCropModal } from "./PhotoCropModal.jsx";
 import { CalendarSyncSection } from "./CalendarSyncSection.jsx";
+import { DayNightToggle } from "./DayNightToggle.jsx";
 import supabase from "../lib/supabase.js";
 import { uploadAvatar, deleteAvatar } from "../lib/avatar-storage.js";
 import { toast } from "../lib/toast.js";
@@ -254,12 +255,13 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
         <div style={styles.profileSectionTitle}>Apparence</div>
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
           <span style={{ fontSize: 12, color: textColor }}>Thème</span>
-          <button
-            onClick={toggleTheme}
-            style={{ background: "none", border: `1px solid ${btnBorder}`, color: mutedColor, padding: "6px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", letterSpacing: "0.06em" }}
-          >
-            {isDark ? "Mode clair" : "Mode sombre"}
-          </button>
+          <DayNightToggle
+            isDark={isDark}
+            onToggle={toggleTheme}
+            size={20}
+            style={{ border: `1px solid ${btnBorder}`, borderRadius: 6 }}
+          />
+          <span style={{ fontSize: 11, color: mutedColor }}>{isDark ? "Mode clair" : "Mode sombre"}</span>
         </div>
         {/* Timeline range */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
