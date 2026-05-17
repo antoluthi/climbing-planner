@@ -1,6 +1,6 @@
 export function DayNightToggle({ isDark, onToggle, size = 22, style = {} }) {
-  const sunColor = "#f5a623";
-  const moonColor = isDark ? "#c8d8f0" : "#8ba8cc";
+  const sunColor = isDark ? "#e0a875" : "#8b4c20";
+  const moonColor = isDark ? "#e0a875" : "#8b4c20";
 
   const rays = [0, 45, 90, 135, 180, 225, 270, 315].map((angle) => {
     const rad = (angle * Math.PI) / 180;
