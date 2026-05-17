@@ -106,7 +106,7 @@ export function DayColumn({
   dateISO,
 }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
-  const totalCharge = sessions.reduce((acc, s) => acc + s.charge, 0);
+  const totalCharge = sessions.reduce((acc, s) => acc + (s.charge ?? 0), 0);
 
   // Dynamic sizing based on column width
   const isCompact = colWidth && colWidth < 80;

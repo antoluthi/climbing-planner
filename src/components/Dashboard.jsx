@@ -34,8 +34,11 @@ function hooperColor(total, isDark) {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
+function sessionCharge(s) { return s.charge ?? 0; }
+
 function getChartData(data, range, refDate) {
   const today = refDate || new Date();
+  const quickSessions = data.quickSessions || [];
 
   if (range === "jour") {
     const monday = getMondayOf(today);
@@ -43,19 +46,21 @@ function getChartData(data, range, refDate) {
     const days = data.weeks[key] || [];
     const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
     return Array.from({ length: 7 }, (_, i) => {
-      const daySessions = (days[i] || []).filter(Boolean);
-      const charge = daySessions.reduce((s, se) => s + se.charge, 0);
+      const d = addDays(monday, i);
+      const dStr = localDateStr(d);
+      const weekDay = (days[i] || []).filter(Boolean);
+      const quick = quickSessions.filter(s => s.startDate === dStr);
+      const daySessions = [...weekDay, ...quick];
+      const charge = daySessions.reduce((s, se) => s + sessionCharge(se), 0);
       const done = daySessions.filter(s => s.feedback?.done === true);
       const rpeVals = done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe);
       const avgRpe = rpeVals.length ? Math.round((rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length) * 10) / 10 : null;
-      const d = addDays(monday, i);
-      const isToday = localDateStr(d) === localDateStr(new Date());
+      const isToday = dStr === localDateStr(new Date());
       return { label: dayNames[i], charge, avgRpe, planned: daySessions.length, done: done.length, isToday };
     });
   }
 
   if (range === "an") {
-    // Last 12 months grouped by month
     return Array.from({ length: 12 }, (_, i) => {
       const d = new Date(today.getFullYear(), today.getMonth() - (11 - i), 1);
       const targetYear = d.getFullYear();
@@ -65,10 +70,19 @@ function getChartData(data, range, refDate) {
         const monday = new Date(key);
         if (monday.getFullYear() === targetYear && monday.getMonth() === targetMonth) {
           const sessions = days.flat().filter(Boolean);
-          totalCharge += sessions.reduce((s, se) => s + se.charge, 0);
+          totalCharge += sessions.reduce((s, se) => s + sessionCharge(se), 0);
           const done = sessions.filter(s => s.feedback?.done === true);
           allRpe.push(...done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe));
           allDone += done.length; allPlanned += sessions.length;
+        }
+      });
+      // Also count quickSessions for this month
+      quickSessions.forEach(s => {
+        if (!s.startDate) return;
+        const sd = new Date(s.startDate);
+        if (sd.getFullYear() === targetYear && sd.getMonth() === targetMonth) {
+          totalCharge += sessionCharge(s);
+          allPlanned += 1;
         }
       });
       const avgRpe = allRpe.length ? Math.round(allRpe.reduce((a, b) => a + b, 0) / allRpe.length * 10) / 10 : null;
@@ -81,10 +95,15 @@ function getChartData(data, range, refDate) {
   const nWeeks = range === "mois" ? 13 : 8;
   return Array.from({ length: nWeeks }, (_, i) => {
     const monday = getMondayOf(addDays(today, -(7 * (nWeeks - 1 - i))));
+    const sunday = addDays(monday, 6);
+    const mondayStr = localDateStr(monday);
+    const sundayStr = localDateStr(sunday);
     const key = weekKey(monday);
     const days = data.weeks[key] || [];
-    const sessions = days.flat().filter(Boolean);
-    const charge = sessions.reduce((s, se) => s + se.charge, 0);
+    const weekSessions = days.flat().filter(Boolean);
+    const quick = quickSessions.filter(s => s.startDate >= mondayStr && s.startDate <= sundayStr);
+    const sessions = [...weekSessions, ...quick];
+    const charge = sessions.reduce((s, se) => s + sessionCharge(se), 0);
     const done = sessions.filter(s => s.feedback?.done === true);
     const rpeVals = done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe);
     const avgRpe = rpeVals.length

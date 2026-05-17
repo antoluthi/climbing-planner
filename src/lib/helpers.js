@@ -68,7 +68,7 @@ export function getDaySessions(data, date) {
 }
 
 export function getDayCharge(data, date) {
-  return getDaySessions(data, date).reduce((a, s) => a + s.charge, 0);
+  return getDaySessions(data, date).reduce((a, s) => a + (s.charge ?? 0), 0);
 }
 
 export function getMonthWeeks(year, month) {
