@@ -839,89 +839,82 @@ export default function ClimbingPlanner() {
             <AuthPanel session={null} onAuthChange={setSession} fullWidth />
           </div>
 
-          {/* Public planning button + picker */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
+          {/* Public planning picker — unified card */}
+          <div style={{
+            border: `1px solid ${loginBorder}`,
+            borderRadius: 10, overflow: "hidden",
+            minWidth: 300,
+          }}>
             <button
               onClick={openProfilePicker}
               style={{
-                background: showProfilePicker ? loginBrownBg : "none",
-                border: `1.5px solid ${loginBrownMid}`,
-                borderRadius: showProfilePicker ? "8px 8px 0 0" : 8,
-                padding: "12px 30px", color: loginBrown,
-                cursor: "pointer", fontFamily: "'Newsreader', Georgia, serif",
-                fontSize: 16, fontStyle: "italic", fontWeight: 500,
-                letterSpacing: "0.06em", transition: "background 0.2s",
+                width: "100%", background: "none", border: "none",
+                borderBottom: showProfilePicker ? `1px solid ${loginBorder}` : "none",
+                padding: "13px 20px",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                color: isDark ? "#a89a82" : "#8a7060",
+                cursor: "pointer", fontFamily: "inherit",
+                fontSize: 13, letterSpacing: "0.03em",
               }}
             >
-              Voir un planning public {showProfilePicker ? "▲" : "▼"}
+              <span>Voir un planning public</span>
+              <span style={{ fontSize: 10, opacity: 0.6 }}>{showProfilePicker ? "▲" : "▼"}</span>
             </button>
 
             {showProfilePicker && (
-              <div style={{
-                background: isDark ? "#241b13" : "#faf6f1",
-                border: `1.5px solid ${loginBrownMid}`,
-                borderTop: "none",
-                borderRadius: "0 0 10px 10px",
-                minWidth: 260, maxWidth: 340, width: "100%",
-                boxShadow: `0 6px 24px rgba(92,51,23,${isDark ? "0.4" : "0.12"})`,
-                overflow: "hidden",
-              }}>
-                {publicProfiles === null ? (
-                  <div style={{ padding: "16px", textAlign: "center", color: isDark ? "#8a7d68" : "#aaa89e", fontSize: 14 }}>
-                    Chargement…
-                  </div>
-                ) : publicProfiles.length === 0 ? (
-                  <div style={{ padding: "16px", textAlign: "center", color: isDark ? "#8a7d68" : "#aaa89e", fontSize: 13 }}>
-                    Aucun planning public disponible.
-                  </div>
-                ) : (
-                  publicProfiles.map((p, i) => {
-                    const initials = [p.firstName?.[0], p.lastName?.[0]].filter(Boolean).join("").toUpperCase() || "?";
-                    const fullName = [p.firstName, p.lastName].filter(Boolean).join(" ") || "Inconnu";
-                    return (
-                      <button
-                        key={p.userId}
-                        onClick={() => { setPublicPlanUser(p); setShowProfilePicker(false); }}
-                        style={{
-                          width: "100%", background: "none",
-                          border: "none",
-                          borderTop: i > 0 ? `1px solid ${loginBorder}` : "none",
-                          padding: "13px 16px",
-                          display: "flex", alignItems: "center", gap: 12,
-                          cursor: "pointer", textAlign: "left",
-                          transition: "background 0.15s",
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = isDark ? "#2e2419" : "#f0e8dc"}
-                        onMouseLeave={e => e.currentTarget.style.background = "none"}
-                      >
-                        {p.avatarUrl ? (
-                          <img
-                            src={p.avatarUrl}
-                            alt={fullName}
-                            style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", border: `2px solid ${loginBrownMid}44`, flexShrink: 0 }}
-                          />
-                        ) : (
-                          <div style={{
-                            width: 38, height: 38, borderRadius: "50%",
-                            background: loginBrownBg, border: `2px solid ${loginBrownMid}55`,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 14, fontWeight: 700, color: loginBrown,
-                            fontFamily: "'Cormorant Garamond', Georgia, serif",
-                            flexShrink: 0,
-                          }}>
-                            {initials}
-                          </div>
-                        )}
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: loginBrown }}>{fullName}</div>
-                          <div style={{ fontSize: 11, color: isDark ? "#8a7d68" : "#aaa89e", marginTop: 1 }}>Planning public</div>
+              publicProfiles === null ? (
+                <div style={{ padding: "14px 20px", color: isDark ? "#8a7d68" : "#aaa89e", fontSize: 13 }}>
+                  Chargement…
+                </div>
+              ) : publicProfiles.filter(p => p.firstName || p.lastName).length === 0 ? (
+                <div style={{ padding: "14px 20px", color: isDark ? "#8a7d68" : "#aaa89e", fontSize: 13 }}>
+                  Aucun planning public disponible.
+                </div>
+              ) : (
+                publicProfiles.filter(p => p.firstName || p.lastName).map((p, i) => {
+                  const initials = [p.firstName?.[0], p.lastName?.[0]].filter(Boolean).join("").toUpperCase();
+                  const fullName = [p.firstName?.trim(), p.lastName?.trim()].filter(Boolean).join(" ");
+                  return (
+                    <button
+                      key={p.userId}
+                      onClick={() => { setPublicPlanUser(p); setShowProfilePicker(false); }}
+                      style={{
+                        width: "100%", background: "none", border: "none",
+                        borderTop: i > 0 ? `1px solid ${loginBorder}` : "none",
+                        padding: "11px 20px",
+                        display: "flex", alignItems: "center", gap: 11,
+                        cursor: "pointer", textAlign: "left",
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = isDark ? "#1f1810" : "#f0ebe0"}
+                      onMouseLeave={e => e.currentTarget.style.background = "none"}
+                    >
+                      {p.avatarUrl ? (
+                        <img
+                          src={p.avatarUrl}
+                          alt={fullName}
+                          style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: 32, height: 32, borderRadius: "50%",
+                          background: isDark ? "#2a2018" : "#e4ddd4",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 12, fontWeight: 700,
+                          color: isDark ? "#a89a82" : "#8a7060",
+                          flexShrink: 0,
+                        }}>
+                          {initials}
                         </div>
-                        <div style={{ marginLeft: "auto", color: isDark ? "#8a7d68" : "#ccc6b8", fontSize: 14 }}>→</div>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
+                      )}
+                      <span style={{ fontSize: 13, color: isDark ? "#e0d4c0" : "#2a2218", fontWeight: 500 }}>
+                        {fullName}
+                      </span>
+                      <span style={{ marginLeft: "auto", color: isDark ? "#4a3e30" : "#c8c0b4", fontSize: 12 }}>→</span>
+                    </button>
+                  );
+                })
+              )
             )}
           </div>
         </div>
