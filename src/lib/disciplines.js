@@ -22,7 +22,7 @@ export const DISCIPLINES = {
     iconId: "running",
     blockTypes: ["Échauffement", "Footing", "Fractionné", "Côtes", "Sortie longue", "Récup"],
     chargeCalculator: "rpe-duration",
-    metrics: ["distanceKm", "elevationM", "pace"],
+    metrics: ["distanceKm", "runDuration", "pace", "elevationM"],
     defaultMode: "simple",
   },
   cycling: {
@@ -77,10 +77,11 @@ export function disciplineList() {
 
 // Libellés affichés pour les métriques optionnelles
 export const METRIC_LABELS = {
-  distanceKm:  { label: "Distance", suffix: "km", placeholder: "8.5", step: 0.1 },
-  elevationM:  { label: "D+",       suffix: "m",  placeholder: "350", step: 5  },
-  pace:        { label: "Allure",   suffix: "/km", placeholder: "5:30", step: 0, isText: true },
-  sets:        { label: "Séries",   suffix: "",   placeholder: "4",   step: 1 },
-  reps:        { label: "Reps",     suffix: "",   placeholder: "8",   step: 1 },
-  weightKg:    { label: "Charge",   suffix: "kg", placeholder: "60",  step: 0.5 },
+  distanceKm:  { label: "Distance",     suffix: "km",  placeholder: "8.5",  step: 0.1 },
+  elevationM:  { label: "D+",           suffix: "m",   placeholder: "350",  step: 5 },
+  pace:        { label: "Allure",       suffix: "/km", placeholder: "5:30", step: 0, isText: true },
+  runDuration: { label: "Durée course", suffix: "",    placeholder: "42:00", step: 0, isText: true },
+  sets:        { label: "Séries",       suffix: "",    placeholder: "4",    step: 1 },
+  reps:        { label: "Reps",         suffix: "",    placeholder: "8",    step: 1 },
+  weightKg:    { label: "Charge",       suffix: "kg",  placeholder: "60",   step: 0.5 },
 };
