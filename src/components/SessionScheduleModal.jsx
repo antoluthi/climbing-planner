@@ -51,7 +51,7 @@ export function SessionScheduleModal({
     return () => clearTimeout(t);
   }, [defaultStartTime]);
 
-  const canConfirm = startTime.trim().length >= 4 && location.trim().length > 0;
+  const canConfirm = startTime.trim().length >= 4;
 
   const handleConfirm = () => {
     if (!canConfirm) return;

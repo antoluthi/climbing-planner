@@ -24,6 +24,30 @@ import { ConfirmModal } from "./ConfirmModal.jsx";
 
 const EVENT_COLORS = ["#c0392b", "#f0a060", "#e6c46a", "#2e6b3f", "#0891b2", "#2563eb", "#6d28d9", "#8a7f70"];
 
+// ── Running metric helpers ────────────────────────────────────────────────
+// Parse "MM:SS" or plain number → fractional minutes. Returns null on failure.
+function parseMmSs(str) {
+  if (!str && str !== 0) return null;
+  const s = String(str).trim();
+  const parts = s.split(":");
+  if (parts.length === 2) {
+    const m = parseInt(parts[0], 10);
+    const sec = parseInt(parts[1], 10);
+    if (isNaN(m) || isNaN(sec)) return null;
+    return m + sec / 60;
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+// Format fractional minutes → "MM:SS"
+function fmtMmSs(totalMin) {
+  if (totalMin == null || isNaN(totalMin) || totalMin < 0) return "";
+  const m = Math.floor(totalMin);
+  const s = Math.round((totalMin - m) * 60);
+  if (s === 60) return `${m + 1}:00`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 function todayISO() {
   const d = new Date();
@@ -535,6 +559,7 @@ export function SessionComposer({
               notes={notes} setNotes={setNotes}
               metrics={metrics} updateMetric={updateMetric}
               discipline={disciplineCfg}
+              saveAsTemplate={saveAsTemplate} setSaveAsTemplate={setSaveAsTemplate}
               tokens={{ surfaceCard, surfaceInput, border, text, textMid, textLight, accent, paperDim }}
               labelStyle={labelStyle} cardLabel={cardLabel}
             />
@@ -684,6 +709,81 @@ function ToggleCard({ title, sub, checked, onChange, color, tokens }) {
   );
 }
 
+// ─── RunningMetrics ────────────────────────────────────────────────────────
+// Pace is the anchor: changing distance recalculates runDuration, and vice-versa.
+// Changing pace recalculates runDuration (distance stays).
+function RunningMetrics({ metrics, updateMetric, inputStyle, labelStyle, paperDim, tokens }) {
+  const { border, textLight } = tokens;
+
+  const onPaceChange = (val) => {
+    updateMetric("pace", val);
+    const paceMin = parseMmSs(val);
+    const dist = metrics.distanceKm;
+    if (paceMin && dist) updateMetric("runDuration", fmtMmSs(paceMin * dist));
+  };
+
+  const onDistanceChange = (val) => {
+    const dist = val === "" ? null : +val;
+    updateMetric("distanceKm", dist);
+    const paceMin = parseMmSs(metrics.pace);
+    if (paceMin != null && dist) updateMetric("runDuration", fmtMmSs(paceMin * dist));
+  };
+
+  const onRunDurationChange = (val) => {
+    updateMetric("runDuration", val);
+    const paceMin = parseMmSs(metrics.pace);
+    const durMin = parseMmSs(val);
+    if (paceMin && durMin) {
+      const dist = Math.round((durMin / paceMin) * 100) / 100;
+      updateMetric("distanceKm", dist);
+    }
+  };
+
+  const linkedInput = { ...inputStyle, background: paperDim };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {/* Row 1: Allure + Distance */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div>
+          <span style={labelStyle}>Allure (/km)</span>
+          <input type="text" placeholder="5:30"
+            value={metrics.pace ?? ""}
+            onChange={e => onPaceChange(e.target.value)}
+            style={linkedInput} />
+        </div>
+        <div>
+          <span style={labelStyle}>Distance (km)</span>
+          <input type="number" step="0.1" min="0" placeholder="8.5"
+            value={metrics.distanceKm ?? ""}
+            onChange={e => onDistanceChange(e.target.value)}
+            style={linkedInput} />
+        </div>
+      </div>
+      {/* Row 2: Durée course + D+ */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div>
+          <span style={labelStyle}>Durée course</span>
+          <input type="text" placeholder="42:00"
+            value={metrics.runDuration ?? ""}
+            onChange={e => onRunDurationChange(e.target.value)}
+            style={linkedInput} />
+        </div>
+        <div>
+          <span style={labelStyle}>D+ (m)</span>
+          <input type="number" step="5" min="0" placeholder="350"
+            value={metrics.elevationM ?? ""}
+            onChange={e => updateMetric("elevationM", e.target.value === "" ? null : +e.target.value)}
+            style={linkedInput} />
+        </div>
+      </div>
+      <div style={{ fontSize: 10, color: textLight, fontStyle: "italic", borderTop: `1px solid ${border}`, paddingTop: 6 }}>
+        Allure fixe · modifier la durée recalcule la distance, et vice-versa
+      </div>
+    </div>
+  );
+}
+
 // ─── SimpleModePanel ───────────────────────────────────────────────────────
 function SimpleModePanel({
   startTime, setStartTime, estimatedTime, setEstimatedTime,
@@ -692,6 +792,7 @@ function SimpleModePanel({
   notes, setNotes,
   metrics, updateMetric,
   discipline,
+  saveAsTemplate, setSaveAsTemplate,
   tokens, labelStyle, cardLabel,
 }) {
   const { surfaceCard, surfaceInput, border, text, textMid, textLight, paperDim } = tokens;
@@ -702,6 +803,8 @@ function SimpleModePanel({
     fontSize: 13, fontFamily: "inherit", color: text,
     outline: "none",
   };
+  const isRunning = discipline.id === "running";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {/* Durée + heure */}
@@ -711,42 +814,50 @@ function SimpleModePanel({
           <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={inputStyle} />
         </div>
         <div style={{ flex: 1 }}>
-          <span style={labelStyle}>Durée (min)</span>
+          <span style={labelStyle}>Durée activité (min)</span>
           <input type="number" min="0" placeholder="60"
             value={estimatedTime} onChange={e => setEstimatedTime(e.target.value)} style={inputStyle} />
         </div>
       </div>
 
-      {/* Lieu */}
+      {/* Lieu (optionnel) */}
       <div>
-        <span style={labelStyle}>Lieu</span>
+        <span style={labelStyle}>Lieu <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optionnel)</span></span>
         <input type="text" placeholder="Salle, falaise, parcours…"
           value={location} onChange={e => setLocation(e.target.value)} style={inputStyle} />
       </div>
 
-      {/* Métriques (si discipline en a) */}
+      {/* Métriques */}
       {discipline.metrics.length > 0 && (
         <div style={{ background: surfaceCard, border: `1px solid ${border}`, borderRadius: 12, padding: 14 }}>
-          <div style={{ ...cardLabel, marginBottom: 10 }}>Métriques {discipline.label.toLowerCase()} (optionnel)</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {discipline.metrics.map(k => {
-              const m = METRIC_LABELS[k];
-              if (!m) return null;
-              return (
-                <div key={k}>
-                  <span style={{ ...labelStyle, marginBottom: 4 }}>{m.label}{m.suffix && ` (${m.suffix})`}</span>
-                  <input
-                    type={m.isText ? "text" : "number"}
-                    step={m.isText ? undefined : m.step}
-                    placeholder={m.placeholder}
-                    value={metrics[k] ?? ""}
-                    onChange={e => updateMetric(k, m.isText ? e.target.value : (e.target.value === "" ? null : +e.target.value))}
-                    style={{ ...inputStyle, background: paperDim }}
-                  />
-                </div>
-              );
-            })}
-          </div>
+          <div style={{ ...cardLabel, marginBottom: 10 }}>Métriques {discipline.label.toLowerCase()} <span style={{ fontSize: 11, color: textLight }}>(optionnel)</span></div>
+          {isRunning ? (
+            <RunningMetrics
+              metrics={metrics} updateMetric={updateMetric}
+              inputStyle={inputStyle} labelStyle={{ ...labelStyle, marginBottom: 4 }}
+              paperDim={paperDim} tokens={{ border, textLight }}
+            />
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {discipline.metrics.map(k => {
+                const m = METRIC_LABELS[k];
+                if (!m) return null;
+                return (
+                  <div key={k}>
+                    <span style={{ ...labelStyle, marginBottom: 4 }}>{m.label}{m.suffix && ` (${m.suffix})`}</span>
+                    <input
+                      type={m.isText ? "text" : "number"}
+                      step={m.isText ? undefined : m.step}
+                      placeholder={m.placeholder}
+                      value={metrics[k] ?? ""}
+                      onChange={e => updateMetric(k, m.isText ? e.target.value : (e.target.value === "" ? null : +e.target.value))}
+                      style={{ ...inputStyle, background: paperDim }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -757,6 +868,12 @@ function SimpleModePanel({
         color={discipline.color}
         tokens={{ surfaceCard, border, text, textMid, textLight }}
       />
+
+      {/* Enregistrer comme modèle */}
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: textMid, cursor: "pointer" }}>
+        <input type="checkbox" checked={saveAsTemplate} onChange={e => setSaveAsTemplate(e.target.checked)} />
+        Enregistrer comme modèle réutilisable
+      </label>
 
       {/* Notes */}
       <div>
