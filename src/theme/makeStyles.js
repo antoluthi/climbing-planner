@@ -556,5 +556,15 @@ export function makeStyles(isDark) {
       padding: "7px 18px", borderRadius: 5, cursor: "pointer", fontSize: 11,
       fontFamily: "inherit", fontWeight: 700, letterSpacing: "0.06em",
     },
+
+    // ── Tokens bruts exposés (consommés par Caillou.jsx pour fills SVG) ──
+    rock1:     t.rock1,
+    rock2:     t.rock2,
+    rock3:     t.rock3,
+    rockShine: t.rockShine,
+    rockEdge:  t.rockEdge,
+    rockIris:  t.rockIris,
+    accent:    t.accent,
+    textMuted: t.textMuted,
   };
 }
