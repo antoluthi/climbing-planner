@@ -49,6 +49,7 @@ import { DayNightToggle } from "./components/DayNightToggle.jsx";
 import { NewSessionSheet } from "./components/NewSessionSheet.jsx";
 import { QuickSessionModal } from "./components/QuickSessionModal.jsx";
 import { ToastContainer } from "./components/ToastContainer.jsx";
+import { Caillou } from "./components/Caillou.jsx";
 import { BottomNav } from "./components/BottomNav.jsx";
 import { toast } from "./lib/toast.js";
 
@@ -746,7 +747,18 @@ export default function ClimbingPlanner() {
     </button>
   );
 
-  const syncDot = syncStatus === "saving" ? <span style={{ fontSize: 11, color: "#a89a82" }} title="Synchronisation…">⟳</span>
+  // Caillou micro remplace le syncDot pendant une sync > 1s (cf. mascot/Caillou).
+  const [syncLong, setSyncLong] = useState(false);
+  useEffect(() => {
+    if (syncStatus !== "saving") { setSyncLong(false); return; }
+    const id = setTimeout(() => setSyncLong(true), 1000);
+    return () => clearTimeout(id);
+  }, [syncStatus]);
+
+  const syncDot = syncStatus === "saving"
+    ? (syncLong
+        ? <span title="Synchronisation…" style={{ lineHeight: 0 }}><Caillou state="micro" size={24} /></span>
+        : <span style={{ fontSize: 11, color: "#a89a82" }} title="Synchronisation…">⟳</span>)
     : syncStatus === "saved" ? <span style={{ fontSize: 11, color: isDark ? "#e0a875" : "#8b4c20" }} title="Synchronisé">✓</span>
     : syncStatus === "offline" ? <span style={{ fontSize: 11, color: "#f0a060" }} title="Hors ligne">—</span>
     : null;

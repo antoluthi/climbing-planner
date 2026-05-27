@@ -7,6 +7,7 @@ import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { AccueilSkeleton } from "./ui/Skeleton.jsx";
 import { TodaySessionCard } from "./TodaySessionCard.jsx";
 import { getActiveRemindersForDate, isReminderCheckedOn } from "../lib/reminders.js";
+import { Caillou } from "./Caillou.jsx";
 
 // ─── GREETING BY TIME OF DAY ──────────────────────────────────────────────────
 
@@ -1125,30 +1126,39 @@ function AccueilViewBody({
           {dateFull} · S{String(weekN).padStart(2, "0")}
         </div>
 
-        {/* Greeting */}
-        <div
-          style={{
-            fontFamily: "'Newsreader', Georgia, serif",
-            fontSize: isMobile ? 34 : 44,
-            fontWeight: 500, color: text,
-            lineHeight: 1.08, letterSpacing: "-0.01em",
-            textWrap: "balance",
-          }}
-        >
-          {getGreeting(new Date().getHours(), firstName)}
-        </div>
+        {/* Greeting + (optional) Caillou sleep si jour de repos */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+          {todaySessions.length === 0 && (
+            <div style={{ flexShrink: 0, marginTop: -4 }}>
+              <Caillou state="sleep" size={84} />
+            </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: "'Newsreader', Georgia, serif",
+                fontSize: isMobile ? 34 : 44,
+                fontWeight: 500, color: text,
+                lineHeight: 1.08, letterSpacing: "-0.01em",
+                textWrap: "balance",
+              }}
+            >
+              {getGreeting(new Date().getHours(), firstName)}
+            </div>
 
-        {/* Contextual phrase */}
-        <div
-          style={{
-            fontFamily: "'Newsreader', Georgia, serif",
-            fontSize: isMobile ? 15 : 17,
-            color: textMid, fontStyle: "italic",
-            lineHeight: 1.5, marginTop: 8,
-            maxWidth: 640,
-          }}
-        >
-          {contextualPhrase}
+            {/* Contextual phrase */}
+            <div
+              style={{
+                fontFamily: "'Newsreader', Georgia, serif",
+                fontSize: isMobile ? 15 : 17,
+                color: textMid, fontStyle: "italic",
+                lineHeight: 1.5, marginTop: 8,
+                maxWidth: 640,
+              }}
+            >
+              {contextualPhrase}
+            </div>
+          </div>
         </div>
 
         {/* Meta row : meso chip + charge chip */}

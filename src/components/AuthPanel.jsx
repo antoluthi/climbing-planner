@@ -1,6 +1,7 @@
 import { useState } from "react";
 import supabase from "../lib/supabase.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
+import { Caillou } from "./Caillou.jsx";
 
 export function AuthPanel({ session, onAuthChange, fullWidth }) {
   const { styles, isDark } = useThemeCtx();
@@ -112,7 +113,10 @@ export function AuthPanel({ session, onAuthChange, fullWidth }) {
   if (mode === "magiclink") return (
     <div style={barStyle}>
       {sent ? (
-        <span style={styles.authSentMsg}>Lien envoyé — vérifiez vos mails</span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+          <Caillou state="curious" size={110} />
+          <span style={styles.authSentMsg}>Lien envoyé — vérifiez vos mails</span>
+        </div>
       ) : (
         <>
           <input

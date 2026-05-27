@@ -6,6 +6,7 @@ import { getMondayOf, addDays, weekKey } from "../lib/helpers.js";
 import { RichText } from "./RichText.jsx";
 import { SuspensionInfoCard } from "./SuspensionInfoCard.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
+import { Caillou } from "./Caillou.jsx";
 import { Z } from "../theme/makeStyles.js";
 import { getDiscipline, METRIC_LABELS } from "../lib/disciplines.js";
 
@@ -153,7 +154,11 @@ export function SessionModal({
     return () => window.removeEventListener("keydown", h);
   });
 
-  const handleSave = () => {
+  // Confirmation "Merci pour ton retour." — overlay affiché après enregistrement
+  // d'un ressenti (sessionDone). Le persist s'exécute à la fermeture de l'overlay
+  // pour que la modale reste montée le temps de jouer l'anim du Caillou success.
+  const [showThanks, setShowThanks] = useState(false);
+  const persistAndClose = () => {
     onSave({
       status,
       done: sessionDone,
@@ -163,6 +168,10 @@ export function SessionModal({
       notes,
       blockFeedbacks: sessionDone ? blockFeedbacks : [],
     });
+  };
+  const handleSave = () => {
+    if (sessionDone) setShowThanks(true);
+    else persistAndClose();
   };
   // Garde la dernière version de handleSave accessible depuis les listeners clavier
   useEffect(() => { handleSaveRef.current = handleSave; });
@@ -815,6 +824,57 @@ export function SessionModal({
           onConfirm={() => { onDelete?.(); }}
           onClose={() => setConfirmDelete(false)}
         />
+      )}
+
+      {showThanks && (
+        <div
+          style={{
+            position: "fixed", inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            zIndex: Z.nested,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16,
+          }}
+          onClick={e => { if (e.target === e.currentTarget) persistAndClose(); }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Ressenti enregistré"
+            style={{
+              background: paper,
+              border: `1px solid ${borderStrong}`,
+              borderRadius: 16,
+              padding: "28px 24px 22px",
+              maxWidth: 360, width: "100%",
+              display: "flex", flexDirection: "column",
+              alignItems: "center", textAlign: "center",
+              gap: 12,
+              boxShadow: "0 16px 40px rgba(0,0,0,0.25)",
+            }}
+          >
+            <Caillou state="success" size={100} />
+            <div style={{
+              fontFamily: "'Newsreader', Georgia, serif",
+              fontSize: 22, fontWeight: 500, color: text,
+              letterSpacing: "-0.01em",
+            }}>
+              Merci pour ton retour.
+            </div>
+            <button
+              onClick={persistAndClose}
+              style={{
+                marginTop: 6,
+                background: inkPrimary,
+                color: isDark ? paper : "#fff",
+                border: "none", borderRadius: 8,
+                padding: "10px 22px",
+                fontSize: 13, fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >Fermer</button>
+          </div>
+        </div>
       )}
     </div>
   );

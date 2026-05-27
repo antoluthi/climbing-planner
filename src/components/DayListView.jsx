@@ -1,6 +1,7 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { TodaySessionCard } from "./TodaySessionCard.jsx";
 import { SessionCardSkeleton } from "./ui/Skeleton.jsx";
+import { Caillou } from "./Caillou.jsx";
 import { getChargeColor } from "../lib/charge.js";
 import { DAYS, getMesoColor } from "../lib/constants.js";
 import { addDays } from "../lib/helpers.js";
@@ -207,12 +208,17 @@ export function DayListView({
           <SessionCardSkeleton count={3} />
         ) : sortedSessions.length === 0 ? (
           <div style={{
-            textAlign: "center", padding: "32px 16px",
+            textAlign: "center", padding: "28px 16px 22px",
             color: textLight, fontSize: 13,
             background: surfaceCard, border: `1px dashed ${border}`,
             borderRadius: 12,
+            display: "flex", flexDirection: "column",
+            alignItems: "center", gap: 10,
           }}>
-            Aucune séance prévue pour ce jour.
+            {(!weekSessions || weekSessions.every(d => !d || d.length === 0)) && (
+              <Caillou state="curious" size={130} />
+            )}
+            <span>Aucune séance prévue pour ce jour.</span>
           </div>
         ) : (
           sortedSessions.map(({ s, _idx }) => (

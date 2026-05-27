@@ -92,6 +92,13 @@ export function makeStyles(isDark) {
     starEmpty:       D ? "#4a3d2d"   : "#bbb",
     badgeText:       D ? "#b8a87a"   : "#5a6878",
     dayEmpty:        D ? "#2e2419"   : "#ccc7bc",
+    // ── Pebble palette (mascotte Caillou) ──
+    rock1:           D ? "#8d7960"   : "#b8a484",
+    rock2:           D ? "#6f5e49"   : "#97836a",
+    rock3:           D ? "#4d4032"   : "#6c5b46",
+    rockShine:       D ? "#a89a82"   : "#d8c9ad",
+    rockEdge:        D ? "#2e251c"   : "#5c4830",
+    rockIris:        D ? "#1a1410"   : "#2a2218",
   };
 
   return {
