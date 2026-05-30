@@ -26,6 +26,33 @@ const EVENT_COLORS = ["#c0392b", "#f0a060", "#e6c46a", "#2e6b3f", "#0891b2", "#2
 
 // ── Running metric helpers ────────────────────────────────────────────────
 // Parse "MM:SS" or plain number → fractional minutes. Returns null on failure.
+// Normalise une saisie d'allure en "MM:SS" strict.
+// "5:30" → "5:30"  |  "5.30" → "5:30"  |  "5.80" → "" (invalide)  |  "5" → "5:00"
+function normalizePace(str) {
+  if (!str?.trim()) return "";
+  const s = str.trim().replace(",", ".");
+  if (s.includes(":")) {
+    const [mStr, sStr] = s.split(":");
+    const m = Math.max(0, parseInt(mStr, 10) || 0);
+    const sec = parseInt(sStr, 10);
+    if (isNaN(sec) || sec < 0 || sec >= 60) return "";
+    return `${m}:${String(sec).padStart(2, "0")}`;
+  }
+  if (s.includes(".")) {
+    const [mStr, sStr = ""] = s.split(".");
+    const m = Math.max(0, parseInt(mStr, 10) || 0);
+    // Pad à 2 chiffres par la droite : "3" → "30", "30" → "30", "08" → "08"
+    const secStr = sStr.slice(0, 2).padEnd(2, "0");
+    const sec = parseInt(secStr, 10);
+    if (sec >= 60) return "";
+    return `${m}:${String(sec).padStart(2, "0")}`;
+  }
+  const m = parseInt(s, 10);
+  if (isNaN(m) || m < 0) return "";
+  return `${m}:00`;
+}
+
+// Parse "MM:SS" or plain number → fractional minutes. Returns null on failure.
 function parseMmSs(str) {
   if (!str && str !== 0) return null;
   const s = String(str).trim();
@@ -750,6 +777,10 @@ function RunningMetrics({ metrics, updateMetric, inputStyle, labelStyle, paperDi
           <input type="text" placeholder="5:30"
             value={metrics.pace ?? ""}
             onChange={e => onPaceChange(e.target.value)}
+            onBlur={e => {
+              const normalized = normalizePace(e.target.value);
+              if (normalized !== e.target.value) onPaceChange(normalized);
+            }}
             style={linkedInput} />
         </div>
         <div>
@@ -767,6 +798,10 @@ function RunningMetrics({ metrics, updateMetric, inputStyle, labelStyle, paperDi
           <input type="text" placeholder="42:00"
             value={metrics.runDuration ?? ""}
             onChange={e => onRunDurationChange(e.target.value)}
+            onBlur={e => {
+              const normalized = normalizePace(e.target.value);
+              if (normalized !== e.target.value) onRunDurationChange(normalized);
+            }}
             style={linkedInput} />
         </div>
         <div>
