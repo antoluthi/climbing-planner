@@ -1,52 +1,50 @@
 import { useState, useEffect, useRef } from "react";
 
 // ── Lib ──
-import supabase from "./lib/supabase.js";
-import { DAYS, getDayLogWarning, getMesoColor, getMesoForDate } from "./lib/constants.js";
-import { getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime, getDayCharge } from "./lib/helpers.js";
-import { generateId } from "./lib/storage.js";
+import supabase from "../lib/supabase.js";
+import { DAYS, getDayLogWarning, getMesoColor, getMesoForDate } from "../lib/constants.js";
+import { getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime, getDayCharge } from "../lib/helpers.js";
+import { generateId } from "../lib/storage.js";
 
 // ── Theme ──
-import { ThemeContext } from "./theme/ThemeContext.jsx";
+import { ThemeContext } from "../theme/ThemeContext.jsx";
 
 // ── Hooks & Context ──
-import { useWindowWidth } from "./hooks/useWindowWidth.js";
-import { useAuth } from "./context/AuthContext.js";
-import { useData } from "./context/DataContext.js";
+import { useWindowWidth } from "../hooks/useWindowWidth.js";
+import { useAuth } from "../context/AuthContext.js";
+import { useData } from "../context/DataContext.js";
 
 // ── Components ──
-import { ClimbingPlannerLogo } from "./components/Logo.jsx";
-import { SyncButtons } from "./components/SyncButtons.jsx";
-import { RoleOnboardingModal } from "./components/RoleOnboardingModal.jsx";
-import { OnboardingModal } from "./components/OnboardingModal.jsx";
-import { SessionScheduleModal } from "./components/SessionScheduleModal.jsx";
-import { ConfirmModal } from "./components/ConfirmModal.jsx";
-import { CustomSessionModal } from "./components/CustomSessionModal.jsx";
-import { SessionComposer } from "./components/SessionComposer.jsx";
-import { SessionPicker } from "./components/SessionPicker.jsx";
-import { SessionModal } from "./components/SessionModal.jsx";
-import { CoachPickerModal } from "./components/CoachPickerModal.jsx";
-import { DayColumn } from "./components/DayColumn.jsx";
-import { MonthView } from "./components/MonthView.jsx";
-import { YearView } from "./components/YearView.jsx";
-import { CyclesView } from "./components/CyclesView.jsx";
-import { Dashboard } from "./components/Dashboard.jsx";
-import { DayLogModal } from "./components/DayLogModal.jsx";
-import { TemplateEditorModal } from "./components/TemplateEditorModal.jsx";
-import { ProfileView } from "./components/ProfileView.jsx";
-import { CoachLibraryView } from "./components/CoachLibraryView.jsx";
-import { AccueilView } from "./components/AccueilView.jsx";
-import { DayListView } from "./components/DayListView.jsx";
-import { NewSessionSheet } from "./components/NewSessionSheet.jsx";
-import { QuickSessionModal } from "./components/QuickSessionModal.jsx";
-import { ToastContainer } from "./components/ToastContainer.jsx";
-import { Caillou } from "./components/Caillou.jsx";
-import { BottomNav } from "./components/BottomNav.jsx";
-import { toast } from "./lib/toast.js";
+import { ClimbingPlannerLogo } from "../components/Logo.jsx";
+import { SyncButtons } from "../components/SyncButtons.jsx";
+import { RoleOnboardingModal } from "../components/RoleOnboardingModal.jsx";
+import { OnboardingModal } from "../components/OnboardingModal.jsx";
+import { SessionScheduleModal } from "../components/SessionScheduleModal.jsx";
+import { ConfirmModal } from "../components/ConfirmModal.jsx";
+import { CustomSessionModal } from "../components/CustomSessionModal.jsx";
+import { SessionComposer } from "../components/SessionComposer.jsx";
+import { SessionPicker } from "../components/SessionPicker.jsx";
+import { SessionModal } from "../components/SessionModal.jsx";
+import { CoachPickerModal } from "../components/CoachPickerModal.jsx";
+import { DayColumn } from "../components/DayColumn.jsx";
+import { MonthView } from "../components/MonthView.jsx";
+import { YearView } from "../components/YearView.jsx";
+import { CyclesView } from "../components/CyclesView.jsx";
+import { Dashboard } from "../components/Dashboard.jsx";
+import { DayLogModal } from "../components/DayLogModal.jsx";
+import { TemplateEditorModal } from "../components/TemplateEditorModal.jsx";
+import { ProfileView } from "../components/ProfileView.jsx";
+import { CoachLibraryView } from "../components/CoachLibraryView.jsx";
+import { AccueilView } from "../components/AccueilView.jsx";
+import { DayListView } from "../components/DayListView.jsx";
+import { NewSessionSheet } from "../components/NewSessionSheet.jsx";
+import { QuickSessionModal } from "../components/QuickSessionModal.jsx";
+import { ToastContainer } from "../components/ToastContainer.jsx";
+import { Caillou } from "../components/Caillou.jsx";
+import { BottomNav } from "../components/BottomNav.jsx";
+import { toast } from "../lib/toast.js";
 
-// ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
-
-export default function ClimbingPlanner({ isDark, toggleTheme, styles }) {
+export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const { session, setSession, syncStatus } = useAuth();
   const {
     data, setData, cloudLoaded, roleResolved, viewingAthlete,
