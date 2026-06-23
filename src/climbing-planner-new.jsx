@@ -14,7 +14,7 @@ import { makeStyles } from "./theme/makeStyles.js";
 
 // ── Hooks ──
 import { useWindowWidth } from "./hooks/useWindowWidth.js";
-import { useSupabaseSync } from "./hooks/useSupabaseSync.js";
+import { useAuth } from "./context/AuthContext.js";
 import { useCommunitySessionsSync } from "./hooks/useCommunitySessionsSync.js";
 import { useSessionsCatalog } from "./hooks/useSessionsCatalog.js";
 import { useSessionBlocks } from "./hooks/useSessionBlocks.js";
@@ -90,7 +90,7 @@ export default function ClimbingPlanner() {
     return !d;
   });
 
-  const { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges, hasPendingSave } = useSupabaseSync();
+  const { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges, hasPendingSave } = useAuth();
   const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
   const { catalog, saveUserSession, deleteUserSession } = useSessionsCatalog(session?.user?.id);
   const { blocks: dbBlocks, saveBlock, deleteBlock } = useSessionBlocks(session?.user?.id);
