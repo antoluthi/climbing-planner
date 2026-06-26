@@ -2,11 +2,15 @@ import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { CUSTOM_CYCLE_COLORS } from "../lib/constants.js";
 import { generateId } from "../lib/storage.js";
+import { Modal, ModalHeader, ModalBody, ModalFooter, modalTokens } from "./ui/Modal.jsx";
+import { Field, TextInput, Textarea, ColorSwatches, Toggle } from "./ui/Field.jsx";
+import { Button } from "./ui/Button.jsx";
 
 // ─── CUSTOM CYCLE MODAL ───────────────────────────────────────────────────────
 
 export function CustomCycleModal({ initial, onSave, onClose }) {
-  const { styles, isDark } = useThemeCtx();
+  const { isDark } = useThemeCtx();
+  const T = modalTokens(isDark);
   const [name, setName] = useState(initial?.name || "");
   const [color, setColor] = useState(initial?.color || CUSTOM_CYCLE_COLORS[0]);
   const [startDate, setStartDate] = useState(initial?.startDate || "");
@@ -33,91 +37,58 @@ export function CustomCycleModal({ initial, onSave, onClose }) {
     });
   };
 
-  const inputStyle = { ...styles.customFormInput, width: "100%", boxSizing: "border-box" };
-  const fieldStyle = { ...styles.customFormField, flex: 1 };
-  const labelColor = isDark ? "#a89a82" : "#6b7060";
-
   return (
-    <div style={styles.confirmOverlay}>
-      <div style={{ ...styles.confirmModal, width: "min(400px, 96vw)", gap: 14, padding: "20px 22px" }}>
-        <div style={styles.modalHeader}>
-          <span style={styles.modalTitle}>{initial ? "Modifier le cycle" : "Nouveau cycle personnalisé"}</span>
-          <button style={styles.closeBtn} onClick={onClose}>✕</button>
-        </div>
+    <Modal onClose={onClose} maxWidth={420} ariaLabel={initial ? "Modifier le cycle" : "Nouveau cycle"}>
+      <ModalHeader title={initial ? "Modifier le cycle" : "Nouveau cycle"} onClose={onClose} />
+      <ModalBody>
+        <Field label="Nom du cycle">
+          <TextInput placeholder="Ex : Créatine, Décharge…" value={name} onChange={e => setName(e.target.value)} autoFocus />
+        </Field>
 
-        {/* Nom */}
-        <input style={inputStyle} placeholder="Nom du cycle… (ex: Créatine, Décharge)" value={name} onChange={e => setName(e.target.value)} />
+        <Field label="Couleur">
+          <ColorSwatches colors={CUSTOM_CYCLE_COLORS} value={color} onChange={setColor} />
+        </Field>
 
-        {/* Palette couleurs */}
-        <div>
-          <div style={{ fontSize: 10, color: labelColor, marginBottom: 7, textTransform: "uppercase", letterSpacing: "0.1em" }}>Couleur</div>
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-            {CUSTOM_CYCLE_COLORS.map(c => (
-              <div key={c} onClick={() => setColor(c)} style={{
-                width: 24, height: 24, borderRadius: "50%", background: c, cursor: "pointer",
-                border: color === c ? "3px solid #fff" : "3px solid transparent",
-                boxShadow: color === c ? `0 0 0 2px ${c}` : "none",
-                flexShrink: 0,
-              }} />
-            ))}
-          </div>
-        </div>
+        <Toggle
+          checked={isRepetitive}
+          onChange={setIsRepetitive}
+          label="Cycle répétitif (alterne ON / OFF)"
+          color={color}
+        />
 
-        {/* Répétitif */}
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: labelColor, cursor: "pointer" }}>
-          <input type="checkbox" checked={isRepetitive} onChange={e => setIsRepetitive(e.target.checked)} style={{ accentColor: color }} />
-          Cycle répétitif (alterne ON / OFF depuis la date de début)
-        </label>
-
-        {/* Dates */}
         {!isRepetitive ? (
           <div style={{ display: "flex", gap: 10 }}>
-            <div style={fieldStyle}>
-              <span style={styles.customFormLabel}>Date de début</span>
-              <input style={inputStyle} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-            </div>
-            <div style={fieldStyle}>
-              <span style={styles.customFormLabel}>Date de fin</span>
-              <input style={inputStyle} type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
-            </div>
+            <Field label="Début" style={{ flex: 1 }}>
+              <TextInput type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </Field>
+            <Field label="Fin" style={{ flex: 1 }}>
+              <TextInput type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </Field>
           </div>
         ) : (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ ...fieldStyle, flex: "2 1 140px" }}>
-              <span style={styles.customFormLabel}>Date de début</span>
-              <input style={inputStyle} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-            </div>
-            <div style={{ ...fieldStyle, flex: "0 0 80px" }}>
-              <span style={styles.customFormLabel}>ON (sem.)</span>
-              <input style={inputStyle} type="number" min="1" max="52" value={onWeeks} onChange={e => setOnWeeks(e.target.value)} />
-            </div>
-            <div style={{ ...fieldStyle, flex: "0 0 80px" }}>
-              <span style={styles.customFormLabel}>OFF (sem.)</span>
-              <input style={inputStyle} type="number" min="1" max="52" value={offWeeks} onChange={e => setOffWeeks(e.target.value)} />
-            </div>
+            <Field label="Début" style={{ flex: "2 1 140px" }}>
+              <TextInput type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </Field>
+            <Field label="ON (sem.)" style={{ flex: "1 1 80px" }}>
+              <TextInput type="number" min="1" max="52" value={onWeeks} onChange={e => setOnWeeks(e.target.value)} />
+            </Field>
+            <Field label="OFF (sem.)" style={{ flex: "1 1 80px" }}>
+              <TextInput type="number" min="1" max="52" value={offWeeks} onChange={e => setOffWeeks(e.target.value)} />
+            </Field>
           </div>
         )}
 
-        {/* Description */}
-        <textarea
-          style={{ ...inputStyle, resize: "vertical", minHeight: 52, fontFamily: "inherit", fontSize: 12, lineHeight: 1.5 }}
-          placeholder="Notes… (optionnel)"
-          value={description}
-          onChange={e => setDescription(e.target.value)}
-        />
-
-        {/* Boutons */}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button style={styles.confirmCancelBtn} onClick={onClose}>Annuler</button>
-          <button
-            style={{ ...styles.confirmDeleteBtn, background: canSave ? color : (isDark ? "#333" : "#ccc"), cursor: canSave ? "pointer" : "default" }}
-            onClick={handleSave}
-            disabled={!canSave}
-          >
-            {initial ? "Enregistrer" : "Créer"}
-          </button>
-        </div>
-      </div>
-    </div>
+        <Field label="Notes" hint="optionnel">
+          <Textarea placeholder="Notes…" value={description} onChange={e => setDescription(e.target.value)} />
+        </Field>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="secondary" size="md" onClick={onClose}>Annuler</Button>
+        <Button variant="primary" size="md" disabled={!canSave} onClick={handleSave} style={canSave ? { background: color, color: "#fff" } : undefined}>
+          {initial ? "Enregistrer" : "Créer"}
+        </Button>
+      </ModalFooter>
+    </Modal>
   );
 }

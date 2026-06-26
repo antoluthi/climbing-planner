@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
 import { modalTokens } from "./Modal.jsx";
 
@@ -46,38 +47,41 @@ function focusHandlers(T) {
   };
 }
 
-export function TextInput({ style, ...rest }) {
+export const TextInput = forwardRef(function TextInput({ style, ...rest }, ref) {
   const { isDark } = useThemeCtx();
   const T = modalTokens(isDark);
   const fh = focusHandlers(T);
   return (
     <input
+      ref={ref}
       {...fh}
       {...rest}
       style={{ ...baseInputStyle(T), ...style }}
     />
   );
-}
+});
 
-export function Textarea({ style, ...rest }) {
+export const Textarea = forwardRef(function Textarea({ style, ...rest }, ref) {
   const { isDark } = useThemeCtx();
   const T = modalTokens(isDark);
   const fh = focusHandlers(T);
   return (
     <textarea
+      ref={ref}
       {...fh}
       {...rest}
       style={{ ...baseInputStyle(T), minHeight: 72, resize: "vertical", lineHeight: 1.5, fontSize: 13, ...style }}
     />
   );
-}
+});
 
-export function Select({ style, children, ...rest }) {
+export const Select = forwardRef(function Select({ style, children, ...rest }, ref) {
   const { isDark } = useThemeCtx();
   const T = modalTokens(isDark);
   const fh = focusHandlers(T);
   return (
     <select
+      ref={ref}
       {...fh}
       {...rest}
       style={{ ...baseInputStyle(T), cursor: "pointer", ...style }}
@@ -85,7 +89,7 @@ export function Select({ style, children, ...rest }) {
       {children}
     </select>
   );
-}
+});
 
 // Pastilles de couleur. `value` est la couleur sélectionnée.
 export function ColorSwatches({ colors, value, onChange, size = 26 }) {
