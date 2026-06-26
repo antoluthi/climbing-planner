@@ -27,8 +27,9 @@ export function HooperSection({ hoopers, onAdd, range }) {
 
   const today = localDateStr(new Date());
   const todayEntry = (hoopers || []).find(h => h.date === today);
+  const anyFilled = form.fatigue || form.stress || form.soreness || form.sleep;
   const allFilled = form.fatigue && form.stress && form.soreness && form.sleep;
-  const total = allFilled ? form.fatigue + form.stress + form.soreness + form.sleep : null;
+  const total = anyFilled ? (form.fatigue || 0) + (form.stress || 0) + (form.soreness || 0) + (form.sleep || 0) : null;
 
   const openForm = (editing = false) => {
     if (editing && todayEntry) {
@@ -40,11 +41,9 @@ export function HooperSection({ hoopers, onAdd, range }) {
   };
 
   const autoSaveHooper = (updated) => {
-    const filled = updated.fatigue && updated.stress && updated.soreness && updated.sleep;
-    if (!filled) return;
-    const t = updated.fatigue + updated.stress + updated.soreness + updated.sleep;
     if (todayEntry && updated.fatigue === todayEntry.fatigue && updated.stress === todayEntry.stress &&
         updated.soreness === todayEntry.soreness && updated.sleep === todayEntry.sleep) return;
+    const t = (updated.fatigue || 0) + (updated.stress || 0) + (updated.soreness || 0) + (updated.sleep || 0);
     onAdd({
       id: todayEntry?.id || "h_" + Date.now().toString(36),
       date: today,
@@ -148,7 +147,7 @@ export function HooperSection({ hoopers, onAdd, range }) {
           ))}
           {total !== null && (
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: hooperColor(total, isDark) }}>
-              Indice : {total} — {hooperLabel(total)}
+              Indice : {total}{allFilled ? ` — ${hooperLabel(total)}` : " (partiel)"}
             </div>
           )}
           <div style={{ fontSize: 10, color: isDark ? "#a89a82" : "#8a7f70", letterSpacing: "0.04em" }}>

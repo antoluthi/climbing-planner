@@ -80,8 +80,9 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
       : { fatigue: null, stress: null, soreness: null, sleep: null }
     );
   }, [dateISO]);
+  const hAnyFilled = hForm.fatigue || hForm.stress || hForm.soreness || hForm.sleep;
   const hAllFilled = hForm.fatigue && hForm.stress && hForm.soreness && hForm.sleep;
-  const hTotal = hAllFilled ? hForm.fatigue + hForm.stress + hForm.soreness + hForm.sleep : null;
+  const hTotal = hAnyFilled ? (hForm.fatigue || 0) + (hForm.stress || 0) + (hForm.soreness || 0) + (hForm.sleep || 0) : null;
   const [helpOpen, setHelpOpen] = useState(false);
   const [microToast, setMicroToast] = useState("");
   const microToastTimer = useRef(null);
@@ -127,12 +128,10 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
     else if (weightInput.trim() === "") onSaveWeight(dateISO, null);
   };
   const flushHooper = (form) => {
-    const filled = form.fatigue && form.stress && form.soreness && form.sleep;
-    if (!filled) return;
-    const total = form.fatigue + form.stress + form.soreness + form.sleep;
     const existing = (data.hooper || []).find(h => h.date === dateISO);
     if (existing && form.fatigue === existing.fatigue && form.stress === existing.stress &&
         form.soreness === existing.soreness && form.sleep === existing.sleep) return;
+    const total = (form.fatigue || 0) + (form.stress || 0) + (form.soreness || 0) + (form.sleep || 0);
     onAddHooper({ date: dateISO, time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), ...form, total });
     showMicroToast("Hooper enregistré");
   };
@@ -436,7 +435,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
             </div>
             {hTotal !== null && (
               <div style={{ fontSize: 11, color: textLight, marginTop: 10 }}>
-                <span style={{ color: hooperColor(hTotal, isDark), fontWeight: 600 }}>{hooperLabel(hTotal)}</span>
+                <span style={{ color: hooperColor(hTotal, isDark), fontWeight: 600 }}>{hAllFilled ? hooperLabel(hTotal) : `${hTotal} (partiel)`}</span>
               </div>
             )}
           </div>
