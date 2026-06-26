@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components */
+// modalTokens (helper) est volontairement co-localisé avec les primitives de
+// modale qui l'utilisent. La règle fast-refresh est désactivée pour ce fichier.
 import { useEffect } from "react";
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
 import { Z } from "../../theme/makeStyles.js";
