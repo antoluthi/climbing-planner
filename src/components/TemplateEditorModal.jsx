@@ -5,6 +5,8 @@ import { generateId } from "../lib/storage.js";
 import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "../lib/charge.js";
 import { BlockEditor } from "./BlockEditor.jsx";
 import { RichText } from "./RichText.jsx";
+import { Modal, ModalHeader, ModalBody, ModalFooter } from "./ui/Modal.jsx";
+import { Button } from "./ui/Button.jsx";
 
 // ─── TEMPLATE EDITOR MODAL ──────────────────────────────────────────────────
 // Pre-filled session editor — user picks a template, then customises everything
@@ -14,7 +16,7 @@ export function TemplateEditorModal({
   template, startTime: initStart, address: initAddr, coachNote: initNote,
   onConfirm, onSaveAsTemplate, onSaveBlock, onClose, allSessions, dbBlocks, onCreateCustom,
 }) {
-  const { styles, isDark } = useThemeCtx();
+  const { isDark } = useThemeCtx();
   const originalName = template.title || template.name || "";
 
   // ── Detect mode ──
@@ -165,7 +167,6 @@ export function TemplateEditorModal({
   };
 
   // ── Styles ──
-  const surface = isDark ? "#241b13" : "#ffffff";
   const bg2     = isDark ? "#241b13" : "#f3f7f4";
   const border  = isDark ? "#3a2e22" : "#daeade";
   const text    = isDark ? "#f0e6d0" : "#1a2e1f";
@@ -177,23 +178,11 @@ export function TemplateEditorModal({
   const sectionStyle = { padding: "10px 12px", background: isDark ? "#1a1410" : "#f5f0e8", borderRadius: 8, border: `1px solid ${isDark ? "#2a2018" : "#ccc6b8"}` };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: surface, borderRadius: 12, width: "100%", maxWidth: 520, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px #0009", overflow: "hidden" }}>
-
-        {/* ── Header ── */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${border}` }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: text }}>Personnaliser la séance</div>
-            <div style={{ fontSize: 10, color: muted, marginTop: 2 }}>
-              Depuis : <span style={{ fontWeight: 600, color: accent }}>{originalName}</span>
-            </div>
-          </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: muted, fontSize: 18, cursor: "pointer", lineHeight: 1 }}>✕</button>
-        </div>
+    <Modal onClose={onClose} maxWidth={520} zIndex={210} ariaLabel="Personnaliser la séance">
+      <ModalHeader eyebrow={`Depuis · ${originalName}`} title="Personnaliser la séance" onClose={onClose} />
 
         {/* ── Scrollable content ── */}
-        <div style={{ overflowY: "auto", flex: 1, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <ModalBody style={{ gap: 14 }}>
 
           {/* ─ Infos séance ─ */}
           <div style={{ ...sectionStyle, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -419,29 +408,19 @@ export function TemplateEditorModal({
               </div>
             </div>
           )}
-        </div>
+        </ModalBody>
 
         {/* ── Footer ── */}
-        <div style={{ padding: "10px 16px", borderTop: `1px solid ${border}`, display: "flex", gap: 8, alignItems: "center" }}>
-          <button onClick={onClose}
-            style={{ background: "none", border: `1px solid ${border}`, borderRadius: 7, color: muted, padding: "8px 14px", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
-            Annuler
-          </button>
-
-          <button onClick={() => setSaveOpen(o => !o)}
-            style={{ background: "none", border: `1px solid ${accent}55`, borderRadius: 7, color: accent, padding: "8px 14px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}>
+        <ModalFooter>
+          <Button variant="secondary" size="md" onClick={onClose}>Annuler</Button>
+          <Button variant="ghost" size="md" onClick={() => setSaveOpen(o => !o)} style={{ color: accent }}>
             {saved ? "✓ Sauvegardé" : "Sauver comme modèle"}
-          </button>
-
+          </Button>
           <div style={{ flex: 1 }} />
-
-          <button onClick={handleConfirm}
-            disabled={!title.trim()}
-            style={{ background: accent, border: "none", borderRadius: 7, color: "#fff", padding: "9px 20px", cursor: title.trim() ? "pointer" : "not-allowed", fontSize: 12, fontFamily: "inherit", fontWeight: 700, boxShadow: `0 2px 8px ${accent}44`, opacity: title.trim() ? 1 : 0.4 }}>
+          <Button variant="primary" size="md" disabled={!title.trim()} onClick={handleConfirm}>
             Ajouter au calendrier
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </ModalFooter>
+    </Modal>
   );
 }
