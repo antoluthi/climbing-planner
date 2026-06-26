@@ -1302,6 +1302,7 @@ function AccueilViewBody({
                   const cur = parseFloat(weightInput.replace(",", ".")) || 0;
                   const next = Math.max(0, Math.round((cur - 0.1) * 10) / 10);
                   setWeightInput(String(next));
+                  onSaveWeight?.(today, next);
                 }}
                 aria-label="Diminuer"
                 style={{
@@ -1331,6 +1332,7 @@ function AccueilViewBody({
                   const cur = parseFloat(weightInput.replace(",", ".")) || 0;
                   const next = Math.round((cur + 0.1) * 10) / 10;
                   setWeightInput(String(next));
+                  onSaveWeight?.(today, next);
                 }}
                 aria-label="Augmenter"
                 style={{

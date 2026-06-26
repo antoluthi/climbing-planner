@@ -39,17 +39,20 @@ export function HooperSection({ hoopers, onAdd, range }) {
     setOpen(o => !o);
   };
 
-  const handleSave = () => {
-    if (!allFilled) return;
+  const autoSaveHooper = (updated) => {
+    const filled = updated.fatigue && updated.stress && updated.soreness && updated.sleep;
+    if (!filled) return;
+    const t = updated.fatigue + updated.stress + updated.soreness + updated.sleep;
+    if (todayEntry && updated.fatigue === todayEntry.fatigue && updated.stress === todayEntry.stress &&
+        updated.soreness === todayEntry.soreness && updated.sleep === todayEntry.sleep) return;
     onAdd({
       id: todayEntry?.id || "h_" + Date.now().toString(36),
       date: today,
       time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
-      ...form, total,
+      ...updated, total: t,
     });
-    setForm({ fatigue: null, stress: null, soreness: null, sleep: null });
-    setSaved(true); setOpen(false);
-    setTimeout(() => setSaved(false), 3000);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   // Build chart data based on range
@@ -130,7 +133,11 @@ export function HooperSection({ hoopers, onAdd, range }) {
                     ? (v <= 2 ? (isDark ? "#82c894" : "#82c894") : v <= 4 ? "#f0a060" : "#f08070")
                     : (isDark ? "#3a2e22" : "#d8d3ca");
                   return (
-                    <button key={v} onClick={() => setForm(f => ({ ...f, [key]: v }))}
+                    <button key={v} onClick={() => {
+                        const updated = { ...form, [key]: v };
+                        setForm(updated);
+                        autoSaveHooper(updated);
+                      }}
                       style={{ ...btnBase, background: bg, color: active ? "#fff" : styles.dashText, fontWeight: active ? 600 : 400 }}>
                       {v}
                     </button>
@@ -144,10 +151,9 @@ export function HooperSection({ hoopers, onAdd, range }) {
               Indice : {total} — {hooperLabel(total)}
             </div>
           )}
-          <button onClick={handleSave} disabled={!allFilled}
-            style={{ ...styles.sleepImportBtn, opacity: allFilled ? 1 : 0.4, cursor: allFilled ? "pointer" : "default" }}>
-            Enregistrer
-          </button>
+          <div style={{ fontSize: 10, color: isDark ? "#a89a82" : "#8a7f70", letterSpacing: "0.04em" }}>
+            Sauvegarde automatique
+          </div>
         </div>
       )}
 

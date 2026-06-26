@@ -3,8 +3,6 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { addDays, localDateStr, getLastKnownWeight } from "../lib/helpers.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { Z } from "../theme/makeStyles.js";
-import { toast } from "../lib/toast.js";
-import { ConfirmModal } from "./ConfirmModal.jsx";
 import {
   getActiveRemindersForDate,
   isReminderCheckedOn,
@@ -32,9 +30,6 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
   const isToday = dateISO === today;
   const isFutureDay = dateISO > today;
 
-  // ── Confirm-on-close si modifications non-enregistrées ────────────────────
-  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
-  // (anyDirty calculé plus bas)
   const requestCloseRef = useRef(null);
 
   useEffect(() => {
@@ -87,14 +82,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
   }, [dateISO]);
   const hAllFilled = hForm.fatigue && hForm.stress && hForm.soreness && hForm.sleep;
   const hTotal = hAllFilled ? hForm.fatigue + hForm.stress + hForm.soreness + hForm.sleep : null;
-  const hFormDirty = existingH
-    ? (hForm.fatigue !== existingH.fatigue || hForm.stress !== existingH.stress ||
-       hForm.soreness !== existingH.soreness || hForm.sleep !== existingH.sleep)
-    : hAllFilled;
-  const hCanSave = hAllFilled && (!existingH || hFormDirty);
-
   const [helpOpen, setHelpOpen] = useState(false);
-  const [savedAnim, setSavedAnim] = useState(false);
   const [microToast, setMicroToast] = useState("");
   const microToastTimer = useRef(null);
 
@@ -124,45 +112,36 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
     if (noteDirty) {
       onSaveNote(dateISO, noteText);
       setNoteSaved(noteText);
-      showMicroToast("Notes enregistrées");
+      showMicroToast("Note enregistrée");
     }
+  };
+  const saveWeight = (val) => {
+    const rounded = Math.round(val * 10) / 10;
+    onSaveWeight(dateISO, rounded);
+    showMicroToast("Poids enregistré");
   };
   const flushWeight = () => {
     if (!weightDirty) return;
     const val = parseFloat(weightInput.replace(",", "."));
-    if (!isNaN(val) && val > 0) {
-      onSaveWeight(dateISO, Math.round(val * 10) / 10);
-      showMicroToast("Poids enregistré");
-    } else if (weightInput.trim() === "") {
-      onSaveWeight(dateISO, null);
-    }
+    if (!isNaN(val) && val > 0) saveWeight(val);
+    else if (weightInput.trim() === "") onSaveWeight(dateISO, null);
+  };
+  const flushHooper = (form) => {
+    const filled = form.fatigue && form.stress && form.soreness && form.sleep;
+    if (!filled) return;
+    const total = form.fatigue + form.stress + form.soreness + form.sleep;
+    const existing = (data.hooper || []).find(h => h.date === dateISO);
+    if (existing && form.fatigue === existing.fatigue && form.stress === existing.stress &&
+        form.soreness === existing.soreness && form.sleep === existing.sleep) return;
+    onAddHooper({ date: dateISO, time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), ...form, total });
+    showMicroToast("Hooper enregistré");
   };
 
-  // Unified save: flush all
-  const anyDirty = noteDirty || weightDirty || hCanSave;
-  // Demande de fermeture protégée : si dirty, ouvre la confirm modal.
   const requestClose = () => {
-    if (anyDirty) setConfirmCloseOpen(true);
-    else onClose();
+    if (noteDirty) flushNote();
+    onClose();
   };
   requestCloseRef.current = requestClose;
-  const handleSaveAll = () => {
-    if (!anyDirty) return;
-    const saved = [];
-    if (noteDirty) { onSaveNote(dateISO, noteText); setNoteSaved(noteText); saved.push("note"); }
-    if (weightDirty) {
-      const val = parseFloat(weightInput.replace(",", "."));
-      if (!isNaN(val) && val > 0) { onSaveWeight(dateISO, Math.round(val * 10) / 10); saved.push("poids"); }
-      else if (weightInput.trim() === "") onSaveWeight(dateISO, null);
-    }
-    if (hCanSave) {
-      onAddHooper({ date: dateISO, time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), ...hForm, total: hTotal });
-      saved.push("Hooper");
-    }
-    setSavedAnim(true);
-    toast.success(`Journal enregistré${saved.length ? ` · ${saved.join(", ")}` : ""}`);
-    setTimeout(() => onClose(), 700);
-  };
 
   // ── Tokens ──
   const paper        = isDark ? "#241b13" : "#fcf8ef";
@@ -306,6 +285,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
                     const cur = parseFloat(weightInput.replace(",", ".")) || 0;
                     const next = Math.max(0, Math.round((cur - 0.1) * 10) / 10);
                     setWeightInput(String(next));
+                    if (next > 0) saveWeight(next);
                   }}
                   style={stepperBtn({ surfaceMuted, accent })}
                   aria-label="Diminuer"
@@ -315,6 +295,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
                   value={weightInput}
                   onChange={e => setWeightInput(e.target.value)}
                   onBlur={flushWeight}
+                  onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
                   placeholder="—"
                   style={{
                     width: 50, textAlign: "center",
@@ -328,6 +309,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
                     const cur = parseFloat(weightInput.replace(",", ".")) || 0;
                     const next = Math.round((cur + 0.1) * 10) / 10;
                     setWeightInput(String(next));
+                    saveWeight(next);
                   }}
                   style={stepperBtn({ surfaceMuted, accent })}
                   aria-label="Augmenter"
@@ -429,7 +411,11 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
                         return (
                           <button
                             key={v}
-                            onClick={() => setHForm(f => ({ ...f, [key]: v }))}
+                            onClick={() => {
+                              const updated = { ...hForm, [key]: v };
+                              setHForm(updated);
+                              flushHooper(updated);
+                            }}
                             aria-label={`${label} ${v}`}
                             style={{
                               flex: 1, height: 6, borderRadius: 3,
@@ -458,7 +444,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
 
         {/* ── Footer sticky ─────────────────────────── */}
         <div style={{
-          padding: "14px 18px",
+          padding: "10px 18px",
           background: paperDim,
           borderTop: `1px solid ${border}`,
           flexShrink: 0,
@@ -475,37 +461,11 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
               {microToast}
             </div>
           )}
-          <button
-            onClick={handleSaveAll}
-            disabled={!anyDirty && !savedAnim}
-            style={{
-              width: "100%",
-              background: savedAnim ? "#2e6b3f" : inkPrimary,
-              color: savedAnim ? "#fff" : (isDark ? paper : "#fff"),
-              border: "none", borderRadius: 10,
-              padding: "12px 16px",
-              fontSize: 14, fontWeight: 600,
-              fontFamily: "inherit",
-              opacity: anyDirty || savedAnim ? 1 : 0.45,
-              cursor: anyDirty && !savedAnim ? "pointer" : "default",
-              transition: "all 0.25s",
-              transform: savedAnim ? "scale(1.01)" : "none",
-            }}
-          >
-            {savedAnim ? "Enregistré ✓" : "Enregistrer la journée"}
-          </button>
+          <div style={{ fontSize: 10, color: textLight, textAlign: "center", letterSpacing: "0.04em" }}>
+            Sauvegarde automatique
+          </div>
         </div>
       </div>
-      {confirmCloseOpen && (
-        <ConfirmModal
-          title="Abandonner les modifications ?"
-          sub="Tes modifications du journal seront perdues."
-          confirmLabel="Abandonner"
-          cancelLabel="Continuer"
-          onConfirm={onClose}
-          onClose={() => setConfirmCloseOpen(false)}
-        />
-      )}
     </div>
   );
 }
