@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
+import { Modal, ModalHeader, ModalBody, ModalFooter, modalTokens } from "./ui/Modal.jsx";
+import { Button } from "./ui/Button.jsx";
 
 // ─── PHOTO CROP MODAL ─────────────────────────────────────────────────────────
 
 export function PhotoCropModal({ onSave, onClose }) {
-  const { styles, isDark } = useThemeCtx();
+  const { isDark } = useThemeCtx();
+  const T = modalTokens(isDark);
   const SIZE = 260;
   const OUTPUT = 240;
 
@@ -100,7 +103,7 @@ export function PhotoCropModal({ onSave, onClose }) {
       el.removeEventListener("wheel", handleWheel);
       el.removeEventListener("touchmove", handleTouchMove);
     };
-  }, [imgSrc, handleWheel, handleTouchMove]); // re-attach when image loads (el becomes visible)
+  }, [imgSrc, handleWheel, handleTouchMove]);
 
   const handleConfirm = () => {
     if (!imgSrc) return;
@@ -124,59 +127,39 @@ export function PhotoCropModal({ onSave, onClose }) {
     img.src = imgSrc;
   };
 
-  const accent = isDark ? "#e0a875" : "#8b4c20";
-  const mutedColor = isDark ? "#a89a82" : "#8a7f70";
-  const textColor = isDark ? "#f0e6d0" : "#2a2218";
-
   return (
-    <div style={styles.cropOverlay}>
-      <div style={styles.cropModal}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: textColor, letterSpacing: "0.08em" }}>RECADRER LA PHOTO</span>
-          <button style={{ background: "none", border: "none", color: mutedColor, cursor: "pointer", fontSize: 18 }} onClick={onClose}>✕</button>
-        </div>
-
-        {!imgSrc ? (
-          <div style={{ textAlign: "center", padding: "32px 0" }}>
-            <div style={{ fontSize: 14, marginBottom: 12, color: isDark ? "#555" : "#aaa" }}>Photo</div>
-            <button
-              style={{ background: "none", border: `1px solid ${accent}55`, color: accent, padding: "8px 20px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}
-              onClick={() => fileRef.current?.click()}
-            >Choisir une photo</button>
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
-          </div>
-        ) : (
-          <>
-            {/* Crop area — wheel + touchmove attached via useEffect (passive:false) */}
+    <Modal onClose={onClose} maxWidth={340} ariaLabel="Recadrer la photo">
+      <ModalHeader title="Recadrer la photo" onClose={onClose} />
+      {!imgSrc ? (
+        <ModalBody style={{ alignItems: "center", padding: "32px 18px" }}>
+          <div style={{ fontSize: 13, color: T.textLight }}>Aucune photo sélectionnée</div>
+          <Button variant="secondary" size="md" onClick={() => fileRef.current?.click()}>Choisir une photo</Button>
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
+        </ModalBody>
+      ) : (
+        <>
+          <ModalBody style={{ alignItems: "center", gap: 8 }}>
             <div
               ref={cropAreaRef}
-              style={{ position: "relative", width: SIZE, height: SIZE, margin: "0 auto", borderRadius: "50%", overflow: "hidden", cursor: dragRef.current ? "grabbing" : "grab", background: "#000", userSelect: "none" }}
+              style={{ position: "relative", width: SIZE, height: SIZE, borderRadius: "50%", overflow: "hidden", cursor: dragRef.current ? "grabbing" : "grab", background: "#000", userSelect: "none" }}
               onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
               onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}
             >
               <img src={imgSrc} style={getImgStyle()} alt="" />
-              {/* Radial gradient to show circle edge */}
               <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: `radial-gradient(circle at center, transparent ${SIZE / 2 - 5}px, rgba(0,0,0,0.55) ${SIZE / 2 - 4}px)` }} />
-              {/* SVG circle border — inside the crop div so it never blocks pointer events */}
               <svg width={SIZE} height={SIZE} style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}>
-                <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2 - 2} fill="none" stroke={accent} strokeWidth="1.5" />
+                <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE / 2 - 2} fill="none" stroke={T.accent} strokeWidth="1.5" />
               </svg>
             </div>
-            <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: mutedColor }}>Glisser · Molette ou pincer pour zoomer</div>
-            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-              <button
-                style={{ flex: 1, background: "none", border: `1px solid ${isDark ? "#3a2e22" : "#bfb9aa"}`, color: mutedColor, padding: "8px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
-                onClick={() => fileRef.current?.click()}
-              >Changer</button>
-              <button
-                style={{ flex: 2, background: isDark ? "#3a2e22" : "#d4e8db", border: `1px solid ${accent}66`, color: accent, padding: "8px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
-                onClick={handleConfirm}
-              >Confirmer</button>
-            </div>
+            <div style={{ fontSize: 11, color: T.textLight }}>Glisser · molette ou pincer pour zoomer</div>
             <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
-          </>
-        )}
-      </div>
-    </div>
+          </ModalBody>
+          <ModalFooter align="between">
+            <Button variant="ghost" size="md" onClick={() => fileRef.current?.click()}>Changer</Button>
+            <Button variant="primary" size="md" onClick={handleConfirm}>Confirmer</Button>
+          </ModalFooter>
+        </>
+      )}
+    </Modal>
   );
 }
