@@ -67,4 +67,20 @@ npm install
 npm run dev
 ```
 
+## APK Android (Capacitor)
+
+```bash
+# ⚠️ .env.local doit exister AVANT le build : la clé Supabase est intégrée
+# au bundle. Sans elle, l'APK démarre silencieusement en mode hors-ligne.
+npm run cap:sync   # build web (mode capacitor, sans service worker) + sync android/
+npm run cap:open   # ouvre Android Studio pour builder/signer l'APK
+```
+
+- Le service worker PWA est désactivé dans le build APK (`--mode capacitor`).
+- Connexion magic link : le deep link `com.climbingplanner.app://auth-callback`
+  doit être ajouté dans Supabase Dashboard > Auth > URL Configuration >
+  Redirect URLs, sinon seul le login par mot de passe fonctionne dans l'APK.
+- Icônes/splash Android : générés depuis `public/icon-512.png`
+  (voir `AUDIT-APK.md`, sprint 3.1).
+
 Voir `CLAUDE.md` pour la documentation technique complète.
