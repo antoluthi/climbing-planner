@@ -4,6 +4,7 @@ import supabase from "../lib/supabase.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { BLOCK_TYPES } from "../lib/constants.js";
 import { getChargeColor } from "../lib/charge.js";
+import { Modal, ModalHeader } from "./ui/Modal.jsx";
 
 /// ─── MODAL: HISTORIQUE FEEDBACKS COACH ───────────────────────────────────────
 
@@ -83,19 +84,12 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
   }, [type, feedbacks, id]);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: surface, borderRadius: 12, border: `1px solid ${border}`, width: "100%", maxWidth: 540, maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.35)" }}>
-
-        {/* Header */}
-        <div style={{ padding: "14px 18px 12px", borderBottom: `1px solid ${border}`, display: "flex", alignItems: "flex-start", gap: 10, flexShrink: 0 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>
-              {type === "session" ? "Retours athlètes — Séance" : "Retours athlètes — Bloc"}
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: text }}>{name}</div>
-          </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: muted, cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 4, flexShrink: 0 }}>✕</button>
-        </div>
+    <Modal onClose={onClose} maxWidth={540} ariaLabel={`Retours athlètes — ${name}`}>
+      <ModalHeader
+        eyebrow={type === "session" ? "Retours athlètes — Séance" : "Retours athlètes — Bloc"}
+        title={name}
+        onClose={onClose}
+      />
 
         {/* ── Graphique évolution poids Suspension ── */}
         {suspChartData && suspChartData.points.length > 1 && (
@@ -273,7 +267,6 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -86,8 +86,9 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
   };
 
   const handleSaveName = () => {
-    onUpdateProfile({ ...profile, firstName, lastName });
-    setEditName(false);
+    if (firstName !== (profile.firstName || "") || lastName !== (profile.lastName || "")) {
+      onUpdateProfile({ ...profile, firstName, lastName });
+    }
   };
 
   const handleExport = () => {
@@ -172,38 +173,25 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
 
           {/* Nom */}
           <div style={{ flex: 1, minWidth: 200 }}>
-            {editName ? (
-              <>
-                <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                  <input
-                    style={{ ...styles.profileNameInput, flex: 1, minWidth: 100 }}
-                    value={firstName} onChange={e => setFirstName(e.target.value)}
-                    placeholder="Prénom" autoFocus
-                    onKeyDown={e => e.key === "Enter" && handleSaveName()}
-                  />
-                  <input
-                    style={{ ...styles.profileNameInput, flex: 1, minWidth: 100 }}
-                    value={lastName} onChange={e => setLastName(e.target.value)}
-                    placeholder="Nom de famille"
-                    onKeyDown={e => e.key === "Enter" && handleSaveName()}
-                  />
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button style={styles.profileSaveBtn} onClick={handleSaveName}>Enregistrer</button>
-                  <button style={styles.profileCancelBtn} onClick={() => { setFirstName(profile.firstName || ""); setLastName(profile.lastName || ""); setEditName(false); }}>Annuler</button>
-                </div>
-              </>
-            ) : (
-              <div
-                style={{ cursor: "pointer", padding: "10px 0" }}
-                onClick={() => setEditName(true)}
-              >
-                <div style={{ fontSize: displayName ? 20 : 13, fontWeight: 600, color: displayName ? textColor : mutedColor, letterSpacing: displayName ? "0.02em" : "0.04em" }}>
-                  {displayName || "Ajouter un nom"}
-                </div>
-                <div style={{ fontSize: 11, color: mutedColor, marginTop: 4 }}>{session?.user?.email || "Non connecté"}</div>
+            <div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  style={{ ...styles.profileNameInput, flex: 1, minWidth: 100 }}
+                  value={firstName} onChange={e => setFirstName(e.target.value)}
+                  placeholder="Prénom"
+                  onBlur={handleSaveName}
+                  onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                />
+                <input
+                  style={{ ...styles.profileNameInput, flex: 1, minWidth: 100 }}
+                  value={lastName} onChange={e => setLastName(e.target.value)}
+                  placeholder="Nom de famille"
+                  onBlur={handleSaveName}
+                  onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                />
               </div>
-            )}
+              <div style={{ fontSize: 11, color: mutedColor, marginTop: 6 }}>{session?.user?.email || "Non connecté"}</div>
+            </div>
           </div>
         </div>
       </div>

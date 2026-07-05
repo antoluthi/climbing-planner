@@ -1,0 +1,11 @@
+{
+  "appId": "com.climbingplanner.app",
+  "appName": "Climbing Planner",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#1a1410"
+  }
+}

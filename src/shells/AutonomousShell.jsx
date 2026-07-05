@@ -1,64 +1,67 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // ── Lib ──
-import supabase from "./lib/supabase.js";
-import { MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, BLOCK_TYPES, DEFAULT_SUSPENSION_CONFIG, GRIP_TYPES, CUSTOM_CYCLE_COLORS, isDateInCustomCycle, getCustomCyclesForDate, getDayLogWarning, getMesoColor, getMesoForDate } from "./lib/constants.js";
-import { getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime, migrateWeekKeys, getDaySessions, getDayCharge, getMonthWeeks } from "./lib/helpers.js";
-import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "./lib/charge.js";
-import { generateId, loadData, saveData, migrateData } from "./lib/storage.js";
-import { parseGarminSleepCSV } from "./lib/garmin-csv.js";
+import supabase from "../lib/supabase.js";
+import { DAYS, getDayLogWarning, getMesoColor, getMesoForDate } from "../lib/constants.js";
+import { getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime, getDayCharge } from "../lib/helpers.js";
+import { generateId } from "../lib/storage.js";
 
 // ── Theme ──
-import { ThemeContext, useThemeCtx } from "./theme/ThemeContext.jsx";
-import { makeStyles } from "./theme/makeStyles.js";
+import { ThemeContext } from "../theme/ThemeContext.jsx";
 
-// ── Hooks ──
-import { useWindowWidth } from "./hooks/useWindowWidth.js";
-import { useSupabaseSync } from "./hooks/useSupabaseSync.js";
-import { useCommunitySessionsSync } from "./hooks/useCommunitySessionsSync.js";
-import { useSessionsCatalog } from "./hooks/useSessionsCatalog.js";
-import { useSessionBlocks } from "./hooks/useSessionBlocks.js";
-import { useCoachAthletes } from "./hooks/useCoachAthletes.js";
+// ── Hooks & Context ──
+import { useWindowWidth } from "../hooks/useWindowWidth.js";
+import { useAuth } from "../context/AuthContext.js";
+import { useData } from "../context/DataContext.js";
 
 // ── Components ──
-import { ClimbingPlannerLogo } from "./components/Logo.jsx";
-import { SyncButtons } from "./components/SyncButtons.jsx";
-import { AuthPanel } from "./components/AuthPanel.jsx";
-import { RoleOnboardingModal } from "./components/RoleOnboardingModal.jsx";
-import { OnboardingModal } from "./components/OnboardingModal.jsx";
-import { SessionScheduleModal } from "./components/SessionScheduleModal.jsx";
-import { ConfirmModal } from "./components/ConfirmModal.jsx";
-import { CustomSessionModal } from "./components/CustomSessionModal.jsx";
-import { SessionComposer } from "./components/SessionComposer.jsx";
-import { SessionPicker } from "./components/SessionPicker.jsx";
-import { SessionModal } from "./components/SessionModal.jsx";
-import { CoachPickerModal } from "./components/CoachPickerModal.jsx";
-import { DayColumn } from "./components/DayColumn.jsx";
-import { MonthView } from "./components/MonthView.jsx";
-import { YearView } from "./components/YearView.jsx";
-import { CyclesView } from "./components/CyclesView.jsx";
-import { Dashboard } from "./components/Dashboard.jsx";
-import { DayLogModal } from "./components/DayLogModal.jsx";
-import { TemplateEditorModal } from "./components/TemplateEditorModal.jsx";
-import { ProfileView } from "./components/ProfileView.jsx";
-import { CoachLibraryView } from "./components/CoachLibraryView.jsx";
-import { AccueilView } from "./components/AccueilView.jsx";
-import { DayListView } from "./components/DayListView.jsx";
-import { PublicPlanView } from "./components/PublicPlanView.jsx";
-import { DayNightToggle } from "./components/DayNightToggle.jsx";
-import { NewSessionSheet } from "./components/NewSessionSheet.jsx";
-import { QuickSessionModal } from "./components/QuickSessionModal.jsx";
-import { ToastContainer } from "./components/ToastContainer.jsx";
-import { Caillou } from "./components/Caillou.jsx";
-import { BottomNav } from "./components/BottomNav.jsx";
-import { toast } from "./lib/toast.js";
+import { ClimbingPlannerLogo } from "../components/Logo.jsx";
+import { SyncButtons } from "../components/SyncButtons.jsx";
+import { RoleOnboardingModal } from "../components/RoleOnboardingModal.jsx";
+import { OnboardingModal } from "../components/OnboardingModal.jsx";
+import { SessionScheduleModal } from "../components/SessionScheduleModal.jsx";
+import { ConfirmModal } from "../components/ConfirmModal.jsx";
+import { CustomSessionModal } from "../components/CustomSessionModal.jsx";
+import { SessionComposer } from "../components/SessionComposer.jsx";
+import { SessionPicker } from "../components/SessionPicker.jsx";
+import { SessionModal } from "../components/SessionModal.jsx";
+import { CoachPickerModal } from "../components/CoachPickerModal.jsx";
+import { DayColumn } from "../components/DayColumn.jsx";
+import { MonthView } from "../components/MonthView.jsx";
+import { YearView } from "../components/YearView.jsx";
+import { CyclesView } from "../components/CyclesView.jsx";
+import { Dashboard } from "../components/Dashboard.jsx";
+import { DayLogModal } from "../components/DayLogModal.jsx";
+import { TemplateEditorModal } from "../components/TemplateEditorModal.jsx";
+import { ProfileView } from "../components/ProfileView.jsx";
+import { CoachLibraryView } from "../components/CoachLibraryView.jsx";
+import { AccueilView } from "../components/AccueilView.jsx";
+import { DayListView } from "../components/DayListView.jsx";
+import { NewSessionSheet } from "../components/NewSessionSheet.jsx";
+import { QuickSessionModal } from "../components/QuickSessionModal.jsx";
+import { ToastContainer } from "../components/ToastContainer.jsx";
+import { Caillou } from "../components/Caillou.jsx";
+import { BottomNav } from "../components/BottomNav.jsx";
+import { toast } from "../lib/toast.js";
 
-// ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
+export function AutonomousShell({ isDark, toggleTheme, styles }) {
+  const { session, setSession, syncStatus } = useAuth();
+  const {
+    data, setData, cloudLoaded, roleResolved, viewingAthlete,
+    switchToAthlete, switchBackToCoach, pullFromCloud,
+    uploadNow, writeStatus,
+    catalog, saveUserSession, deleteUserSession,
+    dbBlocks, saveBlock,
+    communitySessions, pushToCommunity,
+    athletes, searchAthletes, addAthlete, removeAthlete,
+    addMesocycle, updateMesocycle, deleteMesocycle,
+    addMicrocycle, updateMicrocycle, deleteMicrocycle,
+    addCustomCycle, updateCustomCycle, deleteCustomCycle,
+    addQuickSession, editQuickSession, removeQuickSession,
+    syncPlannedSessions,
+    addSessionBlock, editSessionBlock, deleteSessionBlock,
+  } = useData();
 
-export default function ClimbingPlanner() {
-  const [data, setData] = useState(loadData);
-  const [cloudLoaded, setCloudLoaded] = useState(false);
-  const [roleResolved, setRoleResolved] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState("accueil");
   const [sessionBuilderDay, setSessionBuilderDay] = useState(null);
@@ -71,11 +74,7 @@ export default function ClimbingPlanner() {
   const [sessionComposerForm, setSessionComposerForm] = useState(null);
   const [templateEditor, setTemplateEditor] = useState(null);
   const [sessionModal, setSessionModal] = useState(null);
-  const [isDark, setIsDark] = useState(() => localStorage.getItem("climbing_theme") === "dark");
   const [logDate, setLogDate] = useState(null);
-  const [publicPlanUser, setPublicPlanUser] = useState(null); // { userId, firstName, lastName, avatarUrl }
-  const [showProfilePicker, setShowProfilePicker] = useState(false);
-  const [publicProfiles, setPublicProfiles] = useState(null); // null = not loaded yet
   const [addChoiceDay, setAddChoiceDay] = useState(null);
   const [quickSessionForm, setQuickSessionForm] = useState(null);
   const [pendingSchedule, setPendingSchedule] = useState(null);
@@ -84,26 +83,7 @@ export default function ClimbingPlanner() {
     return dow === 0 ? 6 : dow - 1;
   });
 
-  const styles = makeStyles(isDark);
-  const toggleTheme = () => setIsDark(d => {
-    localStorage.setItem("climbing_theme", d ? "light" : "dark");
-    return !d;
-  });
-
-  const { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges, hasPendingSave } = useSupabaseSync();
-  const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
-  const { catalog, saveUserSession, deleteUserSession } = useSessionsCatalog(session?.user?.id);
-  const { blocks: dbBlocks, saveBlock, deleteBlock } = useSessionBlocks(session?.user?.id);
-  const { athletes, searchAthletes, addAthlete, removeAthlete } = useCoachAthletes(session?.user?.id);
-
-  // ── Guard anti-écrasement cloud : quand on charge depuis le cloud,
-  //    on ne re-sauvegarde PAS vers le cloud (évite la race condition debounce).
-  const isCloudSetRef = useRef(false);
-
-  // ── Vue athlète (coach regarde les données d'un athlète) ──
-  const coachDataRef = useRef(null);
   const swipeRef = useRef(null);
-  const [viewingAthlete, setViewingAthlete] = useState(null);
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -113,152 +93,10 @@ export default function ClimbingPlanner() {
   const weekSessions = data.weeks[wKey] || Array(7).fill(null).map(() => []);
   const weekMeta = data.weekMeta[wKey] || { mesocycle: "", microcycle: "", note: "" };
 
-  // Phase 1 : localStorage (sync, immédiat)
-  // Phase 2 : cloud au premier login (données complètes)
+  // ── Reset view on sign-out ──
   useEffect(() => {
-    if (!session || cloudLoaded) return;
-    loadFromCloud()
-      .then(cloudData => {
-        setCloudLoaded(true);
-        if (cloudData) {
-          const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
-          // Migration schemaVersion 2 : discipline/mode/chargePlanned
-          const migrated = migrateData(cleanData);
-          isCloudSetRef.current = true; // skip the auto-save that will be triggered by setData
-          setData(migrated);
-          saveData(migrated);
-        } else {
-          uploadNow(data, session.user.id);
-        }
-      })
-      .catch(() => {});
-  }, [session, cloudLoaded, loadFromCloud, uploadNow]);
-
-  // ── Realtime sync : recharge silencieusement si un autre appareil/onglet sauvegarde ──
-  useEffect(() => {
-    if (!session?.user?.id || !cloudLoaded) return;
-    const unsubscribe = subscribeToChanges(session.user.id, async () => {
-      // Si on a un save en cours (debounce actif), nos données locales sont plus
-      // récentes que le cloud — ne pas recharger, on écraserais nos propres modifs.
-      if (hasPendingSave()) return;
-      try {
-        const cloudData = await loadFromCloud();
-        if (cloudData) {
-          const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
-          const migrated = migrateData(cleanData);
-          isCloudSetRef.current = true;
-          setData(migrated);
-          saveData(migrated);
-        }
-      } catch { /* realtime fail = ignore */ }
-    });
-    return unsubscribe;
-  }, [session?.user?.id, cloudLoaded]); // eslint-disable-line
-
-  // Phase 2b : re-lire le status depuis la DB
-  useEffect(() => {
-    if (!session) { setCloudLoaded(false); setRoleResolved(false); setViewMode("accueil"); return; }
-    if (!cloudLoaded) return;
-    if (!supabase) { setRoleResolved(true); return; }
-    supabase
-      .from("climbing_plans")
-      .select("status, first_name, last_name")
-      .eq("user_id", session.user.id)
-      .maybeSingle()
-      .then(({ data: row }) => {
-        if (row) {
-          setData(d => {
-            const p = { ...(d.profile ?? {}) };
-            if ("status" in row) p.role = row.status;
-            if (row.first_name != null) p.firstName = row.first_name;
-            if (row.last_name != null) p.lastName = row.last_name;
-            return { ...d, profile: p };
-          });
-        }
-        setRoleResolved(true);
-      })
-      .catch(() => setRoleResolved(true));
-  }, [session, cloudLoaded]);
-
-  // ── Migration one-shot : customSessions locaux → sessions_catalog DB ──
-  const migrationDoneRef = useRef(false);
-  useEffect(() => {
-    if (migrationDoneRef.current) return;
-    if (!session?.user?.id) return;
-    const customs = data?.customSessions;
-    if (!customs || customs.length === 0) return;
-    migrationDoneRef.current = true;
-    Promise.all(customs.map(s => saveUserSession(s))).then(() => {
-      setData(d => ({ ...d, customSessions: [] }));
-    });
-  }, [session?.user?.id, data?.customSessions?.length, saveUserSession]);
-
-  // ── Migration one-shot : avatarDataUrl base64 → Supabase Storage ──
-  // Pour les comptes qui ont une photo base64 stockée dans le JSONB,
-  // on l'upload une fois dans le bucket `avatars` et on la nettoie.
-  const avatarMigratedRef = useRef(false);
-  useEffect(() => {
-    if (avatarMigratedRef.current) return;
-    if (!session?.user?.id) return;
-    if (!cloudLoaded) return;
-    const legacy = data?.profile?.avatarDataUrl;
-    if (!legacy || data?.profile?.avatarUrl) return;
-    avatarMigratedRef.current = true;
-    import("./lib/avatar-storage.js")
-      .then(({ uploadAvatar }) => uploadAvatar(session.user.id, legacy))
-      .then(url => {
-        setData(d => ({
-          ...d,
-          profile: { ...(d.profile || {}), avatarUrl: url, avatarDataUrl: undefined },
-        }));
-      })
-      .catch(e => {
-        // eslint-disable-next-line no-console
-        console.warn("[avatar] migration legacy → storage failed:", e);
-      });
-  }, [session?.user?.id, cloudLoaded, data?.profile?.avatarDataUrl, data?.profile?.avatarUrl]);
-
-  const pullFromCloud = async () => {
-    const cloudData = await loadFromCloud();
-    if (cloudData) { setData(cloudData); saveData(cloudData); }
-  };
-
-  useEffect(() => {
-    // Si les données viennent d'être chargées depuis le cloud, ne pas re-sauvegarder
-    // (évite d'écraser des modifications utilisateur en vol pendant le debounce).
-    if (isCloudSetRef.current) {
-      isCloudSetRef.current = false;
-      return;
-    }
-    if (viewingAthlete) {
-      saveToCloud(data, viewingAthlete.userId);
-    } else {
-      saveData(data);
-      saveToCloud(data, session?.user?.id);
-    }
-  }, [data]);
-
-  const switchToAthlete = async (athlete) => {
-    if (!supabase) return;
-    coachDataRef.current = data;
-    const { data: row } = await supabase
-      .from("climbing_plans")
-      .select("data")
-      .eq("user_id", athlete.userId)
-      .maybeSingle();
-    const athleteData = row?.data ?? { weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES, sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {}, profile: {}, customCycles: [], cyclesLocked: false };
-    setViewingAthlete(athlete);
-    setData(athleteData);
-    setViewMode("week");
-  };
-
-  const switchBackToCoach = () => {
-    if (coachDataRef.current) {
-      setData(coachDataRef.current);
-      coachDataRef.current = null;
-    }
-    setViewingAthlete(null);
-  };
+    if (!session) setViewMode("accueil"); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [session]);
 
   // ── Navigation ──
   const handleDateGoToCurrent = () => setCurrentDate(new Date());
@@ -509,89 +347,6 @@ export default function ClimbingPlanner() {
     setMetaEditing(false);
   };
 
-  // ── Mesocycle CRUD ──
-  const updateMesocycles = updater => setData(d => ({ ...d, mesocycles: updater(d.mesocycles || []) }));
-  const addMesocycle = () => updateMesocycles(m => [...m, { id: generateId(), label: "Nouveau mésocycle", color: "#e0a875", durationWeeks: 4, startDate: "", description: "", microcycles: [] }]);
-  const updateMesocycle = (id, changes) => updateMesocycles(m => m.map(x => x.id === id ? { ...x, ...changes } : x));
-  const deleteMesocycle = id => updateMesocycles(m => m.filter(x => x.id !== id));
-  const addMicrocycle = mesoId => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: [...x.microcycles, { id: generateId(), label: "Nouveau microcycle", durationWeeks: 1, description: "" }] } : x));
-  const updateMicrocycle = (mesoId, microId, changes) => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: x.microcycles.map(mc => mc.id === microId ? { ...mc, ...changes } : mc) } : x));
-  const deleteMicrocycle = (mesoId, microId) => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: x.microcycles.filter(mc => mc.id !== microId) } : x));
-
-  // ── Custom cycle CRUD ──
-  const updateCustomCycles = updater => setData(d => ({ ...d, customCycles: updater(d.customCycles || []) }));
-  const addCustomCycle = cc => updateCustomCycles(list => [...list, cc]);
-  const updateCustomCycle = (id, cc) => updateCustomCycles(list => list.map(x => x.id === id ? { ...x, ...cc } : x));
-  const deleteCustomCycle = id => updateCustomCycles(list => list.filter(x => x.id !== id));
-
-  // ── Sync planning futur ──
-  const syncPlannedSessions = (updatedSession) => {
-    if (!updatedSession?.id) return;
-    const todayKey = weekKey(getMondayOf(new Date()));
-    setData(d => {
-      let changed = false;
-      const newWeeks = Object.fromEntries(
-        Object.entries(d.weeks).map(([key, weekData]) => {
-          if (key < todayKey || !Array.isArray(weekData)) return [key, weekData];
-          const newWeek = weekData.map(dayArr =>
-            Array.isArray(dayArr)
-              ? dayArr.map(s => {
-                  if (s.id === updatedSession.id && !s.isBlock) {
-                    changed = true;
-                    return { ...updatedSession, feedback: s.feedback, startTime: s.startTime, endTime: s.endTime, coachNote: s.coachNote, date: s.date };
-                  }
-                  return s;
-                })
-              : dayArr
-          );
-          return [key, newWeek];
-        })
-      );
-      return changed ? { ...d, weeks: newWeeks } : d;
-    });
-  };
-
-  const syncPlannedBlocks = (updatedBlock) => {
-    if (!updatedBlock?.id) return;
-    const todayKey = weekKey(getMondayOf(new Date()));
-    setData(d => {
-      let changed = false;
-      const newWeeks = Object.fromEntries(
-        Object.entries(d.weeks).map(([key, weekData]) => {
-          if (key < todayKey || !Array.isArray(weekData)) return [key, weekData];
-          const newWeek = weekData.map(dayArr =>
-            Array.isArray(dayArr)
-              ? dayArr.map(s => {
-                  if (s.id === updatedBlock.id && s.isBlock) {
-                    changed = true;
-                    return { ...updatedBlock, isBlock: true, feedback: s.feedback, startTime: s.startTime, endTime: s.endTime, coachNote: s.coachNote, date: s.date };
-                  }
-                  return s;
-                })
-              : dayArr
-          );
-          return [key, newWeek];
-        })
-      );
-      return changed ? { ...d, weeks: newWeeks } : d;
-    });
-  };
-
-  // ── Session blocks CRUD ──
-  const addSessionBlock = b => saveBlock(b);
-  const editSessionBlock = async (b) => {
-    await saveBlock(b);
-    const affectedSessions = catalog.filter(s => s.blocks?.some(bl => bl.id === b.id));
-    for (const sess of affectedSessions) {
-      const updatedBlocks = sess.blocks.map(bl => bl.id === b.id ? { ...bl, ...b } : bl);
-      const updatedSession = { ...sess, blocks: updatedBlocks };
-      saveUserSession(updatedSession);
-      syncPlannedSessions(updatedSession);
-    }
-    syncPlannedBlocks(b);
-  };
-  const deleteSessionBlock = id => deleteBlock(id);
-
   // ── Custom session handlers ──
   const saveCustomSession = (customSession, targetDayIndex) => {
     if (customSessionForm?.onSave) {
@@ -682,12 +437,6 @@ export default function ClimbingPlanner() {
     setSessionBuilderDay(null);
   };
 
-  // ── QuickSessions CRUD ──
-  const addQuickSession = qs => setData(d => ({ ...d, quickSessions: [...(d.quickSessions || []), qs] }));
-  const editQuickSession = qs => setData(d => ({ ...d, quickSessions: (d.quickSessions || []).map(q => q.id === qs.id ? qs : q) }));
-  const removeQuickSession = id => setData(d => ({ ...d, quickSessions: (d.quickSessions || []).filter(q => q.id !== id) }));
-
-
   const isCalendarMode = ["week", "month", "year"].includes(viewMode);
   const isCoach = data.profile?.role === "coach";
   const isAuto = data.profile?.role === "auto";
@@ -762,177 +511,6 @@ export default function ClimbingPlanner() {
     : syncStatus === "saved" ? <span style={{ fontSize: 11, color: isDark ? "#e0a875" : "#8b4c20" }} title="Synchronisé">✓</span>
     : syncStatus === "offline" ? <span style={{ fontSize: 11, color: "#f0a060" }} title="Hors ligne">—</span>
     : null;
-
-  // ── Auth gate ──
-  const accent = isDark ? "#e0a875" : "#8b4c20";
-  if (!authChecked) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: isDark ? "#1a1410" : "#f0f0f0" }}>
-        <div style={{ color: accent, fontSize: 28, fontWeight: 300, letterSpacing: "0.1em" }}>…</div>
-      </div>
-    );
-  }
-  if (publicPlanUser) {
-    return (
-      <PublicPlanView
-        onBack={() => setPublicPlanUser(null)}
-        userId={publicPlanUser.userId}
-        firstName={publicPlanUser.firstName}
-        lastName={publicPlanUser.lastName}
-        avatarUrl={publicPlanUser.avatarUrl}
-      />
-    );
-  }
-  if (supabase && !session) {
-    const loginBrown = isDark ? "#e0a875" : "#5c3317";
-    const loginBrownMid = isDark ? "#b8651a" : "#8b4c20";
-    const loginBrownBg = isDark ? "rgba(184,101,26,0.18)" : "rgba(139,76,32,0.08)";
-    const loginBrownBorder = isDark ? "rgba(184,101,26,0.55)" : "rgba(139,76,32,0.4)";
-    const loginBorder = isDark ? "#2e2419" : "#ddd0c2";
-    const loginStyles = {
-      ...styles,
-      authBtn: { ...styles.authBtn, background: loginBrownBg, border: `1px solid ${loginBrownBorder}`, color: loginBrown },
-      authLogoutBtn: { ...styles.authLogoutBtn, color: isDark ? "#c4b69c" : "#8b6650" },
-    };
-
-    const openProfilePicker = async () => {
-      setShowProfilePicker(p => !p);
-      if (publicProfiles !== null) return;
-      if (!supabase) return;
-      const { data: rows } = await supabase
-        .from("climbing_plans")
-        .select("user_id, first_name, last_name, data")
-        .eq("is_public", true);
-      if (rows) {
-        setPublicProfiles(rows.map(r => ({
-          userId: r.user_id,
-          firstName: r.first_name || r.data?.profile?.firstName || "",
-          lastName: r.last_name || r.data?.profile?.lastName || "",
-          avatarUrl: r.data?.profile?.avatarUrl || null,
-        })));
-      } else {
-        setPublicProfiles([]);
-      }
-    };
-
-    return (
-      <ThemeContext.Provider value={{ styles: loginStyles, isDark, toggleTheme, mesocycles: [] }}>
-        <div style={{
-          minHeight: "100vh", position: "relative",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          flexDirection: "column", gap: 24,
-          background: isDark ? "#1a1410" : "#ede7de",
-        }}>
-          {/* Day/night toggle — top right */}
-          <div style={{ position: "absolute", top: 16, right: 16 }}>
-            <DayNightToggle
-              isDark={isDark}
-              onToggle={toggleTheme}
-              style={{
-                border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
-                borderRadius: 8,
-                color: isDark ? "#c4b69c" : "#6a6258",
-              }}
-            />
-          </div>
-
-          <div style={{
-            fontFamily: "'Newsreader', Georgia, serif",
-            fontSize: 22, fontWeight: 500, fontStyle: "italic",
-            color: loginBrown, letterSpacing: "0.08em",
-          }}>Climbing Planner</div>
-
-          <div style={{
-            background: isDark ? "#241b13" : "#faf6f1",
-            borderRadius: 12, padding: "28px 24px",
-            boxShadow: `0 4px 28px rgba(92, 51, 23, ${isDark ? "0.35" : "0.10"})`,
-            minWidth: 300, border: `1px solid ${loginBorder}`,
-          }}>
-            <AuthPanel session={null} onAuthChange={setSession} fullWidth />
-          </div>
-
-          {/* Public planning picker — unified card */}
-          <div style={{
-            border: `1px solid ${loginBorder}`,
-            borderRadius: 10, overflow: "hidden",
-            minWidth: 300,
-          }}>
-            <button
-              onClick={openProfilePicker}
-              style={{
-                width: "100%", background: "none", border: "none",
-                borderBottom: showProfilePicker ? `1px solid ${loginBorder}` : "none",
-                padding: "13px 20px",
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                color: isDark ? "#a89a82" : "#8a7060",
-                cursor: "pointer", fontFamily: "inherit",
-                fontSize: 13, letterSpacing: "0.03em",
-              }}
-            >
-              <span>Voir un planning public</span>
-              <span style={{ fontSize: 10, opacity: 0.6 }}>{showProfilePicker ? "▲" : "▼"}</span>
-            </button>
-
-            {showProfilePicker && (
-              publicProfiles === null ? (
-                <div style={{ padding: "14px 20px", color: isDark ? "#8a7d68" : "#aaa89e", fontSize: 13 }}>
-                  Chargement…
-                </div>
-              ) : publicProfiles.filter(p => p.firstName || p.lastName).length === 0 ? (
-                <div style={{ padding: "14px 20px", color: isDark ? "#8a7d68" : "#aaa89e", fontSize: 13 }}>
-                  Aucun planning public disponible.
-                </div>
-              ) : (
-                publicProfiles.filter(p => p.firstName || p.lastName).map((p, i) => {
-                  const initials = [p.firstName?.[0], p.lastName?.[0]].filter(Boolean).join("").toUpperCase();
-                  const fullName = [p.firstName?.trim(), p.lastName?.trim()].filter(Boolean).join(" ");
-                  return (
-                    <button
-                      key={p.userId}
-                      onClick={() => { setPublicPlanUser(p); setShowProfilePicker(false); }}
-                      style={{
-                        width: "100%", background: "none", border: "none",
-                        borderTop: i > 0 ? `1px solid ${loginBorder}` : "none",
-                        padding: "11px 20px",
-                        display: "flex", alignItems: "center", gap: 11,
-                        cursor: "pointer", textAlign: "left",
-                        transition: "background 0.15s",
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = isDark ? "#1f1810" : "#f0ebe0"}
-                      onMouseLeave={e => e.currentTarget.style.background = "none"}
-                    >
-                      {p.avatarUrl ? (
-                        <img
-                          src={p.avatarUrl}
-                          alt={fullName}
-                          style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
-                        />
-                      ) : (
-                        <div style={{
-                          width: 32, height: 32, borderRadius: "50%",
-                          background: isDark ? "#2a2018" : "#e4ddd4",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 12, fontWeight: 700,
-                          color: isDark ? "#a89a82" : "#8a7060",
-                          flexShrink: 0,
-                        }}>
-                          {initials}
-                        </div>
-                      )}
-                      <span style={{ fontSize: 13, color: isDark ? "#e0d4c0" : "#2a2218", fontWeight: 500 }}>
-                        {fullName}
-                      </span>
-                      <span style={{ marginLeft: "auto", color: isDark ? "#4a3e30" : "#c8c0b4", fontSize: 12 }}>→</span>
-                    </button>
-                  );
-                })
-              )
-            )}
-          </div>
-        </div>
-      </ThemeContext.Provider>
-    );
-  }
 
   return (
     <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: data.mesocycles || [] }}>
@@ -1402,7 +980,7 @@ export default function ClimbingPlanner() {
           onAddAthlete={addAthlete}
           onRemoveAthlete={removeAthlete}
           viewingAthlete={viewingAthlete}
-          onToggleViewAthlete={a => a ? switchToAthlete(a) : switchBackToCoach()}
+          onToggleViewAthlete={a => { if (a) { switchToAthlete(a).then(() => setViewMode("week")); } else { switchBackToCoach(); } }}
         />
       )}
 
