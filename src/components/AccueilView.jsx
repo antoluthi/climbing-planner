@@ -119,7 +119,8 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
 
   // ── Hooper ──
   const hooperEntry = (data.hooper || []).find(h => h.date === today);
-  const hTotal = hooperEntry ? (hooperEntry.fatigue + hooperEntry.stress + hooperEntry.soreness + hooperEntry.sleep) : null;
+  const hComplete = hooperEntry && [hooperEntry.fatigue, hooperEntry.stress, hooperEntry.soreness, hooperEntry.sleep].every(v => v != null);
+  const hTotal = hComplete ? (hooperEntry.fatigue + hooperEntry.stress + hooperEntry.soreness + hooperEntry.sleep) : null;
   const hFatigue  = hooperEntry?.fatigue ?? null;
   const hStress   = hooperEntry?.stress ?? null;
   const hSoreness = hooperEntry?.soreness ?? null;
@@ -237,7 +238,7 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
   const weekChargeRemaining = Math.max(0, weekChargeTotal - weekChargeSoFar - totalCharge);
 
   // ── Facteur Hooper dominant ──
-  const dominantHooper = hooperEntry ? (() => {
+  const dominantHooper = hComplete ? (() => {
     const factors = [
       { key: "fatigue",  val: hooperEntry.fatigue,  label: "fatigue physique" },
       { key: "stress",   val: hooperEntry.stress,   label: "stress" },
@@ -248,8 +249,8 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
   })() : null;
 
   // ── Distinction physique / mental ──
-  const physicalHooper    = hooperEntry ? hooperEntry.fatigue + hooperEntry.soreness : null;
-  const mentalHooper      = hooperEntry ? hooperEntry.stress + hooperEntry.sleep : null;
+  const physicalHooper    = hComplete ? hooperEntry.fatigue + hooperEntry.soreness : null;
+  const mentalHooper      = hComplete ? hooperEntry.stress + hooperEntry.sleep : null;
   const isPhysBodyTired   = physicalHooper !== null && physicalHooper >= 9;
   const isMentalBodyTired = mentalHooper !== null && mentalHooper >= 9;
 
@@ -1299,10 +1300,12 @@ function AccueilViewBody({
               <span style={{ fontSize: 11, color: textLight, flex: 1 }}>Poids</span>
               <button
                 onClick={() => {
+                  // Pas de base connue → ne rien enregistrer (éviterait un poids 0 kg).
+                  if (weightInput.trim() === "") return;
                   const cur = parseFloat(weightInput.replace(",", ".")) || 0;
                   const next = Math.max(0, Math.round((cur - 0.1) * 10) / 10);
                   setWeightInput(String(next));
-                  onSaveWeight?.(today, next);
+                  if (next > 0) onSaveWeight?.(today, next);
                 }}
                 aria-label="Diminuer"
                 style={{
@@ -1329,6 +1332,7 @@ function AccueilViewBody({
               />
               <button
                 onClick={() => {
+                  if (weightInput.trim() === "") return;
                   const cur = parseFloat(weightInput.replace(",", ".")) || 0;
                   const next = Math.round((cur + 0.1) * 10) / 10;
                   setWeightInput(String(next));

@@ -12,11 +12,13 @@ const DEFAULT_DATA = {
   quickSessions: [], reminders: [], reminderState: {}, schemaVersion: 3,
 };
 
-// ─── Migration schemaVersion 2 → 3 ────────────────────────────────────────────
+// ─── Migration schemaVersion 2 → 3 → 4 ───────────────────────────────────────
 // Ajoute discipline / mode / chargePlanned aux sessions et quickSessions
 // existantes (v2), puis data.reminders / data.reminderState avec migration
-// auto de data.creatine vers un rappel "Créatine" daily (v3).
-const SCHEMA_VERSION = 3;
+// auto de data.creatine vers un rappel "Créatine" daily (v3), puis nettoyage
+// des entrées Hooper partielles : total = null si les 4 critères ne sont pas
+// tous remplis (v4 — un total partiel faussait stats et heatmap).
+const SCHEMA_VERSION = 4;
 
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
@@ -102,8 +104,16 @@ export function migrateData(data) {
     customSessions,
   });
 
+  // v4 : entrées Hooper partielles → total null (exclues des agrégats).
+  const hooper = (withReminders.hooper || []).map(h => {
+    const complete = [h.fatigue, h.stress, h.soreness, h.sleep].every(v => v != null);
+    if (complete) return h;
+    return { ...h, total: null };
+  });
+
   return {
     ...withReminders,
+    hooper,
     schemaVersion: SCHEMA_VERSION,
   };
 }

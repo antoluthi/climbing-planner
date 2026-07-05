@@ -161,9 +161,10 @@ export function Toggle({ checked, onChange, label, color }) {
   const T = modalTokens(isDark);
   const on = color || T.accent;
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+    // onClick sur le <label> entier : le libellé est cliquable, pas seulement
+    // l'interrupteur (le curseur pointer le promettait déjà).
+    <label onClick={() => onChange(!checked)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
       <div
-        onClick={() => onChange(!checked)}
         style={{
           width: 36, height: 20, borderRadius: 10,
           background: checked ? on : (isDark ? "#463826" : "#ccc"),

@@ -78,7 +78,8 @@ export function getCustomCyclesForDate(customCycles, date) {
 export function getDayLogWarning(data, dateISO, dateObj) {
   const today = localDateStr(new Date());
   if (dateISO > today) return { hasWarning: false, hooperMissing: false, creatineMissing: false, isFuture: true };
-  const hooperMissing = !(data.hooper || []).some(h => h.date === dateISO);
+  // Une entrée Hooper partielle (total null) compte comme manquante.
+  const hooperMissing = !(data.hooper || []).some(h => h.date === dateISO && h.total != null);
   const creatineCycles = (data.customCycles || []).filter(c =>
     c.name?.toLowerCase().includes("créatine") || c.name?.toLowerCase().includes("creatine")
   );

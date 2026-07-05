@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Button } from "./ui/Button.jsx";
 import { Modal, ModalHeader, ModalBody, ModalFooter, modalTokens } from "./ui/Modal.jsx";
+import { ConfirmModal } from "./ConfirmModal.jsx";
+import { useConfirmClose } from "../hooks/useConfirmClose.js";
 import { Field, TextInput } from "./ui/Field.jsx";
 import { calcEndTime } from "../lib/helpers.js";
 
@@ -37,8 +39,18 @@ export function SessionScheduleModal({
 }) {
   const { isDark } = useThemeCtx();
   const T = modalTokens(isDark);
-  const [startTime, setStartTime] = useState(defaultStartTime || defaultTimeFor(dayDate || new Date()));
-  const [location, setLocation] = useState(defaultLocation || "");
+  // Fermer (backdrop / Échap / ✕ / retour Android) = "Plus tard", mais si
+  // l'utilisateur a déjà modifié heure ou lieu, on confirme avant de jeter.
+  const { requestClose, markDirty, confirmOpen, confirmProps } = useConfirmClose(onSkip, {
+    title: "Programmer plus tard ?",
+    sub: "L'heure et le lieu saisis ne seront pas conservés.",
+    confirmLabel: "Plus tard",
+    cancelLabel: "Continuer",
+  });
+  const [startTime, _setStartTime] = useState(defaultStartTime || defaultTimeFor(dayDate || new Date()));
+  const setStartTime = v => { markDirty(); _setStartTime(v); };
+  const [location, _setLocation] = useState(defaultLocation || "");
+  const setLocation = v => { markDirty(); _setLocation(v); };
   const timeRef = useRef(null);
   const locationRef = useRef(null);
 
@@ -78,8 +90,8 @@ export function SessionScheduleModal({
   }, [recentLocations, location]);
 
   return (
-    <Modal onClose={onSkip} maxWidth={420} ariaLabel="Programmer la séance">
-      <ModalHeader eyebrow={dayLabel || "Programmer"} title="Quand & où ?" onClose={onSkip} />
+    <Modal onClose={requestClose} maxWidth={420} ariaLabel="Programmer la séance">
+      <ModalHeader eyebrow={dayLabel || "Programmer"} title="Quand & où ?" onClose={requestClose} />
       <ModalBody>
         {sessionName && (
           <p style={{ fontSize: 13, color: T.textMid, margin: 0, fontStyle: "italic" }}>{sessionName}</p>
@@ -128,6 +140,8 @@ export function SessionScheduleModal({
         <Button variant="ghost" size="md" onClick={onSkip}>Plus tard</Button>
         <Button variant="primary" size="md" disabled={!canConfirm} onClick={handleConfirm}>Confirmer</Button>
       </ModalFooter>
+
+      {confirmOpen && <ConfirmModal {...confirmProps} danger={false} />}
     </Modal>
   );
 }

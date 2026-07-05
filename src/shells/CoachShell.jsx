@@ -8,7 +8,7 @@ export function CoachShell({ isDark, toggleTheme, styles }) {
       <div style={{ ...styles.app, minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24 }}>
         <div style={styles.grain} />
         <ClimbingPlannerLogo isDark={isDark} size={48} />
-        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: isDark ? "#e0a875" : "#8b4c20", fontWeight: 600 }}>
+        <div style={{ fontFamily: "'Newsreader', Georgia, serif", fontSize: 22, color: isDark ? "#e0a875" : "#8b4c20", fontWeight: 600 }}>
           Vue Coach
         </div>
         <div style={{ fontSize: 13, color: isDark ? "#a89a82" : "#8a7f70", maxWidth: 320, textAlign: "center", lineHeight: 1.6 }}>

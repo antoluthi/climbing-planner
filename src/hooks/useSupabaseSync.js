@@ -66,8 +66,19 @@ export function useSupabaseSync() {
         body: JSON.stringify(row),
       });
     };
+    // pagehide couvre refresh/navigation web ; visibilitychange couvre le
+    // passage en arrière-plan dans la WebView Android (où pagehide ne se
+    // déclenche pas quand l'app est tuée depuis les récents). Le flush est
+    // idempotent (upsert), un double envoi est sans effet.
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") handlePageHide();
+    };
     window.addEventListener("pagehide", handlePageHide);
-    return () => window.removeEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []); // refs only — no deps needed
 
   // Build the flat columns synced alongside the JSONB blob.

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { BLOCK_TYPES } from "../lib/constants.js";
 import { generateId } from "../lib/storage.js";
@@ -7,6 +7,8 @@ import { BlockEditor } from "./BlockEditor.jsx";
 import { RichText } from "./RichText.jsx";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "./ui/Modal.jsx";
 import { Button } from "./ui/Button.jsx";
+import { ConfirmModal } from "./ConfirmModal.jsx";
+import { useConfirmClose } from "../hooks/useConfirmClose.js";
 
 // ─── TEMPLATE EDITOR MODAL ──────────────────────────────────────────────────
 // Pre-filled session editor — user picks a template, then customises everything
@@ -86,6 +88,16 @@ export function TemplateEditorModal({
   const [saveOpen, setSaveOpen]     = useState(false);
   const [saveName, setSaveName]     = useState("");
   const [saved, setSaved]           = useState(false);
+
+  // ── Fermeture protégée : confirme si le formulaire a été modifié ──
+  // (trop de setters individuels ici : le dirty est déduit d'un instantané
+  // des champs signifiants, comparé à sa valeur au montage.)
+  const { requestClose, markDirty, markPristine, confirmOpen, confirmProps } = useConfirmClose(onClose);
+  const dirtySnap = JSON.stringify([title, type, estimatedTime, location, note, minRecovery, editStart, editAddr, editCoachNote, blocks, warmup, main, cooldown, textCharge]);
+  const initialSnapRef = useRef(dirtySnap);
+  useEffect(() => {
+    if (dirtySnap !== initialSnapRef.current) markDirty(); else markPristine();
+  }, [dirtySnap, markDirty, markPristine]);
 
   // ── Derived ──
   const totalBlockCharge = blocks.filter(b => b.type === "Grimpe" || b.type === "Exercices").reduce((s, b) => s + (b.charge || 0), 0);
@@ -178,8 +190,8 @@ export function TemplateEditorModal({
   const sectionStyle = { padding: "10px 12px", background: isDark ? "#1a1410" : "#f5f0e8", borderRadius: 8, border: `1px solid ${isDark ? "#2a2018" : "#ccc6b8"}` };
 
   return (
-    <Modal onClose={onClose} maxWidth={520} zIndex={210} ariaLabel="Personnaliser la séance">
-      <ModalHeader eyebrow={`Depuis · ${originalName}`} title="Personnaliser la séance" onClose={onClose} />
+    <Modal onClose={requestClose} maxWidth={520} zIndex={210} ariaLabel="Personnaliser la séance">
+      <ModalHeader eyebrow={`Depuis · ${originalName}`} title="Personnaliser la séance" onClose={requestClose} />
 
         {/* ── Scrollable content ── */}
         <ModalBody style={{ gap: 14 }}>
@@ -412,7 +424,7 @@ export function TemplateEditorModal({
 
         {/* ── Footer ── */}
         <ModalFooter>
-          <Button variant="secondary" size="md" onClick={onClose}>Annuler</Button>
+          <Button variant="secondary" size="md" onClick={requestClose}>Annuler</Button>
           <Button variant="ghost" size="md" onClick={() => setSaveOpen(o => !o)} style={{ color: accent }}>
             {saved ? "✓ Sauvegardé" : "Sauver comme modèle"}
           </Button>
@@ -421,6 +433,8 @@ export function TemplateEditorModal({
             Ajouter au calendrier
           </Button>
         </ModalFooter>
+
+      {confirmOpen && <ConfirmModal {...confirmProps} />}
     </Modal>
   );
 }

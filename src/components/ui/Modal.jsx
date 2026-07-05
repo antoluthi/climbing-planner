@@ -1,9 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
 // modalTokens (helper) est volontairement co-localisé avec les primitives de
 // modale qui l'utilisent. La règle fast-refresh est désactivée pour ce fichier.
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
 import { Z } from "../../theme/makeStyles.js";
+import { pushLayer, lockBodyScroll } from "../../lib/native.js";
 
 // ─── MODAL PRIMITIVES ─────────────────────────────────────────────────────────
 // Coquille de modale unifiée pour toute l'app. Objectif : chaque modale s'ouvre,
@@ -47,9 +48,24 @@ export function Modal({
   const { isDark } = useThemeCtx();
   const T = modalTokens(isDark);
 
+  // Enregistrement dans la pile de calques : sert au bouton retour Android
+  // (ferme la modale du dessus) et à Échap (ne ferme que le calque du dessus,
+  // pas toute la pile de modales empilées). Verrouille aussi le scroll du body.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+  const layerRef = useRef(null);
+  useEffect(() => {
+    const layer = pushLayer(() => onCloseRef.current?.());
+    layerRef.current = layer;
+    const unlock = lockBodyScroll();
+    return () => { layer.remove(); unlock(); };
+  }, []);
+
   useEffect(() => {
     if (!closeOnEsc) return;
-    const h = e => { if (e.key === "Escape") onClose?.(); };
+    const h = e => {
+      if (e.key === "Escape" && layerRef.current?.isTop()) onClose?.();
+    };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [onClose, closeOnEsc]);

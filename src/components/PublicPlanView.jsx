@@ -34,7 +34,7 @@ function AvatarCircle({ url, firstName, lastName, size = 36, accent }) {
       background: accent + "33", border: `2px solid ${accent}55`,
       display: "flex", alignItems: "center", justifyContent: "center",
       fontSize: size * 0.38, fontWeight: 700, color: accent,
-      flexShrink: 0, fontFamily: "'Cormorant Garamond', Georgia, serif",
+      flexShrink: 0, fontFamily: "'Newsreader', Georgia, serif",
     }}>
       {initials}
     </div>
@@ -178,7 +178,7 @@ function SessionDetailModal({ session, isDark, onClose }) {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
           <div style={{ flex: 1 }}>
             <div style={{
-              fontFamily: "'Cormorant Garamond', Georgia, serif",
+              fontFamily: "'Newsreader', Georgia, serif",
               fontSize: 20, fontWeight: 700, color: textMain, lineHeight: 1.2,
             }}>
               {session.title || session.name}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 
 // ── Lib ──
 import supabase from "../lib/supabase.js";
@@ -30,19 +30,21 @@ import { DayColumn } from "../components/DayColumn.jsx";
 import { MonthView } from "../components/MonthView.jsx";
 import { YearView } from "../components/YearView.jsx";
 import { CyclesView } from "../components/CyclesView.jsx";
-import { Dashboard } from "../components/Dashboard.jsx";
+// Dashboard (Recharts) chargé à la demande : allège le bundle initial,
+// sensible surtout au démarrage de la WebView Android.
+const Dashboard = lazy(() => import("../components/Dashboard.jsx").then(m => ({ default: m.Dashboard })));
 import { DayLogModal } from "../components/DayLogModal.jsx";
 import { TemplateEditorModal } from "../components/TemplateEditorModal.jsx";
 import { ProfileView } from "../components/ProfileView.jsx";
 import { CoachLibraryView } from "../components/CoachLibraryView.jsx";
 import { AccueilView } from "../components/AccueilView.jsx";
 import { DayListView } from "../components/DayListView.jsx";
-import { NewSessionSheet } from "../components/NewSessionSheet.jsx";
 import { QuickSessionModal } from "../components/QuickSessionModal.jsx";
 import { ToastContainer } from "../components/ToastContainer.jsx";
 import { Caillou } from "../components/Caillou.jsx";
 import { BottomNav } from "../components/BottomNav.jsx";
 import { toast } from "../lib/toast.js";
+import { setRootBackHandler } from "../lib/native.js";
 
 export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const { session, setSession, syncStatus } = useAuth();
@@ -68,14 +70,11 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   // Édition d'une séance existante : remplace en place à (weekKey, dayIndex, sessionIndex).
   const [sessionEditCtx, setSessionEditCtx] = useState(null);
   const [picker, setPicker] = useState(null);
-  const [metaEditing, setMetaEditing] = useState(false);
-  const [tempMeta, setTempMeta] = useState({});
   const [customSessionForm, setCustomSessionForm] = useState(null);
   const [sessionComposerForm, setSessionComposerForm] = useState(null);
   const [templateEditor, setTemplateEditor] = useState(null);
   const [sessionModal, setSessionModal] = useState(null);
   const [logDate, setLogDate] = useState(null);
-  const [addChoiceDay, setAddChoiceDay] = useState(null);
   const [quickSessionForm, setQuickSessionForm] = useState(null);
   const [pendingSchedule, setPendingSchedule] = useState(null);
   const [mobileDayIdx, setMobileDayIdx] = useState(() => {
@@ -97,6 +96,19 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   useEffect(() => {
     if (!session) setViewMode("accueil"); // eslint-disable-line react-hooks/set-state-in-effect
   }, [session]);
+
+  // ── Bouton retour Android (APK) ──
+  // Quand aucune modale n'est ouverte : retour à l'accueil depuis n'importe
+  // quelle vue, sinon on laisse l'app se minimiser. No-op sur le web.
+  const viewModeRef = useRef(viewMode);
+  useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
+  useEffect(() => setRootBackHandler(() => {
+    if (viewModeRef.current !== "accueil") {
+      setViewMode("accueil");
+      return true;
+    }
+    return false;
+  }), []);
 
   // ── Navigation ──
   const handleDateGoToCurrent = () => setCurrentDate(new Date());
@@ -156,31 +168,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const addSession = (dayIndex, session) => {
     const updated = weekSessions.map((d, i) => i === dayIndex ? [...d, { ...session, feedback: null }] : d);
     updateWeekSessions(updated);
-  };
-
-  // Ajoute une séance ET ouvre la modale de programmation (heure + lieu).
-  // À utiliser pour les flux où ces infos ne sont pas déjà demandées
-  // (NewSessionSheet quick-insert, SessionComposer save, etc.).
-  const addSessionAndPromptSchedule = (dayIndex, session, targetWKey = wKey) => {
-    const currentLen = (data.weeks[targetWKey] || [])[dayIndex]?.length ?? 0;
-    if (targetWKey === wKey) {
-      addSession(dayIndex, session);
-    } else {
-      setData(d => {
-        const ws = d.weeks[targetWKey] ? d.weeks[targetWKey].map(day => [...day]) : Array(7).fill(null).map(() => []);
-        ws[dayIndex] = [...(ws[dayIndex] || []), { ...session, feedback: null }];
-        return { ...d, weeks: { ...d.weeks, [targetWKey]: ws } };
-      });
-    }
-    setPendingSchedule({
-      weekKey: targetWKey,
-      dayIndex,
-      sessionIndex: currentLen,
-      sessionName: session.name || session.title || "",
-      defaultStartTime: session.startTime || "",
-      defaultLocation: session.location || session.address || "",
-      estimatedTime: session.estimatedTime ?? null,
-    });
   };
 
   const removeSession = (dayIndex, sessionIndex) => {
@@ -340,11 +327,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
 
   const rejectMoveSuggestion = (id) => {
     setData(d => ({ ...d, moveSuggestions: (d.moveSuggestions || []).filter(x => x.id !== id) }));
-  };
-
-  const saveMeta = () => {
-    setData(d => ({ ...d, weekMeta: { ...d.weekMeta, [wKey]: tempMeta } }));
-    setMetaEditing(false);
   };
 
   // ── Custom session handlers ──
@@ -906,15 +888,17 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
 
       {/* ── Dashboard ── */}
       {viewMode === "dash" && (
-        <Dashboard
-          data={data}
-          isLoading={!!session && !cloudLoaded}
-          onUpdateSleep={newRows => setData(d => {
-            const map = Object.fromEntries((d.sleep || []).map(r => [r.date, r]));
-            for (const r of newRows) map[r.date] = r;
-            return { ...d, sleep: Object.values(map).sort((a, b) => a.date.localeCompare(b.date)) };
-          })}
-        />
+        <Suspense fallback={<div style={{ padding: 40, textAlign: "center", opacity: 0.5 }}>…</div>}>
+          <Dashboard
+            data={data}
+            isLoading={!!session && !cloudLoaded}
+            onUpdateSleep={newRows => setData(d => {
+              const map = Object.fromEntries((d.sleep || []).map(r => [r.date, r]));
+              for (const r of newRows) map[r.date] = r;
+              return { ...d, sleep: Object.values(map).sort((a, b) => a.date.localeCompare(b.date)) };
+            })}
+          />
+        </Suspense>
       )}
 
       {/* ── Cycles ── */}
@@ -1276,36 +1260,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
               setSessionModal(null);
             }}
             onSave={saveSessionFeedback}
-          />
-        );
-      })()}
-
-      {/* NewSessionSheet n'est plus utilisé : "+" ouvre directement
-         SessionComposer via setSessionBuilderDay (cf. setAddChoiceDay
-         remplacé en amont aux call-sites). */}
-      {false && (() => {
-        const d2 = addDays(monday, addChoiceDay || 0);
-        const dayLabelStr = `${DAYS[addChoiceDay || 0]} ${formatDate(d2)}`;
-        return (
-          <NewSessionSheet
-            defaultDate={`${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}`}
-            dayLabel={dayLabelStr}
-            catalog={catalog}
-            weeks={data.weeks}
-            onQuickInsert={session => {
-              const di = addChoiceDay;
-              const insertIndex = (data.weeks[wKey] || [])[di]?.length ?? 0;
-              addSessionAndPromptSchedule(di, session);
-              setAddChoiceDay(null);
-              toast.success("Séance ajoutée", {
-                undo: () => { removeSession(di, insertIndex); setPendingSchedule(null); },
-              });
-            }}
-            onCompose={titlePrefill => {
-              setSessionBuilderDay({ dayIndex: addChoiceDay, titlePrefill });
-              setAddChoiceDay(null);
-            }}
-            onClose={() => setAddChoiceDay(null)}
           />
         );
       })()}

@@ -2,10 +2,15 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig({
+// Le build APK utilise `vite build --mode capacitor` (script cap:sync) :
+// le service worker PWA y est désactivé — dans la WebView Capacitor il est
+// inutile (assets locaux) et risque de servir des assets périmés après une
+// mise à jour de l'app.
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     VitePWA({
+      disable: mode === 'capacitor',
       registerType: 'autoUpdate',
       workbox: {
         // Exclude HTML from precache so navigation always fetches fresh from network.
@@ -42,5 +47,16 @@ export default defineConfig({
         ]
       }
     })
-  ]
-})
+  ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Recharts (+ d3) pèse lourd : chunk séparé, chargé en parallèle et
+          // caché indépendamment du bundle applicatif.
+          recharts: ['recharts'],
+        },
+      },
+    },
+  },
+}))

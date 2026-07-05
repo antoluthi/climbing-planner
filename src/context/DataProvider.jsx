@@ -144,7 +144,16 @@ export function DataProvider({ children }) {
 
   const pullFromCloud = async () => {
     const cloudData = await loadFromCloud();
-    if (cloudData) { setData(cloudData); saveData(cloudData); }
+    if (cloudData) {
+      // Même traitement que les autres chemins de chargement : on retire le
+      // champ technique _cloudUpdatedAt, on migre, et on ne redéclenche pas
+      // l'auto-save (sinon le pull resauvegarde aussitôt vers le cloud).
+      const { _cloudUpdatedAt: _cua, ...cleanData } = cloudData;
+      const migrated = migrateData(cleanData);
+      isCloudSetRef.current = true;
+      setData(migrated);
+      saveData(migrated);
+    }
   };
 
   // ── Coach-athlete switching ──

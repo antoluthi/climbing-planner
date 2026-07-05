@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ThemeContext } from "./theme/ThemeContext.jsx";
 import { makeStyles } from "./theme/makeStyles.js";
 import { useAuth } from "./context/AuthContext.js";
@@ -8,6 +8,7 @@ import supabase from "./lib/supabase.js";
 import { AuthPanel } from "./components/AuthPanel.jsx";
 import { PublicPlanView } from "./components/PublicPlanView.jsx";
 import { DayNightToggle } from "./components/DayNightToggle.jsx";
+import { syncSystemBars } from "./lib/native.js";
 
 export default function App() {
   const { session, setSession, authChecked } = useAuth();
@@ -18,6 +19,10 @@ export default function App() {
     localStorage.setItem("climbing_theme", d ? "light" : "dark");
     return !d;
   });
+
+  // APK : aligne le style des icônes de la barre de statut/navigation Android
+  // sur le thème de l'app (no-op sur le web).
+  useEffect(() => { syncSystemBars(isDark); }, [isDark]);
 
   const [publicPlanUser, setPublicPlanUser] = useState(null);
   const [showProfilePicker, setShowProfilePicker] = useState(false);

@@ -3,6 +3,7 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { addDays, localDateStr, getLastKnownWeight } from "../lib/helpers.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { Z } from "../theme/makeStyles.js";
+import { pushLayer, lockBodyScroll } from "../lib/native.js";
 import {
   getActiveRemindersForDate,
   isReminderCheckedOn,
@@ -32,8 +33,19 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
 
   const requestCloseRef = useRef(null);
 
+  // Pile de calques : bouton retour Android + Échap top-only + scroll lock.
+  const layerRef = useRef(null);
   useEffect(() => {
-    const h = e => { if (e.key === "Escape") requestCloseRef.current?.(); };
+    const layer = pushLayer(() => requestCloseRef.current?.());
+    layerRef.current = layer;
+    const unlock = lockBodyScroll();
+    return () => { layer.remove(); unlock(); };
+  }, []);
+
+  useEffect(() => {
+    const h = e => {
+      if (e.key === "Escape" && layerRef.current?.isTop()) requestCloseRef.current?.();
+    };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, []);
@@ -97,7 +109,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
       // OK si aucun rappel actif ce jour, ou si tout est coché
       on: activeReminders.length === 0 || allRemindersChecked,
     });
-    segs.push({ key: "hooper", on: !!existingH });
+    segs.push({ key: "hooper", on: existingH?.total != null }); // partiel ≠ complet
     return segs;
   }, [noteSaved, noteText, weightSavedStr, activeReminders.length, allRemindersChecked, existingH]);
   const filledCount = progress.filter(s => s.on).length;
@@ -131,9 +143,12 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
     const existing = (data.hooper || []).find(h => h.date === dateISO);
     if (existing && form.fatigue === existing.fatigue && form.stress === existing.stress &&
         form.soreness === existing.soreness && form.sleep === existing.sleep) return;
-    const total = (form.fatigue || 0) + (form.stress || 0) + (form.soreness || 0) + (form.sleep || 0);
+    // Entrée partielle : les critères sont persistés mais total reste null —
+    // un total partiel (ex. 3/28) fausserait stats, heatmap et warnings.
+    const filled = form.fatigue && form.stress && form.soreness && form.sleep;
+    const total = filled ? form.fatigue + form.stress + form.soreness + form.sleep : null;
     onAddHooper({ date: dateISO, time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), ...form, total });
-    showMicroToast("Hooper enregistré");
+    showMicroToast(filled ? "Hooper enregistré" : "Hooper enregistré (partiel)");
   };
 
   const requestClose = () => {
@@ -281,6 +296,9 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
                 <span style={{ fontSize: 11, color: textLight, flex: 1 }}>Poids</span>
                 <button
                   onClick={() => {
+                    // Pas de base connue → ne rien enregistrer (sinon on écrirait
+                    // un poids absurde de 0 ou 0,1 kg dans les stats).
+                    if (weightInput.trim() === "") return;
                     const cur = parseFloat(weightInput.replace(",", ".")) || 0;
                     const next = Math.max(0, Math.round((cur - 0.1) * 10) / 10);
                     setWeightInput(String(next));
@@ -305,6 +323,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
                 />
                 <button
                   onClick={() => {
+                    if (weightInput.trim() === "") return;
                     const cur = parseFloat(weightInput.replace(",", ".")) || 0;
                     const next = Math.round((cur + 0.1) * 10) / 10;
                     setWeightInput(String(next));

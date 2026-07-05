@@ -43,7 +43,9 @@ export function HooperSection({ hoopers, onAdd, range }) {
   const autoSaveHooper = (updated) => {
     if (todayEntry && updated.fatigue === todayEntry.fatigue && updated.stress === todayEntry.stress &&
         updated.soreness === todayEntry.soreness && updated.sleep === todayEntry.sleep) return;
-    const t = (updated.fatigue || 0) + (updated.stress || 0) + (updated.soreness || 0) + (updated.sleep || 0);
+    // Entrée partielle : critères persistés mais total null (voir DayLogModal.flushHooper).
+    const filled = updated.fatigue && updated.stress && updated.soreness && updated.sleep;
+    const t = filled ? updated.fatigue + updated.stress + updated.soreness + updated.sleep : null;
     onAdd({
       id: todayEntry?.id || "h_" + Date.now().toString(36),
       date: today,

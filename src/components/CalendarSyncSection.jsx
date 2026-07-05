@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { appOrigin } from "../lib/native.js";
 
 // ─── CALENDAR SYNC SECTION ─────────────────────────────────────────────────────
 
@@ -6,7 +7,9 @@ export function CalendarSyncSection({ profile, onUpdateProfile, isDark, accent, 
   const [copiedCaldav, setCopiedCaldav] = useState(false);
 
   const token = profile.calendarToken || null;
-  const caldavUrl = token ? `${window.location.origin}/api/caldav/${token}/` : null;
+  // appOrigin : les endpoints /api/* n'existent que sur Vercel — dans l'APK,
+  // window.location.origin (https://localhost) produirait une URL inutilisable.
+  const caldavUrl = token ? `${appOrigin}/api/caldav/${token}/` : null;
 
   const generateToken = () => {
     const newToken = crypto.randomUUID

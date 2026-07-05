@@ -8,6 +8,7 @@ import { SuspensionInfoCard } from "./SuspensionInfoCard.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { Caillou } from "./Caillou.jsx";
 import { Z } from "../theme/makeStyles.js";
+import { pushLayer, lockBodyScroll } from "../lib/native.js";
 import { getDiscipline, METRIC_LABELS } from "../lib/disciplines.js";
 
 // ─── SESSION MODAL — refonte sans onglets ─────────────────────────────────────
@@ -143,11 +144,23 @@ export function SessionModal({
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
+  // Pile de calques : bouton retour Android + Échap top-only + scroll lock.
+  // backCloseRef est réassigné à chaque rendu pour capturer l'état frais.
+  const backCloseRef = useRef(null);
+  backCloseRef.current = () => { if (showMove) setShowMove(false); else onClose(); };
+  const layerRef = useRef(null);
+  useEffect(() => {
+    const layer = pushLayer(() => backCloseRef.current?.());
+    layerRef.current = layer;
+    const unlock = lockBodyScroll();
+    return () => { layer.remove(); unlock(); };
+  }, []);
+
   // Escape closes
   const handleSaveRef = useRef(null);
   useEffect(() => {
     const h = e => {
-      if (e.key === "Escape") { if (showMove) setShowMove(false); else onClose(); }
+      if (e.key === "Escape" && layerRef.current?.isTop()) { if (showMove) setShowMove(false); else onClose(); }
       if ((e.key === "Enter") && (e.metaKey || e.ctrlKey)) handleSaveRef.current?.();
     };
     window.addEventListener("keydown", h);

@@ -227,6 +227,7 @@ function DashboardBody({ data, onUpdateSleep }) {
         const d = new Date(statsRefDate.getFullYear(), statsRefDate.getMonth() - (11 - i), 1);
         const y = d.getFullYear(), m = d.getMonth();
         const vals = hooperList
+          .filter(h => h.total != null) // entrées partielles exclues des moyennes
           .filter(h => { const hd = new Date(h.date + "T12:00:00"); return hd.getFullYear() === y && hd.getMonth() === m; })
           .map(h => h.total);
         return {
@@ -240,7 +241,7 @@ function DashboardBody({ data, onUpdateSleep }) {
       const monday = getMondayOf(addDays(statsRefDate, -(7 * (nWeeks - 1 - i))));
       const start = weekKey(monday);
       const end = localDateStr(addDays(monday, 6));
-      const vals = hooperList.filter(h => h.date >= start && h.date <= end).map(h => h.total);
+      const vals = hooperList.filter(h => h.total != null && h.date >= start && h.date <= end).map(h => h.total);
       const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
       return { label, total: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null };
     });
