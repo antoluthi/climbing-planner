@@ -27,13 +27,15 @@ export const CUSTOM_CYCLE_COLORS = [
 
 export const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
+// defaultCharge sur l'échelle unifiée 0-10 : une séance = somme de ses blocs,
+// plafonnée à 10 (bloc principal ≈ 5, annexes 1-3).
 export const BLOCK_TYPES = {
-  "Échauffement":    { color: "#f97316", defaultCharge: 5,  defaultDuration: 15, hasCharge: false },
-  "Grimpe":          { color: "#c8906a", defaultCharge: 24, defaultDuration: 90, hasCharge: true  },
-  "Exercices":       { color: "#60a5fa", defaultCharge: 12, defaultDuration: 20, hasCharge: true  },
-  "Suspension":      { color: "#a78bfa", defaultCharge: 0,  defaultDuration: 15, hasCharge: true  },
-  "Étirements":      { color: "#f0abfc", defaultCharge: 2,  defaultDuration: 10, hasCharge: false },
-  "Retour au calme": { color: "#94a3b8", defaultCharge: 3,  defaultDuration: 10, hasCharge: true  },
+  "Échauffement":    { color: "#f97316", defaultCharge: 1, defaultDuration: 15, hasCharge: false },
+  "Grimpe":          { color: "#c8906a", defaultCharge: 5, defaultDuration: 90, hasCharge: true  },
+  "Exercices":       { color: "#60a5fa", defaultCharge: 3, defaultDuration: 20, hasCharge: true  },
+  "Suspension":      { color: "#a78bfa", defaultCharge: 0, defaultDuration: 15, hasCharge: true  },
+  "Étirements":      { color: "#f0abfc", defaultCharge: 1, defaultDuration: 10, hasCharge: false },
+  "Retour au calme": { color: "#94a3b8", defaultCharge: 1, defaultDuration: 10, hasCharge: true  },
 };
 
 export const GRIP_TYPES = ["Semi-arquée", "Arquée", "Tendu", "Pincée", "Monoigt", "2 doigts", "3 doigts"];

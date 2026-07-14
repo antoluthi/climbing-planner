@@ -5,6 +5,7 @@ import { getMondayOf, addDays, weekKey, localDateStr, formatDate } from "../lib/
 import { ActivityHeatmap } from "./ActivityHeatmap.jsx";
 import { SleepSection } from "./SleepSection.jsx";
 import { DashboardSkeleton } from "./ui/Skeleton.jsx";
+import { getSessionCharge } from "../lib/charge.js";
 
 // ─── Spline cubique monotone passant par chaque point ────────────────────────
 // Recharts a déjà type='monotone' qui dessine une spline cubique
@@ -34,7 +35,7 @@ function hooperColor(total, isDark) {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
-function sessionCharge(s) { return s.charge ?? 0; }
+function sessionCharge(s) { return getSessionCharge(s); } // échelle unifiée 0-10 (ressenti > planifié > legacy)
 
 function getChartData(data, range, refDate) {
   const today = refDate || new Date();

@@ -175,7 +175,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                           {fb.rpe != null && (
                             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                               <span style={{ fontSize: 10, color: muted }}>RPE</span>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: getChargeColor(fb.rpe * 3) }}>{fb.rpe}/10</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: getChargeColor(fb.rpe) }}>{fb.rpe}/10</span>
                             </div>
                           )}
                           {fb.quality != null && (

@@ -3,7 +3,7 @@ import { ThemeContext, useThemeCtx } from "../theme/ThemeContext.jsx";
 import { makeStyles } from "../theme/makeStyles.js";
 import supabase from "../lib/supabase.js";
 import { getMondayOf, addDays, formatDate, weekKey, getDaySessions } from "../lib/helpers.js";
-import { getChargeColor } from "../lib/charge.js";
+import { normalizeCharge10, getChargeColor } from "../lib/charge.js";
 import { useWindowWidth } from "../hooks/useWindowWidth.js";
 import { MonthView } from "./MonthView.jsx";
 import { YearView } from "./YearView.jsx";
@@ -55,7 +55,7 @@ function SessionCard({ session, isDark, compact = false }) {
   const blockCount = blocks.length;
   const charge = session.chargePlanned ?? (
     session.charge != null
-      ? (session.charge > 10 ? Math.round(session.charge / 21.6) : session.charge)
+      ? normalizeCharge10(session.charge)
       : null
   );
 
@@ -150,7 +150,7 @@ function SessionDetailModal({ session, isDark, onClose }) {
   const location = session.location?.trim();
   const charge = session.chargePlanned ?? (
     session.charge != null
-      ? (session.charge > 10 ? Math.round(session.charge / 21.6) : session.charge)
+      ? normalizeCharge10(session.charge)
       : null
   );
 

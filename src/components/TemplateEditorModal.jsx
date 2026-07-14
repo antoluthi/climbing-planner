@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { BLOCK_TYPES } from "../lib/constants.js";
 import { generateId } from "../lib/storage.js";
-import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "../lib/charge.js";
+import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, climbingCharge10, normalizeCharge10 } from "../lib/charge.js";
 import { BlockEditor } from "./BlockEditor.jsx";
 import { RichText } from "./RichText.jsx";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "./ui/Modal.jsx";
@@ -78,7 +78,7 @@ export function TemplateEditorModal({
   const [preview, setPreview]   = useState(false);
 
   // ── Text charge (for text-mode sessions) ──
-  const [textCharge, setTextCharge] = useState(template.charge ?? 24);
+  const [textCharge, setTextCharge] = useState(() => normalizeCharge10(template.charge ?? 5));
   const [calcOpen, setCalcOpen]     = useState(false);
   const [nbMouvements, setNbMouv]   = useState("");
   const [calcZone, setCalcZone]     = useState(3);
@@ -292,17 +292,17 @@ export function TemplateEditorModal({
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 16, fontWeight: 700, color: getChargeColor(textCharge), minWidth: 28 }}>{textCharge}</span>
-                  <input type="range" min="0" max="216" value={textCharge}
+                  <input type="range" min="0" max="10" value={textCharge}
                     onChange={e => setTextCharge(+e.target.value)}
                     style={{ flex: 1, accentColor: accent }} />
-                  <input type="number" min="0" max="216" value={textCharge}
+                  <input type="number" min="0" max="10" value={textCharge}
                     onChange={e => setTextCharge(+e.target.value)}
                     style={{ ...inputBase, width: 52, textAlign: "center" }} />
                 </div>
                 {calcOpen && (() => {
                   const volZone = getNbMouvementsZone(+nbMouvements);
                   const volLabel = VOLUME_ZONES[volZone - 1].label;
-                  const computed = nbMouvements ? volZone * calcZone * calcComplexity : null;
+                  const computed = nbMouvements ? climbingCharge10(volZone, calcZone, calcComplexity) : null;
                   return (
                     <div style={{ marginTop: 8, padding: 8, background: isDark ? "#100c08" : "#f0ece4", borderRadius: 6, border: `1px solid ${border}` }}>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

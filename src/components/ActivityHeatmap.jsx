@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getMondayOf, addDays, localDateStr } from "../lib/helpers.js";
+import { getSessionCharge } from "../lib/charge.js";
 import {
   getActiveRemindersForDate,
   isReminderCheckedOn,
@@ -42,7 +43,7 @@ export function ActivityHeatmap({ data }) {
       const d = addDays(monday, idx);
       const dateStr = d.toISOString().slice(0, 10);
       const sessions = (daySessions || []).filter(Boolean);
-      const charge = sessions.reduce((s, se) => s + (se.charge || 0), 0);
+      const charge = sessions.reduce((s, se) => s + getSessionCharge(se), 0);
       const done = sessions.filter(s => s.feedback?.done === true);
       const rpeVals = done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe);
       const avgRpe = rpeVals.length ? rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length : null;
@@ -95,10 +96,10 @@ export function ActivityHeatmap({ data }) {
       const lvls = isDark
         ? ["#3a2616", "#5a3a18", "#8a5a28", "#e0a875", "#f0c896"]
         : ["#e8d8c8", "#d0a878", "#b07840", "#8b4c20", "#5c3010"];
-      if (v <= 5) return lvls[0];
-      if (v <= 12) return lvls[1];
-      if (v <= 20) return lvls[2];
-      if (v <= 30) return lvls[3];
+      if (v <= 2) return lvls[0];
+      if (v <= 5) return lvls[1];
+      if (v <= 8) return lvls[2];
+      if (v <= 12) return lvls[3];
       return lvls[4];
     }
     if (metric === "rpe") {

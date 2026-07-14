@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { BLOCK_TYPES } from "../lib/constants.js";
-import { getChargeColor } from "../lib/charge.js";
+import { getChargeColor, getSessionCharge, normalizeCharge10 } from "../lib/charge.js";
 import { Modal, ModalHeader, ModalFooter, modalTokens } from "./ui/Modal.jsx";
 import { Field, TextInput, Textarea } from "./ui/Field.jsx";
 import { Button } from "./ui/Button.jsx";
@@ -73,7 +73,7 @@ export function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
   const ItemRow = ({ item, type }) => {
     const isSel = selected?.item.id === item.id && selected?.type === type;
     const cfg   = type === "block" ? (BLOCK_TYPES[item.blockType] || {}) : null;
-    const color = type === "block" ? (cfg?.color || "#a89a82") : getChargeColor(item.charge);
+    const color = type === "block" ? (cfg?.color || "#a89a82") : getChargeColor(getSessionCharge(item));
     const dur   = type === "session" ? item.estimatedTime : item.duration;
     return (
       <button
@@ -96,8 +96,8 @@ export function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
             {type === "session" && item.type && <span>{item.type}</span>}
             {type === "block"   && <span style={{ color }}>{item.blockType}</span>}
             {dur && <span>⏱ {dur} min</span>}
-            {type === "session" && <span style={{ color: getChargeColor(item.charge) }}>⚡{item.charge}</span>}
-            {type === "block" && cfg?.hasCharge && item.charge > 0 && <span style={{ color: getChargeColor(item.charge) }}>⚡{item.charge}</span>}
+            {type === "session" && <span style={{ color: getChargeColor(getSessionCharge(item)) }}>⚡{getSessionCharge(item)}</span>}
+            {type === "block" && cfg?.hasCharge && item.charge > 0 && <span style={{ color: getChargeColor(normalizeCharge10(item.charge)) }}>⚡{normalizeCharge10(item.charge)}</span>}
           </div>
         </div>
         {isSel && <span style={{ color: T.accent, fontSize: 16, flexShrink: 0 }}>✓</span>}

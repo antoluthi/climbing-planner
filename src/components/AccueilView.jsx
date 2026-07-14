@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getMesoForDate, getDayLogWarning } from "../lib/constants.js";
 import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, getLastKnownWeight } from "../lib/helpers.js";
-import { getChargeColor } from "../lib/charge.js";
+import { getSessionCharge } from "../lib/charge.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { AccueilSkeleton } from "./ui/Skeleton.jsx";
 import { TodaySessionCard } from "./TodaySessionCard.jsx";
@@ -28,7 +28,7 @@ function getGreeting(hour, firstName) {
 
 function isRealTraining(sessions) {
   if (sessions.length === 0) return false;
-  const charge = sessions.reduce((s, sess) => s + (sess.charge || 0), 0);
+  const charge = sessions.reduce((s, sess) => s + getSessionCharge(sess), 0);
   if (charge > 5) return true;
   const names = sessions.map(s => (s.title || s.name || "").toLowerCase()).join(" ");
   const blocks = sessions.flatMap(s => (s.blocks || []).map(b => b.type));
@@ -55,11 +55,11 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
   // ── Sessions ──
   const sessionCount = todaySessions.length;
   const isRestDay = sessionCount === 0;
-  const totalCharge = todaySessions.reduce((s, sess) => s + (sess.charge || 0), 0);
+  const totalCharge = todaySessions.reduce((s, sess) => s + getSessionCharge(sess), 0);
   const chargeLevel = totalCharge === 0 ? "none"
-    : totalCharge <= 10 ? "light"
-    : totalCharge <= 20 ? "moderate"
-    : totalCharge <= 30 ? "heavy"
+    : totalCharge <= 3 ? "light"
+    : totalCharge <= 6 ? "moderate"
+    : totalCharge <= 9 ? "heavy"
     : "brutal";
 
   // Session types from names AND blocks
@@ -74,7 +74,7 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
   const hasComp      = /compét|compe|lead|bloc.*final|qualif/.test(names);
   const hasSuspension = /suspend|poutre|hangboard/.test(names) || allBlockTypes.includes("Suspension");
   const hasGrimpe    = allBlockTypes.includes("Grimpe");
-  const isOnlyLight     = !isRestDay && totalCharge <= 5 && (hasMobility || hasRecup) && !hasForce && !hasEndur && !hasComp;
+  const isOnlyLight     = !isRestDay && totalCharge <= 2 && (hasMobility || hasRecup) && !hasForce && !hasEndur && !hasComp;
   // Séance composée UNIQUEMENT de blocs étirements/retour au calme (ou nom seul si pas de blocs)
   const isStretchingOnly = !isRestDay && (
     allBlockTypes.length > 0
@@ -115,7 +115,7 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
   const allDone  = sessionCount > 0 && doneSessions.length === sessionCount;
   const someDone = doneSessions.length > 0 && doneSessions.length < sessionCount;
   const allMissed = sessionCount > 0 && missedSessions.length === sessionCount && pendingSessions.length === 0;
-  const doneCharge = doneSessions.reduce((s, sess) => s + (sess.charge || 0), 0);
+  const doneCharge = doneSessions.reduce((s, sess) => s + getSessionCharge(sess), 0);
 
   // ── Hooper ──
   const hooperEntry = (data.hooper || []).find(h => h.date === today);
@@ -140,7 +140,7 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
 
   // ── Yesterday & recent history ──
   const yesterdaySessions = getDaySessions(data, addDays(todayObj, -1));
-  const yesterdayCharge = yesterdaySessions.reduce((s, sess) => s + (sess.charge || 0), 0);
+  const yesterdayCharge = yesterdaySessions.reduce((s, sess) => s + getSessionCharge(sess), 0);
 
   // Rest/training streaks — only count real training (étirements seuls ≠ entraînement)
   let restDaysBefore = 0;
@@ -161,18 +161,18 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
   // ── Week ──
   const wi = dayIndex;
   const weekArr = weekSessions || Array(7).fill(null).map(() => []);
-  const weekChargeSoFar = weekArr.slice(0, wi).flat().reduce((s, sess) => s + (sess?.charge || 0), 0);
-  const weekChargeTotal = weekArr.flat().reduce((s, sess) => s + (sess?.charge || 0), 0);
+  const weekChargeSoFar = weekArr.slice(0, wi).flat().reduce((s, sess) => s + getSessionCharge(sess), 0);
+  const weekChargeTotal = weekArr.flat().reduce((s, sess) => s + getSessionCharge(sess), 0);
   const weekSessionCountTotal = weekArr.reduce((n, d) => n + (d?.length || 0), 0);
   const sessionsDoneThisWeek = weekArr.slice(0, wi).flat().filter(s => s?.feedback?.done === true).length;
 
   const tomorrowSessions = wi < 6 ? (weekArr[wi + 1] || []) : [];
-  const tomorrowCharge = tomorrowSessions.reduce((s, sess) => s + (sess?.charge || 0), 0);
+  const tomorrowCharge = tomorrowSessions.reduce((s, sess) => s + getSessionCharge(sess), 0);
   const tomorrowIsRest = tomorrowSessions.length === 0 && wi < 6;
 
   const isFirstDayWithSession = !isRestDay && weekArr.slice(0, wi).every(d => !d || d.length === 0);
   const isLastDayWithSession  = !isRestDay && weekArr.slice(wi + 1).every(d => !d || d.length === 0);
-  const isHeavyWeek = weekChargeTotal > 100;
+  const isHeavyWeek = weekChargeTotal > 30; // échelle 0-10 : ~4-5 grosses séances
   const isEndOfWeek = wi >= 4;
 
   // ── Sleep ──
@@ -229,7 +229,7 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
   const hasNutritionToday = todayMeals.length > 0;
 
   // ── Demain ──
-  const tomorrowIsHeavy      = tomorrowCharge >= 28;
+  const tomorrowIsHeavy      = tomorrowCharge >= 9;
   const tomorrowHasSuspension = tomorrowSessions.some(s =>
     /suspend|poutre|hangboard/.test((s.title || s.name || "").toLowerCase()) ||
     (s.blocks || []).some(b => b.type === "Suspension"));
@@ -255,7 +255,7 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
   const isMentalBodyTired = mentalHooper !== null && mentalHooper >= 9;
 
   // ── Conditions idéales + grosse séance ──
-  const isPeakContext = isWellRested && totalCharge >= 25;
+  const isPeakContext = isWellRested && totalCharge >= 8;
 
   // ── Taux de complétion séances cette semaine (jours passés) ──
   const weekPastSessions = weekArr.slice(0, wi + 1).flat().filter(Boolean);
@@ -263,7 +263,7 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
   const weekFeedbackRate = weekPastSessions.length > 0 ? weekPastDone / weekPastSessions.length : null;
 
   // ── Hier était une grosse journée ──
-  const yesterdayWasBig = yesterdayCharge >= 28;
+  const yesterdayWasBig = yesterdayCharge >= 9;
 
   return {
     hour, isMorning, isAfternoon, isEvening, isNight, dow,
@@ -323,15 +323,15 @@ function getContextualPhrase(ctx) {
     const done      = ctx.doneSessions.length;
     const remaining = ctx.pendingSessions.length;
     const missed    = ctx.missedSessions.length;
-    const remainingCharge = ctx.pendingSessions.reduce((s, sess) => s + (sess.charge || 0), 0);
+    const remainingCharge = ctx.pendingSessions.reduce((s, sess) => s + getSessionCharge(sess), 0);
     if (remaining > 0 && ctx.nextSessionVerySoon) {
       const nextName = ctx.nextSession?.session?.name || ctx.nextSession?.session?.title || null;
       return `${done}/${ctx.sessionCount} faite${done > 1 ? "s" : ""} — ${nextName ? `"${nextName}"` : "la prochaine"} dans ${ctx.minutesToNext} min, c'est l'heure !`;
     }
-    if (remaining > 0 && remainingCharge >= 25 && ctx.isVeryFatigued) {
+    if (remaining > 0 && remainingCharge >= 8 && ctx.isVeryFatigued) {
       return `${done}/${ctx.sessionCount} faite${done > 1 ? "s" : ""} — charge ${remainingCharge} encore au programme, mais votre Hooper est élevé. Adaptez.`;
     }
-    if (remaining > 0 && remainingCharge >= 25) {
+    if (remaining > 0 && remainingCharge >= 8) {
       return `${done}/${ctx.sessionCount} faite${done > 1 ? "s" : ""} — le gros morceau arrive encore (charge ${remainingCharge}), continuez.`;
     }
     if (remaining > 0) {
@@ -353,7 +353,7 @@ function getContextualPhrase(ctx) {
     if (ctx.isRestDay)        return `Hooper à ${ctx.hTotal} — votre corps est en surmenage, ce repos n'est pas un luxe, c'est une nécessité.`;
     if (ctx.isStretchingOnly) return `Hooper en surmenage (${ctx.hTotal}) — les étirements sont exactement ce qu'il faut. Respirez, tenez les positions, rien de plus.`;
     if (ctx.isOnlyLight)      return `Hooper ${ctx.hTotal} — surmenage confirmé. La séance légère est la limite à ne pas dépasser aujourd'hui.`;
-    if (ctx.totalCharge >= 25) return `Hooper ${ctx.hTotal} et charge ${ctx.totalCharge} au programme — sérieusement : adaptez ou reportez, le risque de blessure est réel.`;
+    if (ctx.totalCharge >= 8) return `Hooper ${ctx.hTotal} et charge ${ctx.totalCharge} au programme — sérieusement : adaptez ou reportez, le risque de blessure est réel.`;
     if (ctx.hasSuspension)    return `Hooper ${ctx.hTotal} et poutre au programme — les tendons sont fragiles en surmenage. Soit vous réduisez drastiquement, soit vous remettez à plus tard.`;
     if (ctx.hasForce)         return `Surmenage (Hooper ${ctx.hTotal}) et force au programme — réduisez les charges de 30–40%, le travail de qualité reste possible.`;
     if (ctx.hasRecup)         return `Hooper ${ctx.hTotal} — la séance récup est ce qu'il vous faut. N'ajoutez rien, même si vous vous sentez mieux en cours de séance.`;
@@ -372,7 +372,7 @@ function getContextualPhrase(ctx) {
   }
 
   // ── 6. Deux gros jours consécutifs ──
-  if (ctx.yesterdayWasBig && ctx.totalCharge >= 25 && !ctx.isRestDay) {
+  if (ctx.yesterdayWasBig && ctx.totalCharge >= 8 && !ctx.isRestDay) {
     if (ctx.isPhysBodyTired && ctx.hasSuspension) return `Grosse journée hier (${ctx.yesterdayCharge}) et poutre aujourd'hui avec fatigue physique élevée — les tendons ne pardonnent pas. Réduisez le volume, pas l'échauffement.`;
     if (ctx.isPhysBodyTired) return `Charge ${ctx.yesterdayCharge} hier et corps physiquement fatigué aujourd'hui — montez progressivement, sortez si ça ne répond pas.`;
     if (ctx.isGoodShape)    return `Deux grosses journées d'affilée (${ctx.yesterdayCharge} + ${ctx.totalCharge}) et bon Hooper — vous encaissez bien, restez intelligent.`;
@@ -389,7 +389,7 @@ function getContextualPhrase(ctx) {
   }
   if (ctx.restDaysBefore === 3 && !ctx.isRestDay) {
     if (ctx.isWellRested)  return `3 jours de repos et Hooper au vert — conditions idéales pour reprendre. Allez-y avec confiance.`;
-    if (ctx.totalCharge >= 25) return `Reprise après 3 jours off avec une grosse charge — soyez progressif, même si l'envie est là.`;
+    if (ctx.totalCharge >= 8) return `Reprise après 3 jours off avec une grosse charge — soyez progressif, même si l'envie est là.`;
     return `3 jours de repos — bon moment pour reprendre. Prenez soin de l'échauffement.`;
   }
   if (ctx.restDaysBefore === 2 && !ctx.isRestDay) {
@@ -402,7 +402,7 @@ function getContextualPhrase(ctx) {
   if (ctx.isRestDay) {
     if (ctx.yesterdayWasBig && ctx.isPhysBodyTired)
       return `Charge ${ctx.yesterdayCharge} hier et fatigue physique élevée — ce repos est exactement ce qu'il faut. Pas d'improvisation aujourd'hui.`;
-    if (ctx.yesterdayCharge >= 25)
+    if (ctx.yesterdayCharge >= 8)
       return `Charge ${ctx.yesterdayCharge} hier — laissez les muscles se reconstruire, c'est là que la progression opère.`;
     if (ctx.isOverreached)
       return `Hooper à ${ctx.hTotal} — votre corps est en surmenage. Ce repos n'est pas optionnel.`;
@@ -429,7 +429,7 @@ function getContextualPhrase(ctx) {
     if (ctx.isWellRested)   return "Journée off et excellent Hooper — vous êtes au top. Profitez-en sans culpabiliser.";
     if (ctx.isGoodShape)    return "Bien récupéré — profitez de cette journée de repos.";
     if (ctx.isDeloadMicro)  return "Semaine de décharge — le repos fait partie intégrante du plan d'entraînement, pas la peine de compenser.";
-    if (ctx.weekChargeSoFar >= 60)
+    if (ctx.weekChargeSoFar >= 18)
       return `Déjà ${ctx.weekChargeSoFar} de charge cette semaine — ce repos est une décision d'entraînement, pas un abandon.`;
     if (ctx.isEndOfWeek && ctx.sessionsDoneThisWeek >= 3)
       return `${ctx.sessionsDoneThisWeek} séances cette semaine — repos bien mérité pour terminer.`;
@@ -451,14 +451,14 @@ function getContextualPhrase(ctx) {
   if (ctx.nextSessionVerySoon) {
     const s      = ctx.nextSession.session;
     const sName  = s.title || s.name || null;
-    const sCharge = s.charge || 0;
+    const sCharge = getSessionCharge(s);
     if (ctx.hasSuspension && ctx.isPhysBodyTired)
       return `Poutre dans ${ctx.minutesToNext} min et fatigue physique élevée — commencez l'échauffement doigts maintenant, pas au moment de raccrocher.`;
     if (ctx.hasSuspension)
       return `${sName ? `"${sName}"` : "Poutre"} dans ${ctx.minutesToNext} min — mobilisez les doigts progressivement dès maintenant.`;
-    if (sCharge >= 25 && ctx.isMorning)
+    if (sCharge >= 8 && ctx.isMorning)
       return `Charge ${sCharge} dans ${ctx.minutesToNext} min — l'échauffement est non-négociable ce matin, le corps est encore froid.`;
-    if (sCharge >= 25)
+    if (sCharge >= 8)
       return `${sName ? `"${sName}"` : "Séance"} dans ${ctx.minutesToNext} min (charge ${sCharge}) — préparez-vous sérieusement.`;
     if (sName)
       return `"${sName}" dans ${ctx.minutesToNext} min — c'est bientôt l'heure !`;
@@ -502,7 +502,7 @@ function getContextualPhrase(ctx) {
       return `Hooper ${ctx.hTotal} et force aujourd'hui — montez les charges très progressivement. Si le corps ne répond pas à 60%, sortez et récupérez.`;
     if (ctx.hasEndur)
       return `Fatigue élevée pour une séance d'endurance — réduisez l'intensité cible de 15–20%, le volume peut rester.`;
-    if (ctx.totalCharge >= 25)
+    if (ctx.totalCharge >= 8)
       return `Hooper ${ctx.hTotal} et charge ${ctx.totalCharge} prévue — c'est trop. Réduisez l'intensité ou remettez à demain si possible.`;
     if (ctx.isMorning && ctx.dominantHooper?.key === "sleep")
       return `Mauvaise nuit dans les pattes (Hooper ${ctx.hTotal}) — démarrez très doucement, le corps va probablement se réveiller progressivement.`;
@@ -513,11 +513,11 @@ function getContextualPhrase(ctx) {
 
   // ── 12. Journée fractionnée (matin + soir) ──
   if (ctx.hasSplitDay) {
-    if (ctx.isWellRested && ctx.totalCharge >= 30)
+    if (ctx.isWellRested && ctx.totalCharge >= 10)
       return `Double séance avec charge ${ctx.totalCharge} et Hooper au vert — gérez bien l'énergie entre les deux, mangez vraiment entre les séances.`;
     if (ctx.isWellRested)
       return `${ctx.sessionCount} séances aujourd'hui et vous êtes frais — journée productive, dosez pour les deux.`;
-    if (ctx.totalCharge >= 30)
+    if (ctx.totalCharge >= 10)
       return `Journée bi-séance, charge ${ctx.totalCharge} — alimentation et hydratation entre les deux, c'est pas optionnel.`;
     if (ctx.hasSuspension)
       return `Double séance avec poutre — prévoyez au moins 3h de récupération entre les deux et ne rechargez pas les doigts à froid.`;
@@ -544,7 +544,7 @@ function getContextualPhrase(ctx) {
   if (ctx.isDeloadMicro) {
     if (ctx.hasSuspension) return "Semaine de décharge et poutre au programme — réduisez le volume, pas nécessairement les charges de travail. L'objectif c'est la récupération.";
     if (ctx.hasForce)      return "Décharge + force — charges normales si vous le souhaitez, mais volume réduit. Laissez le système récupérer.";
-    if (ctx.totalCharge >= 20) return `Semaine de décharge mais charge ${ctx.totalCharge} — restez sous vos capacités habituelles, c'est le principe de la semaine.`;
+    if (ctx.totalCharge >= 7) return `Semaine de décharge mais charge ${ctx.totalCharge} — restez sous vos capacités habituelles, c'est le principe de la semaine.`;
     return "Semaine de décharge — le mouvement sans la fatigue. C'est une semaine d'entraînement comme les autres, juste plus douce.";
   }
 
@@ -595,7 +595,7 @@ function getContextualPhrase(ctx) {
       return "Poutre en soirée — les tendons mettent plus de temps à chauffer. 20 min d'échauffement progressif minimum.";
     if (ctx.hasForce)
       return "Force tard le soir — bien s'échauffer même si le corps semble raide. C'est normal en fin de journée.";
-    if (ctx.hasEndur && ctx.totalCharge >= 20)
+    if (ctx.hasEndur && ctx.totalCharge >= 7)
       return `Endurance en soirée avec charge ${ctx.totalCharge} — dosez pour ne pas trop perturber le sommeil de récupération.`;
     if (ctx.hasMobility)
       return "Mobilité en soirée — parfait pour décompresser et préparer le sommeil.";
@@ -687,11 +687,11 @@ function getContextualPhrase(ctx) {
 
   // ── 23. Mauvais sommeil + entraînement ──
   if (ctx.hasPoorSleep) {
-    if (ctx.hasForce && ctx.totalCharge >= 20)
+    if (ctx.hasForce && ctx.totalCharge >= 7)
       return `Mauvaise nuit et force au programme (charge ${ctx.totalCharge}) — le système nerveux est sous-optimal. Réduisez les charges de 15–20%, pas la peine de forcer.`;
     if (ctx.hasSuspension)
       return "Mauvaise nuit de sommeil et poutre aujourd'hui — la réactivité neuro-musculaire est réduite. Progressif et attentif.";
-    if (ctx.totalCharge >= 20)
+    if (ctx.totalCharge >= 7)
       return `Sommeil insuffisant et charge ${ctx.totalCharge} — adaptez l'intensité si le corps ne répond pas. Une bonne séance à 80% vaut mieux qu'une séance ratée à 100%.`;
     return "Sommeil difficile — allez-y progressivement, votre corps a besoin de temps pour se réveiller vraiment.";
   }
@@ -704,7 +704,7 @@ function getContextualPhrase(ctx) {
       return `Fatigue physique modérée et poutre — soyez attentif aux sensations doigts. C'est le signal à ne pas ignorer.`;
     if (ctx.hasSuspension)
       return `Fatigue modérée (Hooper ${ctx.hTotal}) avant la poutre — échauffez bien les doigts et restez à l'écoute.`;
-    if (ctx.totalCharge >= 25)
+    if (ctx.totalCharge >= 8)
       return `Hooper ${ctx.hTotal} et charge ${ctx.totalCharge} — fatigue modérée, restez lucide sur l'intensité réelle.`;
     if (ctx.hasForce)
       return `Fatigue modérée et force au programme — montez progressivement, 80% du max est souvent le bon dosage dans cet état.`;
@@ -830,7 +830,7 @@ function getContextualPhrase(ctx) {
   if (ctx.shortSleep) {
     if (ctx.hasSuspension)
       return `${ctx.sleepDuration.toFixed(1)}h de sommeil et poutre aujourd'hui — la récupération tendineuse passe par le sommeil. Soyez particulièrement attentif.`;
-    if (ctx.totalCharge >= 20)
+    if (ctx.totalCharge >= 7)
       return `${ctx.sleepDuration.toFixed(1)}h de sommeil et charge ${ctx.totalCharge} — votre capacité de performance est réduite. Adaptez, ne forcez pas.`;
     return `${ctx.sleepDuration.toFixed(1)}h de sommeil — restez à l'écoute, adaptez si le corps ne répond pas normalement.`;
   }
@@ -870,7 +870,7 @@ function getContextualPhrase(ctx) {
   if (ctx.hasSuspension) {
     if (ctx.weightTrend === "down" && ctx.hasForce)
       return "Poutre au programme avec un poids en baisse — méfiance sur les performances relatives, votre ratio force/poids a peut-être changé.";
-    if (ctx.isMorning && ctx.totalCharge >= 20)
+    if (ctx.isMorning && ctx.totalCharge >= 7)
       return `Poutre ce matin (charge ${ctx.totalCharge}) — 20 min minimum d'échauffement progressif avant de charger. Les tendons matinaux ne pardonnent pas.`;
     if (ctx.isMorning) return "Poutre ce matin — prenez le temps de chauffer progressivement les doigts avant de charger.";
     if (ctx.isEvening) return "Poutre en soirée — les tendons sont plus préparés en fin de journée. Profitez-en.";
@@ -926,7 +926,7 @@ function getContextualPhrase(ctx) {
   }
   if (ctx.isEvening) {
     if (ctx.hasForce)    return "Force en soirée — bien s'échauffer, le corps refroidit vite en fin de journée.";
-    if (ctx.hasEndur && ctx.totalCharge >= 20)
+    if (ctx.hasEndur && ctx.totalCharge >= 7)
       return `Endurance en soirée (charge ${ctx.totalCharge}) — dosez pour ne pas trop perturber votre sommeil de récupération.`;
     if (ctx.hasEndur)    return "Endurance en soirée — gardez un effort raisonnable, le sommeil qui suit compte.";
     if (ctx.hasMobility) return "Mobilité en soirée — parfait pour décompresser avant la nuit.";
@@ -943,8 +943,8 @@ function getContextualPhrase(ctx) {
   }
 
   // ── FALLBACK ──
-  if (ctx.totalCharge >= 25) return `Charge ${ctx.totalCharge} au programme — séance conséquente. Bonne grimpe !`;
-  if (ctx.totalCharge >= 15) return `Charge ${ctx.totalCharge} — séance solide. Allez-y.`;
+  if (ctx.totalCharge >= 8) return `Charge ${ctx.totalCharge} au programme — séance conséquente. Bonne grimpe !`;
+  if (ctx.totalCharge >= 5) return `Charge ${ctx.totalCharge} — séance solide. Allez-y.`;
   if (ctx.totalCharge > 0)   return "Séance légère au programme — profitez-en pour soigner la qualité.";
 
   const fallbacks = [

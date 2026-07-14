@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { generateId } from "../lib/storage.js";
-import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "../lib/charge.js";
+import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, climbingCharge10, normalizeCharge10, getZoneColor } from "../lib/charge.js";
 import { RichText } from "./RichText.jsx";
 import { useConfirmClose } from "../hooks/useConfirmClose.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
@@ -30,7 +30,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
   const setName = wrap(_setName);
   const [type, _setType] = useState(initial?.type ?? "Grimpe");
   const setType = wrap(_setType);
-  const [charge, _setCharge] = useState(initial?.charge ?? 24);
+  const [charge, _setCharge] = useState(() => normalizeCharge10(initial?.charge ?? 5));
   const setCharge = wrap(_setCharge);
   const [estimatedTime, _setEstimatedTime] = useState(initial?.estimatedTime ?? "");
   const setEstimatedTime = wrap(_setEstimatedTime);
@@ -121,7 +121,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
             </div>
             <div style={styles.customFormChargeRow}>
               <span style={{ ...styles.customFormChargeVal, color: getChargeColor(charge) }}>{charge}</span>
-              <input style={styles.customFormSlider} type="range" min="0" max="216" value={charge} onChange={e => setCharge(+e.target.value)} />
+              <input style={styles.customFormSlider} type="range" min="0" max="10" value={charge} onChange={e => setCharge(+e.target.value)} />
               <div style={{ ...styles.customFormField, flex: "0 0 120px" }}>
                 <span style={styles.customFormLabel}>Récup. mini (h)</span>
                 <input style={styles.customFormInput} type="number" min="0" placeholder="48" value={minRecovery} onChange={e => setMinRecovery(e.target.value)} />
@@ -132,7 +132,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
             {calcOpen && (() => {
               const volZone = getNbMouvementsZone(+nbMouvements);
               const volLabel = VOLUME_ZONES[volZone - 1].label;
-              const computed = nbMouvements ? volZone * calcZone * calcComplexity : null;
+              const computed = nbMouvements ? climbingCharge10(volZone, calcZone, calcComplexity) : null;
               return (
                 <div style={styles.calcPanel}>
                   <div style={styles.calcRow}>
@@ -208,7 +208,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
                         {VOLUME_ZONES.map(z => (
                           <tr key={z.index}>
                             <td style={styles.infoTd}>
-                              <span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span>
+                              <span style={{ ...styles.infoIndexBadge, background: getZoneColor(z.index) + "33", color: getZoneColor(z.index) }}>{z.index}</span>
                             </td>
                             <td style={styles.infoTd}>{z.label}</td>
                             <td style={styles.infoTd}>{z.range}</td>
@@ -235,7 +235,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
                         {INTENSITY_ZONES.map(z => (
                           <tr key={z.index}>
                             <td style={styles.infoTd}>
-                              <span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span>
+                              <span style={{ ...styles.infoIndexBadge, background: getZoneColor(z.index) + "33", color: getZoneColor(z.index) }}>{z.index}</span>
                             </td>
                             <td style={styles.infoTd}>{z.label}</td>
                             <td style={styles.infoTd}>{z.pct}</td>
@@ -262,7 +262,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
                         {COMPLEXITY_ZONES.map(z => (
                           <tr key={z.index}>
                             <td style={styles.infoTd}>
-                              <span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span>
+                              <span style={{ ...styles.infoIndexBadge, background: getZoneColor(z.index) + "33", color: getZoneColor(z.index) }}>{z.index}</span>
                             </td>
                             <td style={styles.infoTd}>{z.label}</td>
                             <td style={styles.infoTd}>{z.desc}</td>
@@ -273,7 +273,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
                   </div>
 
                   <div style={{ fontSize: 11, color: isDark ? "#a89a82" : "#8a7060", fontStyle: "italic" }}>
-                    Formule : Charge = Zone volume × Zone intensité × Index complexité (max 216)
+                    Formule : Zone volume × Zone intensité × Index complexité, ramené sur l'échelle 0-10
                   </div>
                 </div>
               </div>

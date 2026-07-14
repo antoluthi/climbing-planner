@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { BLOCK_TYPES, GRIP_TYPES, DEFAULT_SUSPENSION_CONFIG } from "../lib/constants.js";
-import { VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, getNbMouvementsZone, getChargeColor } from "../lib/charge.js";
+import { VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, getNbMouvementsZone, getChargeColor, getZoneColor, climbingCharge10, normalizeCharge10 } from "../lib/charge.js";
 import { RichText } from "./RichText.jsx";
 import { useConfirmClose } from "../hooks/useConfirmClose.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
@@ -24,7 +24,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
   const setName = v => { markDirty(); _setName(v); };
   const [duration, _setDuration] = useState(initial?.duration ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultDuration);
   const setDuration = v => { markDirty(); _setDuration(v); };
-  const [charge, _setCharge] = useState(initial?.charge ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultCharge);
+  const [charge, _setCharge] = useState(() => normalizeCharge10(initial?.charge ?? BLOCK_TYPES[initial?.blockType ?? "Grimpe"].defaultCharge));
   const setCharge = v => { markDirty(); _setCharge(v); };
   const [desc, _setDesc] = useState(initial?.description ?? "");
   const setDesc = v => { markDirty(); _setDesc(v); };
@@ -56,7 +56,8 @@ export function BlockFormModal({ initial, onSave, onClose }) {
   };
 
   const volZone = getNbMouvementsZone(+nbMouvements);
-  const computed = nbMouvements ? volZone * calcZone * calcComplexity : null;
+  // Assistant escalade : zones 1-6 → charge de bloc sur l'échelle unifiée 0-10.
+  const computed = nbMouvements ? climbingCharge10(volZone, calcZone, calcComplexity) : null;
 
   return (
     <Modal onClose={requestClose} maxWidth={480} ariaLabel={initial ? "Modifier le bloc" : "Nouveau bloc"}>
@@ -183,8 +184,8 @@ export function BlockFormModal({ initial, onSave, onClose }) {
               <button style={{ ...styles.calcBtn, background: "none" }} onClick={() => { setInfoOpen(o => !o); setCalcOpen(false); }}>Infos</button>
             </div>
             <div style={styles.customFormChargeRow}>
-              <span style={{ ...styles.customFormChargeVal, color: getChargeColor(charge) }}>{charge}</span>
-              <input style={styles.customFormSlider} type="range" min="0" max="216" value={charge} onChange={e => setCharge(+e.target.value)} />
+              <span style={{ ...styles.customFormChargeVal, color: getChargeColor(charge) }}>{charge}<span style={{ fontSize: 11, opacity: 0.6 }}>/10</span></span>
+              <input style={styles.customFormSlider} type="range" min="0" max="10" value={charge} onChange={e => setCharge(+e.target.value)} />
             </div>
 
             {calcOpen && (
@@ -210,8 +211,8 @@ export function BlockFormModal({ initial, onSave, onClose }) {
                 </div>
                 {computed !== null && (
                   <div style={styles.calcResultRow}>
-                    <span style={{ ...styles.calcResultVal, color: getChargeColor(computed) }}>{computed}</span>
-                    <span style={{ fontSize: 11, color: T.textLight }}>= Zone vol.{volZone} × Int.{calcZone} × Compl.{calcComplexity}</span>
+                    <span style={{ ...styles.calcResultVal, color: getChargeColor(computed) }}>{computed}<span style={{ fontSize: 11, opacity: 0.6 }}>/10</span></span>
+                    <span style={{ fontSize: 11, color: T.textLight }}>← Vol.{volZone} × Int.{calcZone} × Compl.{calcComplexity}, ramené sur 0-10</span>
                     <button style={styles.calcApplyBtn} onClick={() => { setCharge(computed); setCalcOpen(false); }}>Appliquer →</button>
                   </div>
                 )}
@@ -233,7 +234,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
                         <tbody>
                           {VOLUME_ZONES.map(z => (
                             <tr key={z.index}>
-                              <td style={styles.infoTd}><span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span></td>
+                              <td style={styles.infoTd}><span style={{ ...styles.infoIndexBadge, background: getZoneColor(z.index) + "33", color: getZoneColor(z.index) }}>{z.index}</span></td>
                               <td style={styles.infoTd}>{z.label}</td>
                               <td style={styles.infoTd}>{z.range}</td>
                             </tr>
@@ -248,7 +249,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
                         <tbody>
                           {INTENSITY_ZONES.map(z => (
                             <tr key={z.index}>
-                              <td style={styles.infoTd}><span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span></td>
+                              <td style={styles.infoTd}><span style={{ ...styles.infoIndexBadge, background: getZoneColor(z.index) + "33", color: getZoneColor(z.index) }}>{z.index}</span></td>
                               <td style={styles.infoTd}>{z.label}</td>
                               <td style={styles.infoTd}>{z.desc}</td>
                             </tr>
@@ -263,7 +264,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
                         <tbody>
                           {COMPLEXITY_ZONES.map(z => (
                             <tr key={z.index}>
-                              <td style={styles.infoTd}><span style={{ ...styles.infoIndexBadge, background: getChargeColor(z.index * 6) + "33", color: getChargeColor(z.index * 6) }}>{z.index}</span></td>
+                              <td style={styles.infoTd}><span style={{ ...styles.infoIndexBadge, background: getZoneColor(z.index) + "33", color: getZoneColor(z.index) }}>{z.index}</span></td>
                               <td style={styles.infoTd}>{z.label}</td>
                               <td style={styles.infoTd}>{z.desc}</td>
                             </tr>
@@ -271,7 +272,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
                         </tbody>
                       </table>
                     </div>
-                    <div style={{ fontSize: 11, color: T.textLight, fontStyle: "italic" }}>Formule : Charge = Zone volume × Zone intensité × Index complexité (max 216)</div>
+                    <div style={{ fontSize: 11, color: T.textLight, fontStyle: "italic" }}>Formule : Zone volume × Zone intensité × Index complexité, ramené sur l'échelle 0-10</div>
                   </div>
                 </div>
               </div>

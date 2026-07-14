@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { generateId } from "../lib/storage.js";
-import { getChargeColor } from "../lib/charge.js";
+import { getChargeColor, normalizeCharge10 } from "../lib/charge.js";
 import { BLOCK_TYPES } from "../lib/constants.js";
 import { calcEndTime } from "../lib/helpers.js";
 import { DISCIPLINES, disciplineList, getDiscipline, METRIC_LABELS } from "../lib/disciplines.js";
@@ -54,14 +54,12 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function summarizePlannedChargeFromBlocks(blocks, discipline) {
-  if (discipline === "climbing") {
-    // Somme des charges 0-216 normalisée → 0-10
-    const sum = blocks.reduce((s, b) => s + (Number(b.charge) || 0), 0);
-    return clamp(Math.round(sum / 21.6), 0, 10);
-  }
-  // Sinon : somme directe des charges 0-10, cappée à 10
-  const sum = blocks.reduce((s, b) => s + (Number(b.charge) || 0), 0);
+function summarizePlannedChargeFromBlocks(blocks) {
+  // Échelle unifiée : chaque bloc porte une charge 0-10 (escalade comprise —
+  // le calculateur mouvements/intensité/complexité produit du 0-10).
+  // Séance = somme des blocs, plafonnée à 10. Les blocs legacy (0-216)
+  // encore présents dans le catalogue sont normalisés à la volée.
+  const sum = blocks.reduce((s, b) => s + normalizeCharge10(b.charge), 0);
   return clamp(Math.round(sum), 0, 10);
 }
 
@@ -115,11 +113,7 @@ export function SessionComposer({
   // ── Charge planifiée 0-10 (modes simple / detailed / event-ignored) ──
   const initialChargePlanned = (() => {
     if (initial?.chargePlanned != null) return clamp(Math.round(initial.chargePlanned), 0, 10);
-    if (initial?.charge != null) {
-      const c = Number(initial.charge);
-      if (c > 10) return clamp(Math.round(c / 21.6), 0, 10);
-      return clamp(Math.round(c), 0, 10);
-    }
+    if (initial?.charge != null) return normalizeCharge10(initial.charge);
     return 5;
   })();
   const [chargePlanned, _setChargePlanned] = useState(initialChargePlanned);
@@ -217,13 +211,12 @@ export function SessionComposer({
 
   // ── Block mutations ──
   const addBlock = (typeName) => {
-    const cfg = BLOCK_TYPES[typeName] || { defaultCharge: 5, defaultDuration: 15 };
-    const isClimbing = discipline === "climbing";
+    const cfg = BLOCK_TYPES[typeName] || { defaultCharge: 3, defaultDuration: 15 };
     setBlocks(b => [...b, {
       id: generateId(),
       type: typeName, blockType: typeName,
       name: "",
-      charge: isClimbing ? cfg.defaultCharge : Math.min(cfg.defaultCharge, 5),
+      charge: cfg.defaultCharge, // 0-10 pour toutes les disciplines
       duration: cfg.defaultDuration,
       location: "",
       notes: "",
@@ -273,13 +266,11 @@ export function SessionComposer({
         id: generateId(),
         type: b.type || b.blockType,
         blockType: b.blockType || b.type,
+        charge: normalizeCharge10(b.charge), // modèles legacy → 0-10
       })));
     }
-    if (model.chargePlanned != null) setChargePlanned(model.chargePlanned);
-    else if (model.charge != null) {
-      const c = Number(model.charge);
-      setChargePlanned(c > 10 ? clamp(Math.round(c / 21.6), 0, 10) : clamp(Math.round(c), 0, 10));
-    }
+    if (model.chargePlanned != null) setChargePlanned(normalizeCharge10(model.chargePlanned));
+    else if (model.charge != null) setChargePlanned(normalizeCharge10(model.charge));
     markDirty();
     setShowModelPicker(false);
   };
@@ -343,7 +334,7 @@ export function SessionComposer({
       blockType: rest.blockType || rest.type,
     }));
     const finalCharge = mode === "detailed" && cleanBlocks.length > 0
-      ? summarizePlannedChargeFromBlocks(cleanBlocks, discipline)
+      ? summarizePlannedChargeFromBlocks(cleanBlocks)
       : chargePlanned;
 
     onSave({
@@ -355,9 +346,7 @@ export function SessionComposer({
       title: title.trim(),
       type: discipline === "climbing" ? "Grimpe" : (getDiscipline(discipline).label || "Séance"),
       chargePlanned: finalCharge,
-      charge: discipline === "climbing"
-        ? cleanBlocks.reduce((s, b) => s + (b.charge || 0), 0) || finalCharge
-        : finalCharge,
+      charge: finalCharge, // une seule échelle : charge === chargePlanned (0-10)
       estimatedTime: estimatedTime ? +estimatedTime : null,
       startTime: startTime || null,
       endTime: startTime && estimatedTime ? calcEndTime(startTime, +estimatedTime) : null,
@@ -1359,7 +1348,7 @@ function ModelPickerSheet({ models, onPick, onClose, tokens }) {
                 borderBottom: `1px solid ${border}`,
               }}
             >
-              <div style={{ width: 4, height: 28, borderRadius: 2, background: getChargeColor(m.charge ?? 0) }} />
+              <div style={{ width: 4, height: 28, borderRadius: 2, background: getChargeColor(normalizeCharge10(m.charge)) }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, color: text }}>{m.title || m.name}</div>
                 <div style={{ fontSize: 11, color: textLight }}>

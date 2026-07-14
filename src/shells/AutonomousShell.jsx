@@ -187,7 +187,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
       const wasDone = fb?.status === "done" || fb?.status === "adapted" || (fb && fb.done);
       const newFb = wasDone
         ? null
-        : { status: "done", done: true, rpe: fb?.rpe ?? null, quality: fb?.quality ?? null, notes: fb?.notes ?? "", blockFeedbacks: fb?.blockFeedbacks ?? [], adaptedCharge: null };
+        : { status: "done", done: true, rpe: fb?.rpe ?? null, quality: fb?.quality ?? null, notes: fb?.notes ?? "", blockFeedbacks: fb?.blockFeedbacks ?? [] };
       ws[dayIndex] = ws[dayIndex].map((sx, j) => j === sessionIndex ? { ...sx, feedback: newFb } : sx);
       return { ...d, weeks: { ...d.weeks, [smKey]: ws } };
     });

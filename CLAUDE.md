@@ -29,8 +29,9 @@ src/
 │   │                               getDayLogWarning, getMesoColor, getMesoForDate
 │   ├── helpers.js                — getMondayOf, addDays, formatDate, weekKey, localDateStr,
 │   │                               calcEndTime, migrateWeekKeys, getDaySessions, getDayCharge, getMonthWeeks
-│   ├── charge.js                 — VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES,
-│   │                               getNbMouvementsZone, getChargeColor
+│   ├── charge.js                 — échelle de charge unifiée 0-10 : normalizeCharge10,
+│   │                               getSessionCharge, climbingCharge10, RPE_LABELS, getChargeColor,
+│   │                               VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, getNbMouvementsZone
 │   ├── storage.js                — generateId, loadData, saveData (localStorage)
 │   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
 │   └── hooper.js                 — hooperLabel, hooperColor
@@ -218,6 +219,32 @@ Navigation : les vues calendrier (week/month/year) sont regroupées sous un bout
 - **Clic sur le label de date** (ex: "9 mars – 15 mars") → `setCurrentDate(new Date())` pour revenir à la période actuelle
   - Curseur `pointer` uniquement si on n'est pas déjà sur la période en cours
   - Tooltip : "Aller à la semaine en cours" / "Aller au mois en cours" / "Aller à l'année en cours"
+
+## Système de charge unifié (0-10)
+
+Toutes les disciplines partagent la même unité : **la charge de séance 0-10**
+(équivalente au RPE Borg CR-10). Refonte juillet 2026 (`lib/charge.js`).
+
+- **Escalade** : le calculateur spécifique (nb mouvements → zone volume 1-6 ×
+  intensité 1-6 × complexité 1-6) reste un *assistant* — son produit est ramené
+  sur 0-10 via `climbingCharge10()` (diviseur 4.8, calibré sur l'usage réel de
+  l'ancienne échelle : bloc Grimpe type 24 → 5, séance complète 36 → 8).
+- **Blocs** : chaque bloc porte une charge 0-10 ; séance détaillée = somme des
+  blocs plafonnée à 10. Autres disciplines : saisie directe 0-10.
+- **`getSessionCharge(s)`** : charge effective = `feedback.rpe` (ressenti) >
+  `chargePlanned` > `charge` legacy normalisée. **Séance manquée = 0.**
+  Tous les totaux (jour, semaine, heatmap, Dashboard, AccueilView) passent par
+  cette fonction — jamais de lecture directe de `s.charge` dans les vues.
+- **Feedback athlète** : un seul slider "Charge ressentie" 1-10 dans
+  `SessionModal`, **pré-rempli à la charge planifiée** — l'athlète confirme ou
+  ajuste, avec delta affiché ("Plus/Moins soutenu que prévu (±n)").
+  `feedback.adaptedCharge` n'est plus écrit (legacy migré → `rpe`).
+- **Migration v5** (`storage.js`) : charges > 10 divisées par 4.8 (séances +
+  blocs), `chargePlanned` recalculé, `adaptedCharge` → `rpe`. Les données non
+  migrées (catalogue coach en DB) sont normalisées à la volée par
+  `normalizeCharge10()` dans les affichages.
+- **Couleurs** (`getChargeColor`) : 0 repos · ≤3 léger · ≤6 modéré · ≤9 soutenu
+  · >9 très lourd (valable séance et total jour).
 
 ## Points techniques importants
 

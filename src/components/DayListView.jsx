@@ -2,7 +2,7 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { TodaySessionCard } from "./TodaySessionCard.jsx";
 import { SessionCardSkeleton } from "./ui/Skeleton.jsx";
 import { Caillou } from "./Caillou.jsx";
-import { getChargeColor } from "../lib/charge.js";
+import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { DAYS, getMesoColor } from "../lib/constants.js";
 import { addDays } from "../lib/helpers.js";
 
@@ -47,7 +47,7 @@ export function DayListView({
 
   const day = addDays(monday, dayIndex);
   const dayLabelFull = day.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-  const totalCharge = sessions.reduce((s, x) => s + (x.charge || 0), 0);
+  const totalCharge = sessions.reduce((s, x) => s + getSessionCharge(x), 0);
 
   const meso = weekMeta?.mesocycle;
   const mesoColor = meso ? getMesoColor(mesocycles, meso) : null;

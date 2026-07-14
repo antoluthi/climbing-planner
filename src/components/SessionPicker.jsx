@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { getChargeColor } from "../lib/charge.js";
+import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { Modal, ModalHeader, ModalFooter, modalTokens } from "./ui/Modal.jsx";
 import { TextInput } from "./ui/Field.jsx";
 import { Button } from "./ui/Button.jsx";
@@ -19,7 +19,7 @@ export function SessionPicker({ onSelect, onClose, customSessions, onCreateCusto
 
   const applySort = (arr) => {
     if (sort === "date")   return [...arr].sort((a, b) => b.id - a.id);
-    if (sort === "charge") return [...arr].sort((a, b) => b.charge - a.charge);
+    if (sort === "charge") return [...arr].sort((a, b) => getSessionCharge(b) - getSessionCharge(a));
     return arr;
   };
   const matches = (s) => (filter === "Tous" || s.type === filter)
@@ -41,7 +41,7 @@ export function SessionPicker({ onSelect, onClose, customSessions, onCreateCusto
   );
 
   const Row = ({ s, isCustom }) => {
-    const cc = getChargeColor(s.charge);
+    const cc = getChargeColor(getSessionCharge(s));
     const active = selected?.id === s.id;
     return (
       <button
@@ -74,7 +74,7 @@ export function SessionPicker({ onSelect, onClose, customSessions, onCreateCusto
         <span style={{
           fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 6, flexShrink: 0,
           background: cc + "22", color: cc, border: `1px solid ${cc}55`,
-        }}>{s.charge}</span>
+        }}>{getSessionCharge(s)}</span>
       </button>
     );
   };
