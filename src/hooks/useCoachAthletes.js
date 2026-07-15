@@ -36,14 +36,9 @@ export function useCoachAthletes(userId) {
     }));
   }, []);
 
-  const addAthlete = useCallback(async (athleteUserId) => {
-    if (!supabase || !userId) return;
-    await supabase.from("coach_athletes").upsert(
-      { coach_id: userId, athlete_id: athleteUserId },
-      { onConflict: "coach_id,athlete_id" }
-    );
-    fetchAthletes();
-  }, [userId, fetchAthletes]);
+  // NB : plus de addAthlete direct — le lien coach_athletes est créé par
+  // l'ATHLÈTE qui accepte une invitation (useNotifications.respondCoachRequest,
+  // consentement mutuel imposé par la RLS depuis la migration 20260715).
 
   const removeAthlete = useCallback(async (relationId) => {
     if (!supabase) return;
@@ -51,5 +46,31 @@ export function useCoachAthletes(userId) {
     fetchAthletes();
   }, [fetchAthletes]);
 
-  return { athletes, searchAthletes, addAthlete, removeAthlete };
+  // ── Côté athlète : qui me coache ? ──
+  const [myCoaches, setMyCoaches] = useState([]);
+  const fetchMyCoaches = useCallback(async () => {
+    if (!supabase || !userId) { setMyCoaches([]); return; }
+    const { data } = await supabase.rpc("get_my_coaches");
+    setMyCoaches((data || []).map(r => ({
+      relationId: r.relation_id,
+      userId:     r.user_id,
+      firstName:  r.first_name || "?",
+      lastName:   r.last_name  || "",
+    })));
+  }, [userId]);
+
+  useEffect(() => { fetchMyCoaches(); }, [fetchMyCoaches]);
+
+  // L'athlète quitte son coach (la RLS autorise le delete des deux côtés).
+  const leaveCoach = useCallback(async (relationId) => {
+    if (!supabase) return;
+    await supabase.from("coach_athletes").delete().eq("id", relationId);
+    fetchMyCoaches();
+  }, [fetchMyCoaches]);
+
+  return {
+    athletes, searchAthletes, removeAthlete,
+    myCoaches, leaveCoach,
+    refreshAthletes: fetchAthletes, refreshMyCoaches: fetchMyCoaches,
+  };
 }

@@ -45,17 +45,22 @@ import { Caillou } from "../components/Caillou.jsx";
 import { BottomNav } from "../components/BottomNav.jsx";
 import { toast } from "../lib/toast.js";
 import { setRootBackHandler } from "../lib/native.js";
+import { NotificationBell } from "../components/NotificationBell.jsx";
+import { NotificationsPanel } from "../components/NotificationsPanel.jsx";
 
 export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const { session, setSession, syncStatus } = useAuth();
   const {
     data, setData, cloudLoaded, roleResolved, viewingAthlete,
+    accountRole, needsRoleChoice, chooseRole,
     switchToAthlete, switchBackToCoach, pullFromCloud,
-    uploadNow, writeStatus,
+    uploadNow,
     catalog, saveUserSession, deleteUserSession,
     dbBlocks, saveBlock,
     communitySessions, pushToCommunity,
-    athletes, searchAthletes, addAthlete, removeAthlete,
+    athletes, searchAthletes, removeAthlete, myCoaches, leaveCoach, refreshMyCoaches,
+    notifications, sentInvites, unreadCount,
+    markInfosRead, sendCoachRequest, respondCoachRequest,
     addMesocycle, updateMesocycle, deleteMesocycle,
     addMicrocycle, updateMicrocycle, deleteMicrocycle,
     addCustomCycle, updateCustomCycle, deleteCustomCycle,
@@ -75,6 +80,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const [templateEditor, setTemplateEditor] = useState(null);
   const [sessionModal, setSessionModal] = useState(null);
   const [logDate, setLogDate] = useState(null);
+  const [notifOpen, setNotifOpen] = useState(false);
   const [quickSessionForm, setQuickSessionForm] = useState(null);
   const [pendingSchedule, setPendingSchedule] = useState(null);
   const [mobileDayIdx, setMobileDayIdx] = useState(() => {
@@ -420,10 +426,13 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   };
 
   const isCalendarMode = ["week", "month", "year"].includes(viewMode);
-  const isCoach = data.profile?.role === "coach";
-  const isAuto = data.profile?.role === "auto";
+  // Permissions dérivées du rôle du COMPTE connecté (accountRole), jamais de
+  // data.profile.role : en vue athlète, `data` est le blob de l'athlète et son
+  // rôle ne doit pas restreindre le coach (cycles, bibliothèque, picker).
+  const isCoach = accountRole === "coach";
+  const isAuto = accountRole === "auto";
   const hasCoachFeatures = isCoach || isAuto;
-  const actualUserRole = viewingAthlete ? "coach" : (data.profile?.role ?? null);
+  const actualUserRole = accountRole ?? null;
   const pendingSuggestionsIds = new Set((data.moveSuggestions || []).filter(s => s.status === "pending").map(s => s.sessionId));
 
   const calSubToggle = (
@@ -463,6 +472,15 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
       ))}
     </div>
   );
+
+  const notifBell = session ? (
+    <NotificationBell
+      unreadCount={unreadCount}
+      isDark={isDark}
+      active={notifOpen}
+      onClick={() => setNotifOpen(true)}
+    />
+  ) : null;
 
   const profilePhoto = data.profile?.avatarUrl || data.profile?.avatarDataUrl || "";
   const profileBtn = (
@@ -527,7 +545,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
           {/* Sur mobile la barre nav principale est en bas (BottomNav).
               On garde seulement le bouton profil dans l'entête. */}
           <div style={{ ...styles.headerMobileRow2, justifyContent: "flex-end" }}>
-            <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+              {notifBell}
               {profileBtn}
             </div>
           </div>
@@ -584,6 +603,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             <div style={styles.headerRightTop}>
               {viewToggle}
               {syncDot && <span style={{ fontSize: 12 }}>{syncDot}</span>}
+              {notifBell}
               {profileBtn}
             </div>
             {viewMode !== "profil" && (
@@ -917,7 +937,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
           onDeleteCustomCycle={deleteCustomCycle}
           locked={!!data.cyclesLocked}
           onSetLocked={val => setData(d => ({ ...d, cyclesLocked: val }))}
-          canEdit={(data.profile?.role ?? null) !== "athlete"}
+          canEdit={accountRole !== "athlete"}
           objectives={(data.quickSessions || []).filter(qs => qs.isObjective)}
           reminders={data.reminders || []}
           reminderState={data.reminderState || {}}
@@ -961,8 +981,15 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
           isDark={isDark}
           athletes={athletes}
           onSearchAthletes={searchAthletes}
-          onAddAthlete={addAthlete}
+          onInviteAthlete={athleteUserId => {
+            const fromName = [data.profile?.firstName, data.profile?.lastName].filter(Boolean).join(" ") || "Un coach";
+            return sendCoachRequest(athleteUserId, fromName);
+          }}
+          sentInvites={sentInvites}
           onRemoveAthlete={removeAthlete}
+          myCoaches={myCoaches}
+          onLeaveCoach={leaveCoach}
+          accountRole={accountRole}
           viewingAthlete={viewingAthlete}
           onToggleViewAthlete={a => { if (a) { switchToAthlete(a).then(() => setViewMode("week")); } else { switchBackToCoach(); } }}
         />
@@ -1131,18 +1158,15 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         />
       )}
       {/* ── Role Onboarding (1er login) ── */}
-      {session && cloudLoaded && roleResolved && !("role" in (data.profile || {})) && (
-        <RoleOnboardingModal
-          onSelect={role => {
-            setData(d => ({ ...d, profile: { ...(d.profile || {}), role } }));
-            writeStatus(session.user.id, role);
-          }}
-        />
+      {/* needsRoleChoice = colonne status NULL en DB : fiable même si la
+          ligne vient d'être créée par le premier upload (plus de course). */}
+      {session && cloudLoaded && roleResolved && needsRoleChoice && !viewingAthlete && (
+        <RoleOnboardingModal onSelect={chooseRole} />
       )}
 
       {/* ── Onboarding 3 écrans (après le choix du rôle) ── */}
       {session && cloudLoaded && roleResolved
-        && ("role" in (data.profile || {}))
+        && !needsRoleChoice
         && !data.profile?.onboarded
         && !viewingAthlete && (
         <OnboardingModal
@@ -1282,6 +1306,24 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
           extraTabs={hasCoachFeatures ? [{ key: "library", label: "Bibli", icon: "library" }] : []}
         />
       )}
+      {/* ── Panneau de notifications (cloche) ── */}
+      {notifOpen && (
+        <NotificationsPanel
+          notifications={notifications}
+          onClose={() => setNotifOpen(false)}
+          onMarkInfosRead={markInfosRead}
+          onRespondRequest={async (n, accept) => {
+            const myName = [data.profile?.firstName, data.profile?.lastName].filter(Boolean).join(" ") || "Un athlète";
+            const { error } = await respondCoachRequest(n, accept, myName);
+            if (error) toast.error("Impossible d'enregistrer la réponse — réessaie.");
+            else if (accept) {
+              refreshMyCoaches();
+              toast.success("Coach accepté — il peut maintenant gérer ton planning.");
+            }
+          }}
+        />
+      )}
+
       <ToastContainer isMobile={isMobile} />
     </div>
     </ThemeContext.Provider>
