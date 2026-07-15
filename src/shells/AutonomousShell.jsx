@@ -47,6 +47,7 @@ import { toast } from "../lib/toast.js";
 import { setRootBackHandler } from "../lib/native.js";
 import { NotificationBell } from "../components/NotificationBell.jsx";
 import { NotificationsPanel } from "../components/NotificationsPanel.jsx";
+import { getSessionCharge } from "../lib/charge.js";
 
 export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const { session, setSession, syncStatus } = useAuth();
@@ -154,7 +155,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
 
   // ── Charge totale période ──
   const totalPeriodCharge = (() => {
-    if (viewMode === "week") return weekSessions.flat().reduce((a, s) => a + s.charge, 0);
+    if (viewMode === "week") return weekSessions.flat().reduce((a, s) => a + getSessionCharge(s), 0);
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const firstDay = viewMode === "month" ? new Date(year, month, 1) : new Date(year, 0, 1);
