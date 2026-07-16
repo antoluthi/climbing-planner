@@ -11,6 +11,8 @@ DROP POLICY IF EXISTS "Public read for Anto plan" ON climbing_plans;
 DROP POLICY IF EXISTS "anon read anto" ON climbing_plans;
 
 -- Generic policy: anonymous users can read any row marked is_public = true
+-- (drop d'abord : rend le script ré-exécutable)
+DROP POLICY IF EXISTS "Public read for public profiles" ON climbing_plans;
 CREATE POLICY "Public read for public profiles"
   ON climbing_plans
   FOR SELECT

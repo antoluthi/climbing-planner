@@ -1,9 +1,9 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- PLANIF ESCALADE — TOUTES LES MIGRATIONS EN ATTENTE (juillet 2026)
+-- PLANIF ESCALADE — TOUTES LES MIGRATIONS EN ATTENTE (juillet 2026) — v2
 -- Un seul copier-coller dans Supabase Dashboard → SQL Editor → Run.
 -- Ré-exécutable sans risque (tous les scripts sont idempotents).
--- Contenu, dans l'ordre : realtime · bucket avatars · bibliothèque commune
---                         · profils publics · notifications + invitations
+-- v2 : la policy des profils publics est maintenant droppée avant recréation
+--      (l'erreur 42710 « already exists » de la v1 est corrigée).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -190,6 +190,8 @@ DROP POLICY IF EXISTS "Public read for Anto plan" ON climbing_plans;
 DROP POLICY IF EXISTS "anon read anto" ON climbing_plans;
 
 -- Generic policy: anonymous users can read any row marked is_public = true
+-- (drop d'abord : rend le script ré-exécutable)
+DROP POLICY IF EXISTS "Public read for public profiles" ON climbing_plans;
 CREATE POLICY "Public read for public profiles"
   ON climbing_plans
   FOR SELECT
