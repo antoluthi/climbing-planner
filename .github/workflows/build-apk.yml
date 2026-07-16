@@ -1,0 +1,75 @@
+# Build automatique de l'APK à chaque push, publié sur GitHub Releases
+# (tag "latest-apk" → lien de téléchargement permanent).
+#
+# ⚠️ Secrets GitHub requis (Settings → Secrets and variables → Actions) :
+#   VITE_SUPABASE_URL       — URL du projet Supabase
+#   VITE_SUPABASE_ANON_KEY  — clé anon Supabase
+# Sans eux, l'APK serait compilé sans accès Supabase (mode hors-ligne muet) :
+# le workflow échoue volontairement s'ils manquent.
+
+name: Build APK
+
+on:
+  push:
+    branches:
+      - master
+      - claude/apk-application-audit-4klr69
+
+permissions:
+  contents: write # nécessaire pour publier la release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Vérifier les secrets Supabase
+        run: |
+          if [ -z "${{ secrets.VITE_SUPABASE_URL }}" ] || [ -z "${{ secrets.VITE_SUPABASE_ANON_KEY }}" ]; then
+            echo "::error::Secrets VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY manquants — l'APK serait compilé sans accès Supabase."
+            exit 1
+          fi
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Build web en mode capacitor (service worker PWA désactivé — il est
+      # inutile dans la WebView et risque de servir des assets périmés après
+      # une mise à jour de l'app) + sync du projet android/.
+      - name: Build web (mode capacitor) + sync android
+        run: npm run cap:sync
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-apk
+          name: "Climbing Planner — dernière version"
+          body: "APK (debug) généré automatiquement depuis le dernier commit."
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

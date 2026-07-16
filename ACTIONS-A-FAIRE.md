@@ -112,14 +112,37 @@ l'onboarding.
 
 ---
 
-## 6 · Build APK Android (quand tu veux tester sur téléphone)
+## 6 · APK Android — CI GitHub Actions + secrets (5 min)
+
+Le workflow `.github/workflows/build-apk.yml` (repris de ton autre session,
+**corrigé** : build en mode capacitor sans service worker + injection des
+variables Supabase) publie un APK à chaque push sur `master` ou la branche
+d'audit, téléchargeable en permanence sur la release GitHub `latest-apk`.
+
+**À faire une fois** — GitHub → Settings → Secrets and variables → Actions :
+
+```
+VITE_SUPABASE_URL       = https://zkoiykpiymvwioihnhhp.supabase.co
+VITE_SUPABASE_ANON_KEY  = <clé anon>
+```
+
+Sans ces secrets, le workflow échoue volontairement (sinon l'APK serait
+compilé sans accès Supabase et démarrerait muet, en mode hors-ligne).
+
+**En local** (émulateur / téléphone branché) :
 
 ```bash
 # ⚠️ .env.local doit exister AVANT le build (la clé Supabase est intégrée au bundle)
-npm install
+./run-android.sh    # one-shot : émulateur + build + install + lancement
+# ou à la main :
 npm run cap:sync    # build web (sans service worker) + sync android/
 npm run cap:open    # ouvre Android Studio → Run sur ton téléphone
 ```
+
+> ⚠️ La branche `claude/APK-APP` est **remplacée** par
+> `claude/apk-application-audit-4klr69` (qui contient tout son contenu + les
+> correctifs). Ne merge pas `claude/APK-APP` séparément : son workflow et son
+> package-lock sont des versions antérieures et créeraient des conflits.
 
 À vérifier sur l'appareil : icône calendrier verte + splash sombre, bouton
 retour (ferme les modales, ne quitte plus l'app), magic link (après l'étape 2),
