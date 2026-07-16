@@ -12,7 +12,7 @@ export function AuthPanel({ session, onAuthChange, fullWidth }) {
   void isDark; // theme available if needed
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode]         = useState("password"); // "password" | "magiclink" | "setpw" | "pwdone"
+  const [mode, setMode]         = useState("password"); // "password" | "signup" | "magiclink" | "setpw" | "pwdone"
   const [sending, setSending]   = useState(false);
   const [sent, setSent]         = useState(false);
   const [authError, setAuthError] = useState("");
@@ -43,6 +43,29 @@ export function AuthPanel({ session, onAuthChange, fullWidth }) {
     if (error) {
       setAuthError(error.status === 429 ? "Trop d'essais — attendez quelques minutes" : error.message);
     } else { setSent(true); }
+  };
+
+  // Création de compte par email + mot de passe (le magic link reste possible
+  // mais n'est plus le seul moyen de créer un compte — et il est vite
+  // rate-limité côté Supabase).
+  const handleSignUp = async () => {
+    if (!email.trim() || password.trim().length < 6 || !supabase) return;
+    setSending(true); setAuthError("");
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password: password.trim(),
+      options: { emailRedirectTo: isNative ? AUTH_CALLBACK_URL : window.location.origin },
+    });
+    setSending(false);
+    if (error) {
+      setAuthError(error.status === 429 ? "Trop d'essais — attendez quelques minutes"
+        : /already registered/i.test(error.message) ? "Un compte existe déjà avec cet email — connecte-toi."
+        : error.message);
+      return;
+    }
+    // Selon la config Supabase : session directe, ou confirmation email requise.
+    if (data?.session) return; // connecté — onAuthStateChange prend le relais
+    setSent(true);
   };
 
   const handleSetPassword = async () => {
@@ -112,6 +135,42 @@ export function AuthPanel({ session, onAuthChange, fullWidth }) {
     );
   }
 
+  /* ── Création de compte ── */
+  if (mode === "signup") return (
+    <div style={barStyle}>
+      {sent ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+          <Caillou state="curious" size={110} />
+          <span style={styles.authSentMsg}>Compte créé — confirme ton adresse via l'email reçu, puis connecte-toi.</span>
+        </div>
+      ) : (
+        <>
+          <input
+            style={wideInput}
+            type="email"
+            placeholder="votre@email.com"
+            value={email}
+            autoFocus
+            onChange={e => { setEmail(e.target.value); setAuthError(""); }}
+          />
+          <input
+            style={{ ...wideInput, width: fullWidth ? undefined : 150 }}
+            type="password"
+            placeholder="Mot de passe (6+ car.)"
+            value={password}
+            onChange={e => { setPassword(e.target.value); setAuthError(""); }}
+            onKeyDown={e => e.key === "Enter" && handleSignUp()}
+          />
+          <button style={styles.authBtn} onClick={handleSignUp} disabled={sending || !email.trim() || password.trim().length < 6}>
+            {sending ? "…" : "Créer le compte"}
+          </button>
+        </>
+      )}
+      <button style={{ ...styles.authLogoutBtn, opacity: 0.7 }} onClick={() => go("password")}>← Connexion</button>
+      {authError && <span style={styles.authErrorMsg}>{authError}</span>}
+    </div>
+  );
+
   /* ── Magic link ── */
   if (mode === "magiclink") return (
     <div style={barStyle}>
@@ -160,9 +219,12 @@ export function AuthPanel({ session, onAuthChange, fullWidth }) {
         onChange={e => { setPassword(e.target.value); setAuthError(""); }}
         onKeyDown={e => e.key === "Enter" && handlePasswordLogin()}
       />
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button style={styles.authBtn} onClick={handlePasswordLogin} disabled={sending || !password.trim()}>
           {sending ? "…" : "Connexion"}
+        </button>
+        <button style={{ ...styles.authLogoutBtn, opacity: 0.75 }} onClick={() => go("signup")} title="Créer un compte avec email + mot de passe">
+          Créer un compte
         </button>
         <button style={{ ...styles.authLogoutBtn, opacity: 0.6 }} onClick={() => go("magiclink")} title="Connexion par lien email">
           Lien →

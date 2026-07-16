@@ -5,6 +5,20 @@ export function generateId() {
   return "c_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
+// Clé localStorage identifiant le DERNIER compte qui a possédé les données
+// locales. Garde anti-fuite : sur un navigateur partagé, un nouveau compte ne
+// doit jamais hériter (ni pousser vers son cloud) les données du précédent.
+const OWNER_KEY = "climbing_planner_owner_v1";
+export function getLocalDataOwner() {
+  try { return localStorage.getItem(OWNER_KEY); } catch { return null; }
+}
+export function setLocalDataOwner(userId) {
+  try { localStorage.setItem(OWNER_KEY, userId); } catch { /* ignore */ }
+}
+export function freshData() {
+  return JSON.parse(JSON.stringify(DEFAULT_DATA));
+}
+
 const DEFAULT_DATA = {
   weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES,
   sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {},
