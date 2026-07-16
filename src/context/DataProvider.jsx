@@ -4,7 +4,7 @@ import { useAuth } from "./AuthContext.js";
 import supabase from "../lib/supabase.js";
 import { DEFAULT_MESOCYCLES } from "../lib/constants.js";
 import { getMondayOf, weekKey } from "../lib/helpers.js";
-import { generateId, loadData, saveData, migrateData } from "../lib/storage.js";
+import { generateId, loadData, saveData, migrateData, freshData, getLocalDataOwner, setLocalDataOwner } from "../lib/storage.js";
 import { useCommunitySessionsSync } from "../hooks/useCommunitySessionsSync.js";
 import { useSessionsCatalog } from "../hooks/useSessionsCatalog.js";
 import { useSessionBlocks } from "../hooks/useSessionBlocks.js";
@@ -69,12 +69,29 @@ export function DataProvider({ children }) {
           isCloudSetRef.current = true;
           setData(migrated);
           saveData(migrated);
+          setLocalDataOwner(session.user.id);
         } else {
           // Nouveau compte : pas encore de ligne → choix du rôle requis.
           setAccountRole(null);
           setNeedsRoleChoice(true);
           setRoleResolved(true);
-          uploadNow(data, session.user.id);
+          // Garde anti-fuite : le localStorage est partagé par NAVIGATEUR.
+          // On ne pousse les données locales vers le cloud du nouveau compte
+          // que si elles n'appartiennent à personne d'autre (usage solo
+          // hors-ligne qui crée son compte). Sinon — un autre compte s'est
+          // déjà connecté sur ce navigateur — le nouveau compte démarre
+          // vierge, au lieu d'hériter du profil/planning du précédent.
+          const owner = getLocalDataOwner();
+          if (owner && owner !== session.user.id) {
+            const blank = migrateData(freshData());
+            isCloudSetRef.current = true;
+            setData(blank);
+            saveData(blank);
+            uploadNow(blank, session.user.id);
+          } else {
+            uploadNow(data, session.user.id);
+          }
+          setLocalDataOwner(session.user.id);
         }
       })
       .catch(() => {});
