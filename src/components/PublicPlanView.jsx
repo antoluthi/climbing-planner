@@ -3,7 +3,7 @@ import { ThemeContext, useThemeCtx } from "../theme/ThemeContext.jsx";
 import { makeStyles } from "../theme/makeStyles.js";
 import supabase from "../lib/supabase.js";
 import { getMondayOf, addDays, formatDate, weekKey, getDaySessions } from "../lib/helpers.js";
-import { getChargeColor } from "../lib/charge.js";
+import { normalizeCharge10, getChargeColor } from "../lib/charge.js";
 import { useWindowWidth } from "../hooks/useWindowWidth.js";
 import { MonthView } from "./MonthView.jsx";
 import { YearView } from "./YearView.jsx";
@@ -34,7 +34,7 @@ function AvatarCircle({ url, firstName, lastName, size = 36, accent }) {
       background: accent + "33", border: `2px solid ${accent}55`,
       display: "flex", alignItems: "center", justifyContent: "center",
       fontSize: size * 0.38, fontWeight: 700, color: accent,
-      flexShrink: 0, fontFamily: "'Cormorant Garamond', Georgia, serif",
+      flexShrink: 0, fontFamily: "'Newsreader', Georgia, serif",
     }}>
       {initials}
     </div>
@@ -55,7 +55,7 @@ function SessionCard({ session, isDark, compact = false }) {
   const blockCount = blocks.length;
   const charge = session.chargePlanned ?? (
     session.charge != null
-      ? (session.charge > 10 ? Math.round(session.charge / 21.6) : session.charge)
+      ? normalizeCharge10(session.charge)
       : null
   );
 
@@ -150,7 +150,7 @@ function SessionDetailModal({ session, isDark, onClose }) {
   const location = session.location?.trim();
   const charge = session.chargePlanned ?? (
     session.charge != null
-      ? (session.charge > 10 ? Math.round(session.charge / 21.6) : session.charge)
+      ? normalizeCharge10(session.charge)
       : null
   );
 
@@ -178,7 +178,7 @@ function SessionDetailModal({ session, isDark, onClose }) {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
           <div style={{ flex: 1 }}>
             <div style={{
-              fontFamily: "'Cormorant Garamond', Georgia, serif",
+              fontFamily: "'Newsreader', Georgia, serif",
               fontSize: 20, fontWeight: 700, color: textMain, lineHeight: 1.2,
             }}>
               {session.title || session.name}

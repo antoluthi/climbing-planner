@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { BLOCK_TYPES, GRIP_TYPES, DEFAULT_SUSPENSION_CONFIG } from "../lib/constants.js";
-import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES } from "../lib/charge.js";
+import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, climbingCharge10, normalizeCharge10 } from "../lib/charge.js";
 import { getDiscipline } from "../lib/disciplines.js";
 import { RichText } from "./RichText.jsx";
 
@@ -82,7 +82,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
         )}
         {!block.name && !block.presetName && <span style={{ flex: 1 }} />}
         {hasCharge && (
-          <span style={{ fontSize: 10, color: getChargeColor(block.charge || 0), fontWeight: 700, flexShrink: 0 }}>⚡{block.charge || 0}</span>
+          <span style={{ fontSize: 10, color: getChargeColor(normalizeCharge10(block.charge)), fontWeight: 700, flexShrink: 0 }}>⚡{normalizeCharge10(block.charge)}</span>
         )}
         <span style={{ fontSize: 10, color: isDark ? "#4a3d2d" : "#8a7d68", flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
         <div style={{ display: "flex", gap: 2, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
@@ -115,7 +115,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
                   value={block.presetId ?? ""}
                   onChange={e => {
                     const preset = grimpePresets.find(s => String(s.id) === e.target.value);
-                    if (preset) onUpdate({ presetId: preset.id, presetName: preset.name, name: preset.name, charge: preset.charge });
+                    if (preset) onUpdate({ presetId: preset.id, presetName: preset.name, name: preset.name, charge: normalizeCharge10(preset.charge) });
                     else onUpdate({ presetId: null, presetName: null });
                   }}
                 >
@@ -141,7 +141,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
                   value={block.exerciseId ?? ""}
                   onChange={e => {
                     const ex = exercicePresets.find(s => String(s.id) === e.target.value);
-                    if (ex) onUpdate({ exerciseId: ex.id, name: ex.name, charge: ex.charge });
+                    if (ex) onUpdate({ exerciseId: ex.id, name: ex.name, charge: normalizeCharge10(ex.charge) });
                     else onUpdate({ exerciseId: null, name: null });
                   }}
                 >
@@ -290,10 +290,10 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
               </div>
               {isClimbing ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: getChargeColor(block.charge || 0), minWidth: 28 }}>{block.charge || 0}</span>
-                  <input type="range" min="0" max="216" style={styles.customFormSlider}
+                  <span style={{ fontSize: 16, fontWeight: 700, color: getChargeColor(normalizeCharge10(block.charge)), minWidth: 28 }}>{normalizeCharge10(block.charge)}</span>
+                  <input type="range" min="0" max="10" style={styles.customFormSlider}
                     value={block.charge ?? 0} onChange={e => onUpdate({ charge: +e.target.value })} />
-                  <input type="number" min="0" max="216" style={{ ...inputStyle, width: 52, textAlign: "center" }}
+                  <input type="number" min="0" max="10" style={{ ...inputStyle, width: 52, textAlign: "center" }}
                     value={block.charge ?? ""} onChange={e => onUpdate({ charge: +e.target.value })} />
                 </div>
               ) : (
@@ -308,7 +308,7 @@ export function BlockEditor({ block, onUpdate, onRemove, canMoveUp, canMoveDown,
               {isClimbing && calcOpen && (() => {
                 const volZone = getNbMouvementsZone(+nbMouvements);
                 const volLabel = VOLUME_ZONES[volZone - 1].label;
-                const computed = nbMouvements ? volZone * calcZone * calcComplexity : null;
+                const computed = nbMouvements ? climbingCharge10(volZone, calcZone, calcComplexity) : null;
                 return (
                   <div style={{ ...styles.calcPanel, marginTop: 6 }}>
                     <div style={styles.calcRow}>

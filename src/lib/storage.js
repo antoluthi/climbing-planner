@@ -12,20 +12,23 @@ const DEFAULT_DATA = {
   quickSessions: [], reminders: [], reminderState: {}, schemaVersion: 3,
 };
 
-// ─── Migration schemaVersion 2 → 3 ────────────────────────────────────────────
-// Ajoute discipline / mode / chargePlanned aux sessions et quickSessions
-// existantes (v2), puis data.reminders / data.reminderState avec migration
-// auto de data.creatine vers un rappel "Créatine" daily (v3).
-const SCHEMA_VERSION = 3;
+// ─── Migration schemaVersion 2 → 3 → 4 → 5 ───────────────────────────────────
+// v2 : discipline / mode / chargePlanned sur sessions et quickSessions.
+// v3 : data.reminders / data.reminderState (+ rapatrie l'ancien data.creatine).
+// v4 : entrées Hooper partielles → total null (sinon stats faussées).
+// v5 : échelle de charge unifiée 0-10 — les charges escalade legacy
+//      (vol×int×compl, 0-216) des séances ET de leurs blocs sont ramenées
+//      sur 0-10 ; les feedbacks "adaptedCharge" legacy deviennent un rpe.
+const SCHEMA_VERSION = 5;
 
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
 function normalizeCharge(legacyCharge) {
-  // L'ancienne échelle escalade allait de 0 à ~216 (vol × int × compl).
-  // Si la valeur tient déjà dans 0-10, on garde telle quelle.
+  // Ancienne échelle escalade (vol × int × compl) → 0-10. Diviseur calibré
+  // sur l'usage réel (voir lib/charge.js, LEGACY_CHARGE_DIVISOR).
   const c = Number(legacyCharge) || 0;
   if (c <= 10) return clamp(Math.round(c), 0, 10);
-  return clamp(Math.round(c / 21.6), 0, 10);
+  return clamp(Math.round(c / 4.8), 1, 10);
 }
 
 function inferSessionMode(s) {
@@ -44,6 +47,22 @@ function migrateSession(s) {
   if (!out.discipline) out.discipline = "climbing";
   if (!out.mode) out.mode = mode;
   if (out.chargePlanned == null) out.chargePlanned = normalizeCharge(s.charge);
+  // v5 : tout sur l'échelle 0-10 — charge de séance, charges des blocs,
+  // et feedback legacy (adaptedCharge → rpe 0-10). Quand la charge est encore
+  // legacy, chargePlanned (calculé en v2 avec un mauvais diviseur) est
+  // recalculé au passage.
+  if (Number(out.charge) > 10) {
+    out.charge = normalizeCharge(out.charge);
+    out.chargePlanned = out.charge;
+  }
+  if (Array.isArray(out.blocks)) {
+    out.blocks = out.blocks.map(b =>
+      b && Number(b.charge) > 10 ? { ...b, charge: normalizeCharge(b.charge) } : b
+    );
+  }
+  if (out.feedback && out.feedback.rpe == null && out.feedback.adaptedCharge != null) {
+    out.feedback = { ...out.feedback, rpe: normalizeCharge(out.feedback.adaptedCharge) };
+  }
   // En mode 'simple' historique : concatène warmup/main/cooldown dans notes.
   if (mode === "simple" && !out.notes && (s.warmup || s.main || s.cooldown)) {
     out.notes = [s.warmup, s.main, s.cooldown].filter(Boolean).join("\n\n").trim();
@@ -102,8 +121,16 @@ export function migrateData(data) {
     customSessions,
   });
 
+  // v4 : entrées Hooper partielles → total null (exclues des agrégats).
+  const hooper = (withReminders.hooper || []).map(h => {
+    const complete = [h.fatigue, h.stress, h.soreness, h.sleep].every(v => v != null);
+    if (complete) return h;
+    return { ...h, total: null };
+  });
+
   return {
     ...withReminders,
+    hooper,
     schemaVersion: SCHEMA_VERSION,
   };
 }

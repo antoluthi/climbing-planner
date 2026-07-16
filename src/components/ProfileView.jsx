@@ -12,7 +12,9 @@ import { toast } from "../lib/toast.js";
 // ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
 
 export function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus, onUpload, onPull, onImport, toggleTheme, isDark,
-  athletes, onSearchAthletes, onAddAthlete, onRemoveAthlete, viewingAthlete, onToggleViewAthlete }) {
+  athletes, onSearchAthletes, onInviteAthlete, sentInvites, onRemoveAthlete,
+  myCoaches, onLeaveCoach, accountRole,
+  viewingAthlete, onToggleViewAthlete }) {
   const { styles } = useThemeCtx();
   const profile = data.profile || {};
 
@@ -86,8 +88,9 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
   };
 
   const handleSaveName = () => {
-    onUpdateProfile({ ...profile, firstName, lastName });
-    setEditName(false);
+    if (firstName !== (profile.firstName || "") || lastName !== (profile.lastName || "")) {
+      onUpdateProfile({ ...profile, firstName, lastName });
+    }
   };
 
   const handleExport = () => {
@@ -172,38 +175,25 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
 
           {/* Nom */}
           <div style={{ flex: 1, minWidth: 200 }}>
-            {editName ? (
-              <>
-                <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                  <input
-                    style={{ ...styles.profileNameInput, flex: 1, minWidth: 100 }}
-                    value={firstName} onChange={e => setFirstName(e.target.value)}
-                    placeholder="Prénom" autoFocus
-                    onKeyDown={e => e.key === "Enter" && handleSaveName()}
-                  />
-                  <input
-                    style={{ ...styles.profileNameInput, flex: 1, minWidth: 100 }}
-                    value={lastName} onChange={e => setLastName(e.target.value)}
-                    placeholder="Nom de famille"
-                    onKeyDown={e => e.key === "Enter" && handleSaveName()}
-                  />
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button style={styles.profileSaveBtn} onClick={handleSaveName}>Enregistrer</button>
-                  <button style={styles.profileCancelBtn} onClick={() => { setFirstName(profile.firstName || ""); setLastName(profile.lastName || ""); setEditName(false); }}>Annuler</button>
-                </div>
-              </>
-            ) : (
-              <div
-                style={{ cursor: "pointer", padding: "10px 0" }}
-                onClick={() => setEditName(true)}
-              >
-                <div style={{ fontSize: displayName ? 20 : 13, fontWeight: 600, color: displayName ? textColor : mutedColor, letterSpacing: displayName ? "0.02em" : "0.04em" }}>
-                  {displayName || "Ajouter un nom"}
-                </div>
-                <div style={{ fontSize: 11, color: mutedColor, marginTop: 4 }}>{session?.user?.email || "Non connecté"}</div>
+            <div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  style={{ ...styles.profileNameInput, flex: 1, minWidth: 100 }}
+                  value={firstName} onChange={e => setFirstName(e.target.value)}
+                  placeholder="Prénom"
+                  onBlur={handleSaveName}
+                  onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                />
+                <input
+                  style={{ ...styles.profileNameInput, flex: 1, minWidth: 100 }}
+                  value={lastName} onChange={e => setLastName(e.target.value)}
+                  placeholder="Nom de famille"
+                  onBlur={handleSaveName}
+                  onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                />
               </div>
-            )}
+              <div style={{ fontSize: 11, color: mutedColor, marginTop: 6 }}>{session?.user?.email || "Non connecté"}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -248,12 +238,13 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
         </div>
       )}
 
-      {/* ── Mes athlètes (coach / auto uniquement) ── */}
-      {(profile.role === "coach" || profile.role === "auto") && onSearchAthletes && (
+      {/* ── Mes athlètes (coach / auto uniquement — rôle du compte) ── */}
+      {(accountRole === "coach" || accountRole === "auto") && onSearchAthletes && (
         <CoachAthletesSection
           athletes={athletes || []}
           onSearch={onSearchAthletes}
-          onAdd={onAddAthlete}
+          onInvite={onInviteAthlete}
+          sentInvites={sentInvites || []}
           onRemove={onRemoveAthlete}
           viewingAthlete={viewingAthlete}
           onToggle={onToggleViewAthlete}
@@ -264,6 +255,30 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
           textColor={textColor}
           btnBorder={btnBorder}
         />
+      )}
+
+      {/* ── Mon coach (visible dès qu'un lien existe) ── */}
+      {(myCoaches || []).length > 0 && !viewingAthlete && (
+        <div style={styles.profileSection}>
+          <div style={styles.profileSectionTitle}>Mon coach</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {myCoaches.map(c => (
+              <div key={c.relationId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: isDark ? "#241b13" : "#ffffff", border: `1px solid ${isDark ? "#3a2e22" : "#daeade"}`, borderRadius: 7 }}>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: textColor }}>
+                  {c.firstName} {c.lastName}
+                </div>
+                <span style={{ fontSize: 11, color: mutedColor }}>peut voir et modifier ton planning</span>
+                <button
+                  onClick={() => window.confirm(`Quitter ${c.firstName} ? Il n'aura plus accès à ton planning.`) && onLeaveCoach?.(c.relationId)}
+                  title="Quitter ce coach"
+                  style={{ background: "none", border: `1px solid ${isDark ? "#3a2e22" : "#daeade"}`, borderRadius: 5, color: "#f08070", padding: "4px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
+                >
+                  Quitter
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* ── Connexion ── */}

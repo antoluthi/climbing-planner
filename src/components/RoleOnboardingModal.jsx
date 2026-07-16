@@ -1,102 +1,60 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
+import { Modal, ModalHeader, ModalBody, ModalFooter, modalTokens } from "./ui/Modal.jsx";
+import { Button } from "./ui/Button.jsx";
+
+// Choix du rôle au 1er login. C'est une porte d'entrée : pas de fermeture
+// (ni Esc, ni clic-extérieur), un choix explicite requis avant de continuer.
+const ROLES = [
+  { value: null,      label: "Athlète solo",   desc: "Vous gérez votre planning vous-même." },
+  { value: "coach",   label: "Coach",          desc: "Vous créez et modifiez les cycles de vos athlètes." },
+  { value: "athlete", label: "Athlète suivi",  desc: "Votre coach gère vos cycles. Ils sont en lecture seule." },
+];
 
 export function RoleOnboardingModal({ onSelect }) {
   const { isDark } = useThemeCtx();
-  const bg       = isDark ? "#1a1410" : "#f6f9f7";
-  const surface  = isDark ? "#241b13" : "#ffffff";
-  const border   = isDark ? "#3a2e22" : "#d4e8db";
-  const text     = isDark ? "#f0e6d0" : "#1a2e1f";
-  const muted    = isDark ? "#a89a82" : "#6b8c72";
-  const accent   = isDark ? "#e0a875" : "#8b4c20";
-  const [selected, setSelected] = useState(null);
-
-  const roles = [
-    {
-      value: null,
-      label: "Athlète solo",
-      desc: "Vous gérez votre planning vous-même.",
-    },
-    {
-      value: "coach",
-      label: "Coach",
-      desc: "Vous créez et modifiez les cycles de vos athlètes.",
-    },
-    {
-      value: "athlete",
-      label: "Athlète suivi",
-      desc: "Votre coach gère vos cycles. Vos cycles sont en lecture seule.",
-    },
-  ];
+  const T = modalTokens(isDark);
+  const [selected, setSelected] = useState(undefined); // undefined = rien choisi
+  const chosen = selected !== undefined;
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 9999,
-      background: "rgba(0,0,0,0.6)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: 24,
-    }}>
-      <div style={{
-        background: surface, border: `1px solid ${border}`,
-        borderRadius: 14, padding: "32px 28px", maxWidth: 420, width: "100%",
-        boxShadow: "0 8px 40px rgba(0,0,0,0.35)",
-      }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: muted, textTransform: "uppercase", marginBottom: 8 }}>
-          Bienvenue
-        </div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: text, marginBottom: 6 }}>
-          Quel est votre rôle ?
-        </div>
-        <div style={{ fontSize: 12, color: muted, marginBottom: 24, lineHeight: 1.5 }}>
+    <Modal maxWidth={420} dismissOnBackdrop={false} closeOnEsc={false} ariaLabel="Quel est votre rôle ?">
+      <ModalHeader eyebrow="Bienvenue" title="Quel est votre rôle ?" />
+      <ModalBody style={{ gap: 12 }}>
+        <p style={{ fontSize: 12, color: T.textLight, lineHeight: 1.5, margin: 0 }}>
           Ce choix est permanent. Contactez votre administrateur pour le modifier.
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-          {roles.map(opt => {
-            const active = selected === opt.value || (selected === undefined && opt.value === null && false);
-            const isSelected = selected !== null ? selected === opt.value : opt.value === selected;
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {ROLES.map(opt => {
+            const active = selected === opt.value;
             return (
               <button
                 key={String(opt.value)}
                 onClick={() => setSelected(opt.value)}
+                aria-pressed={active}
                 style={{
-                  display: "flex", alignItems: "flex-start", gap: 14,
-                  background: isSelected ? (isDark ? "#3a2616" : "#e8f5ed") : bg,
-                  border: `1.5px solid ${isSelected ? accent : border}`,
-                  borderRadius: 9, padding: "14px 16px",
-                  cursor: "pointer", textAlign: "left",
-                  transition: "all 0.15s",
+                  textAlign: "left", cursor: "pointer",
+                  background: active ? (isDark ? "#3a2616" : "#f3ece2") : T.surface,
+                  border: `1.5px solid ${active ? T.accent : T.border}`,
+                  borderRadius: 10, padding: "14px 16px",
+                  transition: "border-color 0.15s, background 0.15s",
+                  fontFamily: "inherit",
                 }}
               >
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: isSelected ? accent : text, marginBottom: 3 }}>
-                    {opt.label}
-                  </div>
-                  <div style={{ fontSize: 11, color: muted, lineHeight: 1.4 }}>{opt.desc}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: active ? T.accent : T.text, marginBottom: 3 }}>
+                  {opt.label}
                 </div>
+                <div style={{ fontSize: 12, color: T.textMid, lineHeight: 1.4 }}>{opt.desc}</div>
               </button>
             );
           })}
         </div>
-
-        <button
-          disabled={selected === undefined}
-          onClick={() => selected !== undefined && onSelect(selected)}
-          style={{
-            width: "100%",
-            background: selected !== undefined ? accent : (isDark ? "#3a2e22" : "#e0ebe3"),
-            border: "none", borderRadius: 8,
-            color: selected !== undefined ? "#fff" : muted,
-            padding: "12px 20px",
-            cursor: selected !== undefined ? "pointer" : "default",
-            fontSize: 13, fontFamily: "inherit", fontWeight: 700,
-            letterSpacing: "0.04em",
-            opacity: selected !== undefined ? 1 : 0.5,
-          }}
-        >
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="primary" size="md" fullWidth disabled={!chosen} onClick={() => chosen && onSelect(selected)}>
           Confirmer
-        </button>
-      </div>
-    </div>
+        </Button>
+      </ModalFooter>
+    </Modal>
   );
 }

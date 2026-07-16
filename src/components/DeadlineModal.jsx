@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { CUSTOM_CYCLE_COLORS } from "../lib/constants.js";
 import { generateId } from "../lib/storage.js";
+import { Modal, ModalHeader, ModalBody, ModalFooter } from "./ui/Modal.jsx";
+import { Field, TextInput, Textarea, Select, ColorSwatches, SegmentedControl } from "./ui/Field.jsx";
+import { Button } from "./ui/Button.jsx";
+import { ConfirmModal } from "./ConfirmModal.jsx";
+import { useConfirmClose } from "../hooks/useConfirmClose.js";
 
 // ─── DEADLINE MODAL ───────────────────────────────────────────────────────────
 
 const DEADLINE_TYPES = ["competition", "sortie", "objectif"];
 const DEADLINE_TYPE_LABELS = { competition: "Compétition", sortie: "Sortie", objectif: "Objectif" };
-const PRIORITY_LABELS = { A: "A — Principale", B: "B — Secondaire", C: "C — Indicatif" };
 
 const DEADLINE_COLORS = [
   "#f0805a", "#f0a060", "#f59e0b", "#22d3ee",
@@ -16,15 +18,21 @@ const DEADLINE_COLORS = [
 ];
 
 export function DeadlineModal({ initial, onSave, onClose }) {
-  const { styles, isDark } = useThemeCtx();
-
-  const [label, setLabel] = useState(initial?.label || "");
-  const [type, setType] = useState(initial?.type || "competition");
-  const [startDate, setStartDate] = useState(initial?.startDate || "");
-  const [endDate, setEndDate] = useState(initial?.endDate || "");
-  const [color, setColor] = useState(initial?.color || DEADLINE_COLORS[0]);
-  const [priority, setPriority] = useState(initial?.priority || "A");
-  const [note, setNote] = useState(initial?.note || "");
+  const { requestClose, markDirty, confirmOpen, confirmProps } = useConfirmClose(onClose);
+  const [label, _setLabel] = useState(initial?.label || "");
+  const setLabel = v => { markDirty(); _setLabel(v); };
+  const [type, _setType] = useState(initial?.type || "competition");
+  const setType = v => { markDirty(); _setType(v); };
+  const [startDate, _setStartDate] = useState(initial?.startDate || "");
+  const setStartDate = v => { markDirty(); _setStartDate(v); };
+  const [endDate, _setEndDate] = useState(initial?.endDate || "");
+  const setEndDate = v => { markDirty(); _setEndDate(v); };
+  const [color, _setColor] = useState(initial?.color || DEADLINE_COLORS[0]);
+  const setColor = v => { markDirty(); _setColor(v); };
+  const [priority, _setPriority] = useState(initial?.priority || "A");
+  const setPriority = v => { markDirty(); _setPriority(v); };
+  const [note, _setNote] = useState(initial?.note || "");
+  const setNote = v => { markDirty(); _setNote(v); };
 
   const canSave = label.trim() && startDate;
 
@@ -42,114 +50,55 @@ export function DeadlineModal({ initial, onSave, onClose }) {
     });
   };
 
-  const labelColor = isDark ? "#a89a82" : "#6b7060";
-  const inputStyle = { ...styles.customFormInput, width: "100%", boxSizing: "border-box" };
-  const fieldStyle = { ...styles.customFormField, flex: 1 };
-
   return (
-    <div style={styles.confirmOverlay}>
-      <div style={{ ...styles.confirmModal, width: "min(420px, 96vw)", gap: 14, padding: "20px 22px" }}>
-        <div style={styles.modalHeader}>
-          <span style={styles.modalTitle}>{initial ? "Modifier l'échéance" : "Nouvelle échéance"}</span>
-          <button style={styles.closeBtn} onClick={onClose}>✕</button>
-        </div>
+    <Modal onClose={requestClose} maxWidth={420} ariaLabel={initial ? "Modifier l'échéance" : "Nouvelle échéance"}>
+      <ModalHeader title={initial ? "Modifier l'échéance" : "Nouvelle échéance"} onClose={requestClose} />
+      <ModalBody>
+        <Field label="Nom de l'échéance">
+          <TextInput placeholder="Ex : Coupe régionale" value={label} onChange={e => setLabel(e.target.value)} autoFocus />
+        </Field>
 
-        {/* Label */}
-        <input
-          style={inputStyle}
-          placeholder="Nom de l'échéance… (ex: Coupe régionale)"
-          value={label}
-          onChange={e => setLabel(e.target.value)}
-        />
-
-        {/* Type + Priorité */}
         <div style={{ display: "flex", gap: 10 }}>
-          <div style={fieldStyle}>
-            <span style={styles.customFormLabel}>Type</span>
-            <select
-              style={{ ...styles.customFormSelect, width: "100%" }}
-              value={type}
-              onChange={e => setType(e.target.value)}
-            >
-              {DEADLINE_TYPES.map(t => (
-                <option key={t} value={t}>{DEADLINE_TYPE_LABELS[t]}</option>
-              ))}
-            </select>
-          </div>
-          <div style={{ ...fieldStyle, flex: "0 0 auto" }}>
-            <span style={styles.customFormLabel}>Priorité</span>
-            <div style={{ display: "flex", gap: 4 }}>
-              {["A", "B", "C"].map(p => (
-                <button
-                  key={p}
-                  title={PRIORITY_LABELS[p]}
-                  onClick={() => setPriority(p)}
-                  style={{
-                    width: 32, height: 32, borderRadius: 5, fontFamily: "inherit",
-                    fontSize: 12, fontWeight: 700, cursor: "pointer",
-                    border: priority === p ? `2px solid ${color}` : `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
-                    background: priority === p ? color + "33" : (isDark ? "#2e2419" : "#ddd7cc"),
-                    color: priority === p ? color : (isDark ? "#a89a82" : "#6b7060"),
-                  }}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
+          <Field label="Type" style={{ flex: 1 }}>
+            <Select value={type} onChange={e => setType(e.target.value)}>
+              {DEADLINE_TYPES.map(t => <option key={t} value={t}>{DEADLINE_TYPE_LABELS[t]}</option>)}
+            </Select>
+          </Field>
+          <Field label="Priorité" style={{ flex: "0 0 140px" }}>
+            <SegmentedControl
+              options={[{ value: "A", label: "A" }, { value: "B", label: "B" }, { value: "C", label: "C" }]}
+              value={priority}
+              onChange={setPriority}
+              accent={color}
+            />
+          </Field>
         </div>
 
-        {/* Palette couleurs */}
-        <div>
-          <div style={{ fontSize: 10, color: labelColor, marginBottom: 7, textTransform: "uppercase", letterSpacing: "0.1em" }}>Couleur</div>
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-            {DEADLINE_COLORS.map(c => (
-              <div
-                key={c}
-                onClick={() => setColor(c)}
-                style={{
-                  width: 24, height: 24, borderRadius: "50%", background: c, cursor: "pointer",
-                  border: color === c ? "3px solid #fff" : "3px solid transparent",
-                  boxShadow: color === c ? `0 0 0 2px ${c}` : "none",
-                  flexShrink: 0,
-                }}
-              />
-            ))}
-          </div>
-        </div>
+        <Field label="Couleur">
+          <ColorSwatches colors={DEADLINE_COLORS} value={color} onChange={setColor} />
+        </Field>
 
-        {/* Dates */}
         <div style={{ display: "flex", gap: 10 }}>
-          <div style={fieldStyle}>
-            <span style={styles.customFormLabel}>Date de début</span>
-            <input style={inputStyle} type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-          </div>
-          <div style={fieldStyle}>
-            <span style={styles.customFormLabel}>Date de fin <span style={{ fontStyle: "italic", fontWeight: 400 }}>(optionnel)</span></span>
-            <input style={inputStyle} type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
-          </div>
+          <Field label="Début" style={{ flex: 1 }}>
+            <TextInput type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+          </Field>
+          <Field label="Fin" hint="optionnel" style={{ flex: 1 }}>
+            <TextInput type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+          </Field>
         </div>
 
-        {/* Note */}
-        <textarea
-          style={{ ...inputStyle, resize: "vertical", minHeight: 52, fontFamily: "inherit", fontSize: 12, lineHeight: 1.5 }}
-          placeholder="Note… (optionnel)"
-          value={note}
-          onChange={e => setNote(e.target.value)}
-        />
+        <Field label="Note" hint="optionnel">
+          <Textarea placeholder="Note…" value={note} onChange={e => setNote(e.target.value)} />
+        </Field>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="secondary" size="md" onClick={requestClose}>Annuler</Button>
+        <Button variant="primary" size="md" disabled={!canSave} onClick={handleSave} style={canSave ? { background: color, color: "#fff" } : undefined}>
+          {initial ? "Enregistrer" : "Créer"}
+        </Button>
+      </ModalFooter>
 
-        {/* Boutons */}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button style={styles.confirmCancelBtn} onClick={onClose}>Annuler</button>
-          <button
-            style={{ ...styles.confirmDeleteBtn, background: canSave ? color : (isDark ? "#333" : "#ccc"), cursor: canSave ? "pointer" : "default" }}
-            onClick={handleSave}
-            disabled={!canSave}
-          >
-            {initial ? "Enregistrer" : "Créer"}
-          </button>
-        </div>
-      </div>
-    </div>
+      {confirmOpen && <ConfirmModal {...confirmProps} />}
+    </Modal>
   );
 }

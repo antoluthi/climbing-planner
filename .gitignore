@@ -23,6 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 
+# Android build artifacts
+android/app/build/
+android/.gradle/
+android/build/
+*.apk
+*.aab
+
 # Claude Code worktrees & temp patches
 .claude/worktrees/
 patch_*.cjs

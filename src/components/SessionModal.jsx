@@ -1,31 +1,19 @@
 import { useState, useRef, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { DAYS, BLOCK_TYPES, DEFAULT_SUSPENSION_CONFIG, getMesoColor } from "../lib/constants.js";
-import { getChargeColor } from "../lib/charge.js";
+import { getChargeColor, normalizeCharge10, RPE_LABELS } from "../lib/charge.js";
 import { getMondayOf, addDays, weekKey } from "../lib/helpers.js";
 import { RichText } from "./RichText.jsx";
 import { SuspensionInfoCard } from "./SuspensionInfoCard.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { Caillou } from "./Caillou.jsx";
 import { Z } from "../theme/makeStyles.js";
+import { pushLayer, lockBodyScroll } from "../lib/native.js";
 import { getDiscipline, METRIC_LABELS } from "../lib/disciplines.js";
 
 // ─── SESSION MODAL — refonte sans onglets ─────────────────────────────────────
 // Le ressenti est la vue par défaut (le moment le plus fréquent d'ouverture).
 // Le détail technique devient un accordéon en bas. "Déplacer" est dans un kebab.
-
-const RPE_LABELS = {
-  1: "Très facile — récupération.",
-  2: "Facile — échauffement.",
-  3: "Modéré — confortable.",
-  4: "Un peu difficile.",
-  5: "Difficile.",
-  6: "Difficile, soutenu.",
-  7: "Difficile mais soutenable.",
-  8: "Très difficile.",
-  9: "Maximal — limite.",
-  10: "Maximum absolu.",
-};
 
 const STATUS_OPTIONS = [
   { key: "done",     label: "Fait",      icon: "✓" },
@@ -46,7 +34,6 @@ export function SessionModal({
   const [notesOpen, setNotesOpen] = useState(!!session.feedback?.notes);
   const [kebabOpen, setKebabOpen] = useState(false);
   const kebabRef = useRef(null);
-  const rpeGridRef = useRef(null);
 
   // ── Move tab state ──
   const [newStartTime, setNewStartTime] = useState(session.startTime || "");
@@ -89,8 +76,12 @@ export function SessionModal({
     return fb.done ? "done" : "not_done";
   };
   const [status,         setStatus]         = useState(initStatus);
-  const [adaptedCharge,  setAdaptedCharge]  = useState(session.feedback?.adaptedCharge ?? session.charge ?? 24);
-  const [rpe,            setRpe]            = useState(session.feedback?.rpe ?? null);
+  // Charge planifiée sur l'échelle unifiée 0-10 (référence du slider ressenti).
+  const plannedCharge = session.chargePlanned != null
+    ? normalizeCharge10(session.chargePlanned)
+    : (session.charge != null ? normalizeCharge10(session.charge) : null);
+  // Le slider part de la valeur planifiée : l'athlète confirme ou ajuste.
+  const [rpe,            setRpe]            = useState(() => session.feedback?.rpe ?? plannedCharge ?? 5);
   const [quality,        setQuality]        = useState(session.feedback?.quality ?? null);
   const [notes,          setNotes]          = useState(session.feedback?.notes ?? "");
   const [blockFeedbacks, setBlockFeedbacks] = useState(session.feedback?.blockFeedbacks ?? []);
@@ -143,11 +134,23 @@ export function SessionModal({
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
+  // Pile de calques : bouton retour Android + Échap top-only + scroll lock.
+  // backCloseRef est réassigné à chaque rendu pour capturer l'état frais.
+  const backCloseRef = useRef(null);
+  backCloseRef.current = () => { if (showMove) setShowMove(false); else onClose(); };
+  const layerRef = useRef(null);
+  useEffect(() => {
+    const layer = pushLayer(() => backCloseRef.current?.());
+    layerRef.current = layer;
+    const unlock = lockBodyScroll();
+    return () => { layer.remove(); unlock(); };
+  }, []);
+
   // Escape closes
   const handleSaveRef = useRef(null);
   useEffect(() => {
     const h = e => {
-      if (e.key === "Escape") { if (showMove) setShowMove(false); else onClose(); }
+      if (e.key === "Escape" && layerRef.current?.isTop()) { if (showMove) setShowMove(false); else onClose(); }
       if ((e.key === "Enter") && (e.metaKey || e.ctrlKey)) handleSaveRef.current?.();
     };
     window.addEventListener("keydown", h);
@@ -162,7 +165,6 @@ export function SessionModal({
     onSave({
       status,
       done: sessionDone,
-      adaptedCharge: status === "adapted" ? adaptedCharge : null,
       rpe: sessionDone ? rpe : null,
       quality: sessionDone ? quality : null,
       notes,
@@ -193,15 +195,9 @@ export function SessionModal({
   );
 
   const chargeColors = (() => {
-    const c = getChargeColor(session.charge || 0);
+    const c = getChargeColor(plannedCharge ?? 0);
     return { fg: c, bg: c + "22" };
   })();
-
-  // RPE keyboard navigation
-  const handleRpeKey = (e) => {
-    if (e.key === "ArrowRight" && rpe < 10) { setRpe((rpe || 0) + 1); e.preventDefault(); }
-    if (e.key === "ArrowLeft" && rpe > 1)  { setRpe(rpe - 1); e.preventDefault(); }
-  };
 
   return (
     <div
@@ -302,11 +298,7 @@ export function SessionModal({
             {hasBlocks ? chip(`${effectiveBlocks.length} bloc${effectiveBlocks.length > 1 ? "s" : ""}`) : null}
             {/* Charge planifiée vs ressentie */}
             {(() => {
-              const planned = session.chargePlanned != null
-                ? session.chargePlanned
-                : (session.charge != null
-                  ? (session.charge > 10 ? Math.round(session.charge / 21.6) : session.charge)
-                  : null);
+              const planned = plannedCharge;
               const felt = session.feedback?.rpe ?? null;
               if (planned == null && felt == null) return null;
               const items = [];
@@ -399,53 +391,60 @@ export function SessionModal({
                 </div>
               )}
 
-              {/* Card RPE perçu */}
-              <div style={{
-                background: surfaceCard, border: `1px solid ${border}`,
-                borderRadius: 12, padding: 14,
-                opacity: sessionDone ? 1 : sessionMissed ? 0.5 : 0.85,
-                pointerEvents: sessionDone ? "auto" : sessionMissed ? "none" : "auto",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: textMid }}>Charge ressentie (1-10)</span>
-                  <span style={{
-                    fontFamily: "'Newsreader', Georgia, serif", fontSize: 18, fontWeight: 700,
-                    color: rpe ? getChargeColor((rpe || 0) * 3) : textLight,
+              {/* Card Charge ressentie — slider unique, pré-rempli à la charge
+                  planifiée : l'athlète confirme (ne touche à rien) ou ajuste si
+                  c'était plus / moins soutenu que prévu. Même échelle 0-10 que
+                  toutes les disciplines. */}
+              {(() => {
+                const feltColor = getChargeColor(rpe || 0);
+                const delta = plannedCharge != null && rpe != null ? rpe - plannedCharge : null;
+                const deltaText = delta == null ? null
+                  : delta === 0 ? "Conforme au plan"
+                  : delta > 0 ? `Plus soutenu que prévu (+${delta})`
+                  : `Moins soutenu que prévu (${delta})`;
+                const deltaColor = delta == null || delta === 0
+                  ? textLight
+                  : delta > 0 ? (isDark ? "#f0a060" : "#c2410c") : (isDark ? "#82c894" : "#2e6b3f");
+                return (
+                  <div style={{
+                    background: surfaceCard, border: `1px solid ${border}`,
+                    borderRadius: 12, padding: 14,
+                    opacity: sessionDone ? 1 : sessionMissed ? 0.5 : 0.85,
+                    pointerEvents: sessionDone ? "auto" : sessionMissed ? "none" : "auto",
                   }}>
-                    {rpe ? `${rpe} / 10` : "—"}
-                  </span>
-                </div>
-                <div
-                  ref={rpeGridRef}
-                  role="radiogroup"
-                  aria-label="Charge ressentie 1 à 10"
-                  tabIndex={0}
-                  onKeyDown={handleRpeKey}
-                  style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 4, outline: "none" }}
-                  onFocus={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${accent}44`}
-                  onBlur={e => e.currentTarget.style.boxShadow = "none"}
-                >
-                  {Array.from({ length: 10 }, (_, i) => i + 1).map(n => {
-                    const active = rpe === n;
-                    return (
-                      <button
-                        key={n}
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => setRpe(n)}
-                        style={{
-                          height: 30, borderRadius: 6, border: "none",
-                          background: active ? accent : surfaceMuted,
-                          color: active ? "#fff" : textMid,
-                          fontSize: 12, fontWeight: 600, cursor: "pointer",
-                          fontFamily: "inherit", transition: "background 0.1s",
-                        }}
-                      >{n}</button>
-                    );
-                  })}
-                </div>
-                {rpe && <div style={{ fontSize: 11, color: textLight, marginTop: 8 }}>{rpe} — {RPE_LABELS[rpe] || ""}</div>}
-              </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: textMid }}>Charge ressentie</span>
+                      <span style={{
+                        fontFamily: "'Newsreader', Georgia, serif", fontSize: 20, fontWeight: 700,
+                        color: rpe ? feltColor : textLight,
+                      }}>
+                        {rpe ? `${rpe} / 10` : "—"}
+                      </span>
+                    </div>
+                    {plannedCharge != null && (
+                      <div style={{ fontSize: 11, color: textLight, marginBottom: 8 }}>
+                        Prévu : {plannedCharge}/10 — ajuste si c'était plus ou moins soutenu.
+                      </div>
+                    )}
+                    <input
+                      type="range" min="1" max="10" step="1"
+                      value={rpe ?? plannedCharge ?? 5}
+                      onChange={e => setRpe(+e.target.value)}
+                      aria-label="Charge ressentie de 1 à 10"
+                      style={{ width: "100%", accentColor: feltColor, cursor: "pointer" }}
+                    />
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: textLight, marginTop: 2 }}>
+                      <span>1 · facile</span><span>5 · difficile</span><span>10 · max</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, gap: 8 }}>
+                      <span style={{ fontSize: 11, color: textLight, fontStyle: "italic" }}>{rpe ? RPE_LABELS[rpe] : ""}</span>
+                      {deltaText && (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: deltaColor, flexShrink: 0 }}>{deltaText}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Card Qualité ressentie */}
               <div style={{
@@ -471,26 +470,6 @@ export function SessionModal({
                   ))}
                 </div>
               </div>
-
-              {/* Card Charge réalisée (uniquement si adaptée) */}
-              {status === "adapted" && (
-                <div style={{
-                  background: statusColors.adapted.bg, border: `1px solid ${statusColors.adapted.fg}55`,
-                  borderRadius: 12, padding: 14,
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: statusColors.adapted.fg }}>Charge réalisée</span>
-                    <span style={{ fontWeight: 700, color: getChargeColor(adaptedCharge) }}>{adaptedCharge}</span>
-                  </div>
-                  <input
-                    type="range" min="0" max="30" step="1"
-                    value={adaptedCharge}
-                    onChange={e => setAdaptedCharge(+e.target.value)}
-                    style={{ width: "100%", accentColor: accent }}
-                  />
-                  <div style={{ fontSize: 10, color: textLight, marginTop: 4 }}>Charge prévue : {session.charge}</div>
-                </div>
-              )}
 
               {/* Accordéon Notes */}
               <div style={{
@@ -757,7 +736,7 @@ export function SessionModal({
                   {/* Récap discipline / charge / durée — fallback minimal */}
                   {!hasBlocks && !hasContent && !hasSessionNotes && !hasDescription && !hasEventContent && !hasMetrics && (() => {
                     const disc = getDiscipline(session.discipline || "climbing");
-                    const planned = session.chargePlanned ?? (session.charge != null ? (session.charge > 10 ? Math.round(session.charge / 21.6) : session.charge) : null);
+                    const planned = session.chargePlanned ?? (session.charge != null ? normalizeCharge10(session.charge) : null);
                     return (
                       <div style={{ padding: "12px 14px", background: surfaceCard, border: `1px dashed ${border}`, borderRadius: 10 }}>
                         <div style={{ fontSize: 12, color: textMid, lineHeight: 1.6 }}>

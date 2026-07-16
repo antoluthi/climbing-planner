@@ -29,8 +29,9 @@ src/
 │   │                               getDayLogWarning, getMesoColor, getMesoForDate
 │   ├── helpers.js                — getMondayOf, addDays, formatDate, weekKey, localDateStr,
 │   │                               calcEndTime, migrateWeekKeys, getDaySessions, getDayCharge, getMonthWeeks
-│   ├── charge.js                 — VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES,
-│   │                               getNbMouvementsZone, getChargeColor
+│   ├── charge.js                 — échelle de charge unifiée 0-10 : normalizeCharge10,
+│   │                               getSessionCharge, climbingCharge10, RPE_LABELS, getChargeColor,
+│   │                               VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, getNbMouvementsZone
 │   ├── storage.js                — generateId, loadData, saveData (localStorage)
 │   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
 │   └── hooper.js                 — hooperLabel, hooperColor
@@ -163,9 +164,18 @@ Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autor
 | `"coach"` | Coach — accès à la bibliothèque de séances + vue des athlètes |
 | `"auto"` | Athlète autonome — expérimental, réglable en DB uniquement — même accès que coach |
 
-- Le rôle est choisi une seule fois via `RoleOnboardingModal` (1er login, quand `!("role" in profile)`)
-- `isCoach = role === "coach"`, `isAuto = role === "auto"`, `hasCoachFeatures = isCoach || isAuto`
-- `canEdit = role !== "athlete"` (cycles, mésocycles)
+- **Source de vérité** : colonne `status` de `climbing_plans`. Valeurs : `'coach'` |
+  `'athlete'` | `'auto'` | `'solo'` (athlète solo explicite) | `NULL` (= n'a
+  **jamais** choisi → `RoleOnboardingModal` s'affiche). `'solo'` se traduit par
+  `role: null` dans l'app.
+- Le rôle du **compte** (`accountRole`, résolu dans `DataProvider` depuis la
+  même requête que le chargement cloud — plus de course avec le premier upload)
+  pilote toutes les permissions : `isCoach`/`isAuto`/`hasCoachFeatures`/`canEdit`
+  dérivent de `accountRole`, **jamais de `data.profile.role`** (qui devient
+  celui de l'athlète en vue athlète — le coach garde bibliothèque, picker coach
+  et édition des cycles pendant la vue athlète).
+- Choix unique via `RoleOnboardingModal` → `chooseRole()` (écrit `status`,
+  `'solo'` pour null).
 
 ## Système coach-athlète
 
@@ -176,11 +186,25 @@ Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autor
 - **Auto-save modifié** : quand `viewingAthlete` est set → `saveToCloud(data, viewingAthlete.userId)` (jamais localStorage, jamais la ligne du coach)
 - **Bandeau** : barre brune "VUE ATHLÈTE — Prénom Nom" avec bouton "← Retour à ma vue"
 
-### Gestion des athlètes (`hooks/useCoachAthletes.js`)
-- Fetch : `coach_athletes` JOIN `climbing_plans` (deux requêtes)
-- Recherche : RPC `search_athletes(term)` → athlètes non-coach matchant le nom
-- Ajout : upsert dans `coach_athletes` (onConflict coach_id,athlete_id)
-- Retrait : delete par `id` (clé primaire de `coach_athletes`)
+### Gestion des athlètes (`hooks/useCoachAthletes.js` + `hooks/useNotifications.js`)
+- **Consentement mutuel** (migration `20260715`) : le coach **invite**
+  (notification `coach_request`), et c'est **l'athlète qui crée le lien** en
+  acceptant depuis la cloche (RLS : INSERT `coach_athletes` réservé à
+  `athlete_id = auth.uid()` — personne ne peut s'auto-déclarer coach).
+- Recherche : RPC `search_athletes(term)` (statuts null/'athlete'/'auto'/'solo')
+- Retrait : delete par les **deux** côtés (coach retire / athlète quitte via
+  section "Mon coach" du profil, RPC `get_my_coaches()` pour les noms)
+- États côté coach dans "Mes athlètes" : Inviter → "Invitation en attente…" →
+  suivi ✓ (refresh temps réel à l'acceptation)
+
+### Notifications (cloche 🔔 — `components/NotificationBell.jsx` / `NotificationsPanel.jsx`)
+- Table `notifications` (RLS : destinataire lit/marque lu, émetteur insère/lit
+  ses envois) + realtime (`postgres_changes`) → badge non-lus en direct
+- Types : `coach_request` (actionnable Accepter/Refuser), `coach_accepted`,
+  `coach_declined`, `plan_update`
+- `plan_update` : envoyée à l'athlète quand le coach quitte la vue athlète si
+  le planning a changé (diff des `weeks` + cycles dans `switchBackToCoach`,
+  payload = semaines touchées)
 
 ## Variables d'environnement
 
@@ -218,6 +242,32 @@ Navigation : les vues calendrier (week/month/year) sont regroupées sous un bout
 - **Clic sur le label de date** (ex: "9 mars – 15 mars") → `setCurrentDate(new Date())` pour revenir à la période actuelle
   - Curseur `pointer` uniquement si on n'est pas déjà sur la période en cours
   - Tooltip : "Aller à la semaine en cours" / "Aller au mois en cours" / "Aller à l'année en cours"
+
+## Système de charge unifié (0-10)
+
+Toutes les disciplines partagent la même unité : **la charge de séance 0-10**
+(équivalente au RPE Borg CR-10). Refonte juillet 2026 (`lib/charge.js`).
+
+- **Escalade** : le calculateur spécifique (nb mouvements → zone volume 1-6 ×
+  intensité 1-6 × complexité 1-6) reste un *assistant* — son produit est ramené
+  sur 0-10 via `climbingCharge10()` (diviseur 4.8, calibré sur l'usage réel de
+  l'ancienne échelle : bloc Grimpe type 24 → 5, séance complète 36 → 8).
+- **Blocs** : chaque bloc porte une charge 0-10 ; séance détaillée = somme des
+  blocs plafonnée à 10. Autres disciplines : saisie directe 0-10.
+- **`getSessionCharge(s)`** : charge effective = `feedback.rpe` (ressenti) >
+  `chargePlanned` > `charge` legacy normalisée. **Séance manquée = 0.**
+  Tous les totaux (jour, semaine, heatmap, Dashboard, AccueilView) passent par
+  cette fonction — jamais de lecture directe de `s.charge` dans les vues.
+- **Feedback athlète** : un seul slider "Charge ressentie" 1-10 dans
+  `SessionModal`, **pré-rempli à la charge planifiée** — l'athlète confirme ou
+  ajuste, avec delta affiché ("Plus/Moins soutenu que prévu (±n)").
+  `feedback.adaptedCharge` n'est plus écrit (legacy migré → `rpe`).
+- **Migration v5** (`storage.js`) : charges > 10 divisées par 4.8 (séances +
+  blocs), `chargePlanned` recalculé, `adaptedCharge` → `rpe`. Les données non
+  migrées (catalogue coach en DB) sont normalisées à la volée par
+  `normalizeCharge10()` dans les affichages.
+- **Couleurs** (`getChargeColor`) : 0 repos · ≤3 léger · ≤6 modéré · ≤9 soutenu
+  · >9 très lourd (valable séance et total jour).
 
 ## Points techniques importants
 
@@ -305,6 +355,7 @@ Règles de sync (refonte mars 2026) :
 | `supabase/migrations/20260315_public_anto_plan.sql` | Policy RLS `anon` lecture-seule sur la ligne Anto dans `climbing_plans` | ✅ appliquée |
 | `supabase/migrations/20260512_avatars_bucket.sql` | Bucket Storage `avatars` (public read, 2MB max, jpeg/png/webp) + policies INSERT/UPDATE/DELETE par owner sur `{auth.uid()}.{ext}` | ⏳ à appliquer |
 | `supabase/migrations/20260513_shared_sessions_catalog.sql` | Bibliothèque commune : `sessions_catalog` + `session_blocks` → tout user authentifié peut SELECT/INSERT/UPDATE/DELETE toutes les rows. `user_id` / `created_by` conservés pour la traçabilité. | ⏳ à appliquer |
+| `supabase/migrations/20260715_notifications_coach_invites.sql` | Table `notifications` + realtime, `coach_athletes` en consentement mutuel (INSERT athlète only, SELECT/DELETE des deux côtés), `search_athletes` inclut 'solo', RPC `get_my_coaches` | ⏳ à appliquer — **requise** pour la cloche et les invitations |
 
 ## Commandes
 

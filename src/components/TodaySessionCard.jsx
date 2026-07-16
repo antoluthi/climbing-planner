@@ -1,5 +1,5 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { getChargeColor } from "../lib/charge.js";
+import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { BLOCK_TYPES } from "../lib/constants.js";
 
 // ─── TODAY SESSION CARD ───────────────────────────────────────────────────────
@@ -20,7 +20,7 @@ export function TodaySessionCard({ session, onTap, onToggleDone }) {
   const done = status === "done" || status === "adapted";
   const missed = status === "not_done";
 
-  const chargeColor = getChargeColor(session.charge || 0);
+  const chargeColor = getChargeColor(getSessionCharge(session));
   const typeColor = (() => {
     if (session.blocks?.length) {
       const main = session.blocks.find(b => (b.type || b.blockType) === "Grimpe");
@@ -102,7 +102,7 @@ export function TodaySessionCard({ session, onTap, onToggleDone }) {
             borderRadius: 14, padding: "3px 9px",
             fontSize: 11, fontWeight: 700,
             minWidth: 24, textAlign: "center",
-          }}>{session.charge}</span>
+          }}>{getSessionCharge(session)}</span>
         )}
         <button
           onClick={handleToggle}

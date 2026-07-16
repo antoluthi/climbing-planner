@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { getChargeColor } from "../lib/charge.js";
+import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { BLOCK_TYPES, getMesoColor } from "../lib/constants.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 
@@ -106,7 +106,7 @@ export function DayColumn({
   dateISO,
 }) {
   const { styles, isDark, mesocycles } = useThemeCtx();
-  const totalCharge = sessions.reduce((acc, s) => acc + (s.charge ?? 0), 0);
+  const totalCharge = sessions.reduce((acc, s) => acc + getSessionCharge(s), 0);
 
   // Dynamic sizing based on column width
   const isCompact = colWidth && colWidth < 80;
@@ -458,7 +458,7 @@ export function DayColumn({
 
             if (ev.type === "session") {
               const s = ev.data;
-              const chargeColor = getChargeColor(s.charge);
+              const chargeColor = getChargeColor(getSessionCharge(s));
               return (
                 <div
                   key={ev.key}

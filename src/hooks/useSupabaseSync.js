@@ -66,8 +66,19 @@ export function useSupabaseSync() {
         body: JSON.stringify(row),
       });
     };
+    // pagehide couvre refresh/navigation web ; visibilitychange couvre le
+    // passage en arrière-plan dans la WebView Android (où pagehide ne se
+    // déclenche pas quand l'app est tuée depuis les récents). Le flush est
+    // idempotent (upsert), un double envoi est sans effet.
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") handlePageHide();
+    };
     window.addEventListener("pagehide", handlePageHide);
-    return () => window.removeEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []); // refs only — no deps needed
 
   // Build the flat columns synced alongside the JSONB blob.
@@ -103,23 +114,29 @@ export function useSupabaseSync() {
     }
     if (!row) return null;
     const blob = row.data ?? {};
+    // La colonne status fait autorité pour le rôle. Valeurs : 'coach' |
+    // 'athlete' | 'auto' | 'solo' (choix explicite « athlète solo ») |
+    // NULL (n'a JAMAIS choisi → l'onboarding rôle doit s'afficher).
+    // Dans l'app, 'solo' se traduit par role: null.
+    const status = "status" in (row ?? {}) ? row.status : undefined;
     const profile = {
       ...(blob.profile ?? {}),
       ...(row.first_name != null ? { firstName: row.first_name } : {}),
       ...(row.last_name  != null ? { lastName:  row.last_name  } : {}),
-      // status column is authoritative for role (overrides blob value)
-      ...("status" in (row ?? {}) ? { role: row.status } : {}),
+      ...(status !== undefined ? { role: status === "solo" ? null : status } : {}),
     };
     const migrated = migrateWeekKeys({ ...blob, profile });
-    return { ...migrated, _cloudUpdatedAt: row.updated_at ?? null };
+    return { ...migrated, _cloudUpdatedAt: row.updated_at ?? null, _status: status ?? null };
   }, []);
 
   // Write status to its own column — called only from onboarding.
+  // « Athlète solo » est stocké comme 'solo' (jamais NULL) : NULL est réservé
+  // à « n'a jamais choisi », ce qui rend l'affichage de l'onboarding fiable.
   const writeStatus = useCallback(async (userId, role) => {
     if (!supabase || !userId) return;
     await supabase
       .from("climbing_plans")
-      .upsert({ user_id: userId, status: role }, { onConflict: "user_id" });
+      .upsert({ user_id: userId, status: role ?? "solo" }, { onConflict: "user_id" });
   }, []);
 
   const saveToCloud = useCallback((planData, userId) => {

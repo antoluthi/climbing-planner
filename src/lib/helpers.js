@@ -1,3 +1,4 @@
+import { getSessionCharge } from "./charge.js";
 export function getMondayOf(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -68,7 +69,9 @@ export function getDaySessions(data, date) {
 }
 
 export function getDayCharge(data, date) {
-  return getDaySessions(data, date).reduce((a, s) => a + (s.charge ?? 0), 0);
+  // Somme des charges de séance sur l'échelle unifiée 0-10 (ressenti > planifié
+  // > legacy normalisé) — voir lib/charge.js.
+  return getDaySessions(data, date).reduce((a, s) => a + getSessionCharge(s), 0);
 }
 
 export function getMonthWeeks(year, month) {

@@ -27,8 +27,9 @@ export function HooperSection({ hoopers, onAdd, range }) {
 
   const today = localDateStr(new Date());
   const todayEntry = (hoopers || []).find(h => h.date === today);
+  const anyFilled = form.fatigue || form.stress || form.soreness || form.sleep;
   const allFilled = form.fatigue && form.stress && form.soreness && form.sleep;
-  const total = allFilled ? form.fatigue + form.stress + form.soreness + form.sleep : null;
+  const total = anyFilled ? (form.fatigue || 0) + (form.stress || 0) + (form.soreness || 0) + (form.sleep || 0) : null;
 
   const openForm = (editing = false) => {
     if (editing && todayEntry) {
@@ -39,17 +40,20 @@ export function HooperSection({ hoopers, onAdd, range }) {
     setOpen(o => !o);
   };
 
-  const handleSave = () => {
-    if (!allFilled) return;
+  const autoSaveHooper = (updated) => {
+    if (todayEntry && updated.fatigue === todayEntry.fatigue && updated.stress === todayEntry.stress &&
+        updated.soreness === todayEntry.soreness && updated.sleep === todayEntry.sleep) return;
+    // Entrée partielle : critères persistés mais total null (voir DayLogModal.flushHooper).
+    const filled = updated.fatigue && updated.stress && updated.soreness && updated.sleep;
+    const t = filled ? updated.fatigue + updated.stress + updated.soreness + updated.sleep : null;
     onAdd({
       id: todayEntry?.id || "h_" + Date.now().toString(36),
       date: today,
       time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
-      ...form, total,
+      ...updated, total: t,
     });
-    setForm({ fatigue: null, stress: null, soreness: null, sleep: null });
-    setSaved(true); setOpen(false);
-    setTimeout(() => setSaved(false), 3000);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   // Build chart data based on range
@@ -130,7 +134,11 @@ export function HooperSection({ hoopers, onAdd, range }) {
                     ? (v <= 2 ? (isDark ? "#82c894" : "#82c894") : v <= 4 ? "#f0a060" : "#f08070")
                     : (isDark ? "#3a2e22" : "#d8d3ca");
                   return (
-                    <button key={v} onClick={() => setForm(f => ({ ...f, [key]: v }))}
+                    <button key={v} onClick={() => {
+                        const updated = { ...form, [key]: v };
+                        setForm(updated);
+                        autoSaveHooper(updated);
+                      }}
                       style={{ ...btnBase, background: bg, color: active ? "#fff" : styles.dashText, fontWeight: active ? 600 : 400 }}>
                       {v}
                     </button>
@@ -141,13 +149,12 @@ export function HooperSection({ hoopers, onAdd, range }) {
           ))}
           {total !== null && (
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: hooperColor(total, isDark) }}>
-              Indice : {total} — {hooperLabel(total)}
+              Indice : {total}{allFilled ? ` — ${hooperLabel(total)}` : " (partiel)"}
             </div>
           )}
-          <button onClick={handleSave} disabled={!allFilled}
-            style={{ ...styles.sleepImportBtn, opacity: allFilled ? 1 : 0.4, cursor: allFilled ? "pointer" : "default" }}>
-            Enregistrer
-          </button>
+          <div style={{ fontSize: 10, color: isDark ? "#a89a82" : "#8a7f70", letterSpacing: "0.04em" }}>
+            Sauvegarde automatique
+          </div>
         </div>
       )}
 

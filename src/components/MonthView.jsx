@@ -1,5 +1,5 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { getChargeColor } from "../lib/charge.js";
+import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { DAYS, getCustomCyclesForDate, getMesoForDate } from "../lib/constants.js";
 import { addDays, getMonthWeeks, getDaySessions } from "../lib/helpers.js";
 
@@ -77,13 +77,13 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                         key={si}
                         style={{
                           ...styles.monthSessionRow,
-                          background: getChargeColor(s.charge, isDark) + (isDark ? "22" : "33"),
-                          borderLeft: `2px solid ${getChargeColor(s.charge, isDark)}`,
+                          background: getChargeColor(getSessionCharge(s), isDark) + (isDark ? "22" : "33"),
+                          borderLeft: `2px solid ${getChargeColor(getSessionCharge(s), isDark)}`,
                           cursor: "pointer",
                         }}
                         onClick={e => { e.stopPropagation(); onSessionClick && onSessionClick(date, si); }}
                       >
-                        <span style={{ ...styles.monthSessionLabel, color: getChargeColor(s.charge, isDark) }}>
+                        <span style={{ ...styles.monthSessionLabel, color: getChargeColor(getSessionCharge(s), isDark) }}>
                           {s.name.length > 18 ? s.name.slice(0, 18) + "…" : s.name}
                         </span>
                       </div>
@@ -98,7 +98,7 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                     {sessions.slice(0, 3).map((s, si) => (
                       <div
                         key={si}
-                        style={{ ...styles.monthMobileDot, background: getChargeColor(s.charge) }}
+                        style={{ ...styles.monthMobileDot, background: getChargeColor(getSessionCharge(s)) }}
                       />
                     ))}
                   </div>

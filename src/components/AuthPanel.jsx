@@ -2,6 +2,7 @@ import { useState } from "react";
 import supabase from "../lib/supabase.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Caillou } from "./Caillou.jsx";
+import { isNative, AUTH_CALLBACK_URL } from "../lib/native.js";
 
 export function AuthPanel({ session, onAuthChange, fullWidth }) {
   const { styles, isDark } = useThemeCtx();
@@ -34,7 +35,9 @@ export function AuthPanel({ session, onAuthChange, fullWidth }) {
     setSending(true); setAuthError("");
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin },
+      // APK : window.location.origin vaut https://localhost — le lien doit
+      // rediriger vers le deep link de l'app (géré dans lib/native.js).
+      options: { emailRedirectTo: isNative ? AUTH_CALLBACK_URL : window.location.origin },
     });
     setSending(false);
     if (error) {

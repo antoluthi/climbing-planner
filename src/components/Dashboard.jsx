@@ -5,6 +5,7 @@ import { getMondayOf, addDays, weekKey, localDateStr, formatDate } from "../lib/
 import { ActivityHeatmap } from "./ActivityHeatmap.jsx";
 import { SleepSection } from "./SleepSection.jsx";
 import { DashboardSkeleton } from "./ui/Skeleton.jsx";
+import { getSessionCharge } from "../lib/charge.js";
 
 // ─── Spline cubique monotone passant par chaque point ────────────────────────
 // Recharts a déjà type='monotone' qui dessine une spline cubique
@@ -34,7 +35,7 @@ function hooperColor(total, isDark) {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
-function sessionCharge(s) { return s.charge ?? 0; }
+function sessionCharge(s) { return getSessionCharge(s); } // échelle unifiée 0-10 (ressenti > planifié > legacy)
 
 function getChartData(data, range, refDate) {
   const today = refDate || new Date();
@@ -227,6 +228,7 @@ function DashboardBody({ data, onUpdateSleep }) {
         const d = new Date(statsRefDate.getFullYear(), statsRefDate.getMonth() - (11 - i), 1);
         const y = d.getFullYear(), m = d.getMonth();
         const vals = hooperList
+          .filter(h => h.total != null) // entrées partielles exclues des moyennes
           .filter(h => { const hd = new Date(h.date + "T12:00:00"); return hd.getFullYear() === y && hd.getMonth() === m; })
           .map(h => h.total);
         return {
@@ -240,7 +242,7 @@ function DashboardBody({ data, onUpdateSleep }) {
       const monday = getMondayOf(addDays(statsRefDate, -(7 * (nWeeks - 1 - i))));
       const start = weekKey(monday);
       const end = localDateStr(addDays(monday, 6));
-      const vals = hooperList.filter(h => h.date >= start && h.date <= end).map(h => h.total);
+      const vals = hooperList.filter(h => h.total != null && h.date >= start && h.date <= end).map(h => h.total);
       const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
       return { label, total: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null };
     });

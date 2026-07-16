@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { BLOCK_TYPES } from "../lib/constants.js";
-import { getChargeColor } from "../lib/charge.js";
+import { getChargeColor, getSessionCharge, normalizeCharge10 } from "../lib/charge.js";
 import { SuspensionSummaryChips } from "./SuspensionSummaryChips.jsx";
 import { BlockFormModal } from "./BlockFormModal.jsx";
 import { FeedbackHistoryModal } from "./FeedbackHistoryModal.jsx";
@@ -42,7 +42,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
 
   const applySort = (arr) => {
     if (sort === "date")   return [...arr].sort((a, b) => b.id - a.id);
-    if (sort === "charge") return [...arr].sort((a, b) => (b.charge ?? 0) - (a.charge ?? 0));
+    if (sort === "charge") return [...arr].sort((a, b) => getSessionCharge(b) - getSessionCharge(a));
     return arr;
   };
 
@@ -166,7 +166,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
                 <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 8, paddingBottom: 5, borderBottom: `1px solid ${border}` }}>{type}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {sessions.map(s => (
-                    <div key={s.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${getChargeColor(s.charge)}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                    <div key={s.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${getChargeColor(getSessionCharge(s))}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</div>
                         <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10 }}>
@@ -175,7 +175,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
                           {s.minRecovery  && <span>↺ {s.minRecovery}h récup</span>}
                         </div>
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 9px", borderRadius: 4, flexShrink: 0, background: getChargeColor(s.charge) + "28", color: getChargeColor(s.charge), border: `1px solid ${getChargeColor(s.charge)}55` }}>⚡{s.charge}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 9px", borderRadius: 4, flexShrink: 0, background: getChargeColor(getSessionCharge(s)) + "28", color: getChargeColor(getSessionCharge(s)), border: `1px solid ${getChargeColor(getSessionCharge(s))}55` }}>⚡{getSessionCharge(s)}</span>
                       <ItemActions id={s.id} onEdit={() => onEdit(s)} onDel={onDelete} onHistory={() => setFeedbackHistory({ type: "session", id: s.id, name: s.name })} />
                     </div>
                   ))}
@@ -210,7 +210,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
                           <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</div>
                           <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10, flexWrap: "wrap" }}>
                             {b.duration    && <span>⏱ {b.duration} min</span>}
-                            {cfg.hasCharge && b.charge > 0 && <span style={{ color: getChargeColor(b.charge) }}>⚡{b.charge}</span>}
+                            {cfg.hasCharge && b.charge > 0 && <span style={{ color: getChargeColor(normalizeCharge10(b.charge)) }}>⚡{normalizeCharge10(b.charge)}</span>}
                             {b.blockType === "Suspension" && b.config ? (
                               <SuspensionSummaryChips config={b.config} muted={muted} />
                             ) : b.description ? (
