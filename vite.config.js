@@ -25,6 +25,9 @@ function appVersion() {
 export default defineConfig(({ mode }) => ({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion()),
+    // 0 hors CI (build local ou web) : aucune comparaison de version possible,
+    // la vérification de mise à jour se désactive d'elle-même.
+    __APP_VERSION_CODE__: JSON.stringify(Number(process.env.APK_VERSION_CODE) || 0),
   },
   plugins: [
     react(),

@@ -91,16 +91,35 @@ précédent. C'est le bug corrigé par le dernier commit, jamais re-testé depui
 
 ---
 
-## 4 · Pour distribuer l'APK aujourd'hui
+## 4 · Comment mettre à jour l'app
 
-Lien permanent, toujours à jour depuis `master` :
-<https://github.com/antoluthi/climbing-planner/releases/tag/latest-apk>
+**Le site web se met à jour tout seul.** Push sur `master` → Vercel redéploie →
+tu recharges la page. Rien à faire.
 
-Les personnes qui l'installent doivent autoriser les « sources inconnues » sur
+**L'APK, non.** Il embarque ses propres fichiers web : un changement de code ne
+l'atteint qu'en installant un nouvel APK. La CI en construit un à chaque push
+sur `master` et met à jour la release. Sur le téléphone :
+
+1. l'app affiche « Version X disponible » avec un bouton **Télécharger**
+   (elle interroge la release au démarrage) ;
+2. sinon, lien permanent :
+   <https://github.com/antoluthi/climbing-planner/releases/tag/latest-apk>
+3. ouvrir le fichier téléchargé → installer par-dessus.
+
+⚠️ **Tant que le keystore de l'étape 1 n'existe pas**, l'étape 3 échoue
+(« application non installée ») : chaque build CI est signé par une clé
+différente. Il faut désinstaller l'app puis réinstaller, et te reconnecter. Tes
+données sont dans Supabase, rien n'est perdu.
+
+⚠️ **Au passage à la clé de release**, une **dernière** désinstallation sera
+nécessaire — pour toi et pour les personnes ayant déjà l'app. Ensuite les mises
+à jour s'installent par-dessus, normalement.
+
+Les personnes qui installent doivent autoriser les « sources inconnues » sur
 leur téléphone. La version installée est affichée **en bas de l'onglet Profil** —
 demande-la quand quelqu'un te remonte un bug.
 
-Les builds de branches de travail ne remplacent **pas** cette release : ils sont
+Les builds de branches de travail ne remplacent **pas** la release : ils sont
 téléchargeables depuis la page du run GitHub Actions correspondant.
 
 **En local** (téléphone branché ou émulateur) :

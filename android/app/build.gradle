@@ -1,5 +1,12 @@
 apply plugin: 'com.android.application'
 
+// Signature release : le keystore n'est jamais versionné, il arrive par
+// l'environnement (CI = secret GitHub décodé dans un fichier temporaire).
+// Absent — build local, Android Studio — on ne déclare rien et la CI retombe
+// sur assembleDebug.
+def releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+def hasReleaseKey = releaseKeystorePath && file(releaseKeystorePath).exists()
+
 android {
     namespace = "com.climbingplanner.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -19,10 +26,25 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseKey) {
+            release {
+                storeFile file(releaseKeystorePath)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            // minifyEnabled reste à false : activer R8 sans tester risquerait
+            // de casser le pont Capacitor.
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseKey) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

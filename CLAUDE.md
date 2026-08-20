@@ -379,15 +379,28 @@ concatène les 5 dernières dans l'ordre, idempotent et ré-exécutable.
   le localStorage de la WebView et ne doit pas partir dans les backups Google.
 - **CI** (`.github/workflows/build-apk.yml`) : build sur `master` et `claude/**`,
   plus `workflow_dispatch`. Chaque run publie un artefact téléchargeable ; seul
-  `master` écrase la release `latest-apk` (lien d'installation permanent).
+  `master` écrase la release `latest-apk` (asset au nom stable
+  `climbing-planner.apk` → lien d'installation permanent).
   Échoue volontairement si les secrets `VITE_SUPABASE_*` manquent.
+- **Détection de mise à jour** (`src/lib/update-check.js` + `components/UpdateBanner.jsx`,
+  monté dans `AutonomousShell`) : l'APK embarquant ses fichiers web, rien ne
+  signalerait une nouvelle version. Au démarrage (natif uniquement), l'app lit le
+  **titre de la release** `latest-apk` — format imposé par la CI
+  « Climbing Planner 1.0.\<run\> » — et compare à `__APP_VERSION_CODE__`. L'API
+  GitHub envoie `Access-Control-Allow-Origin: *` (un asset de release, non : sa
+  redirection de téléchargement n'a aucun en-tête CORS), donc `fetch` suffit,
+  sans plugin HTTP natif. Tout échec (hors-ligne, quota) est silencieux.
 - **Versionnage** : `versionCode` = numéro de run GitHub, `versionName` =
   `1.0.<run>`, lus depuis `APK_VERSION_CODE` / `APK_VERSION_NAME` dans
   `android/app/build.gradle` (repli `1` / `1.0` en build local). La même valeur
   alimente `__APP_VERSION__` (`define` dans `vite.config.js`), affichée en pied
   de `ProfileView` — sur le web, repli sur le SHA court du commit.
-- **Signature** : pas encore de `signingConfig` release — la CI produit un APK
-  debug, dont la clé n'est pas stable entre builds. Voir `ACTIONS-A-FAIRE.md`.
+- **Signature** : `signingConfig` release conditionnel — `android/app/build.gradle`
+  ne le déclare que si `ANDROID_KEYSTORE_PATH` pointe vers un fichier existant
+  (la CI y décode le secret `ANDROID_KEYSTORE_BASE64`). Sans keystore, la CI
+  retombe sur `assembleDebug` : la clé de debug étant régénérée à chaque runner,
+  les mises à jour ne s'installent alors pas par-dessus (« application non
+  installée »). Les 4 secrets à créer sont listés dans `ACTIONS-A-FAIRE.md`.
 
 ## Commandes
 
