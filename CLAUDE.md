@@ -353,9 +353,41 @@ Règles de sync (refonte mars 2026) :
 |---|---|---|
 | `supabase/migrations/20260313_coach_athletes.sql` | Table `coach_athletes` + RLS, policies coach sur `climbing_plans`, RPC `search_athletes` | ✅ appliquée |
 | `supabase/migrations/20260315_public_anto_plan.sql` | Policy RLS `anon` lecture-seule sur la ligne Anto dans `climbing_plans` | ✅ appliquée |
-| `supabase/migrations/20260512_avatars_bucket.sql` | Bucket Storage `avatars` (public read, 2MB max, jpeg/png/webp) + policies INSERT/UPDATE/DELETE par owner sur `{auth.uid()}.{ext}` | ⏳ à appliquer |
-| `supabase/migrations/20260513_shared_sessions_catalog.sql` | Bibliothèque commune : `sessions_catalog` + `session_blocks` → tout user authentifié peut SELECT/INSERT/UPDATE/DELETE toutes les rows. `user_id` / `created_by` conservés pour la traçabilité. | ⏳ à appliquer |
-| `supabase/migrations/20260715_notifications_coach_invites.sql` | Table `notifications` + realtime, `coach_athletes` en consentement mutuel (INSERT athlète only, SELECT/DELETE des deux côtés), `search_athletes` inclut 'solo', RPC `get_my_coaches` | ⏳ à appliquer — **requise** pour la cloche et les invitations |
+| `supabase/migrations/20260331_realtime_climbing_plans.sql` | `climbing_plans` ajoutée à la publication `supabase_realtime` (sync multi-appareils) | ✅ appliquée |
+| `supabase/migrations/20260512_avatars_bucket.sql` | Bucket Storage `avatars` (public read, 2MB max, jpeg/png/webp) + policies INSERT/UPDATE/DELETE par owner sur `{auth.uid()}.{ext}` | ✅ appliquée |
+| `supabase/migrations/20260513_shared_sessions_catalog.sql` | Bibliothèque commune : `sessions_catalog` + `session_blocks` → tout user authentifié peut SELECT/INSERT/UPDATE/DELETE toutes les rows. `user_id` / `created_by` conservés pour la traçabilité. | ✅ appliquée |
+| `supabase/migrations/20260517_public_profiles.sql` | Colonne `climbing_plans.is_public` + policy `anon` lecture des lignes publiques (remplace la policy Anto) | ✅ appliquée |
+| `supabase/migrations/20260715_notifications_coach_invites.sql` | Table `notifications` + realtime, `coach_athletes` en consentement mutuel (INSERT athlète only, SELECT/DELETE des deux côtés), `search_athletes` inclut 'solo', RPC `get_my_coaches` | ✅ appliquée |
+
+Statuts vérifiés le 20 août 2026 contre le projet Supabase (existence des
+tables, colonnes, RPC et buckets via l'API REST). `supabase/MIGRATIONS-A-COLLER.sql`
+concatène les 5 dernières dans l'ordre, idempotent et ré-exécutable.
+`supabase/legacy/` conserve les scripts SQL antérieurs aux migrations — dont
+`supabase-community-sessions.sql`, seule définition de `community_sessions`
+(utilisée par `useCommunitySessionsSync.js`), qui n'a pas d'équivalent en migration.
+
+## APK Android (Capacitor)
+
+- `appId` : `com.climbingplanner.app` · minSdk 24 · target/compile SDK 36
+- **Intégration native** : `src/lib/native.js` — `isNative`, `PROD_ORIGIN` (les
+  URL destinées à l'extérieur ne peuvent pas utiliser `window.location.origin`,
+  qui vaut `https://localhost` dans la WebView), deep link d'auth
+  (`com.climbingplanner.app://auth-callback`, en allowlist Supabase), bouton
+  retour Android via pile de calques, `syncSystemBars()`.
+- **Service worker** : désactivé pour le build natif (`vite build --mode capacitor`).
+- **Sauvegarde Android** : `allowBackup="false"` — la session Supabase vit dans
+  le localStorage de la WebView et ne doit pas partir dans les backups Google.
+- **CI** (`.github/workflows/build-apk.yml`) : build sur `master` et `claude/**`,
+  plus `workflow_dispatch`. Chaque run publie un artefact téléchargeable ; seul
+  `master` écrase la release `latest-apk` (lien d'installation permanent).
+  Échoue volontairement si les secrets `VITE_SUPABASE_*` manquent.
+- **Versionnage** : `versionCode` = numéro de run GitHub, `versionName` =
+  `1.0.<run>`, lus depuis `APK_VERSION_CODE` / `APK_VERSION_NAME` dans
+  `android/app/build.gradle` (repli `1` / `1.0` en build local). La même valeur
+  alimente `__APP_VERSION__` (`define` dans `vite.config.js`), affichée en pied
+  de `ProfileView` — sur le web, repli sur le SHA court du commit.
+- **Signature** : pas encore de `signingConfig` release — la CI produit un APK
+  debug, dont la clé n'est pas stable entre builds. Voir `ACTIONS-A-FAIRE.md`.
 
 ## Commandes
 
@@ -363,6 +395,9 @@ Règles de sync (refonte mars 2026) :
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
+npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
+npm run cap:open # ouvre Android Studio
+./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement
 ```
 
 ## Idées futures / backlog

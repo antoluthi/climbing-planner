@@ -7,8 +7,11 @@ android {
         applicationId "com.climbingplanner.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Version injectée par la CI (APK_VERSION_CODE = numéro de run GitHub,
+        // strictement croissant). Sans ces variables — build local, Android
+        // Studio — on retombe sur les valeurs historiques.
+        versionCode System.getenv("APK_VERSION_CODE") ? System.getenv("APK_VERSION_CODE").toInteger() : 1
+        versionName System.getenv("APK_VERSION_NAME") ?: "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- allowBackup="false" : la session Supabase vit dans le localStorage de la
+         WebView. Avec la sauvegarde Android activée (défaut Capacitor), ce jeton
+         d'authentification partirait dans les sauvegardes cloud Google. -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
