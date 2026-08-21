@@ -63,6 +63,21 @@ export function CalendarView({
       ? `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`
       : String(currentDate.getFullYear());
 
+  // ── Retour à la période courante ──
+  // Cliquer sur la date ramène à aujourd'hui **sans changer de vue** : depuis
+  // « 2028 » en vue année on revient sur l'année en cours, toujours en année.
+  const now = new Date();
+  const isCurrentPeriod = mode === "week"
+    ? weekKey(getMondayOf(currentDate)) === weekKey(getMondayOf(now))
+    : mode === "month"
+      ? currentDate.getFullYear() === now.getFullYear() && currentDate.getMonth() === now.getMonth()
+      : currentDate.getFullYear() === now.getFullYear();
+  const currentLabel = mode === "week" ? "Semaine en cours" : mode === "month" ? "Mois en cours" : "Année en cours";
+  const goToCurrentLabel = mode === "week"
+    ? "Aller à la semaine en cours"
+    : mode === "month" ? "Aller au mois en cours" : "Aller à l'année en cours";
+  const goToCurrent = () => { setCurrentDate(new Date()); setSelected(localDateStr(new Date())); };
+
   // Zone de balayage du calendrier : change de période, et s'arrête là.
   // `stopPropagation` empêche le geste de remonter jusqu'au conteneur de page,
   // qui lui change d'onglet — sans ça, un swipe sur la grille ferait les deux.
@@ -106,8 +121,22 @@ export function CalendarView({
         <RoundIconButton isDark={isDark} size={32} label="Précédent" onClick={() => step(-1)}>
           <Chevron dir="left" />
         </RoundIconButton>
-        <div style={{ fontSize: 15, fontWeight: 700, color: c.text, textTransform: "capitalize" }}>
-          {periodLabel}
+        <div
+          onClick={isCurrentPeriod ? undefined : goToCurrent}
+          title={isCurrentPeriod ? undefined : goToCurrentLabel}
+          style={{
+            textAlign: "center", minWidth: 0,
+            cursor: isCurrentPeriod ? "default" : "pointer",
+          }}
+        >
+          <div style={{ fontSize: 15, fontWeight: 700, color: c.text, textTransform: "capitalize" }}>
+            {periodLabel}
+          </div>
+          {isCurrentPeriod && (
+            <div style={{ fontSize: 10, fontWeight: 600, color: c.accent, letterSpacing: "0.04em", marginTop: 1 }}>
+              {currentLabel}
+            </div>
+          )}
         </div>
         <RoundIconButton isDark={isDark} size={32} label="Suivant" onClick={() => step(1)}>
           <Chevron dir="right" />

@@ -38,6 +38,12 @@ export function pushLayer(close) {
   };
 }
 
+// Un geste de navigation n'a rien à faire quand une modale est ouverte : le
+// pager de pages interroge la pile avant d'armer un balayage.
+export function hasOpenLayers() {
+  return layerStack.length > 0;
+}
+
 export function closeTopLayer() {
   const top = layerStack[layerStack.length - 1];
   if (!top) return false;
