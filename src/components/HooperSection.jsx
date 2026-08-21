@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { localDateStr, weekKey, getMondayOf } from "../lib/helpers.js";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { Caillou } from "./Caillou.jsx";
 
 // ─── HOOPER INDEX ─────────────────────────────────────────────────────────────
 
@@ -95,16 +94,9 @@ export function HooperSection({ hoopers, onAdd, range }) {
 
   const btnBase = { width: 28, height: 28, borderRadius: 4, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "inherit", transition: "all 0.12s" };
 
-  const isHighFatigue = todayEntry && todayEntry.total > 17;
-
   return (
     <div style={styles.dashSection}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-        {isHighFatigue && (
-          <div style={{ flexShrink: 0, lineHeight: 0 }}>
-            <Caillou state="rainy" size={72} />
-          </div>
-        )}
         <div style={{ ...styles.dashSectionTitle, marginBottom: 0, flex: 1 }}>Indice Hooper</div>
         {todayEntry && !open && (
           <span style={{ fontSize: 10, color: hooperColor(todayEntry.total, isDark) }}>

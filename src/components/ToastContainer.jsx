@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { toast } from "../lib/toast.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Z } from "../theme/makeStyles.js";
-import { Caillou } from "./Caillou.jsx";
 
 // ─── TOAST CONTAINER ──────────────────────────────────────────────────────────
 // S'abonne au store et affiche en bas, avec UNDO et auto-dismiss.
+// La pastille et la bordure sont teintées selon le type du toast.
 
 export function ToastContainer({ isMobile }) {
   const [items, setItems] = useState([]);
@@ -57,21 +57,15 @@ export function ToastContainer({ isMobile }) {
             fontSize: 13,
           }}
         >
-          {t.kind === "success" || t.kind === "error" ? (
-            <span style={{ flexShrink: 0, lineHeight: 0 }}>
-              <Caillou key={t.id} state={t.kind} size={28} />
-            </span>
-          ) : (
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: accent,
-                flexShrink: 0,
-              }}
-            />
-          )}
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: t.kind === "error" ? error : t.kind === "success" ? success : accent,
+              flexShrink: 0,
+            }}
+          />
           <span style={{ flex: 1, color: text, lineHeight: 1.4 }}>{t.message}</span>
           {t.undo && (
             <button

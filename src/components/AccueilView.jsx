@@ -7,7 +7,6 @@ import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { AccueilSkeleton } from "./ui/Skeleton.jsx";
 import { TodaySessionCard } from "./TodaySessionCard.jsx";
 import { getActiveRemindersForDate, isReminderCheckedOn } from "../lib/reminders.js";
-import { Caillou } from "./Caillou.jsx";
 
 // ─── GREETING BY TIME OF DAY ──────────────────────────────────────────────────
 
@@ -1127,13 +1126,8 @@ function AccueilViewBody({
           {dateFull} · S{String(weekN).padStart(2, "0")}
         </div>
 
-        {/* Greeting + (optional) Caillou sleep si jour de repos */}
+        {/* Greeting */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-          {todaySessions.length === 0 && (
-            <div style={{ flexShrink: 0, marginTop: -4 }}>
-              <Caillou state="sleep" size={84} />
-            </div>
-          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
