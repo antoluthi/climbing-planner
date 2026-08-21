@@ -1,12 +1,12 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { useState } from "react";
 import { getMesoForDate, getCustomCycleDay } from "../lib/constants.js";
-import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions } from "../lib/helpers.js";
+import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, isEventItem } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
 import { generateId } from "../lib/storage.js";
 import { AccueilSkeleton } from "./ui/Skeleton.jsx";
 import { getActiveRemindersForDate, isReminderCheckedOn } from "../lib/reminders.js";
-import { colors } from "../theme/palette.js";
+import { colors, DATA } from "../theme/palette.js";
 import { BellIcon } from "./NotificationBell.jsx";
 import { Card, SectionLabel, StatValue, SportBadge, PrimaryButton, SecondaryButton,
          RoundCheck, InitialsAvatar, SANS, MONO } from "./ui/Ascent.jsx";
@@ -1037,6 +1037,25 @@ function AccueilViewBody({
 
   // ── Contexte pour la phrase d'accueil ──
   const mesoCtx = getMesoForDate(data.mesocycles || [], todayObj);
+
+  // Où l'on en est dans le plan : mésocycle, microcycle, et le rang de la
+  // semaine dans le mésocycle.
+  const planPosition = (() => {
+    const meso = mesoCtx?.meso;
+    if (!meso) return null;
+    const micros = meso.microcycles || [];
+    const idx = mesoCtx.micro ? micros.findIndex(m => m.id === mesoCtx.micro.id) : -1;
+    return {
+      color: meso.color,
+      meso: meso.label,
+      micro: mesoCtx.micro?.label || null,
+      rank: idx >= 0 && micros.length > 1 ? `${idx + 1}/${micros.length}` : null,
+    };
+  })();
+
+  // Les séances de la semaine, jour par jour — échéances comprises, comme dans
+  // le calendrier. Sert aux pastilles sous les jours.
+  const weekItems = Array.from({ length: 7 }, (_, i) => getDaySessions(data, addDays(monday, i)));
   const phraseCtx = buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayIndex, mesoCtx);
   const contextualPhrase = getContextualPhrase(phraseCtx);
 
@@ -1115,6 +1134,41 @@ function AccueilViewBody({
         </div>
       </div>
 
+      {/* ── Où l'on en est dans le plan ── */}
+      {planPosition && (
+        <div style={{
+          padding: `14px ${pad}px 0`, display: "flex", alignItems: "center",
+          gap: 8, flexWrap: "wrap",
+        }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: 4, flexShrink: 0,
+            background: planPosition.color || c.accent,
+          }} />
+          <span style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
+            color: planPosition.color || c.accent,
+          }}>
+            {planPosition.meso}
+          </span>
+          {planPosition.micro && (
+            <>
+              <span style={{ fontSize: 11, color: c.textDim }}>·</span>
+              <span style={{
+                fontSize: 11, fontWeight: 600, letterSpacing: "0.6px",
+                textTransform: "uppercase", color: c.textMuted,
+              }}>
+                {planPosition.micro}
+              </span>
+            </>
+          )}
+          {planPosition.rank && (
+            <span style={{ font: `700 11px ${MONO}`, color: c.textDim }}>
+              sem. {planPosition.rank}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* ── Charge de la semaine ── */}
       <div style={{ padding: `${pad}px ${pad}px 0` }}>
         <div style={{ display: "flex", gap: 6, height: 40, alignItems: "flex-end" }}>
@@ -1134,6 +1188,25 @@ function AccueilViewBody({
               flex: 1, textAlign: "center", fontSize: 10, fontWeight: 700,
               color: i === dayIndex ? c.accent : c.textDim,
             }}>{l}</div>
+          ))}
+        </div>
+
+        {/* Une pastille par séance, à la couleur de sa discipline — ou à celle
+            de l'échéance. Coup d'œil sur la semaine, sans ouvrir le calendrier. */}
+        <div style={{ display: "flex", gap: 6, marginTop: 6, minHeight: 6 }}>
+          {weekItems.map((items, i) => (
+            <div key={i} style={{
+              flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 3,
+            }}>
+              {items.slice(0, 3).map((item, j) => (
+                <span key={j} style={{
+                  width: 5, height: 5, borderRadius: 3,
+                  background: isEventItem(item)
+                    ? (item.color || c.accent)
+                    : (DATA.sports[item.discipline] || DATA.sports.custom),
+                }} />
+              ))}
+            </div>
           ))}
         </div>
       </div>

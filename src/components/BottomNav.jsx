@@ -1,6 +1,7 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Z } from "../theme/makeStyles.js";
 import { colors } from "../theme/palette.js";
+import { LibraryIcon } from "./ui/Ascent.jsx";
 
 // ─── BOTTOM NAV (mobile) ─────────────────────────────────────────────────────
 // Barre de navigation fixe en bas d'écran sur mobile. 4 onglets principaux.
@@ -57,20 +58,7 @@ function NavIcon({ kind, size = 22 }) {
         </svg>
       );
     case "library":
-      return (
-        <svg {...common}>
-          <path d="M4 5v15M9 5v15M14 5l5 14M19 19l-5-14" />
-          <path d="M4 5h5M14 5h-2" />
-        </svg>
-      );
-    case "db":
-      return (
-        <svg {...common}>
-          <ellipse cx="12" cy="6" rx="7" ry="3" />
-          <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
-          <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
-        </svg>
-      );
+      return <LibraryIcon size={size} strokeWidth={1.8} />;
     default:
       return null;
   }
@@ -81,7 +69,7 @@ const TABS = [
   { key: "week",    label: "Calendrier", icon: "cal"   },
   { key: "cycles",  label: "Cycles",     icon: "cycle" },
   { key: "dash",    label: "Stats",      icon: "chart" },
-  { key: "library", label: "Bibliothèque", icon: "db" },
+  { key: "library", label: "Bibliothèque", icon: "library" },
 ];
 
 export function BottomNav({ viewMode, onChange, extraTabs }) {
