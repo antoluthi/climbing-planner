@@ -76,6 +76,10 @@ const light = {
   dangerBg:      "rgba(192,57,43,0.10)",
   dangerBorder:  "rgba(192,57,43,0.30)",
   info:          "#3a63c8",
+  // Ligne de l'indice Hooper superposée au graphe d'écart : troisième teinte,
+  // séparable de l'accent et de `info` y compris en vision des couleurs
+  // déficiente (validé : ΔE ≥ 21 deutan/protan).
+  hooperLine:    "#1c8a5a",
   infoBg:        "rgba(58,99,200,0.10)",
   infoBorder:    "rgba(58,99,200,0.30)",
 };
@@ -136,6 +140,7 @@ const dark = {
   dangerBg:      "rgba(255,107,95,0.12)",
   dangerBorder:  "rgba(255,107,95,0.35)",
   info:          "#6c8cff",
+  hooperLine:    "#5fe0c0",   // cf. commentaire côté clair
   infoBg:        "rgba(108,140,255,0.12)",
   infoBorder:    "rgba(108,140,255,0.35)",
 };

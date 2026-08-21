@@ -8,6 +8,7 @@ import {
   countMissedRemindersOn,
 } from "../lib/reminders.js";
 import { colors, DATA } from "../theme/palette.js";
+import { Chip } from "./ui/Ascent.jsx";
 
 function hooperLabel(total) {
   if (total <= 10) return "Bien récupéré";
@@ -169,13 +170,11 @@ export function ActivityHeatmap({ data }) {
     <div style={styles.dashSection} ref={containerRef}>
       {/* Title */}
       <div style={styles.dashSectionTitle}>Activité</div>
-      {/* Metric selector — own row, below title */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+      {/* Métrique — chips, comme les filtres du reste de l'app */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
         {[["charge", "Charge"], ["rpe", "RPE"], ["hooper", "Hooper"], ["reminders", "Rappels"]].map(([k, l]) => (
-          <button key={k} onClick={() => setMetric(k)}
-            style={{ ...styles.viewToggleBtn, ...(metric === k ? styles.viewToggleBtnActive : {}), padding: "3px 9px", fontSize: 10 }}>
-            {l}
-          </button>
+          <Chip key={k} isDark={isDark} size="sm" label={l}
+                active={metric === k} onClick={() => setMetric(k)} />
         ))}
       </div>
 

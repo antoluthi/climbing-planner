@@ -505,6 +505,18 @@ chose.
 - Les rappels n'y sont plus : leur place est l'écran Cycles.
 
 ### Dashboard — graphiques (`components/Dashboard.jsx`)
+- **Périodes** : Semaine · Mois · Année, mêmes libellés et même `Segmented` que
+  le calendrier. Un seul découpage sert toutes les séries (`getBuckets`) : la
+  semaine se lit en jours, le mois en semaines, l'année en mois.
+- **Écart de charge** (remplace le graphe « RPE moyen ») : `feedback.rpe −
+  chargePlanned`, moyenné par période. Au-dessus de zéro la séance a été plus
+  dure que prévu (charge sous-estimée), en dessous plus facile — deux teintes de
+  part et d'autre d'une ligne de zéro, jamais un dégradé.
+- **Superposition Hooper** (case à cocher) : la courbe Hooper s'ajoute sur un
+  **axe droit à domaine fixe 4-28**, dans `hooperLine` — une troisième teinte
+  choisie pour rester séparable de l'accent et de `info` en vision des couleurs
+  déficiente (ΔE ≥ 21). Domaines bornés en dur des deux côtés : la relation
+  visuelle entre les deux séries ne se déforme pas d'une période à l'autre.
 - Graphique poids : scaffold période complète avec données manquantes nulles
 - Graphique Hooper : barres (BarChart) au lieu de lignes, scaffold identique
 - Sélecteur de plage Sem / Mois / An pour tous les graphiques stats

@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { getMondayOf, addDays, weekKey, localDateStr, formatDate } from "../lib/helpers.js";
+import { BarChart, Bar, Cell, LineChart, Line, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { getMondayOf, addDays, localDateStr, formatDate } from "../lib/helpers.js";
 import { ActivityHeatmap } from "./ActivityHeatmap.jsx";
 import { SleepSection } from "./SleepSection.jsx";
 import { DashboardSkeleton } from "./ui/Skeleton.jsx";
-import { getSessionCharge } from "../lib/charge.js";
+import { getSessionCharge, normalizeCharge10 } from "../lib/charge.js";
 import { colors } from "../theme/palette.js";
-import { PageTitle } from "./ui/Ascent.jsx";
+import { PageTitle, Segmented, RoundIconButton } from "./ui/Ascent.jsx";
 
 // ─── Spline cubique monotone passant par chaque point ────────────────────────
 // Recharts a déjà type='monotone' qui dessine une spline cubique
@@ -39,81 +39,93 @@ function hooperColor(total, isDark) {
 
 function sessionCharge(s) { return getSessionCharge(s); } // échelle unifiée 0-10 (ressenti > planifié > legacy)
 
-function getChartData(data, range, refDate) {
-  const today = refDate || new Date();
-  const quickSessions = data.quickSessions || [];
+// ─── DÉCOUPAGE DE LA PÉRIODE ──────────────────────────────────────────────────
+// Une seule façon de découper le temps, partagée par toutes les séries de la
+// page — charge, écart, poids, Hooper, nutrition. Les trois périodes reprennent
+// celles du calendrier : la semaine se lit en jours, le mois en semaines,
+// l'année en mois.
+function getBuckets(range, refDate) {
+  const ref = refDate || new Date();
+  const todayStr = localDateStr(new Date());
 
-  if (range === "jour") {
-    const monday = getMondayOf(today);
-    const key = weekKey(monday);
-    const days = data.weeks[key] || [];
-    const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = addDays(monday, i);
-      const dStr = localDateStr(d);
-      const weekDay = (days[i] || []).filter(Boolean);
-      const quick = quickSessions.filter(s => s.startDate === dStr);
-      const daySessions = [...weekDay, ...quick];
-      const charge = daySessions.reduce((s, se) => s + sessionCharge(se), 0);
-      const done = daySessions.filter(s => s.feedback?.done === true);
-      const rpeVals = done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe);
-      const avgRpe = rpeVals.length ? Math.round((rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length) * 10) / 10 : null;
-      const isToday = dStr === localDateStr(new Date());
-      return { label: dayNames[i], charge, avgRpe, planned: daySessions.length, done: done.length, isToday };
-    });
+  if (range === "mois") {
+    // Les semaines qui touchent le mois affiché, bornées au mois.
+    const first = new Date(ref.getFullYear(), ref.getMonth(), 1);
+    const last = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+    const out = [];
+    let monday = getMondayOf(first);
+    while (monday <= last) {
+      const sunday = addDays(monday, 6);
+      out.push({
+        label: `${monday.getDate()}/${monday.getMonth() + 1}`,
+        start: localDateStr(monday),
+        end: localDateStr(sunday),
+      });
+      monday = addDays(monday, 7);
+    }
+    return out;
   }
 
   if (range === "an") {
-    return Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(today.getFullYear(), today.getMonth() - (11 - i), 1);
-      const targetYear = d.getFullYear();
-      const targetMonth = d.getMonth();
-      let totalCharge = 0, allRpe = [], allDone = 0, allPlanned = 0;
-      Object.entries(data.weeks).forEach(([key, days]) => {
-        const monday = new Date(key);
-        if (monday.getFullYear() === targetYear && monday.getMonth() === targetMonth) {
-          const sessions = days.flat().filter(Boolean);
-          totalCharge += sessions.reduce((s, se) => s + sessionCharge(se), 0);
-          const done = sessions.filter(s => s.feedback?.done === true);
-          allRpe.push(...done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe));
-          allDone += done.length; allPlanned += sessions.length;
-        }
-      });
-      // Also count quickSessions for this month
-      quickSessions.forEach(s => {
-        if (!s.startDate) return;
-        const sd = new Date(s.startDate);
-        if (sd.getFullYear() === targetYear && sd.getMonth() === targetMonth) {
-          totalCharge += sessionCharge(s);
-          allPlanned += 1;
-        }
-      });
-      const avgRpe = allRpe.length ? Math.round(allRpe.reduce((a, b) => a + b, 0) / allRpe.length * 10) / 10 : null;
-      const label = d.toLocaleDateString("fr-FR", { month: "short" });
-      return { label, charge: totalCharge, avgRpe, done: allDone, planned: allPlanned };
+    return Array.from({ length: 12 }, (_, m) => {
+      const first = new Date(ref.getFullYear(), m, 1);
+      const last = new Date(ref.getFullYear(), m + 1, 0);
+      return {
+        label: first.toLocaleDateString("fr-FR", { month: "short" }).replace(".", ""),
+        start: localDateStr(first),
+        end: localDateStr(last),
+      };
     });
   }
 
-  // "sem" = 8 weeks, "mois" = 13 weeks (~3 months)
-  const nWeeks = range === "mois" ? 13 : 8;
-  return Array.from({ length: nWeeks }, (_, i) => {
-    const monday = getMondayOf(addDays(today, -(7 * (nWeeks - 1 - i))));
-    const sunday = addDays(monday, 6);
-    const mondayStr = localDateStr(monday);
-    const sundayStr = localDateStr(sunday);
-    const key = weekKey(monday);
-    const days = data.weeks[key] || [];
-    const weekSessions = days.flat().filter(Boolean);
-    const quick = quickSessions.filter(s => s.startDate >= mondayStr && s.startDate <= sundayStr);
-    const sessions = [...weekSessions, ...quick];
-    const charge = sessions.reduce((s, se) => s + sessionCharge(se), 0);
-    const done = sessions.filter(s => s.feedback?.done === true);
-    const rpeVals = done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe);
-    const avgRpe = rpeVals.length
-      ? Math.round((rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length) * 10) / 10
-      : null;
-    const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
-    return { label, charge, avgRpe, planned: sessions.length, done: done.length };
+  // "sem" : les sept jours de la semaine affichée.
+  const monday = getMondayOf(ref);
+  const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = localDateStr(addDays(monday, i));
+    return { label: dayNames[i], start: d, end: d, isToday: d === todayStr };
+  });
+}
+
+// Toutes les séances (planning + échéances) d'un intervalle de dates.
+function sessionsBetween(data, start, end) {
+  const out = [];
+  Object.entries(data.weeks || {}).forEach(([key, days]) => {
+    (days || []).forEach((dayArr, i) => {
+      const dateStr = localDateStr(addDays(new Date(key + "T12:00:00"), i));
+      if (dateStr < start || dateStr > end) return;
+      (dayArr || []).filter(Boolean).forEach(sx => out.push(sx));
+    });
+  });
+  (data.quickSessions || []).forEach(e => {
+    if (e.startDate && e.startDate >= start && e.startDate <= end) out.push(e);
+  });
+  return out;
+}
+
+const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+const round1 = (n) => n == null ? null : Math.round(n * 10) / 10;
+
+// Charge et écart de charge, période par période.
+//
+// L'écart, c'est la différence entre le ressenti de l'athlète et ce qui était
+// prévu : `feedback.rpe − chargePlanned`. Positif, la séance a été plus dure
+// que prévu (charge sous-estimée) ; négatif, plus facile (surestimée).
+function getChartData(data, range, refDate) {
+  return getBuckets(range, refDate).map(b => {
+    const sessions = sessionsBetween(data, b.start, b.end);
+    const done = sessions.filter(sx => sx.feedback?.done === true);
+    const deviations = done
+      .filter(sx => sx.feedback?.rpe != null && (sx.chargePlanned ?? sx.charge) != null)
+      .map(sx => sx.feedback.rpe - normalizeCharge10(sx.chargePlanned ?? sx.charge));
+    return {
+      ...b,
+      charge: sessions.reduce((sum, sx) => sum + sessionCharge(sx), 0),
+      deviation: round1(avg(deviations)),
+      rated: deviations.length,
+      planned: sessions.length,
+      done: done.length,
+    };
   });
 }
 
@@ -126,185 +138,102 @@ function DashboardBody({ data, onUpdateSleep }) {
   const { styles, isDark } = useThemeCtx();
   const [range, setRange] = useState("sem"); // "sem" | "mois" | "an"
   const [statsRefDate, setStatsRefDate] = useState(() => new Date());
+  // Superposition de l'indice Hooper sur le graphe d'écart, pour chercher à
+  // l'œil si les périodes « plus dur que prévu » tombent sur la fatigue.
+  const [showHooperOverlay, setShowHooperOverlay] = useState(false);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const handleStatsPrev = () => {
-    if (range === "jour" || range === "sem") setStatsRefDate(d => addDays(d, -7));
-    else if (range === "mois") setStatsRefDate(d => new Date(d.getFullYear(), d.getMonth() - 1, d.getDate()));
-    else setStatsRefDate(d => new Date(d.getFullYear() - 1, d.getMonth(), d.getDate()));
-  };
-  const handleStatsNext = () => {
-    if (range === "jour" || range === "sem") setStatsRefDate(d => addDays(d, 7));
-    else if (range === "mois") setStatsRefDate(d => new Date(d.getFullYear(), d.getMonth() + 1, d.getDate()));
-    else setStatsRefDate(d => new Date(d.getFullYear() + 1, d.getMonth(), d.getDate()));
+  const step = (dir) => {
+    if (range === "sem") setStatsRefDate(d => addDays(d, 7 * dir));
+    else if (range === "mois") setStatsRefDate(d => new Date(d.getFullYear(), d.getMonth() + dir, 1));
+    else setStatsRefDate(d => new Date(d.getFullYear() + dir, 0, 1));
   };
 
-  // Is the statsRefDate within the current period?
+  // Sommes-nous sur la période en cours ?
   const isCurrentPeriod = (() => {
     const ref = new Date(statsRefDate); ref.setHours(0, 0, 0, 0);
-    if (range === "jour" || range === "sem") {
-      const refMonday = getMondayOf(ref); const todayMonday = getMondayOf(today);
-      return refMonday.getTime() >= todayMonday.getTime();
-    }
-    if (range === "mois") return ref.getFullYear() > today.getFullYear() || (ref.getFullYear() === today.getFullYear() && ref.getMonth() >= today.getMonth());
-    return ref.getFullYear() >= today.getFullYear();
+    if (range === "sem") return getMondayOf(ref).getTime() === getMondayOf(today).getTime();
+    if (range === "mois") return ref.getFullYear() === today.getFullYear() && ref.getMonth() === today.getMonth();
+    return ref.getFullYear() === today.getFullYear();
   })();
 
-  // Label for the current period
+  // Libellé de la période — mêmes formes que le calendrier.
   const statsPeriodLabel = (() => {
     const ref = statsRefDate;
-    if (range === "jour") {
+    if (range === "sem") {
       const monday = getMondayOf(ref);
       return `${formatDate(monday)} — ${formatDate(addDays(monday, 6))}`;
     }
-    if (range === "sem") {
-      const nWeeks = 8;
-      const endMonday = getMondayOf(ref);
-      const startMonday = getMondayOf(addDays(endMonday, -(7 * (nWeeks - 1))));
-      return `${formatDate(startMonday)} — ${formatDate(addDays(endMonday, 6))}`;
-    }
-    if (range === "mois") {
-      const nWeeks = 13;
-      const endMonday = getMondayOf(ref);
-      const startMonday = getMondayOf(addDays(endMonday, -(7 * (nWeeks - 1))));
-      return `${formatDate(startMonday)} — ${formatDate(addDays(endMonday, 6))}`;
-    }
+    if (range === "mois") return ref.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
     return ref.toLocaleDateString("fr-FR", { year: "numeric" });
   })();
+  const currentLabel = range === "sem" ? "Semaine en cours"
+    : range === "mois" ? "Mois en cours" : "Année en cours";
 
   const chartData = getChartData(data, range, statsRefDate);
 
-  // Weight chart data — scaffolded for the full period (null where no measure)
-  const weightChartData = (() => {
-    const weightMap = data.weight || {};
-    if (range === "jour") {
-      const monday = getMondayOf(statsRefDate);
-      const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-      return Array.from({ length: 7 }, (_, i) => {
-        const dateStr = localDateStr(addDays(monday, i));
-        return { label: dayNames[i], kg: weightMap[dateStr] ?? null };
-      });
-    }
-    if (range === "an") {
-      return Array.from({ length: 12 }, (_, i) => {
-        const d = new Date(statsRefDate.getFullYear(), statsRefDate.getMonth() - (11 - i), 1);
-        const y = d.getFullYear(), m = d.getMonth();
-        const vals = Object.entries(weightMap)
-          .filter(([date, v]) => { if (v == null) return false; const dd = new Date(date + "T12:00:00"); return dd.getFullYear() === y && dd.getMonth() === m; })
-          .map(([, v]) => v);
-        return {
-          label: d.toLocaleDateString("fr-FR", { month: "short" }),
-          kg: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null,
-        };
-      });
-    }
-    const nWeeks = range === "mois" ? 13 : 8;
-    return Array.from({ length: nWeeks }, (_, i) => {
-      const monday = getMondayOf(addDays(statsRefDate, -(7 * (nWeeks - 1 - i))));
-      const start = weekKey(monday);
-      const end = localDateStr(addDays(monday, 6));
-      const vals = Object.entries(weightMap)
-        .filter(([date, v]) => v != null && date >= start && date <= end)
-        .map(([, v]) => v);
-      const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
-      return { label, kg: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null };
-    });
-  })();
+  const buckets = getBuckets(range, statsRefDate);
 
-  // Hooper chart data — scaffolded for the full period (null where no measure)
-  const hooperChartData = (() => {
-    const hooperList = data.hooper || [];
-    if (range === "jour") {
-      const monday = getMondayOf(statsRefDate);
-      const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-      return Array.from({ length: 7 }, (_, i) => {
-        const dateStr = localDateStr(addDays(monday, i));
-        const entry = hooperList.find(h => h.date === dateStr);
-        return { label: dayNames[i], total: entry?.total ?? null };
-      });
-    }
-    if (range === "an") {
-      return Array.from({ length: 12 }, (_, i) => {
-        const d = new Date(statsRefDate.getFullYear(), statsRefDate.getMonth() - (11 - i), 1);
-        const y = d.getFullYear(), m = d.getMonth();
-        const vals = hooperList
-          .filter(h => h.total != null) // entrées partielles exclues des moyennes
-          .filter(h => { const hd = new Date(h.date + "T12:00:00"); return hd.getFullYear() === y && hd.getMonth() === m; })
-          .map(h => h.total);
-        return {
-          label: d.toLocaleDateString("fr-FR", { month: "short" }),
-          total: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null,
-        };
-      });
-    }
-    const nWeeks = range === "mois" ? 13 : 8;
-    return Array.from({ length: nWeeks }, (_, i) => {
-      const monday = getMondayOf(addDays(statsRefDate, -(7 * (nWeeks - 1 - i))));
-      const start = weekKey(monday);
-      const end = localDateStr(addDays(monday, 6));
-      const vals = hooperList.filter(h => h.total != null && h.date >= start && h.date <= end).map(h => h.total);
-      const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
-      return { label, total: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null };
-    });
-  })();
+  // Poids : moyenne des mesures de chaque période, null quand rien n'a été pesé.
+  const weightChartData = buckets.map(b => {
+    const vals = Object.entries(data.weight || {})
+      .filter(([date, v]) => v != null && date >= b.start && date <= b.end)
+      .map(([, v]) => v);
+    return { label: b.label, kg: round1(avg(vals)) };
+  });
 
-  const nutritionChartData = (() => {
-    const nutrMap = data.nutrition || {};
-    const sumDay = dateStr => {
-      const meals = nutrMap[dateStr] || [];
-      if (meals.length === 0) return { cal: null, prot: null };
-      return { cal: meals.reduce((s, m) => s + (m.calories || 0), 0), prot: meals.reduce((s, m) => s + (m.proteins || 0), 0) };
+  // Hooper : moyenne du total sur la période (entrées partielles exclues).
+  const hooperChartData = buckets.map(b => {
+    const vals = (data.hooper || [])
+      .filter(h => h.total != null && h.date >= b.start && h.date <= b.end)
+      .map(h => h.total);
+    const m = avg(vals);
+    return { label: b.label, total: m == null ? null : Math.round(m) };
+  });
+
+  // Nutrition : moyenne journalière sur les jours renseignés de la période.
+  const nutritionChartData = buckets.map(b => {
+    const days = Object.keys(data.nutrition || {})
+      .filter(dt => dt >= b.start && dt <= b.end && (data.nutrition[dt] || []).length);
+    if (!days.length) return { label: b.label, cal: null, prot: null };
+    const sum = (key) => days.reduce((acc, dt) =>
+      acc + (data.nutrition[dt] || []).reduce((a, meal) => a + (meal[key] || 0), 0), 0);
+    return {
+      label: b.label,
+      cal: Math.round(sum("calories") / days.length) || null,
+      prot: Math.round(sum("proteins") / days.length) || null,
     };
-    if (range === "jour") {
-      const monday = getMondayOf(statsRefDate);
-      const dayNames = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-      return Array.from({ length: 7 }, (_, i) => {
-        const dateStr = localDateStr(addDays(monday, i));
-        const { cal, prot } = sumDay(dateStr);
-        return { label: dayNames[i], cal, prot };
-      });
-    }
-    if (range === "an") {
-      return Array.from({ length: 12 }, (_, i) => {
-        const d = new Date(statsRefDate.getFullYear(), statsRefDate.getMonth() - (11 - i), 1);
-        const y = d.getFullYear(), m = d.getMonth();
-        const days = Object.keys(nutrMap).filter(dt => { const dd = new Date(dt + "T12:00:00"); return dd.getFullYear() === y && dd.getMonth() === m; });
-        if (!days.length) return { label: d.toLocaleDateString("fr-FR", { month: "short" }), cal: null, prot: null };
-        const cal = Math.round(days.reduce((s, dt) => s + (nutrMap[dt] || []).reduce((a, m) => a + (m.calories || 0), 0), 0) / days.length);
-        const prot = Math.round(days.reduce((s, dt) => s + (nutrMap[dt] || []).reduce((a, m) => a + (m.proteins || 0), 0), 0) / days.length);
-        return { label: d.toLocaleDateString("fr-FR", { month: "short" }), cal: cal || null, prot: prot || null };
-      });
-    }
-    const nWeeks = range === "mois" ? 13 : 8;
-    return Array.from({ length: nWeeks }, (_, i) => {
-      const monday = getMondayOf(addDays(statsRefDate, -(7 * (nWeeks - 1 - i))));
-      const days = Array.from({ length: 7 }, (__, d) => localDateStr(addDays(monday, d))).filter(dt => nutrMap[dt]);
-      const label = `${monday.getDate().toString().padStart(2, "0")}/${(monday.getMonth() + 1).toString().padStart(2, "0")}`;
-      if (!days.length) return { label, cal: null, prot: null };
-      const cal = Math.round(days.reduce((s, dt) => s + (nutrMap[dt] || []).reduce((a, m) => a + (m.calories || 0), 0), 0) / days.length);
-      const prot = Math.round(days.reduce((s, dt) => s + (nutrMap[dt] || []).reduce((a, m) => a + (m.proteins || 0), 0), 0) / days.length);
-      return { label, cal: cal || null, prot: prot || null };
-    });
+  });
+
+  // Charge des quatre dernières semaines, indépendante de la période affichée.
+  const totalCharge4w = (() => {
+    const end = localDateStr(new Date());
+    const start = localDateStr(addDays(new Date(), -27));
+    return sessionsBetween(data, start, end).reduce((sum, sx) => sum + sessionCharge(sx), 0);
   })();
 
-  const totalCharge4w = getChartData(data, "sem").slice(4).reduce((s, w) => s + w.charge, 0);
-  const rpeVals = chartData.filter(w => w.avgRpe != null).map(w => w.avgRpe);
-  const globalAvgRpe = rpeVals.length
-    ? (rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length).toFixed(1)
-    : "—";
+  // Écart moyen sur la période : le cœur de la lecture « ai-je tendance à
+  // sous-estimer mes séances ? ».
+  // Écart et Hooper sur la même grille temporelle, pour la superposition.
+  const deviationChartData = chartData.map((d, i) => ({
+    ...d, hooper: hooperChartData[i]?.total ?? null,
+  }));
+  const ratedCount = chartData.reduce((sum, d) => sum + (d.rated || 0), 0);
+  const devVals = chartData.filter(d => d.deviation != null).map(d => d.deviation);
+  const globalDeviation = devVals.length ? round1(avg(devVals)) : null;
+  const deviationVerdict = globalDeviation == null ? "pas encore de retour"
+    : Math.abs(globalDeviation) < 0.5 ? "charge bien estimée"
+    : globalDeviation > 0 ? "plus dur que prévu" : "plus facile que prévu";
 
   const tooltipStyle = { background: styles.dashTooltipBg, border: "none", borderRadius: 6, color: styles.dashTooltipText, fontSize: 11 };
 
-  const rangeLabel = { jour: "cette semaine", sem: "8 semaines", mois: "3 mois", an: "12 mois" }[range];
-
-  const RangeBtn = ({ r, label }) => (
-    <button onClick={() => { setRange(r); setStatsRefDate(new Date()); }}
-      style={{ ...styles.viewToggleBtn, ...(range === r ? styles.viewToggleBtnActive : {}), padding: "3px 9px", fontSize: 10 }}>
-      {label}
-    </button>
-  );
+  const rangeLabel = { sem: "la semaine", mois: "le mois", an: "l'année" }[range];
+  // Étiquettes lisibles : la semaine tient ses 7 jours, le mois ses 5 semaines,
+  // l'année ses 12 mois — tout tient, donc on les affiche toutes.
+  const tickInterval = 0;
+  const devColor = (v) => v > 0 ? colors(isDark).accent : v < 0 ? colors(isDark).info : colors(isDark).textMuted;
 
   return (
     <div style={styles.dashboard}>
@@ -313,25 +242,46 @@ function DashboardBody({ data, onUpdateSleep }) {
       {/* Activity heatmap */}
       <ActivityHeatmap data={data} />
 
-      {/* Range selector row */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 10, gap: 4 }}>
-        <RangeBtn r="jour" label="Jours" />
-        <RangeBtn r="sem" label="Sem" />
-        <RangeBtn r="mois" label="Mois" />
-        <RangeBtn r="an" label="An" />
-      </div>
-      {/* Period navigation */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16, gap: 8 }}>
-        <button style={styles.navBtn} onClick={handleStatsPrev}>←</button>
+      {/* Période — même sélecteur que le calendrier */}
+      <Segmented
+        isDark={isDark}
+        value={range}
+        onChange={r => { setRange(r); setStatsRefDate(new Date()); }}
+        options={[
+          { value: "sem", label: "Semaine" },
+          { value: "mois", label: "Mois" },
+          { value: "an", label: "Année" },
+        ]}
+        style={{ marginBottom: 14 }}
+      />
+
+      {/* Navigation de période */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: 12, marginBottom: 18,
+      }}>
+        <RoundIconButton isDark={isDark} size={32} label="Précédent" onClick={() => step(-1)}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg>
+        </RoundIconButton>
         <div
-          style={{ textAlign: "center", minWidth: 190, cursor: isCurrentPeriod ? "default" : "pointer" }}
           onClick={isCurrentPeriod ? undefined : () => setStatsRefDate(new Date())}
-          title={isCurrentPeriod ? undefined : "Aller à la période en cours"}
+          title={isCurrentPeriod ? undefined : "Revenir à la période en cours"}
+          style={{ textAlign: "center", minWidth: 0, cursor: isCurrentPeriod ? "default" : "pointer" }}
         >
-          <div style={styles.weekRange}>{statsPeriodLabel}</div>
-          {isCurrentPeriod && <div style={styles.weekCurrent}>Période actuelle</div>}
+          <div style={{ fontSize: 15, fontWeight: 700, color: colors(isDark).text, textTransform: "capitalize" }}>
+            {statsPeriodLabel}
+          </div>
+          {isCurrentPeriod && (
+            <div style={{ fontSize: 10, fontWeight: 600, color: colors(isDark).accent, letterSpacing: "0.04em", marginTop: 1 }}>
+              {currentLabel}
+            </div>
+          )}
         </div>
-        <button style={{ ...styles.navBtn, visibility: isCurrentPeriod ? "hidden" : "visible" }} onClick={handleStatsNext}>→</button>
+        <RoundIconButton isDark={isDark} size={32} label="Suivant" onClick={() => step(1)}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+        </RoundIconButton>
       </div>
 
       <div style={{ ...styles.dashCards, gridTemplateColumns: "repeat(2, 1fr)" }}>
@@ -340,8 +290,14 @@ function DashboardBody({ data, onUpdateSleep }) {
           <span style={styles.dashCardLabel}>Charge 4 sem.</span>
         </div>
         <div style={styles.dashCard}>
-          <span style={styles.dashCardVal}>{globalAvgRpe}</span>
-          <span style={styles.dashCardLabel}>RPE moyen</span>
+          <span style={{
+            ...styles.dashCardVal,
+            color: globalDeviation == null || Math.abs(globalDeviation) < 0.5
+              ? undefined : devColor(globalDeviation),
+          }}>
+            {globalDeviation == null ? "—" : (globalDeviation > 0 ? "+" : "") + globalDeviation}
+          </span>
+          <span style={styles.dashCardLabel}>Écart — {deviationVerdict}</span>
         </div>
       </div>
 
@@ -363,23 +319,82 @@ function DashboardBody({ data, onUpdateSleep }) {
         </ResponsiveContainer>
       </div>
 
+      {/* ── Écart de charge ─────────────────────────────────────────────────
+           Ce que l'athlète a ressenti moins ce qui était prévu. Au-dessus de
+           zéro, la séance a été plus dure qu'annoncé (charge sous-estimée) ;
+           en dessous, plus facile. Deux teintes de part et d'autre du zéro,
+           jamais un dégradé : le signe est ce qui compte.
+           L'indice Hooper peut se superposer — il a son axe à droite, sur son
+           échelle 4-28, bornée en dur pour que la comparaison ne se déforme
+           pas d'une période à l'autre. */}
       <div style={styles.dashSection}>
-        <div style={styles.dashSectionTitle}>RPE moyen — {rangeLabel}</div>
-        <ResponsiveContainer width="100%" height={160}>
-          <LineChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+        <div style={styles.dashSectionTitle}>Écart de charge — {rangeLabel}</div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 10 }}>
+          <span style={{ fontSize: 11, color: colors(isDark).textMuted, display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: colors(isDark).accent }} />
+            plus dur que prévu
+          </span>
+          <span style={{ fontSize: 11, color: colors(isDark).textMuted, display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: colors(isDark).info }} />
+            plus facile
+          </span>
+          <label style={{
+            display: "flex", alignItems: "center", gap: 6, marginLeft: "auto",
+            fontSize: 11, color: showHooperOverlay ? colors(isDark).hooperLine : colors(isDark).textMuted,
+            cursor: "pointer", userSelect: "none",
+          }}>
+            <input
+              type="checkbox"
+              checked={showHooperOverlay}
+              onChange={e => setShowHooperOverlay(e.target.checked)}
+              style={{ accentColor: colors(isDark).hooperLine, cursor: "pointer" }}
+            />
+            Superposer Hooper
+          </label>
+        </div>
+
+        <ResponsiveContainer width="100%" height={185}>
+          <ComposedChart data={deviationChartData} margin={{ top: 4, right: showHooperOverlay ? 4 : 8, left: -24, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
             <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
-              interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
-            <YAxis domain={[0, 10]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={tooltipStyle} />
-            {/* Spline cubique monotone : passe exactement par chaque point
-                mesuré, enjambe les gaps via connectNulls */}
-            <Line type="monotone" dataKey="avgRpe" name="RPE"
-              stroke={colors(isDark).warn} strokeWidth={2}
-              dot={{ r: 3, fill: colors(isDark).warn }} activeDot={{ r: 5 }}
-              connectNulls />
-          </LineChart>
+              interval={tickInterval} />
+            <YAxis yAxisId="dev" domain={[-5, 5]} ticks={[-5, -2.5, 0, 2.5, 5]}
+              tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
+            {showHooperOverlay && (
+              <YAxis yAxisId="hooper" orientation="right" domain={[4, 28]} ticks={[4, 14, 21, 28]}
+                tick={{ fill: colors(isDark).hooperLine, fontSize: 10 }} axisLine={false} tickLine={false} />
+            )}
+            <Tooltip
+              contentStyle={tooltipStyle}
+              cursor={{ fill: colors(isDark).tint }}
+              formatter={(v, name) => {
+                if (v == null) return null;
+                if (name === "hooper") return [`${v} — ${hooperLabel(v)}`, "Hooper"];
+                return [(v > 0 ? "+" : "") + v, "Écart"];
+              }}
+            />
+            <ReferenceLine yAxisId="dev" y={0} stroke={styles.dashText} strokeOpacity={0.5} />
+            <Bar yAxisId="dev" dataKey="deviation" name="deviation" radius={[3, 3, 0, 0]} maxBarSize={30}>
+              {deviationChartData.map((entry, i) => (
+                <Cell key={i} fill={entry.deviation == null ? "transparent" : devColor(entry.deviation)} />
+              ))}
+            </Bar>
+            {showHooperOverlay && (
+              <Line yAxisId="hooper" type="monotone" dataKey="hooper" name="hooper"
+                stroke={colors(isDark).hooperLine} strokeWidth={2}
+                dot={{ r: 3, fill: colors(isDark).hooperLine }} activeDot={{ r: 5 }}
+                connectNulls />
+            )}
+          </ComposedChart>
         </ResponsiveContainer>
+
+        <div style={{ fontSize: 11, color: colors(isDark).textDim, marginTop: 8, lineHeight: 1.5 }}>
+          {ratedCount === 0
+            ? "Aucune séance notée sur la période — l'écart se calcule à partir de la charge ressentie."
+            : `${ratedCount} séance${ratedCount > 1 ? "s" : ""} notée${ratedCount > 1 ? "s" : ""}.`
+              + (showHooperOverlay ? " Hooper garde son échelle à droite (4-28, plus bas = mieux)." : "")}
+        </div>
       </div>
 
       {weightChartData.some(d => d.kg != null) && (
@@ -412,7 +427,7 @@ function DashboardBody({ data, onUpdateSleep }) {
               <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
                 interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
               <YAxis domain={[0, 28]} ticks={[0, 7, 14, 17, 20, 28]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => v != null ? [v + ` — ${hooperLabel(v)}`, "Hooper"] : null} cursor={{ fill: colors(isDark).tint }} />
+              <Tooltip contentStyle={tooltipStyle} formatter={v => v != null ? [`${v} — ${hooperLabel(v)}`, "Hooper"] : null} cursor={{ fill: colors(isDark).tint }} />
               <ReferenceLine y={14} stroke={colors(isDark).accentBorder} strokeDasharray="4 4" />
               <ReferenceLine y={17} stroke={colors(isDark).warnBorder} strokeDasharray="4 4" />
               <ReferenceLine y={20} stroke={colors(isDark).dangerBorder} strokeDasharray="4 4" />
