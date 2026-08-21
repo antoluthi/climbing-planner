@@ -306,6 +306,24 @@ export function ProgressBar({ isDark, ratio }) {
   );
 }
 
+// ── Icône bibliothèque ───────────────────────────────────────────────────────
+// Deux livres droits et un troisième appuyé dessus. Partagée entre la barre du
+// bas et le bouton du formulaire de séance : une seule silhouette pour un seul
+// endroit de l'app.
+export function LibraryIcon({ size = 20, strokeWidth = 1.8 }) {
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={strokeWidth}
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+    >
+      <rect x="3.6" y="6" width="4.6" height="13.5" rx="1.3" />
+      <rect x="9.2" y="4.5" width="4.6" height="15" rx="1.3" />
+      <rect x="14.8" y="6.6" width="4.6" height="12.9" rx="1.3" transform="rotate(13 14.8 19.5)" />
+    </svg>
+  );
+}
+
 // ── Avatar initiales ─────────────────────────────────────────────────────────
 export function InitialsAvatar({ isDark, initials, size = 40, onClick, photoUrl }) {
   const c = colors(isDark);

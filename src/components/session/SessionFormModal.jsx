@@ -3,7 +3,7 @@ import { useThemeCtx } from "../../theme/ThemeContext.jsx";
 import { Modal } from "../ui/Modal.jsx";
 import { colors, DATA } from "../../theme/palette.js";
 import { RADIUS, Z } from "../../theme/makeStyles.js";
-import { PrimaryButton, RoundIconButton, Chip, RoundCheck, SANS, MONO } from "../ui/Ascent.jsx";
+import { PrimaryButton, RoundIconButton, Chip, RoundCheck, LibraryIcon, SANS, MONO } from "../ui/Ascent.jsx";
 import { disciplineList, getDiscipline } from "../../lib/disciplines.js";
 import { getChargeColor, normalizeCharge10, chargeLabel } from "../../lib/charge.js";
 import { generateId } from "../../lib/storage.js";
@@ -302,12 +302,7 @@ export function SessionFormModal({
           />
           <RoundIconButton isDark={isDark} size={34} label="Charger depuis la bibliothèque"
                            onClick={() => setLibraryOpen(true)}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <ellipse cx="12" cy="6" rx="8" ry="3" />
-              <path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6" />
-              <path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
-            </svg>
+            <LibraryIcon size={18} />
           </RoundIconButton>
           {onDelete && (
             <RoundIconButton isDark={isDark} size={34} label="Supprimer" onClick={() => setConfirmDelete(true)}>

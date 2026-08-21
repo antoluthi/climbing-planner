@@ -435,7 +435,10 @@ grep -rn '#[0-9a-f]\{3,8\}' src/ --include=*.jsx --include=*.js | grep -v palett
 - `components/ui/Ascent.jsx` : primitives du système — `Card`, `RowCard`/`Row`,
   `PageTitle`, `SectionLabel`, `StatValue`, `SportBadge`, `SportDot`,
   `Segmented`, `PillToggle`, `RoundIconButton`, `Chip`, `RoundCheck`,
-  `ProgressBar`, `InitialsAvatar`, plus les constantes `SANS` / `MONO`.
+  `ProgressBar`, `InitialsAvatar`, `LibraryIcon`, plus les constantes
+  `SANS` / `MONO`. `LibraryIcon` (deux livres droits, un troisième appuyé
+  dessus) sert à la fois à la barre du bas et au bouton du formulaire de
+  séance : une seule silhouette pour un seul endroit de l'app.
 - Écrans refaits : **Accueil**, **Calendrier** (`CalendarView.jsx`, Semaine/Mois/
   Année, mobile uniquement — le bureau garde les vues historiques), **Compte**,
   **Bibliothèque** et le **journal du jour**.
@@ -507,7 +510,14 @@ chose.
 - Sélecteur de plage Sem / Mois / An pour tous les graphiques stats
 - **Heatmap d'activité** (`components/ActivityHeatmap.jsx`, GitHub-style) : 53 semaines × 7 jours, sélecteur de métrique (Charge / RPE / Hooper), labels mois et jours, tooltip hover, légende Moins/Plus, adaptatif mobile
 
-### AccueilView — phrase contextuelle (`components/AccueilView.jsx`)
+### AccueilView — en-tête (`components/AccueilView.jsx`)
+De haut en bas : date, salutation, phrase contextuelle, puis **où l'on en est
+dans le plan** (mésocycle · microcycle · rang de la semaine, à la couleur du
+mésocycle, depuis `getMesoForDate`), puis la semaine — barres de charge,
+initiales des jours, et une **pastille par séance** à la couleur de sa
+discipline (celle de l'échéance pour une échéance, trois au plus par jour).
+
+### AccueilView — phrase contextuelle
 - Police **Newsreader** (serif élégant) pour la phrase d'accueil
 - Salutation granulaire selon l'heure (matin, après-midi, soir, nuit)
 - Phrase contextuelle dynamique : heure courante, complétion des séances du jour, contexte semaine (mésocycle, charge)
