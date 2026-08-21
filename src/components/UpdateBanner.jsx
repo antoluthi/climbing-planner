@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Z } from "../theme/makeStyles.js";
 import { checkForUpdate, isDismissed, dismissUpdate } from "../lib/update-check.js";
+import { colors } from "../theme/palette.js";
 
 // ─── BANDEAU DE MISE À JOUR (APK) ─────────────────────────────────────────────
 // L'APK ne se met pas à jour tout seul : ce bandeau est le seul signal qu'une
@@ -22,9 +23,9 @@ export function UpdateBanner({ isMobile }) {
 
   if (!update) return null;
 
-  const surface = isDark ? "#2a2218" : "#2a2218";
-  const text = isDark ? "#f0e6d0" : "#fcf8ef";
-  const accent = "#e0a875";
+  const surface = colors(isDark).toastBg;
+  const text = colors(isDark).toastText;
+  const accent = colors(isDark).accent;
 
   const close = () => {
     dismissUpdate(update.versionCode);

@@ -3,6 +3,7 @@ import { getChargeColor } from "../lib/charge.js";
 import { getMesoForDate } from "../lib/constants.js";
 import { getCustomCyclesForDate } from "../lib/constants.js";
 import { addDays, getMonthWeeks, getDaySessions, getDayCharge } from "../lib/helpers.js";
+import { colors } from "../theme/palette.js";
 
 // ─── VUE ANNÉE ────────────────────────────────────────────────────────────────
 
@@ -89,7 +90,7 @@ export function YearView({ data, currentDate, onSelectMonth, isMobile, creatine,
                           style={{
                             ...styles.yearHeatmapCell,
                             background: "transparent",
-                            outline: isToday ? `1px solid ${isDark ? "#e0a875" : "#8b4c20"}` : "none",
+                            outline: isToday ? `1px solid ${colors(isDark).accent}` : "none",
                             outlineOffset: 0,
                             display: "flex",
                             alignItems: "center",

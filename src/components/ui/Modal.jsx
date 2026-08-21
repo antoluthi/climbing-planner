@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
 import { Z } from "../../theme/makeStyles.js";
 import { pushLayer, lockBodyScroll } from "../../lib/native.js";
+import { colors } from "../../theme/palette.js";
 
 // ─── MODAL PRIMITIVES ─────────────────────────────────────────────────────────
 // Coquille de modale unifiée pour toute l'app. Objectif : chaque modale s'ouvre,
@@ -20,19 +21,22 @@ import { pushLayer, lockBodyScroll } from "../../lib/native.js";
 //   </Modal>
 
 export function modalTokens(isDark) {
-  const D = isDark;
+  // Ces noms sont ceux qu'utilisent les modales ; ce ne sont que des alias vers
+  // la palette, conservés pour ne pas réécrire tous les composants de modale.
+  const c = colors(isDark);
   return {
-    paper:        D ? "#241b13" : "#fcf8ef",
-    paperDim:     D ? "#15100b" : "#f7f1e2",
-    surface:      D ? "#241b13" : "#ffffff",
-    surfaceMuted: D ? "#2e2419" : "#f0ebde",
-    border:       D ? "#3a2e22" : "#e6dfd1",
-    borderStrong: D ? "#3a2e22" : "#d8d0bf",
-    text:         D ? "#f0e6d0" : "#2a2218",
-    textMid:      D ? "#c4b69c" : "#5a4d3c",
-    textLight:    D ? "#a89a82" : "#8a7f70",
-    accent:       D ? "#e0a875" : "#8b4c20",
-    danger:       D ? "#e87878" : "#b83030",
+    paper:        c.modalBg,
+    paperDim:     c.surface2,
+    surface:      c.card,
+    surfaceMuted: c.surface2,
+    border:       c.border,
+    borderStrong: c.borderStrong,
+    text:         c.text,
+    textMid:      c.textCard,
+    textLight:    c.textMuted,
+    accent:       c.accent,
+    danger:       c.danger,
+    onColor:      c.onColor,
   };
 }
 

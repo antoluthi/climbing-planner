@@ -9,6 +9,7 @@ import { ConfirmModal } from "./ConfirmModal.jsx";
 import { Z } from "../theme/makeStyles.js";
 import { pushLayer, lockBodyScroll } from "../lib/native.js";
 import { getDiscipline, METRIC_LABELS } from "../lib/disciplines.js";
+import { colors, DATA } from "../theme/palette.js";
 
 // ─── SESSION MODAL — refonte sans onglets ─────────────────────────────────────
 // Le ressenti est la vue par défaut (le moment le plus fréquent d'ouverture).
@@ -106,21 +107,21 @@ export function SessionModal({
   };
 
   // ── Tokens visuels ──
-  const paper        = isDark ? "#241b13" : "#fcf8ef";
-  const paperDim     = isDark ? "#15100b" : "#f7f1e2";
-  const surfaceCard  = isDark ? "#241b13" : "#ffffff";
-  const surfaceMuted = isDark ? "#2e2419" : "#f0ebde";
-  const border       = isDark ? "#3a2e22" : "#e6dfd1";
-  const borderStrong = isDark ? "#3a2e22" : "#d8d0bf";
-  const text         = isDark ? "#f0e6d0" : "#2a2218";
-  const textMid      = isDark ? "#c4b69c" : "#5a4d3c";
-  const textLight    = isDark ? "#a89a82" : "#8a7f70";
-  const accent       = isDark ? "#e0a875" : "#8b4c20";
-  const inkPrimary   = isDark ? "#e6d8bc" : "#2a2218";
+  const paper        = colors(isDark).card;
+  const paperDim     = colors(isDark).surface;
+  const surfaceCard  = colors(isDark).card;
+  const surfaceMuted = colors(isDark).surface;
+  const border       = colors(isDark).borderSubtle;
+  const borderStrong = colors(isDark).border;
+  const text         = colors(isDark).text;
+  const textMid      = colors(isDark).textCard;
+  const textLight    = colors(isDark).textMuted;
+  const accent       = colors(isDark).accent;
+  const inkPrimary   = colors(isDark).text;
   const statusColors = {
-    done:     { bg: isDark ? "#1a2a1d" : "#e3f0e5", fg: isDark ? "#82c894" : "#2e6b3f" },
-    adapted:  { bg: isDark ? "#2a2010" : "#fef2dc", fg: isDark ? "#e6c46a" : "#b8881a" },
-    not_done: { bg: isDark ? "#2a1612" : "#fbecec", fg: isDark ? "#f08070" : "#b83030" },
+    done:     { bg: colors(isDark).successBg, fg: colors(isDark).success },
+    adapted:  { bg: colors(isDark).warnBg, fg: colors(isDark).warn },
+    not_done: { bg: colors(isDark).dangerBg, fg: colors(isDark).danger },
   };
 
   // Close kebab on outside click
@@ -264,7 +265,7 @@ export function SessionModal({
                     style={kebabItemStyle({ color: textMid })}
                   >
                     {isAthleteUser ? "Suggérer un déplacement…" : "Déplacer la séance…"}
-                    {pendingSuggestions.length > 0 && <span style={{ marginLeft: 6, width: 7, height: 7, borderRadius: "50%", background: "#f0a060", display: "inline-block" }} />}
+                    {pendingSuggestions.length > 0 && <span style={{ marginLeft: 6, width: 7, height: 7, borderRadius: "50%", background: colors(isDark).warn, display: "inline-block" }} />}
                   </button>
                   {!isAthleteUser && onEdit && (
                     <button
@@ -275,7 +276,7 @@ export function SessionModal({
                   {!isAthleteUser && onDelete && (
                     <button
                       onClick={() => { setKebabOpen(false); setConfirmDelete(true); }}
-                      style={kebabItemStyle({ color: isDark ? "#f08070" : "#b83030" })}
+                      style={kebabItemStyle({ color: colors(isDark).danger })}
                     >Supprimer la séance</button>
                   )}
                 </div>
@@ -382,7 +383,7 @@ export function SessionModal({
                   <button
                     onClick={() => setShowMove(true)}
                     style={{
-                      background: statusColors.not_done.fg, color: "#fff",
+                      background: statusColors.not_done.fg, color: colors(isDark).onColor,
                       border: "none", borderRadius: 8, padding: "8px 14px",
                       fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                     }}
@@ -403,7 +404,7 @@ export function SessionModal({
                   : `Moins soutenu que prévu (${delta})`;
                 const deltaColor = delta == null || delta === 0
                   ? textLight
-                  : delta > 0 ? (isDark ? "#f0a060" : "#c2410c") : (isDark ? "#82c894" : "#2e6b3f");
+                  : delta > 0 ? (colors(isDark).accent) : (colors(isDark).success);
                 return (
                   <div style={{
                     background: surfaceCard, border: `1px solid ${border}`,
@@ -463,7 +464,7 @@ export function SessionModal({
                       style={{
                         background: "none", border: "none", cursor: "pointer",
                         fontSize: 22, padding: 0, lineHeight: 1,
-                        color: quality >= s ? "#e6c46a" : (isDark ? "#4a3d2d" : "#d8d0bf"),
+                        color: quality >= s ? colors(isDark).warn : (colors(isDark).border),
                       }}
                     >★</button>
                   ))}
@@ -513,7 +514,7 @@ export function SessionModal({
                   </div>
                   {effectiveBlocks.filter(bl => bl.blockType === "Suspension").map((bl, i) => {
                     const cfg = BLOCK_TYPES[bl.blockType] || {};
-                    const color = cfg.color || "#a78bfa";
+                    const color = cfg.color || DATA.blocks["Suspension"];
                     const existing = blockFeedbacks.find(bf => bf.blockId === bl.id);
                     const suspCfgRef = bl.config ?? DEFAULT_SUSPENSION_CONFIG;
                     const suspData = existing?.suspensionData ?? {};
@@ -617,7 +618,7 @@ export function SessionModal({
                   {/* Mode détaillé : liste des blocs */}
                   {hasBlocks && effectiveBlocks.map((bl, i) => {
                     const cfg = BLOCK_TYPES[bl.blockType] || {};
-                    const color = cfg.color || "#a89a82";
+                    const color = cfg.color || colors(isDark).textMuted;
                     return (
                       <div key={i} style={{
                         borderRadius: 10, border: `1px solid ${border}`,
@@ -781,7 +782,7 @@ export function SessionModal({
               style={{
                 width: "100%",
                 background: inkPrimary,
-                color: isDark ? paper : "#fff",
+                color: isDark ? paper : colors(isDark).onColor,
                 border: "none", borderRadius: 8,
                 padding: "12px 18px",
                 fontSize: 14, fontWeight: 600,
@@ -843,7 +844,7 @@ export function SessionModal({
               style={{
                 marginTop: 6,
                 background: inkPrimary,
-                color: isDark ? paper : "#fff",
+                color: isDark ? paper : colors(isDark).onColor,
                 border: "none", borderRadius: 8,
                 padding: "10px 22px",
                 fontSize: 13, fontWeight: 600,
@@ -894,7 +895,7 @@ function renderMovePanel({
     cursor: "pointer", fontSize: 11, fontWeight: active ? 700 : 400, fontFamily: "inherit",
   });
   const saveBtnStyle = {
-    background: accent, border: "none", color: "#fff",
+    background: accent, border: "none", color: colors(isDark).onColor,
     borderRadius: 8, padding: "8px 16px",
     fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
   };
@@ -993,21 +994,21 @@ function renderMovePanel({
 
       {!isAthleteUser && pendingSuggestions.length > 0 && (
         <div>
-          <label style={{ ...labelStyle, color: "#f0a060" }}>Suggestions de l'athlète</label>
+          <label style={{ ...labelStyle, color: colors(isDark).warn }}>Suggestions de l'athlète</label>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pendingSuggestions.map(s => (
               <div key={s.id} style={{
-                borderRadius: 8, border: `1px solid ${isDark ? "#5a3a18" : "#fbd8aa"}`,
-                background: isDark ? "#2a1612" : "#fff8ee", padding: "10px 12px",
+                borderRadius: 8, border: `1px solid ${colors(isDark).borderSubtle}`,
+                background: colors(isDark).card, padding: "10px 12px",
               }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#e6c46a" : "#e6c46a", marginBottom: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: colors(isDark).warn, marginBottom: 4 }}>
                   → {formatSuggTarget(s.toWeekKey, s.toDayIndex)}
                 </div>
-                {s.note && <div style={{ fontSize: 11, color: isDark ? "#e6c46a" : "#c4b69c", fontStyle: "italic", marginBottom: 8 }}>"{s.note}"</div>}
+                {s.note && <div style={{ fontSize: 11, color: colors(isDark).warn, fontStyle: "italic", marginBottom: 8 }}>"{s.note}"</div>}
                 <div style={{ display: "flex", gap: 6 }}>
                   <button style={{ ...saveBtnStyle, padding: "5px 12px", fontSize: 11, flex: 1 }}
                     onClick={() => onAcceptSuggestion(s.id)}>✓ Accepter</button>
-                  <button style={{ ...ghostBtn, padding: "5px 12px", fontSize: 11, flex: 1, color: isDark ? "#f08070" : "#f08070", borderColor: isDark ? "#5a2620" : "#f08070" }}
+                  <button style={{ ...ghostBtn, padding: "5px 12px", fontSize: 11, flex: 1, color: colors(isDark).danger, borderColor: colors(isDark).danger }}
                     onClick={() => onRejectSuggestion(s.id)}>✗ Refuser</button>
                 </div>
               </div>

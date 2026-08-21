@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { parseGarminSleepCSV } from "../lib/garmin-csv.js";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { colors, DATA } from "../theme/palette.js";
 
 // ─── SECTION SOMMEIL ──────────────────────────────────────────────────────────
 
@@ -56,7 +57,7 @@ export function SleepSection({ sleepData, onImport, range }) {
       </div>
 
       {importMsg && (
-        <div style={{ fontSize: 11, color: importMsg.startsWith("⚠") ? "#f08070" : "#e0a875", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: importMsg.startsWith("⚠") ? colors(isDark).danger : colors(isDark).accent, marginBottom: 8 }}>
           {importMsg}
         </div>
       )}
@@ -71,7 +72,7 @@ export function SleepSection({ sleepData, onImport, range }) {
       ) : (
         <>
           {lastDate && (
-            <div style={{ fontSize: 10, color: isDark ? "#a89a82" : "#8a7060", marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: colors(isDark).textMuted, marginBottom: 10 }}>
               Dernière nuit : {lastDate} · {filtered.length} nuits chargées
             </div>
           )}
@@ -83,16 +84,16 @@ export function SleepSection({ sleepData, onImport, range }) {
               <span style={styles.dashCardLabel}>Durée moy.</span>
             </div>
             <div style={styles.sleepCard}>
-              <span style={{ ...styles.dashCardVal, fontSize: 17, color: "#6366f1" }}>{fmt(avgDeep)}</span>
+              <span style={{ ...styles.dashCardVal, fontSize: 17, color: DATA.sleep.deep }}>{fmt(avgDeep)}</span>
               <span style={styles.dashCardLabel}>Profond moy.</span>
             </div>
             <div style={styles.sleepCard}>
-              <span style={{ ...styles.dashCardVal, fontSize: 17, color: "#a855f7" }}>{fmt(avgRem)}</span>
+              <span style={{ ...styles.dashCardVal, fontSize: 17, color: DATA.sleep.rem }}>{fmt(avgRem)}</span>
               <span style={styles.dashCardLabel}>REM moy.</span>
             </div>
             {avgScore != null && (
               <div style={styles.sleepCard}>
-                <span style={{ ...styles.dashCardVal, fontSize: 17, color: avgScore >= 80 ? "#82c894" : avgScore >= 60 ? "#e6c46a" : "#f08070" }}>{avgScore}</span>
+                <span style={{ ...styles.dashCardVal, fontSize: 17, color: avgScore >= 80 ? colors(isDark).success : avgScore >= 60 ? colors(isDark).warn : colors(isDark).danger }}>{avgScore}</span>
                 <span style={styles.dashCardLabel}>Score moy.</span>
               </div>
             )}
@@ -100,8 +101,8 @@ export function SleepSection({ sleepData, onImport, range }) {
 
           {/* Légende */}
           <div style={styles.sleepLegend}>
-            {[["#6366f1","Profond"],["#a855f7","REM"],["#22d3ee","Léger"],["#f9731666","Éveil"]].map(([c,l]) => (
-              <span key={l} style={{ fontSize: 10, color: isDark ? "#a89a82" : "#a89a82", display: "flex", alignItems: "center" }}>
+            {[[DATA.sleep.deep,"Profond"],[DATA.sleep.rem,"REM"],[DATA.sleep.light,"Léger"],[DATA.sleep.awake,"Éveil"]].map(([c,l]) => (
+              <span key={l} style={{ fontSize: 10, color: colors(isDark).textMuted, display: "flex", alignItems: "center" }}>
                 <span style={{ ...styles.sleepLegendDot, background: c }} />{l}
               </span>
             ))}
@@ -113,11 +114,11 @@ export function SleepSection({ sleepData, onImport, range }) {
               <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
               <XAxis dataKey="date" tick={{ fill: styles.dashText, fontSize: 9 }} axisLine={false} tickLine={false} interval={Math.floor(chartData.length / 6)} />
               <YAxis tickFormatter={v => `${Math.floor(v / 60)}h`} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v, name) => [fmt(v), name]} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
-              <Bar dataKey="deep"  name="Profond" stackId="s" fill="#6366f1" />
-              <Bar dataKey="rem"   name="REM"     stackId="s" fill="#a855f7" />
-              <Bar dataKey="light" name="Léger"   stackId="s" fill="#22d3ee" />
-              <Bar dataKey="awake" name="Éveil"   stackId="s" fill="#f9731644" radius={[3, 3, 0, 0]} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v, name) => [fmt(v), name]} cursor={{ fill: colors(isDark).tint }} />
+              <Bar dataKey="deep"  name="Profond" stackId="s" fill={DATA.sleep.deep} />
+              <Bar dataKey="rem"   name="REM"     stackId="s" fill={DATA.sleep.rem} />
+              <Bar dataKey="light" name="Léger"   stackId="s" fill={DATA.sleep.light} />
+              <Bar dataKey="awake" name="Éveil"   stackId="s" fill={DATA.sleep.awake} radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
 
@@ -131,7 +132,7 @@ export function SleepSection({ sleepData, onImport, range }) {
                   <XAxis dataKey="date" tick={{ fill: styles.dashText, fontSize: 9 }} axisLine={false} tickLine={false} interval={Math.floor(chartData.length / 6)} />
                   <YAxis domain={[40, 100]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="score" name="Score" stroke={isDark ? "#e0a875" : "#8b4c20"} strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="score" name="Score" stroke={colors(isDark).accent} strokeWidth={2} dot={false} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </div>

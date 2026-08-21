@@ -1,6 +1,7 @@
 import { forwardRef } from "react";
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
 import { modalTokens } from "./Modal.jsx";
+import { colors } from "../../theme/palette.js";
 
 // ─── FIELD PRIMITIVES ─────────────────────────────────────────────────────────
 // Champs de formulaire unifiés pour les modales. Même typographie, mêmes états
@@ -167,13 +168,13 @@ export function Toggle({ checked, onChange, label, color }) {
       <div
         style={{
           width: 36, height: 20, borderRadius: 10,
-          background: checked ? on : (isDark ? "#463826" : "#ccc"),
+          background: checked ? on : (colors(isDark).border),
           position: "relative", flexShrink: 0, transition: "background 0.2s",
         }}
       >
         <div style={{
           position: "absolute", top: 2, left: checked ? 18 : 2,
-          width: 16, height: 16, borderRadius: "50%", background: "#fff",
+          width: 16, height: 16, borderRadius: "50%", background: colors(isDark).onColor,
           transition: "left 0.2s", boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
         }} />
       </div>

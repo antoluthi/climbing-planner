@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Modal, ModalHeader, ModalBody, ModalFooter, modalTokens } from "./ui/Modal.jsx";
 import { Button } from "./ui/Button.jsx";
+import { colors } from "../theme/palette.js";
 
 // ─── PHOTO CROP MODAL ─────────────────────────────────────────────────────────
 
@@ -141,7 +142,7 @@ export function PhotoCropModal({ onSave, onClose }) {
           <ModalBody style={{ alignItems: "center", gap: 8 }}>
             <div
               ref={cropAreaRef}
-              style={{ position: "relative", width: SIZE, height: SIZE, borderRadius: "50%", overflow: "hidden", cursor: dragRef.current ? "grabbing" : "grab", background: "#000", userSelect: "none" }}
+              style={{ position: "relative", width: SIZE, height: SIZE, borderRadius: "50%", overflow: "hidden", cursor: dragRef.current ? "grabbing" : "grab", background: colors(isDark).toastBg, userSelect: "none" }}
               onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
               onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}
             >

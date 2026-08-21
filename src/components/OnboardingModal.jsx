@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Modal, ModalBody, ModalFooter, modalTokens } from "./ui/Modal.jsx";
 import { Button } from "./ui/Button.jsx";
+import { colors, DATA } from "../theme/palette.js";
 
 // ─── ONBOARDING MODAL ─────────────────────────────────────────────────────────
 // 3 écrans expliquant les concepts clés : cycles, Hooper, créatine.
@@ -25,7 +26,7 @@ const SCREENS = [
       "Tu peux les modifier à tout moment dans l'onglet Cycles.",
     ],
     glyph: "↻",
-    color: "#8b4c20",
+    color: DATA.picker[0],
   },
   {
     key: "hooper",
@@ -44,7 +45,7 @@ const SCREENS = [
       "Plus le score est haut, plus tu es en zone de fatigue.",
     ],
     glyph: "⚇",
-    color: "#e6c46a",
+    color: DATA.picker[1],
   },
   {
     key: "creatine",
@@ -63,7 +64,7 @@ const SCREENS = [
       "Tout est privé, stocké sur ton compte uniquement.",
     ],
     glyph: "◍",
-    color: "#82c894",
+    color: DATA.picker[3],
   },
 ];
 

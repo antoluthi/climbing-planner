@@ -1,3 +1,4 @@
+import { DATA } from "../theme/palette.js";
 export function SuspensionSummaryChips({ config, muted }) {
   if (!config) return null;
   const c = config;
@@ -19,7 +20,7 @@ export function SuspensionSummaryChips({ config, muted }) {
       {c.sets && c.reps && <span>{c.sets}×{c.reps}</span>}
       {c.gripSize && <span>{c.gripSize}mm</span>}
       {c.gripType && <span>{c.gripType}</span>}
-      {w && <span style={{ color: "#a78bfa" }}>{w}</span>}
+      {w && <span style={{ color: DATA.blocks["Suspension"] }}>{w}</span>}
     </>
   );
 }

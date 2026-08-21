@@ -9,6 +9,7 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from "./ui/Modal.jsx";
 import { Button } from "./ui/Button.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { useConfirmClose } from "../hooks/useConfirmClose.js";
+import { colors } from "../theme/palette.js";
 
 // ─── TEMPLATE EDITOR MODAL ──────────────────────────────────────────────────
 // Pre-filled session editor — user picks a template, then customises everything
@@ -179,15 +180,15 @@ export function TemplateEditorModal({
   };
 
   // ── Styles ──
-  const bg2     = isDark ? "#241b13" : "#f3f7f4";
-  const border  = isDark ? "#3a2e22" : "#daeade";
-  const text    = isDark ? "#f0e6d0" : "#1a2e1f";
-  const muted   = isDark ? "#a89a82" : "#6b8c72";
-  const accent  = isDark ? "#e0a875" : "#8b4c20";
+  const bg2     = colors(isDark).successBg;
+  const border  = colors(isDark).successBg;
+  const text    = colors(isDark).text;
+  const muted   = colors(isDark).success;
+  const accent  = colors(isDark).accent;
 
   const inputBase = { background: bg2, border: `1px solid ${border}`, borderRadius: 6, padding: "7px 11px", color: text, fontSize: 12, fontFamily: "inherit", outline: "none" };
   const labelStyle = { fontSize: 9, color: muted, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 2 };
-  const sectionStyle = { padding: "10px 12px", background: isDark ? "#1a1410" : "#f5f0e8", borderRadius: 8, border: `1px solid ${isDark ? "#2a2018" : "#ccc6b8"}` };
+  const sectionStyle = { padding: "10px 12px", background: colors(isDark).surface, borderRadius: 8, border: `1px solid ${colors(isDark).border}` };
 
   return (
     <Modal onClose={requestClose} maxWidth={520} zIndex={210} ariaLabel="Personnaliser la séance">
@@ -286,7 +287,7 @@ export function TemplateEditorModal({
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <span style={labelStyle}>Charge ⚡</span>
                   <button onClick={() => setCalcOpen(o => !o)}
-                    style={{ fontSize: 9, background: isDark ? "#241b13" : "#e8e0d4", border: `1px solid ${border}`, borderRadius: 4, color: accent, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                    style={{ fontSize: 9, background: colors(isDark).borderSubtle, border: `1px solid ${border}`, borderRadius: 4, color: accent, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}>
                     {calcOpen ? "Fermer calc." : "Calculateur"}
                   </button>
                 </div>
@@ -304,7 +305,7 @@ export function TemplateEditorModal({
                   const volLabel = VOLUME_ZONES[volZone - 1].label;
                   const computed = nbMouvements ? climbingCharge10(volZone, calcZone, calcComplexity) : null;
                   return (
-                    <div style={{ marginTop: 8, padding: 8, background: isDark ? "#100c08" : "#f0ece4", borderRadius: 6, border: `1px solid ${border}` }}>
+                    <div style={{ marginTop: 8, padding: 8, background: colors(isDark).surface, borderRadius: 6, border: `1px solid ${border}` }}>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <div style={{ flex: "1 1 80px" }}>
                           <div style={labelStyle}>Nb mouvements</div>
@@ -331,7 +332,7 @@ export function TemplateEditorModal({
                           <span style={{ fontSize: 14, fontWeight: 700, color: getChargeColor(computed) }}>{computed}</span>
                           <span style={{ fontSize: 10, color: muted }}>= Vol.{volZone} × Int.{calcZone} × C.{calcComplexity}</span>
                           <button onClick={() => { setTextCharge(computed); setCalcOpen(false); setNbMouv(""); }}
-                            style={{ marginLeft: "auto", fontSize: 10, background: accent, color: "#fff", border: "none", borderRadius: 4, padding: "3px 10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                            style={{ marginLeft: "auto", fontSize: 10, background: accent, color: colors(isDark).onColor, border: "none", borderRadius: 4, padding: "3px 10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
                             Appliquer
                           </button>
                         </div>
@@ -346,7 +347,7 @@ export function TemplateEditorModal({
                 <div style={{ display: "flex", gap: 2, marginBottom: 6 }}>
                   {["warmup", "main", "cooldown"].map(s => (
                     <button key={s} onClick={() => setSection(s)}
-                      style={{ flex: 1, padding: "6px 0", border: "none", borderRadius: "6px 6px 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: section === s ? 700 : 400, background: section === s ? (isDark ? "#241b13" : "#e8e0d4") : "transparent", color: section === s ? accent : muted }}>
+                      style={{ flex: 1, padding: "6px 0", border: "none", borderRadius: "6px 6px 0 0", cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: section === s ? 700 : 400, background: section === s ? (colors(isDark).borderSubtle) : "transparent", color: section === s ? accent : muted }}>
                       {sectionLabels[s]}
                     </button>
                   ))}
@@ -414,7 +415,7 @@ export function TemplateEditorModal({
                   Annuler
                 </button>
                 <button onClick={handleSaveAsTemplate}
-                  style={{ background: accent, border: "none", borderRadius: 6, color: "#fff", padding: "6px 16px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 700 }}>
+                  style={{ background: accent, border: "none", borderRadius: 6, color: colors(isDark).onColor, padding: "6px 16px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 700 }}>
                   Sauvegarder
                 </button>
               </div>

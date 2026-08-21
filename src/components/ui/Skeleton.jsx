@@ -1,4 +1,5 @@
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
+import { colors } from "../../theme/palette.js";
 
 // ─── SKELETON ─────────────────────────────────────────────────────────────────
 // Silhouette d'attente avec animation de pulse douce (pas de spinner).
@@ -11,7 +12,7 @@ export function Skeleton({
   style: extra,
 }) {
   const { isDark } = useThemeCtx();
-  const baseBg = isDark ? "#3a2e22" : "#e6dfd1";
+  const baseBg = colors(isDark).borderSubtle;
   return (
     <div
       className="cp-skeleton"
@@ -30,8 +31,8 @@ export function Skeleton({
 // Dashboard stats skeleton : 3 cards de chiffres + 2 zones graphique
 export function DashboardSkeleton() {
   const { isDark } = useThemeCtx();
-  const surface = isDark ? "#241b13" : "#ffffff";
-  const border  = isDark ? "#3a2e22" : "#e6dfd1";
+  const surface = colors(isDark).card;
+  const border  = colors(isDark).borderSubtle;
   return (
     <div
       role="status"
@@ -83,8 +84,8 @@ export function DashboardSkeleton() {
 // AccueilView skeleton : header + grosse phrase + liste de séances du jour
 export function AccueilSkeleton() {
   const { isDark } = useThemeCtx();
-  const surface = isDark ? "#241b13" : "#ffffff";
-  const border  = isDark ? "#3a2e22" : "#e6dfd1";
+  const surface = colors(isDark).card;
+  const border  = colors(isDark).borderSubtle;
   return (
     <div
       role="status"
@@ -118,8 +119,8 @@ export function AccueilSkeleton() {
 // Card-shaped skeleton pour les listes de séances
 export function SessionCardSkeleton({ count = 3 }) {
   const { isDark } = useThemeCtx();
-  const surface = isDark ? "#241b13" : "#ffffff";
-  const border  = isDark ? "#3a2e22" : "#e6dfd1";
+  const surface = colors(isDark).card;
+  const border  = colors(isDark).borderSubtle;
 
   return (
     <div

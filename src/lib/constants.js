@@ -1,12 +1,15 @@
+import { DATA } from "../theme/palette.js";
 import { addDays } from "./helpers.js";
 import { localDateStr } from "./helpers.js";
 
+// Les couleurs sont recopiées dans data.mesocycles (éditables par l'utilisateur)
+// : elles doivent être fixes, pas déclinées par thème.
 export const MESOCYCLES = [
-  { label: "Mise en condition", color: "#c8906a" },
-  { label: "Base orientée", color: "#60a5fa" },
-  { label: "Pré-comp", color: "#f97316" },
-  { label: "Comp / Objectif", color: "#f43f5e" },
-  { label: "Récupération", color: "#a78bfa" },
+  { label: "Mise en condition", color: DATA.picker[10] },
+  { label: "Base orientée",     color: DATA.picker[5] },
+  { label: "Pré-comp",          color: DATA.picker[0] },
+  { label: "Comp / Objectif",   color: DATA.picker[9] },
+  { label: "Récupération",      color: DATA.picker[6] },
 ];
 
 export const DEFAULT_MESOCYCLES = MESOCYCLES.map((m, i) => ({
@@ -19,23 +22,20 @@ export const DEFAULT_MESOCYCLES = MESOCYCLES.map((m, i) => ({
   microcycles: [],
 }));
 
-export const CUSTOM_CYCLE_COLORS = [
-  "#c8906a", "#22d3ee", "#f59e0b", "#f87171",
-  "#a78bfa", "#fb923c", "#34d399", "#60a5fa",
-  "#e879f9", "#facc15", "#94a3b8", "#ff6b9d",
-];
+// Palette proposée au choix de l'utilisateur, enregistrée avec le cycle.
+export const CUSTOM_CYCLE_COLORS = DATA.picker;
 
 export const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 // defaultCharge sur l'échelle unifiée 0-10 : une séance = somme de ses blocs,
 // plafonnée à 10 (bloc principal ≈ 5, annexes 1-3).
 export const BLOCK_TYPES = {
-  "Échauffement":    { color: "#f97316", defaultCharge: 1, defaultDuration: 15, hasCharge: false },
-  "Grimpe":          { color: "#c8906a", defaultCharge: 5, defaultDuration: 90, hasCharge: true  },
-  "Exercices":       { color: "#60a5fa", defaultCharge: 3, defaultDuration: 20, hasCharge: true  },
-  "Suspension":      { color: "#a78bfa", defaultCharge: 0, defaultDuration: 15, hasCharge: true  },
-  "Étirements":      { color: "#f0abfc", defaultCharge: 1, defaultDuration: 10, hasCharge: false },
-  "Retour au calme": { color: "#94a3b8", defaultCharge: 1, defaultDuration: 10, hasCharge: true  },
+  "Échauffement":    { color: DATA.blocks["Échauffement"], defaultCharge: 1, defaultDuration: 15, hasCharge: false },
+  "Grimpe":          { color: DATA.blocks["Grimpe"], defaultCharge: 5, defaultDuration: 90, hasCharge: true  },
+  "Exercices":       { color: DATA.blocks["Exercices"], defaultCharge: 3, defaultDuration: 20, hasCharge: true  },
+  "Suspension":      { color: DATA.blocks["Suspension"], defaultCharge: 0, defaultDuration: 15, hasCharge: true  },
+  "Étirements":      { color: DATA.blocks["Étirements"], defaultCharge: 1, defaultDuration: 10, hasCharge: false },
+  "Retour au calme": { color: DATA.blocks["Retour au calme"], defaultCharge: 1, defaultDuration: 10, hasCharge: true  },
 };
 
 export const GRIP_TYPES = ["Semi-arquée", "Arquée", "Tendu", "Pincée", "Monoigt", "2 doigts", "3 doigts"];
@@ -92,7 +92,7 @@ export function getDayLogWarning(data, dateISO, dateObj) {
 
 export function getMesoColor(mesocycles, label) {
   const found = (mesocycles || []).find(m => m.label === label)?.color;
-  return found || MESOCYCLES.find(m => m.label === label)?.color || "#888";
+  return found || MESOCYCLES.find(m => m.label === label)?.color || DATA.fallback;
 }
 
 export function getMesoForDate(mesocycles, date) {

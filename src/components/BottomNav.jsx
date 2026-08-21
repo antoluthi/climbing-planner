@@ -1,5 +1,6 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Z } from "../theme/makeStyles.js";
+import { colors } from "../theme/palette.js";
 
 // ─── BOTTOM NAV (mobile) ─────────────────────────────────────────────────────
 // Barre de navigation fixe en bas d'écran sur mobile. 4 onglets principaux.
@@ -77,11 +78,11 @@ const TABS = [
 export function BottomNav({ viewMode, onChange, extraTabs }) {
   const { isDark } = useThemeCtx();
 
-  const bg          = isDark ? "#15100b" : "#fcf8ef";
-  const border      = isDark ? "#3a2e22" : "#e6dfd1";
-  const textMuted   = isDark ? "#a89a82" : "#8a7f70";
-  const accent      = isDark ? "#e0a875" : "#8b4c20";
-  const accentBg    = isDark ? "#3a2616" : "#ecddd4";
+  const bg          = colors(isDark).card;
+  const border      = colors(isDark).borderSubtle;
+  const textMuted   = colors(isDark).textMuted;
+  const accent      = colors(isDark).accent;
+  const accentBg    = colors(isDark).borderSubtle;
 
   // viewMode "week"/"month"/"year" → tous matchent l'onglet "week"
   const activeKey = ["month", "year"].includes(viewMode) ? "week" : viewMode;

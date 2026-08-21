@@ -7,6 +7,7 @@ import {
   formatRecurrence,
   DAY_NAMES_SHORT,
 } from "../lib/reminders.js";
+import { colors } from "../theme/palette.js";
 
 // ─── CYCLES TIMELINE ─────────────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ export function CyclesTimeline({
   });
 
   const fmtDate = d => d ? d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : null;
-  const accent = isDark ? "#e0a875" : "#8b4c20";
+  const accent = colors(isDark).accent;
 
   const handleMicroClick = (e, meso, micro) => {
     e.stopPropagation();
@@ -88,7 +89,7 @@ export function CyclesTimeline({
 
       {/* Empty state */}
       {mesocycles.length === 0 && (
-        <div style={{ color: isDark ? "#8a7d68" : "#9a9890", fontSize: 13, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>
+        <div style={{ color: colors(isDark).textMuted, fontSize: 13, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>
           {onEdit ? "Aucun mésocycle défini. Cliquez sur Modifier pour commencer." : "Aucun mésocycle défini."}
         </div>
       )}
@@ -135,7 +136,7 @@ export function CyclesTimeline({
               </div>
               <div style={styles.timelineLabelMeta}>
                 {meso.durationWeeks} sem.
-                {startLabel && <span style={{ color: isDark ? "#a89a82" : "#c4b69c" }}> · {startLabel}</span>}
+                {startLabel && <span style={{ color: colors(isDark).borderStrong }}> · {startLabel}</span>}
               </div>
             </div>
 
@@ -152,8 +153,8 @@ export function CyclesTimeline({
                   <div style={{
                     position: "absolute", left: `${todayPct}%`,
                     top: -1, bottom: -1, width: 2,
-                    background: "#f08070",
-                    boxShadow: "0 0 4px #ef444488",
+                    background: colors(isDark).danger,
+                    boxShadow: `0 0 4px ${colors(isDark).dangerBorder}`,
                     borderRadius: 1, zIndex: 5, pointerEvents: "none",
                   }} />
                 )}
@@ -167,7 +168,7 @@ export function CyclesTimeline({
                   if (objDate < mesoS || objDate >= mesoE) return null;
                   const msPerDay = 864e5;
                   const pct = ((objDate - mesoS) / msPerDay) / (meso.durationWeeks * 7) * 100;
-                  const objColor = obj.color || "#f59e0b";
+                  const objColor = obj.color || colors(isDark).warn;
                   const objLabel = obj.name;
                   const fmtObj = objDate.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
                   return (
@@ -178,7 +179,7 @@ export function CyclesTimeline({
                       <div style={{
                         position: "absolute", bottom: -14,
                         fontSize: 7, fontWeight: 700, color: objColor, whiteSpace: "nowrap",
-                        background: isDark ? "#1a1410ee" : "#f0ebe2ee",
+                        background: colors(isDark).bgScrim,
                         padding: "1px 4px", borderRadius: 3, border: `1px solid ${objColor}44`,
                         letterSpacing: "0.02em", lineHeight: 1.3,
                         transform: "translateX(-50%)",
@@ -281,7 +282,7 @@ export function CyclesTimeline({
       {/* ── Rappels journaliers (lecture + édition rapide) ── */}
       <div style={styles.timelineSectionSep}>Rappels journaliers</div>
       {reminders.length === 0 && (
-        <div style={{ color: isDark ? "#8a7d68" : "#9a9890", fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 8 }}>
+        <div style={{ color: colors(isDark).textMuted, fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 8 }}>
           {canEditReminders
             ? "Aucun rappel. Tape « + Nouveau rappel » pour en créer un."
             : "Aucun rappel."}
@@ -330,7 +331,7 @@ export function CyclesTimeline({
             </div>
             {popover.micro ? (
               <>
-                <div style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#e6d8bc" : "#a89a82", marginBottom: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: colors(isDark).textMuted, marginBottom: 4 }}>
                   {popover.micro.label}
                 </div>
                 <div style={styles.timelinePopoverMeta}>{popover.micro.durationWeeks} semaine{popover.micro.durationWeeks > 1 ? "s" : ""}</div>
@@ -351,13 +352,13 @@ export function CyclesTimeline({
 
 // ─── TimelineReminderRow ─────────────────────────────────────────────────────
 function TimelineReminderRow({ reminder, completionRate, isDark, disabled, onClick }) {
-  const text     = isDark ? "#f0e6d0" : "#2a2218";
-  const textMid  = isDark ? "#c4b69c" : "#5a4d3c";
-  const textLight= isDark ? "#a89a82" : "#8a7f70";
-  const border   = isDark ? "#3a2e22" : "#e6dfd1";
-  const surface  = isDark ? "#241b13" : "#ffffff";
-  const surface2 = isDark ? "#2e2419" : "#f0ebde";
-  const accent   = isDark ? "#e0a875" : "#8b4c20";
+  const text     = colors(isDark).text;
+  const textMid  = colors(isDark).textCard;
+  const textLight= colors(isDark).textMuted;
+  const border   = colors(isDark).borderSubtle;
+  const surface  = colors(isDark).card;
+  const surface2 = colors(isDark).surface;
+  const accent   = colors(isDark).accent;
 
   const isDaily = reminder.recurrence?.kind !== "weekdays";
   const activeDays = isDaily ? [0, 1, 2, 3, 4, 5, 6] : (reminder.recurrence?.days || []);
@@ -398,7 +399,7 @@ function TimelineReminderRow({ reminder, completionRate, isDark, disabled, onCli
                   style={{
                     width: 14, height: 14, borderRadius: 3,
                     background: active ? reminder.color + (isDark ? "" : "cc") : surface2,
-                    color: active ? (isDark ? "#1a1f1c" : "#fff") : textLight,
+                    color: active ? (colors(isDark).card) : textLight,
                     fontSize: 8, fontWeight: 700,
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}

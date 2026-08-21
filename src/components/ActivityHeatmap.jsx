@@ -7,6 +7,7 @@ import {
   isReminderCheckedOn,
   countMissedRemindersOn,
 } from "../lib/reminders.js";
+import { colors, DATA } from "../theme/palette.js";
 
 function hooperLabel(total) {
   if (total <= 10) return "Bien récupéré";
@@ -87,15 +88,13 @@ export function ActivityHeatmap({ data }) {
 
   // Color per metric
   const getColor = (day) => {
-    const empty = isDark ? "#2e2419" : "#eaefec";
-    const future = isDark ? "#1a1410" : "#f3f5f4";
+    const empty = colors(isDark).surface2;   // case sans donnée : neutre
+    const future = colors(isDark).card;
     if (day.isFuture) return future;
     if (metric === "charge") {
       const v = day.charge || 0;
       if (v === 0) return empty;
-      const lvls = isDark
-        ? ["#3a2616", "#5a3a18", "#8a5a28", "#e0a875", "#f0c896"]
-        : ["#e8d8c8", "#d0a878", "#b07840", "#8b4c20", "#5c3010"];
+      const lvls = isDark ? DATA.heatmap.charge.dark : DATA.heatmap.charge.light;
       if (v <= 2) return lvls[0];
       if (v <= 5) return lvls[1];
       if (v <= 8) return lvls[2];
@@ -105,9 +104,7 @@ export function ActivityHeatmap({ data }) {
     if (metric === "rpe") {
       const v = day.avgRpe;
       if (v == null) return empty;
-      const lvls = isDark
-        ? ["#3a2616", "#6b3a10", "#b86509", "#f0a060", "#e6c46a"]
-        : ["#fde8c8", "#fbc87a", "#f0a060", "#f0a060", "#f0a060"];
+      const lvls = isDark ? DATA.heatmap.rpe.dark : DATA.heatmap.rpe.light;
       if (v <= 4) return lvls[0];
       if (v <= 6) return lvls[1];
       if (v <= 7.5) return lvls[2];
@@ -118,20 +115,20 @@ export function ActivityHeatmap({ data }) {
       const v = day.hooper;
       if (v == null) return empty;
       // Hooper: low=good (green), high=bad (red)
-      if (v <= 10) return isDark ? "#1a2a1d" : "#bbf7d0";
-      if (v <= 14) return isDark ? "#82c894" : "#4abe80";
-      if (v <= 17) return isDark ? "#e6c46a" : "#e6c46a";
-      if (v <= 20) return isDark ? "#f0a060" : "#f0a060";
-      return isDark ? "#f08070" : "#f08070";
+      if (v <= 10) return colors(isDark).success;
+      if (v <= 14) return colors(isDark).success;
+      if (v <= 17) return colors(isDark).warn;
+      if (v <= 20) return colors(isDark).warn;
+      return colors(isDark).danger;
     }
     if (metric === "reminders") {
       // Aucun rappel actif ce jour-là → vide (rien à montrer)
       if (day.remindersActive === 0) return empty;
       const m = day.remindersMissed;
-      if (m === 0) return isDark ? "#82c894" : "#bbf7d0";  // tout coché → vert
-      if (m === 1) return isDark ? "#e6c46a" : "#fbbf24";  // 1 manqué → ambre
-      if (m === 2) return isDark ? "#f0a060" : "#f97316";  // 2 manqués → orange
-      return isDark ? "#f08070" : "#ef4444";               // 3+ → corail
+      if (m === 0) return colors(isDark).success;  // tout coché → vert
+      if (m === 1) return colors(isDark).warn;  // 1 manqué → ambre
+      if (m === 2) return colors(isDark).textMuted;  // 2 manqués → orange
+      return colors(isDark).danger;               // 3+ → corail
     }
     return empty;
   };
@@ -147,21 +144,14 @@ export function ActivityHeatmap({ data }) {
 
   // Legend colors per metric
   const legendColors = {
-    charge: isDark
-      ? ["#1c1612", "#3a2616", "#5a3a18", "#8a5a28", "#e0a875"]
-      : ["#f0ebe2", "#e8d8c8", "#d0a878", "#b07840", "#8b4c20"],
-    rpe: isDark
-      ? ["#2e2419", "#3a2616", "#6b3a10", "#b86509", "#f0a060"]
-      : ["#eaefec", "#fde8c8", "#fbc87a", "#f0a060", "#f0a060"],
-    hooper: isDark
-      ? ["#2e2419", "#1a2a1d", "#82c894", "#e6c46a", "#f08070"]
-      : ["#eaefec", "#bbf7d0", "#4abe80", "#e6c46a", "#f08070"],
-    reminders: isDark
-      ? ["#2e2419", "#82c894", "#e6c46a", "#f0a060", "#f08070"]
-      : ["#eaefec", "#bbf7d0", "#fbbf24", "#f97316", "#ef4444"],
+    charge:    isDark ? DATA.heatmap.charge.dark    : DATA.heatmap.charge.light,
+    rpe:       isDark ? DATA.heatmap.rpe.dark       : DATA.heatmap.rpe.light,
+    hooper:    isDark ? DATA.heatmap.hooper.dark    : DATA.heatmap.hooper.light,
+    reminders: isDark ? DATA.heatmap.reminders.dark : DATA.heatmap.reminders.light,
   };
 
-  const muted = isDark ? "#a89a82" : "#8a9e90";
+
+  const muted = colors(isDark).textMuted;
 
   const visibleWeeks = weeks.slice(-maxWeeks);
   // Recompute month labels for the visible slice
@@ -260,12 +250,12 @@ export function ActivityHeatmap({ data }) {
           position: "fixed",
           left: tooltip.x + 14,
           top: tooltip.y - 10,
-          background: isDark ? "#241b13" : "#ffffff",
-          border: `1px solid ${isDark ? "#3a2e22" : "#d4e8db"}`,
+          background: colors(isDark).card,
+          border: `1px solid ${colors(isDark).border}`,
           borderRadius: 6,
           padding: "6px 10px",
           fontSize: 11,
-          color: isDark ? "#f0e6d0" : "#1a2e1f",
+          color: colors(isDark).text,
           pointerEvents: "none",
           zIndex: 9999,
           boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
@@ -299,7 +289,7 @@ export function ActivityHeatmap({ data }) {
                   <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
                     {tooltip.day.remindersDetail.map(r => (
                       <div key={r.id} style={{ fontSize: 10 }}>
-                        <span style={{ color: r.checked ? "#82c894" : "#f08070", marginRight: 4 }}>
+                        <span style={{ color: r.checked ? colors(isDark).success : colors(isDark).danger, marginRight: 4 }}>
                           {r.checked ? "✓" : "✗"}
                         </span>
                         {r.name}

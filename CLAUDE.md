@@ -18,7 +18,6 @@ Le code source est organisé en modules dans `src/` :
 src/
 ├── main.jsx                      — point d'entrée React
 ├── climbing-planner-new.jsx      — composant racine ClimbingPlanner (~1 078 lignes)
-├── climbing-planner.jsx          — ancien fichier monolithique (backup, non importé)
 ├── index.css                     — styles globaux
 │
 ├── lib/                          — utilitaires et données
@@ -37,6 +36,7 @@ src/
 │   └── hooper.js                 — hooperLabel, hooperColor
 │
 ├── theme/
+│   ├── palette.js                — SOURCE UNIQUE des couleurs (PALETTE.light/dark, colors(), DATA)
 │   ├── ThemeContext.jsx           — ThemeContext + useThemeCtx()
 │   └── makeStyles.js             — makeStyles(isDark) → objet styles inline complet
 │
@@ -288,9 +288,35 @@ Toutes les disciplines partagent la même unité : **la charge de séance 0-10**
 - Pas de toggle opt-in dans le profil
 - `data.creatine[date] = true` quand cochée, supprimée quand décochée
 
-### Thème (`theme/ThemeContext.jsx` + `theme/makeStyles.js`)
-`ThemeContext` + `useThemeCtx()` — dark/light, accent brun
-`makeStyles(isDark)` retourne l'objet de styles complet
+### Thème (`theme/palette.js` + `makeStyles.js` + `ThemeContext.jsx`)
+
+**`theme/palette.js` est le seul endroit où une couleur est définie.** Aucun
+littéral hex ne subsiste ailleurs dans `src/` — c'est vérifiable :
+
+```bash
+grep -rn '#[0-9a-f]\{3,8\}' src/ --include=*.jsx --include=*.js | grep -v palette.js
+```
+
+- Chrome **noir & blanc** neutre, **accent chaud** unique (terracotta) pour
+  l'interactif, couleurs **désaturées** réservées aux données.
+- `PALETTE.light` / `PALETTE.dark` : mêmes clés, ~48 tokens sémantiques
+  (`bg`, `surface`, `card`, `border`, `text`, `textMuted`, `accent`,
+  `success`/`warn`/`danger`/`info` avec variantes `*Bg` / `*Border`…).
+- `colors(isDark)` renvoie l'un des deux objets — ce sont des constantes de
+  module, aucune allocation, appelable en plein rendu.
+- `DATA` : valeurs porteuses de sens — rampes `charge` et `hooper`, rampes de
+  la `heatmap`, séries `sleep` / `hands`, `blocks`, et surtout **`picker`**, la
+  palette proposée à l'utilisateur. `picker` est **fixe** (identique dans les
+  deux thèmes) parce que ces couleurs sont **enregistrées dans ses données** :
+  une couleur choisie en clair ne doit pas changer en sombre.
+- `makeStyles(isDark)` ne définit plus aucune couleur : il consomme la palette,
+  garde quelques alias historiques (`btnBorder`, `todayBg`, `negativeColor`…) et
+  expose la palette brute sous `styles.c` pour les composants qui n'ont que
+  `styles`.
+- Dans un composant : `colors(isDark).border`. Les `isDark ? "#x" : "#y"` sont
+  proscrits.
+
+Pour retoucher l'apparence : éditer `palette.js`, rien d'autre.
 
 ### Typographie
 - **Cormorant Garamond** (serif) pour les titres : `appTitle`, `weekRange`, `dashSectionTitle`, `modalTitle`

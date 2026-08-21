@@ -8,8 +8,9 @@ import { ConfirmModal } from "./ConfirmModal.jsx";
 import { Modal, ModalHeader, ModalBody, ModalFooter, modalTokens } from "./ui/Modal.jsx";
 import { Field, TextInput, Textarea, Select, SegmentedControl } from "./ui/Field.jsx";
 import { Button } from "./ui/Button.jsx";
+import { colors, DATA } from "../theme/palette.js";
 
-const SUSP = "#a78bfa";
+const SUSP = DATA.blocks["Suspension"];
 
 export function BlockFormModal({ initial, onSave, onClose }) {
   const { styles, isDark } = useThemeCtx();
@@ -151,7 +152,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <TextInput type="number" step="0.5" value={suspCfg.targetWeight} onChange={e => patchSusp({ targetWeight: +e.target.value })} style={{ width: 90 }} />
                   <span style={{ fontSize: 11, color: T.textLight }}>kg</span>
-                  {suspCfg.supportType === "wall" && suspCfg.targetWeight < 0 && <span style={{ fontSize: 10, color: "#e6c46a" }}>délestage</span>}
+                  {suspCfg.supportType === "wall" && suspCfg.targetWeight < 0 && <span style={{ fontSize: 10, color: colors(isDark).warn }}>délestage</span>}
                   {suspCfg.supportType === "wall" && suspCfg.targetWeight > 0 && <span style={{ fontSize: 10, color: SUSP }}>lest</span>}
                 </div>
               ) : (
@@ -307,7 +308,7 @@ export function BlockFormModal({ initial, onSave, onClose }) {
 
       <ModalFooter>
         <Button variant="secondary" size="md" onClick={requestClose}>Annuler</Button>
-        <Button variant="primary" size="md" disabled={!name.trim()} onClick={handleSave} style={name.trim() ? { background: cfg.color, color: "#fff" } : undefined}>
+        <Button variant="primary" size="md" disabled={!name.trim()} onClick={handleSave} style={name.trim() ? { background: cfg.color, color: colors(isDark).onColor } : undefined}>
           {initial ? "Enregistrer" : "Créer le bloc"}
         </Button>
       </ModalFooter>

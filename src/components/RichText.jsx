@@ -1,7 +1,8 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
+import { colors } from "../theme/palette.js";
 
 export function RichText({ text, onCheckToggle }) {
-  const { styles } = useThemeCtx();
+  const { styles, isDark } = useThemeCtx();
   if (!text?.trim()) return null;
 
   const lines = text.split("\n");
@@ -22,7 +23,7 @@ export function RichText({ text, onCheckToggle }) {
                 style={{ ...styles.richCheckbox, ...(cbDone ? styles.richCheckboxDone : {}) }}
                 onClick={() => onCheckToggle?.(i, !cbDone)}
               >
-                {cbDone && <span style={{ fontSize: 9, color: "#fff" }}>✓</span>}
+                {cbDone && <span style={{ fontSize: 9, color: colors(isDark).onColor }}>✓</span>}
               </div>
               <span style={cbDone ? { textDecoration: "line-through", opacity: 0.5 } : {}}>{renderInline(content, styles)}</span>
             </div>
@@ -59,7 +60,7 @@ function renderInline(text, styles) {
   let rest = text;
   const patterns = [
     { re: /\*\*(.+?)\*\*/, render: (m, i) => <strong key={i}>{m[1]}</strong> },
-    { re: /`(.+?)`/, render: (m, i) => <code key={i} style={{ background: "#ffffff15", padding: "1px 4px", borderRadius: 3, fontSize: "0.9em" }}>{m[1]}</code> },
+    { re: /`(.+?)`/, render: (m, i) => <code key={i} style={{ background: styles.c.tint, padding: "1px 4px", borderRadius: 3, fontSize: "0.9em" }}>{m[1]}</code> },
     { re: /\[([^\]]+)\]\(([^)]+)\)/, render: (m, i) => <a key={i} href={m[2]} target="_blank" rel="noopener" style={styles.richLink}>{m[1]}</a> },
   ];
   let key = 0;

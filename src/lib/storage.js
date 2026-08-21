@@ -1,3 +1,4 @@
+import { DATA } from "../theme/palette.js";
 import { DEFAULT_MESOCYCLES } from "./constants.js";
 import { migrateWeekKeys } from "./helpers.js";
 
@@ -100,7 +101,7 @@ function migrateReminders(data) {
     reminders.push({
       id: creatineId,
       name: "Créatine",
-      color: "#e0a875",
+      color: DATA.picker[0],
       recurrence: { kind: "daily" },
       createdAt: new Date().toISOString(),
     });

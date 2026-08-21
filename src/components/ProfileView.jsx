@@ -9,6 +9,7 @@ import supabase from "../lib/supabase.js";
 import { uploadAvatar, deleteAvatar } from "../lib/avatar-storage.js";
 import { isNative } from "../lib/native.js";
 import { toast } from "../lib/toast.js";
+import { colors } from "../theme/palette.js";
 
 // ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
 
@@ -119,16 +120,16 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
     e.target.value = "";
   };
 
-  const accent = isDark ? "#e0a875" : "#8b4c20";
-  const mutedColor = isDark ? "#a89a82" : "#8a7f70";
-  const textColor = isDark ? "#f0e6d0" : "#2a2218";
-  const surfaceBg = isDark ? "#241b13" : "#e8e2d8";
-  const borderColor = isDark ? "#2e2419" : "#ccc6b8";
-  const inputBg = isDark ? "#2e2419" : "#ddd7cc";
-  const btnBorder = isDark ? "#3a2e22" : "#bfb9aa";
+  const accent = colors(isDark).accent;
+  const mutedColor = colors(isDark).textMuted;
+  const textColor = colors(isDark).text;
+  const surfaceBg = colors(isDark).borderSubtle;
+  const borderColor = colors(isDark).border;
+  const inputBg = colors(isDark).borderSubtle;
+  const btnBorder = colors(isDark).border;
 
   const syncIcon = syncStatus === "saving" ? "⟳" : syncStatus === "saved" ? "✓" : syncStatus === "offline" ? "⚡" : null;
-  const syncColor = syncStatus === "saved" ? accent : syncStatus === "offline" ? "#f0a060" : mutedColor;
+  const syncColor = syncStatus === "saved" ? accent : syncStatus === "offline" ? colors(isDark).warn : mutedColor;
 
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || null;
 
@@ -154,7 +155,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
                   background: "rgba(0,0,0,0.55)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   borderRadius: "50%",
-                  fontSize: 11, color: "#fff", fontWeight: 600,
+                  fontSize: 11, color: colors(isDark).onColor, fontWeight: 600,
                   letterSpacing: "0.05em",
                 }}>
                   Upload…
@@ -204,7 +205,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
         <div style={styles.profileSection}>
           <div style={styles.profileSectionTitle}>Rôle</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ background: isDark ? "#3a2e22" : "#d4e8db", border: `1px solid ${accent}88`, color: accent, padding: "7px 16px", borderRadius: 5, fontSize: 11, fontWeight: 600, letterSpacing: "0.04em" }}>
+            <span style={{ background: colors(isDark).successBg, border: `1px solid ${accent}88`, color: accent, padding: "7px 16px", borderRadius: 5, fontSize: 11, fontWeight: 600, letterSpacing: "0.04em" }}>
               {profile.role === "coach" ? "Coach" : profile.role === "athlete" ? "Athlète suivi" : profile.role === "auto" ? "Athlète autonome ✦" : "Athlète solo"}
             </span>
             <span style={{ fontSize: 11, color: mutedColor, fontStyle: "italic" }}>
@@ -264,7 +265,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
           <div style={styles.profileSectionTitle}>Mon coach</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {myCoaches.map(c => (
-              <div key={c.relationId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: isDark ? "#241b13" : "#ffffff", border: `1px solid ${isDark ? "#3a2e22" : "#daeade"}`, borderRadius: 7 }}>
+              <div key={c.relationId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: colors(isDark).card, border: `1px solid ${colors(isDark).successBg}`, borderRadius: 7 }}>
                 <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: textColor }}>
                   {c.firstName} {c.lastName}
                 </div>
@@ -272,7 +273,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
                 <button
                   onClick={() => window.confirm(`Quitter ${c.firstName} ? Il n'aura plus accès à ton planning.`) && onLeaveCoach?.(c.relationId)}
                   title="Quitter ce coach"
-                  style={{ background: "none", border: `1px solid ${isDark ? "#3a2e22" : "#daeade"}`, borderRadius: 5, color: "#f08070", padding: "4px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
+                  style={{ background: "none", border: `1px solid ${colors(isDark).successBg}`, borderRadius: 5, color: colors(isDark).danger, padding: "4px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
                 >
                   Quitter
                 </button>
@@ -350,7 +351,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
               style={{
                 flexShrink: 0,
                 width: 44, height: 24, borderRadius: 12, border: "none",
-                background: isPublic ? accent : (isDark ? "#2a2018" : "#ccc6ba"),
+                background: isPublic ? accent : (colors(isDark).border),
                 position: "relative", cursor: isPublic === null ? "default" : "pointer",
                 transition: "background 0.25s",
                 opacity: isPublic === null ? 0.4 : 1,
@@ -361,7 +362,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
                 position: "absolute",
                 top: 3, left: isPublic ? 23 : 3,
                 width: 18, height: 18, borderRadius: "50%",
-                background: "#fff",
+                background: colors(isDark).onColor,
                 transition: "left 0.25s",
                 boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
               }} />
@@ -385,7 +386,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
             )}
             {onPull && (
               <button
-                style={{ background: "none", border: `1px solid ${btnBorder}`, color: isDark ? "#7da7f0" : "#2563eb", padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
+                style={{ background: "none", border: `1px solid ${btnBorder}`, color: colors(isDark).info, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}
                 onClick={onPull} title="Charger les données depuis le cloud (écraser local)"
               >↓ Charger depuis le cloud</button>
             )}

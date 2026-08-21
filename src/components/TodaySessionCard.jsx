@@ -1,6 +1,7 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { BLOCK_TYPES } from "../lib/constants.js";
+import { colors } from "../theme/palette.js";
 
 // ─── TODAY SESSION CARD ───────────────────────────────────────────────────────
 // Card unique pour une séance dans la vue liste mobile.
@@ -8,12 +9,12 @@ import { BLOCK_TYPES } from "../lib/constants.js";
 export function TodaySessionCard({ session, onTap, onToggleDone }) {
   const { isDark } = useThemeCtx();
 
-  const surfaceCard  = isDark ? "#241b13" : "#ffffff";
-  const border       = isDark ? "#3a2e22" : "#e6dfd1";
-  const text         = isDark ? "#f0e6d0" : "#2a2218";
-  const textMid      = isDark ? "#c4b69c" : "#5a4d3c";
-  const textLight    = isDark ? "#a89a82" : "#8a7f70";
-  const accent       = isDark ? "#e0a875" : "#8b4c20";
+  const surfaceCard  = colors(isDark).card;
+  const border       = colors(isDark).borderSubtle;
+  const text         = colors(isDark).text;
+  const textMid      = colors(isDark).textCard;
+  const textLight    = colors(isDark).textMuted;
+  const accent       = colors(isDark).accent;
 
   const fb = session.feedback;
   const status = fb?.status ?? (fb?.done ? "done" : null);
@@ -73,22 +74,22 @@ export function TodaySessionCard({ session, onTap, onToggleDone }) {
         </div>
         <div style={{ display: "flex", gap: 5, marginTop: 8, flexWrap: "wrap" }}>
           {session.type && (
-            <span style={tagStyle({ bg: isDark ? "#2a2010" : "#fef2dc", fg: isDark ? "#e6c46a" : "#b8881a" })}>
+            <span style={tagStyle({ bg: colors(isDark).warnBg, fg: colors(isDark).warn })}>
               {session.type}
             </span>
           )}
           {done && fb?.rpe != null && (
-            <span style={tagStyle({ bg: isDark ? "#1a2a1d" : "#e7f2e0", fg: isDark ? "#82c894" : "#4a7050" })}>
+            <span style={tagStyle({ bg: colors(isDark).successBg, fg: colors(isDark).success })}>
               Fait · RPE {fb.rpe}
             </span>
           )}
           {missed && (
-            <span style={tagStyle({ bg: isDark ? "#2a1612" : "#fbecec", fg: isDark ? "#f08070" : "#b83030" })}>
+            <span style={tagStyle({ bg: colors(isDark).dangerBg, fg: colors(isDark).danger })}>
               Manquée
             </span>
           )}
           {!done && !missed && session.blocks?.length > 0 && (
-            <span style={tagStyle({ bg: isDark ? "#2e2419" : "#f0ebde", fg: textMid })}>
+            <span style={tagStyle({ bg: colors(isDark).surface, fg: textMid })}>
               {session.blocks.length} bloc{session.blocks.length > 1 ? "s" : ""}
             </span>
           )}
@@ -109,9 +110,9 @@ export function TodaySessionCard({ session, onTap, onToggleDone }) {
           aria-label={done ? "Marquer non fait" : "Marquer fait"}
           style={{
             width: 28, height: 28, borderRadius: "50%",
-            border: done ? "2px solid #2e6b3f" : `2px solid ${border}`,
-            background: done ? "#2e6b3f" : "transparent",
-            color: done ? "#fff" : "transparent",
+            border: done ? `2px solid ${colors(isDark).success}` : `2px solid ${border}`,
+            background: done ? colors(isDark).success : "transparent",
+            color: done ? colors(isDark).onColor : "transparent",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 14, fontWeight: 700, cursor: "pointer",
             fontFamily: "inherit",

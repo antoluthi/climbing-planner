@@ -1,4 +1,5 @@
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
+import { colors } from "../../theme/palette.js";
 
 // ─── BUTTON ───────────────────────────────────────────────────────────────────
 // Composant bouton unifié. Variantes : primary, secondary, ghost, danger.
@@ -23,20 +24,20 @@ export function Button({
 }) {
   const { isDark } = useThemeCtx();
 
-  const accent     = isDark ? "#e0a875" : "#8b4c20";
-  const ink        = isDark ? "#e6d8bc" : "#2a2218";
-  const paper      = isDark ? "#241b13" : "#fcf8ef";
-  const border     = isDark ? "#3a2e22" : "#d8d0bf";
-  const textMid    = isDark ? "#c4b69c" : "#5a4d3c";
-  const dangerBg   = isDark ? "#b83030" : "#b83030";
-  const ghostHover = isDark ? "#2e2419" : "#f0ebde";
+  const accent     = colors(isDark).accent;
+  const ink        = colors(isDark).text;
+  const paper      = colors(isDark).card;
+  const border     = colors(isDark).border;
+  const textMid    = colors(isDark).textCard;
+  const dangerBg   = colors(isDark).danger;
+  const ghostHover = colors(isDark).surface;
 
   const sz = SIZE_STYLES[size] || SIZE_STYLES.md;
 
   let palette;
   switch (variant) {
     case "primary":
-      palette = { background: ink, color: isDark ? paper : "#fff", border: "none", hover: "brightness(1.08)" };
+      palette = { background: ink, color: isDark ? paper : colors(isDark).onColor, border: "none", hover: "brightness(1.08)" };
       break;
     case "secondary":
       palette = { background: "transparent", color: ink, border: `1px solid ${border}`, hover: "brightness(0.96)" };
@@ -45,13 +46,13 @@ export function Button({
       palette = { background: "transparent", color: textMid, border: "none", hoverBg: ghostHover };
       break;
     case "danger":
-      palette = { background: dangerBg, color: "#fff", border: "none", hover: "brightness(1.08)" };
+      palette = { background: dangerBg, color: colors(isDark).onColor, border: "none", hover: "brightness(1.08)" };
       break;
     case "accent":
-      palette = { background: accent, color: "#fff", border: "none", hover: "brightness(1.08)" };
+      palette = { background: accent, color: colors(isDark).onColor, border: "none", hover: "brightness(1.08)" };
       break;
     default:
-      palette = { background: ink, color: isDark ? paper : "#fff", border: "none" };
+      palette = { background: ink, color: isDark ? paper : colors(isDark).onColor, border: "none" };
   }
 
   const style = {

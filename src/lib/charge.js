@@ -1,3 +1,4 @@
+import { DATA } from "../theme/palette.js";
 export const VOLUME_ZONES = [
   { index: 1, label: "Spécifique",           range: "< 10 mouvements" },
   { index: 2, label: "Bloc intensif",         range: "10 – 25 mouvements" },
@@ -100,16 +101,10 @@ export const RPE_LABELS = {
 // (somme de séances, typiquement 0-20) : 0 repos · ≤3 léger · ≤6 modéré ·
 // ≤9 soutenu · >9 très lourd.
 export function getChargeColor(charge, isDark = true) {
-  if (isDark) {
-    if (charge === 0) return "#4ade80";
-    if (charge <= 3) return "#86efac";
-    if (charge <= 6) return "#fbbf24";
-    if (charge <= 9) return "#f97316";
-    return "#f43f5e";
-  }
-  if (charge === 0) return "#16a34a";
-  if (charge <= 3) return "#15803d";
-  if (charge <= 6) return "#b45309";
-  if (charge <= 9) return "#c2410c";
-  return "#b91c1c";
+  const scale = isDark ? DATA.charge.dark : DATA.charge.light;
+  if (charge === 0) return scale[0];
+  if (charge <= 3) return scale[1];
+  if (charge <= 6) return scale[2];
+  if (charge <= 9) return scale[3];
+  return scale[4];
 }

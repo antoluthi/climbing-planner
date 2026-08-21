@@ -5,6 +5,7 @@ import { getChargeColor, getNbMouvementsZone, VOLUME_ZONES, INTENSITY_ZONES, COM
 import { RichText } from "./RichText.jsx";
 import { useConfirmClose } from "../hooks/useConfirmClose.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
+import { colors } from "../theme/palette.js";
 
 // ─── MODAL: CRÉER / MODIFIER UNE SÉANCE PERSONNALISÉE ─────────────────────────
 /**
@@ -170,7 +171,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
                   {computed !== null && (
                     <div style={styles.calcResultRow}>
                       <span style={{ ...styles.calcResultVal, color: getChargeColor(computed) }}>{computed}</span>
-                      <span style={{ fontSize: 11, color: isDark ? "#a89a82" : "#8a7060" }}>
+                      <span style={{ fontSize: 11, color: colors(isDark).textMuted }}>
                         = Zone vol.{volZone} × Int.{calcZone} × Compl.{calcComplexity}
                       </span>
                       <button style={styles.calcApplyBtn} onClick={() => { setCharge(computed); setCalcOpen(false); }}>
@@ -272,7 +273,7 @@ export function CustomSessionModal({ initial, data, onSave, onClose }) {
                     </table>
                   </div>
 
-                  <div style={{ fontSize: 11, color: isDark ? "#a89a82" : "#8a7060", fontStyle: "italic" }}>
+                  <div style={{ fontSize: 11, color: colors(isDark).textMuted, fontStyle: "italic" }}>
                     Formule : Zone volume × Zone intensité × Index complexité, ramené sur l'échelle 0-10
                   </div>
                 </div>

@@ -2,6 +2,7 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { DAYS, getCustomCyclesForDate, getMesoForDate } from "../lib/constants.js";
 import { addDays, getMonthWeeks, getDaySessions } from "../lib/helpers.js";
+import { colors } from "../theme/palette.js";
 
 // ─── VUE MOIS ─────────────────────────────────────────────────────────────────
 
@@ -122,9 +123,9 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                   <div style={{ display: "flex", gap: 2, marginTop: 2 }}>
                     {dayObjectives.slice(0, 2).map(o => (
                       <div key={o.id} style={{
-                        fontSize: 8, fontWeight: 700, color: o.color || "#f59e0b",
-                        background: (o.color || "#f59e0b") + "18",
-                        border: `1px solid ${(o.color || "#f59e0b")}33`,
+                        fontSize: 8, fontWeight: 700, color: o.color || colors(isDark).warn,
+                        background: (o.color || colors(isDark).warn) + "18",
+                        border: `1px solid ${(o.color || colors(isDark).warn)}33`,
                         borderRadius: 3, padding: "0 3px", lineHeight: "14px",
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%",
                       }}>{o.name.length > 10 ? o.name.slice(0, 9) + "…" : o.name}</div>
@@ -134,7 +135,7 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
                 {dayObjectives.length > 0 && isMobile && (
                   <div style={{ display: "flex", gap: 2, justifyContent: "center", marginTop: 1 }}>
                     {dayObjectives.slice(0, 2).map(o => (
-                      <div key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: o.color || "#f59e0b", border: `1px solid ${(o.color || "#f59e0b")}88` }} />
+                      <div key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: o.color || colors(isDark).warn, border: `1px solid ${(o.color || colors(isDark).warn)}88` }} />
                     ))}
                   </div>
                 )}

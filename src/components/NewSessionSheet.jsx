@@ -3,6 +3,7 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Z } from "../theme/makeStyles.js";
 import { getChargeColor } from "../lib/charge.js";
 import { generateId } from "../lib/storage.js";
+import { colors, DATA } from "../theme/palette.js";
 
 // ─── NEW SESSION SHEET ────────────────────────────────────────────────────────
 // Bottom-sheet pour créer/insérer une séance. Remplace AddSessionChoiceModal.
@@ -16,7 +17,7 @@ const QUICK_TEMPLATES = [
     type: "Grimpe",
     estimatedTime: 75,
     charge: 6,
-    color: "#8b4c20",
+    color: DATA.picker[0],  // recopiée dans la séance créée → fixe
     description: "75 min · charge 6",
     blocks: [
       { id: "_qt-w", blockType: "Échauffement", name: "Échauffement", duration: 15, charge: 0, description: "" },
@@ -30,7 +31,7 @@ const QUICK_TEMPLATES = [
     type: "Grimpe",
     estimatedTime: 90,
     charge: 7,
-    color: "#2e6b3f",
+    color: DATA.picker[3],
     description: "90 min · charge 7",
     blocks: [
       { id: "_qt-w", blockType: "Échauffement", name: "Échauffement", duration: 20, charge: 0, description: "" },
@@ -44,7 +45,7 @@ const QUICK_TEMPLATES = [
     type: "Exercices",
     estimatedTime: 25,
     charge: 3,
-    color: "#e6c46a",
+    color: DATA.picker[1],
     description: "25 min · charge 3",
     blocks: [
       { id: "_qt-w", blockType: "Échauffement", name: "Échauffement doigts", duration: 8, charge: 0, description: "" },
@@ -57,7 +58,7 @@ const QUICK_TEMPLATES = [
     type: "Exercice",
     estimatedTime: 30,
     charge: 1,
-    color: "#7a9a82",
+    color: DATA.picker[3],
     description: "30 min · charge 1",
     blocks: [
       { id: "_qt-m", blockType: "Étirements", name: "Mobilité & étirements", duration: 30, charge: 1, description: "" },
@@ -181,15 +182,15 @@ export function NewSessionSheet({
   }, [catalogItems, recent, query]);
 
   // ── Tokens ──
-  const sheetBg     = isDark ? "#15100b" : "#fcf8ef";
-  const surfaceCard = isDark ? "#2e2419" : "#ffffff";
-  const surfaceInput= isDark ? "#1f1812" : "#ffffff";
-  const border      = isDark ? "#3a2e22" : "#e6dfd1";
-  const borderSoft  = isDark ? "#2e2419" : "#ede5d4";
-  const text        = isDark ? "#f0e6d0" : "#2a2218";
-  const textLight   = isDark ? "#a89a82" : "#8a7f70";
-  const accent      = isDark ? "#e0a875" : "#8b4c20";
-  const grab        = isDark ? "#3a2e22" : "#c4beb0";
+  const sheetBg     = colors(isDark).card;
+  const surfaceCard = colors(isDark).card;
+  const surfaceInput= colors(isDark).card;
+  const border      = colors(isDark).borderSubtle;
+  const borderSoft  = colors(isDark).borderSubtle;
+  const text        = colors(isDark).text;
+  const textLight   = colors(isDark).textMuted;
+  const accent      = colors(isDark).accent;
+  const grab        = colors(isDark).border;
 
   const sectionLabel = {
     fontSize: 11,
@@ -414,7 +415,7 @@ export function NewSessionSheet({
                         fontFamily: "inherit",
                         borderRadius: 4,
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = isDark ? "#2a2018" : "#f5efe0"}
+                      onMouseEnter={e => e.currentTarget.style.background = colors(isDark).surface}
                       onMouseLeave={e => e.currentTarget.style.background = "none"}
                     >
                       <div style={{ width: 4, height: 32, borderRadius: 2, background: c, flexShrink: 0 }} />
@@ -495,7 +496,7 @@ export function NewSessionSheet({
             style={{
               width: "100%",
               background: accent,
-              color: "#fff",
+              color: colors(isDark).onColor,
               border: "none",
               borderRadius: 10,
               padding: "13px 16px",

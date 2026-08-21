@@ -3,6 +3,7 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { BLOCK_TYPES, getMesoColor } from "../lib/constants.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
+import { colors } from "../theme/palette.js";
 
 // ─── TIMELINE CONSTANTS ─────────────────────────────────────────────────────
 const GUTTER_WIDTH = 26; // width of time labels gutter
@@ -45,13 +46,13 @@ function JournalButton({ logWarning, isToday, isMobile, isCompact, isDark, onOpe
   const future = logWarning?.isFuture;
   const btnStyle = warn
     ? isToday
-      ? { background: "#ef444418", border: "2px solid #ef4444", color: "#f08070", fontWeight: 700 }
-      : { background: "#f9731618", border: "2px solid #f97316", color: "#f0a060", fontWeight: 700 }
+      ? { background: colors(isDark).dangerBg, border: `2px solid ${colors(isDark).danger}`, color: colors(isDark).danger, fontWeight: 700 }
+      : { background: colors(isDark).warnBg, border: `2px solid ${colors(isDark).warn}`, color: colors(isDark).warn, fontWeight: 700 }
     : future
-    ? { background: "transparent", border: `1px solid ${isDark ? "#2a2018" : "#e5e0d8"}`, color: isDark ? "#2e2419" : "#ccc8c0", fontWeight: 400 }
+    ? { background: "transparent", border: `1px solid ${colors(isDark).borderSubtle}`, color: colors(isDark).border, fontWeight: 400 }
     : isToday
-    ? { background: isDark ? "#2a1d11" : "#ecddd4", border: `1px solid ${isDark ? "#5a3a18" : "#c8a080"}`, color: isDark ? "#e0a875" : "#8b4c20", fontWeight: 600 }
-    : { background: "transparent", border: `1px solid ${isDark ? "#2e2419" : "#d8d3ca"}`, color: isDark ? "#3a2e22" : "#c0bbb2", fontWeight: 400 };
+    ? { background: colors(isDark).borderSubtle, border: `1px solid ${colors(isDark).borderStrong}`, color: colors(isDark).accent, fontWeight: 600 }
+    : { background: "transparent", border: `1px solid ${colors(isDark).border}`, color: colors(isDark).border, fontWeight: 400 };
 
   return (
     <button
@@ -275,10 +276,10 @@ export function DayColumn({
   const noteAreaStyle = {
     width: "100%",
     boxSizing: "border-box",
-    background: isDark ? "#15100b" : "#e4dfd6",
-    border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
+    background: colors(isDark).borderSubtle,
+    border: `1px solid ${colors(isDark).border}`,
     borderRadius: 4,
-    color: isDark ? "#f0e6d0" : "#2a2218",
+    color: colors(isDark).text,
     fontSize: 10,
     fontFamily: "inherit",
     lineHeight: 1.45,
@@ -379,7 +380,7 @@ export function DayColumn({
               >
                 {gutter > 0 && <span style={{
                   fontSize: sz.hourLabel,
-                  color: isDark ? "#3a2e22" : "#bcb8b0",
+                  color: colors(isDark).border,
                   width: gutter,
                   textAlign: "right",
                   paddingRight: isCompact ? 1 : isNarrow ? 2 : 5,
@@ -394,8 +395,8 @@ export function DayColumn({
                 <div style={{
                   flex: 1,
                   borderTop: h % 6 === 0
-                    ? `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`
-                    : `1px solid ${isDark ? "#2a2018" : "#e5e0da"}`,
+                    ? `1px solid ${colors(isDark).border}`
+                    : `1px solid ${colors(isDark).borderSubtle}`,
                 }} />
               </div>
             );
@@ -412,7 +413,7 @@ export function DayColumn({
                   top: i * hourHeight + hourHeight / 2,
                   left: gutter,
                   right: 0,
-                  borderTop: `1px dashed ${isDark ? "#1a1410" : "#eae6e0"}`,
+                  borderTop: `1px dashed ${colors(isDark).borderSubtle}`,
                   pointerEvents: "none",
                 }}
               />
@@ -436,8 +437,8 @@ export function DayColumn({
                   alignItems: "center",
                 }}
               >
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#f08070", flexShrink: 0 }} />
-                <div style={{ flex: 1, borderTop: "1.5px solid #ef4444" }} />
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: colors(isDark).danger, flexShrink: 0 }} />
+                <div style={{ flex: 1, borderTop: `1.5px solid ${colors(isDark).danger}` }} />
               </div>
             );
           })()}
@@ -470,7 +471,7 @@ export function DayColumn({
                     height,
                     background: ev.isAllDay
                       ? (isDark ? chargeColor + "15" : chargeColor + "10")
-                      : (isDark ? "#241b13" : "#f2ede5"),
+                      : (colors(isDark).surface),
                     border: `1px solid ${chargeColor}44`,
                     borderLeft: `3px solid ${chargeColor}`,
                     borderRadius: 4,
@@ -490,7 +491,7 @@ export function DayColumn({
                         {!isShort && !isNarrow && !ev.isAllDay && (
                           <span style={{
                             fontSize: sz.sessionTime,
-                            color: isDark ? "#82c894" : "#a89a82",
+                            color: colors(isDark).success,
                             fontWeight: 600, display: "block", lineHeight: 1.3,
                           }}>
                             {s.startTime}{s.endTime ? ` → ${s.endTime}` : ""}
@@ -499,7 +500,7 @@ export function DayColumn({
                         {!isNarrow && (
                           <span style={{
                             fontSize: isShort ? Math.max(sz.sessionTitle - 1, 6) : sz.sessionTitle,
-                            fontWeight: 600, color: isDark ? "#f0e6d0" : "#3a2e22",
+                            fontWeight: 600, color: colors(isDark).textCard,
                             display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3,
                           }}>
                             {s.title || s.name}
@@ -539,7 +540,7 @@ export function DayColumn({
 
             // QuickSession
             const qs = ev.data;
-            const accent = qs.color || "#7da7f0";
+            const accent = qs.color || colors(isDark).info;
             return (
               <div
                 key={ev.key}
@@ -575,7 +576,7 @@ export function DayColumn({
                     )}
                     <span style={{
                       fontSize: sz.sessionTitle, fontWeight: 600,
-                      color: isDark ? "#f0e6d0" : "#3a2e22",
+                      color: colors(isDark).textCard,
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1,
                     }}>
                       {qs.name}
@@ -589,7 +590,7 @@ export function DayColumn({
       </div>
 
       {/* ── Pied : bouton ajouter ── */}
-      <div style={{ padding: isCompact ? "1px 1px 2px" : isNarrow ? "3px 2px 4px" : "4px 6px 6px", flexShrink: 0, borderTop: `1px solid ${isDark ? "#2a2018" : "#e5e0da"}` }}>
+      <div style={{ padding: isCompact ? "1px 1px 2px" : isNarrow ? "3px 2px 4px" : "4px 6px 6px", flexShrink: 0, borderTop: `1px solid ${colors(isDark).borderSubtle}` }}>
         {!isNarrow && !isCompact && (
           <div style={{ marginBottom: 4 }}>
             {noteOpen ? (
@@ -606,13 +607,13 @@ export function DayColumn({
                 onClick={() => setNoteOpen(true)}
                 style={{
                   fontSize: 10,
-                  color: isDark ? "#a89a82" : "#6b7060",
+                  color: colors(isDark).textDim,
                   lineHeight: 1.4,
                   cursor: "text",
                   padding: "3px 5px",
                   borderRadius: 4,
-                  borderLeft: `2px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
-                  background: isDark ? "#1a141055" : "#e4dfd655",
+                  borderLeft: `2px solid ${colors(isDark).border}`,
+                  background: colors(isDark).bgVeil,
                   wordBreak: "break-word",
                 }}
               >
@@ -621,7 +622,7 @@ export function DayColumn({
             ) : (
               <div
                 onClick={() => setNoteOpen(true)}
-                style={{ fontSize: 9, color: isDark ? "#3a2e22" : "#ccc8c0", cursor: "text", padding: "2px 3px", letterSpacing: "0.03em" }}
+                style={{ fontSize: 9, color: colors(isDark).border, cursor: "text", padding: "2px 3px", letterSpacing: "0.03em" }}
               >
                 note
               </div>

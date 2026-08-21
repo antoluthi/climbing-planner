@@ -10,6 +10,7 @@ import { useSessionsCatalog } from "../hooks/useSessionsCatalog.js";
 import { useSessionBlocks } from "../hooks/useSessionBlocks.js";
 import { useCoachAthletes } from "../hooks/useCoachAthletes.js";
 import { useNotifications } from "../hooks/useNotifications.js";
+import { DATA } from "../theme/palette.js";
 
 export function DataProvider({ children }) {
   const {
@@ -264,7 +265,7 @@ export function DataProvider({ children }) {
 
   // ── Mesocycle CRUD ──
   const updateMesocycles = updater => setData(d => ({ ...d, mesocycles: updater(d.mesocycles || []) }));
-  const addMesocycle = () => updateMesocycles(m => [...m, { id: generateId(), label: "Nouveau mésocycle", color: "#e0a875", durationWeeks: 4, startDate: "", description: "", microcycles: [] }]);
+  const addMesocycle = () => updateMesocycles(m => [...m, { id: generateId(), label: "Nouveau mésocycle", color: DATA.picker[0], durationWeeks: 4, startDate: "", description: "", microcycles: [] }]);
   const updateMesocycle = (id, changes) => updateMesocycles(m => m.map(x => x.id === id ? { ...x, ...changes } : x));
   const deleteMesocycle = id => updateMesocycles(m => m.filter(x => x.id !== id));
   const addMicrocycle = mesoId => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: [...x.microcycles, { id: generateId(), label: "Nouveau microcycle", durationWeeks: 1, description: "" }] } : x));

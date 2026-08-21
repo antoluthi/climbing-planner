@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { localDateStr, weekKey, getMondayOf } from "../lib/helpers.js";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { colors } from "../theme/palette.js";
 
 // ─── HOOPER INDEX ─────────────────────────────────────────────────────────────
 
@@ -13,9 +14,9 @@ function hooperLabel(total) {
 }
 
 function hooperColor(total, isDark) {
-  if (total <= 14) return isDark ? "#82c894" : "#82c894";
-  if (total <= 17) return "#f0a060";
-  return "#f08070";
+  if (total <= 14) return colors(isDark).success;
+  if (total <= 17) return colors(isDark).warn;
+  return colors(isDark).danger;
 }
 
 export function HooperSection({ hoopers, onAdd, range }) {
@@ -112,7 +113,7 @@ export function HooperSection({ hoopers, onAdd, range }) {
       </div>
 
       {open && (
-        <div style={{ marginBottom: 14, padding: "12px 14px", background: isDark ? "#241b13" : "#e8e3da", borderRadius: 8 }}>
+        <div style={{ marginBottom: 14, padding: "12px 14px", background: colors(isDark).borderSubtle, borderRadius: 8 }}>
           {CRITERIA.map(({ key, label, sub }) => (
             <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <div style={{ width: 110, flexShrink: 0 }}>
@@ -123,15 +124,15 @@ export function HooperSection({ hoopers, onAdd, range }) {
                 {[1, 2, 3, 4, 5, 6, 7].map(v => {
                   const active = form[key] === v;
                   const bg = active
-                    ? (v <= 2 ? (isDark ? "#82c894" : "#82c894") : v <= 4 ? "#f0a060" : "#f08070")
-                    : (isDark ? "#3a2e22" : "#d8d3ca");
+                    ? (v <= 2 ? (colors(isDark).success) : v <= 4 ? colors(isDark).warn : colors(isDark).danger)
+                    : (colors(isDark).border);
                   return (
                     <button key={v} onClick={() => {
                         const updated = { ...form, [key]: v };
                         setForm(updated);
                         autoSaveHooper(updated);
                       }}
-                      style={{ ...btnBase, background: bg, color: active ? "#fff" : styles.dashText, fontWeight: active ? 600 : 400 }}>
+                      style={{ ...btnBase, background: bg, color: active ? colors(isDark).onColor : styles.dashText, fontWeight: active ? 600 : 400 }}>
                       {v}
                     </button>
                   );
@@ -144,13 +145,13 @@ export function HooperSection({ hoopers, onAdd, range }) {
               Indice : {total}{allFilled ? ` — ${hooperLabel(total)}` : " (partiel)"}
             </div>
           )}
-          <div style={{ fontSize: 10, color: isDark ? "#a89a82" : "#8a7f70", letterSpacing: "0.04em" }}>
+          <div style={{ fontSize: 10, color: colors(isDark).textMuted, letterSpacing: "0.04em" }}>
             Sauvegarde automatique
           </div>
         </div>
       )}
 
-      {saved && <div style={{ fontSize: 11, color: "#e0a875", marginBottom: 8 }}>Indice enregistré ✓</div>}
+      {saved && <div style={{ fontSize: 11, color: colors(isDark).accent, marginBottom: 8 }}>Indice enregistré ✓</div>}
 
       {chartData.length > 0 ? (
         <ResponsiveContainer width="100%" height={160}>
@@ -162,11 +163,11 @@ export function HooperSection({ hoopers, onAdd, range }) {
             <Tooltip contentStyle={tooltipStyle}
               formatter={(v, n) => [v, n === "total" ? "Hooper" : n]}
             />
-            <ReferenceLine y={14} stroke={isDark ? "#e0a87528" : "#8b4c2033"} strokeDasharray="4 4" />
-            <ReferenceLine y={17} stroke="#f9731633" strokeDasharray="4 4" />
-            <ReferenceLine y={20} stroke="#f8717133" strokeDasharray="4 4" />
-            <Line type="monotone" dataKey="total" name="Hooper" stroke={isDark ? "#e0a875" : "#8b4c20"}
-              strokeWidth={2} dot={{ r: 3, fill: isDark ? "#e0a875" : "#8b4c20" }} connectNulls />
+            <ReferenceLine y={14} stroke={colors(isDark).accentBorder} strokeDasharray="4 4" />
+            <ReferenceLine y={17} stroke={colors(isDark).warnBorder} strokeDasharray="4 4" />
+            <ReferenceLine y={20} stroke={colors(isDark).dangerBorder} strokeDasharray="4 4" />
+            <Line type="monotone" dataKey="total" name="Hooper" stroke={colors(isDark).accent}
+              strokeWidth={2} dot={{ r: 3, fill: colors(isDark).accent }} connectNulls />
           </LineChart>
         </ResponsiveContainer>
       ) : (

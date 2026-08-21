@@ -1,3 +1,5 @@
+import { colors, statusColors, chargeTokenColors } from "./palette.js";
+
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 // Système typographique, espacement, statuts, charge — utilisable par tous
 // les composants pour rester cohérent. Voir audit P06.
@@ -32,21 +34,13 @@ export const Z = {
   toast:    500,  // toasts toujours au-dessus
 };
 
-export const STATUS = (isDark) => ({
-  done:     { bg: isDark ? "#1a2a1d" : "#e3f0e5", fg: isDark ? "#82c894" : "#2e6b3f" },
-  adapted:  { bg: isDark ? "#2a2010" : "#fef2dc", fg: isDark ? "#e6c46a" : "#b8881a" },
-  moved:    { bg: isDark ? "#2a2010" : "#fef2dc", fg: isDark ? "#e6c46a" : "#b8881a" },
-  missed:   { bg: isDark ? "#2a1612" : "#fbecec", fg: isDark ? "#f08070" : "#b83030" },
-});
+export const STATUS = statusColors;
 
-export const chargeTokenColor = (value, isDark) => {
-  if (!value || value < 4)  return { bg: isDark ? "#1a2a1d" : "#e3f0e5", fg: isDark ? "#82c894" : "#2e6b3f" };
-  if (value < 7)            return { bg: isDark ? "#2a2010" : "#fef2dc", fg: isDark ? "#e6c46a" : "#b8881a" };
-  return                          { bg: isDark ? "#2a1d11" : "#fbecdc", fg: isDark ? "#e0a875" : "#b8651a" };
-};
+export const chargeTokenColor = chargeTokenColors;
 
 export function makeStyles(isDark) {
-  const D = isDark;
+  const D = isDark;          // encore utilisé pour l'opacité, colorScheme et les ombres
+  const c = colors(isDark);
   const t = {
     // ── Design tokens partagés ──
     type: TYPE,
@@ -57,41 +51,26 @@ export function makeStyles(isDark) {
     serif: "'Newsreader', Georgia, serif",
     sans: "'Inter', system-ui, -apple-system, sans-serif",
     mono: "'JetBrains Mono', Menlo, Consolas, monospace",
-    // ── Existants ──
-    bg:              D ? "#1a1410"   : "#f0ebe2",
-    surface:         D ? "#241b13"   : "#e8e2d8",
-    surface2:        D ? "#2e2419"   : "#ddd7cc",
-    border:          D ? "#3a2e22"   : "#ccc6b8",
-    border2:         D ? "#463826"   : "#c4beb0",
-    headerGrad:      D ? "linear-gradient(180deg, #1f1812 0%, #1a1410 100%)" : "linear-gradient(180deg, #e0d9ce 0%, #eae4da 100%)",
-    text:            D ? "#f0e6d0"   : "#2a2218",
-    textTitle:       D ? "#e6d8bc"   : "#3a2e22",
-    textMuted:       D ? "#a89a82"   : "#8a7f70",
-    textDim:         D ? "#8a7d68"   : "#7a7060",
-    textCard:        D ? "#c4b69c"   : "#4a3f32",
-    accent:          D ? "#e0a875"   : "#8b4c20",
-    accentBg:        D ? "#2a1d11"   : "#ecddd4",
-    accentBorder:    D ? "#e0a87566" : "#8b4c2066",
-    accentFaint:     D ? "#e0a87528" : "#8b4c2044",
-    accentSolid:     D ? "#e0a87555" : "#8b4c2055",
-    btnBorder:       D ? "#3a2e22"   : "#bfb9aa",
-    navColor:        D ? "#a89a82"   : "#7a7060",
-    gridGap:         D ? "#0d0905"   : "#d0c9bf",
-    todayBg:         D ? "#2a1d11"   : "#ecddd4",
-    metabarBg:       D ? "#15100b"   : "#ece6dc",
-    subtleBorder:    D ? "#2a2018"   : "#ccc6b8",
-    modalBg:         D ? "#1c160f"   : "#ede8de",
-    overlayBg:       D ? "rgba(0,0,0,0.78)" : "rgba(0,0,0,0.45)",
-    actionColor:     D ? "#6a5d4c"   : "#8a7f70",
-    dashedBorder:    D ? "#463826"   : "#c4beb0",
-    sessionBorder:   D ? "#2a2018"   : "#d4cec4",
-    negativeBg:      D ? "#2a1612"   : "#f8d8dc",
-    negativeBorder:  D ? "#f0805a66" : "#c0394e55",
-    negativeColor:   D ? "#f0805a"   : "#c0394e",
-    inputBg:         D ? "#15100b"   : "#ddd7cc",
-    starEmpty:       D ? "#4a3d2d"   : "#bbb",
-    badgeText:       D ? "#b8a87a"   : "#5a6878",
-    dayEmpty:        D ? "#2e2419"   : "#ccc7bc",
+
+    // ── Couleurs : toutes viennent de la palette, aucune n'est définie ici ──
+    ...c,
+
+    // Alias historiques : des noms utilisés dans les styles ci-dessous qui
+    // désignent en réalité un token sémantique de la palette.
+    border2:        c.borderStrong,
+    btnBorder:      c.border,
+    navColor:       c.textMuted,
+    todayBg:        c.accentBg,
+    metabarBg:      c.bgAlt,
+    subtleBorder:   c.borderSubtle,
+    actionColor:    c.textMuted,
+    sessionBorder:  c.borderSubtle,
+    negativeBg:     c.dangerBg,
+    negativeBorder: c.dangerBorder,
+    negativeColor:  c.danger,
+    starEmpty:      c.borderStrong,
+    badgeText:      c.textMuted,
+    dayEmpty:       c.surface2,
   };
 
   return {
@@ -193,7 +172,7 @@ export function makeStyles(isDark) {
       padding: "4px 10px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontFamily: "inherit", letterSpacing: "0.06em",
     },
     authSentMsg: { fontSize: 11, color: t.accent, letterSpacing: "0.06em" },
-    authErrorMsg: { fontSize: 11, color: "#f0a060", letterSpacing: "0.04em" },
+    authErrorMsg: { fontSize: 11, color: t.danger, letterSpacing: "0.04em" },
     headerMobileRow3: { padding: "4px 16px 10px", borderTop: `1px solid ${t.subtleBorder}` },
 
     metaBar: {
@@ -373,7 +352,7 @@ export function makeStyles(isDark) {
     confirmTitle: { fontSize: 14, fontWeight: 600, color: t.text, textAlign: "center" },
     confirmSub: { fontSize: 12, color: t.textDim, textAlign: "center", marginTop: -6 },
     confirmBtnRow: { display: "flex", gap: 8, justifyContent: "center" },
-    confirmDeleteBtn: { background: "#b83030", border: "none", borderRadius: 6, color: "#fff", padding: "8px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
+    confirmDeleteBtn: { background: t.danger, border: "none", borderRadius: 6, color: t.textOnAccent, padding: "8px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
     confirmCancelBtn: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.text, padding: "8px 22px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" },
     cycleAddMicroBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 4, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit", marginTop: 4 },
     cycleAddMesoBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em" },
@@ -445,7 +424,7 @@ export function makeStyles(isDark) {
     calcInput: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 5, padding: "6px 8px", color: t.text, fontSize: 12, fontFamily: "inherit", outline: "none", width: "100%" },
     calcResultRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
     calcResultVal: { fontSize: 20, fontWeight: 700 },
-    calcApplyBtn: { fontSize: 12, padding: "5px 14px", borderRadius: 5, border: "none", background: t.accent, color: "#fff", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
+    calcApplyBtn: { fontSize: 12, padding: "5px 14px", borderRadius: 5, border: "none", background: t.accent, color: t.textOnAccent, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
     calcVolumeHint: { fontSize: 10, color: t.textDim, fontStyle: "italic" },
     // ── Info panel (reference tables) ──
     infoOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: Z.nested, backdropFilter: "blur(4px)" },
@@ -514,8 +493,8 @@ export function makeStyles(isDark) {
     },
     sessionItemLeft: { display: "flex", alignItems: "center", gap: 10 },
     sessionTypeBadge: { fontSize: 9, padding: "2px 7px", borderRadius: 3, color: t.badgeText, letterSpacing: "0.08em", textTransform: "uppercase" },
-    seanceBadgeBg: D ? "#1e3a5f" : "#c4d8ee",
-    exerciceBadgeBg: D ? "#1a2a1d" : "#c4e0c8",
+    seanceBadgeBg: t.infoBg,
+    exerciceBadgeBg: t.successBg,
     sessionItemName: { fontSize: 12, color: t.textCard },
     chargePill: { fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4 },
     emptySearch: { padding: 20, textAlign: "center", color: t.textMuted, fontSize: 12 },
@@ -549,6 +528,9 @@ export function makeStyles(isDark) {
       padding: "7px 18px", borderRadius: 5, cursor: "pointer", fontSize: 11,
       fontFamily: "inherit", fontWeight: 700, letterSpacing: "0.06em",
     },
+
+    // ── Palette brute, pour les composants qui n'ont que `styles` ──
+    c,
 
     // ── Tokens bruts exposés (couleurs brutes, hors objets de style) ──
     accent:    t.accent,

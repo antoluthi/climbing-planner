@@ -1,6 +1,7 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Modal, ModalHeader, ModalBody, ModalFooter, modalTokens } from "./ui/Modal.jsx";
 import { Button } from "./ui/Button.jsx";
+import { colors } from "../theme/palette.js";
 
 // ─── DEADLINE DETAIL MODAL ────────────────────────────────────────────────────
 
@@ -56,7 +57,7 @@ export function DeadlineDetailModal({ deadline: dl, onClose, onEdit }) {
       </ModalBody>
       <ModalFooter>
         <Button variant="secondary" size="md" onClick={onClose}>Fermer</Button>
-        <Button variant="primary" size="md" onClick={() => onEdit(dl)} style={{ background: dl.color, color: "#fff" }}>
+        <Button variant="primary" size="md" onClick={() => onEdit(dl)} style={{ background: dl.color, color: colors(isDark).onColor }}>
           Modifier
         </Button>
       </ModalFooter>

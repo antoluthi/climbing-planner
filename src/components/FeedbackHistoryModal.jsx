@@ -5,6 +5,7 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { BLOCK_TYPES } from "../lib/constants.js";
 import { getChargeColor } from "../lib/charge.js";
 import { Modal, ModalHeader } from "./ui/Modal.jsx";
+import { colors, DATA } from "../theme/palette.js";
 
 /// ─── MODAL: HISTORIQUE FEEDBACKS COACH ───────────────────────────────────────
 
@@ -34,12 +35,12 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
     load();
   }, [type, id, name]);
 
-  const surface = isDark ? "#241b13" : "#ffffff";
-  const bg      = isDark ? "#241b13" : "#f3f7f4";
-  const border  = isDark ? "#3a2e22" : "#daeade";
-  const text    = isDark ? "#f0e6d0" : "#1a2e1f";
-  const muted   = isDark ? "#a89a82" : "#6b8c72";
-  const accent  = isDark ? "#e0a875" : "#8b4c20";
+  const surface = colors(isDark).card;
+  const bg      = colors(isDark).successBg;
+  const border  = colors(isDark).successBg;
+  const text    = colors(isDark).text;
+  const muted   = colors(isDark).success;
+  const accent  = colors(isDark).accent;
 
   const fmtDate = (ds) => {
     if (!ds) return "";
@@ -94,12 +95,12 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
         {/* ── Graphique évolution poids Suspension ── */}
         {suspChartData && suspChartData.points.length > 1 && (
           <div style={{ padding: "12px 16px 0", borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: DATA.hands.left, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
               Évolution du poids
             </div>
             <ResponsiveContainer width="100%" height={140}>
               <LineChart data={suspChartData.points} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#3a2e22" : "#daeade"} />
+                <CartesianGrid strokeDasharray="3 3" stroke={colors(isDark).successBg} />
                 <XAxis dataKey="date" tick={{ fontSize: 9, fill: muted }} />
                 <YAxis tick={{ fontSize: 9, fill: muted }} unit="kg" />
                 <ReferenceLine y={0} stroke={muted} strokeDasharray="2 2" />
@@ -110,18 +111,18 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                 />
                 {suspChartData.isOneArm ? (
                   <>
-                    <Line type="monotone" dataKey="gauche" stroke="#a78bfa" strokeWidth={2} dot={{ r: 3 }} name="Main gauche" connectNulls />
-                    <Line type="monotone" dataKey="droite" stroke="#f472b6" strokeWidth={2} dot={{ r: 3 }} name="Main droite" connectNulls />
+                    <Line type="monotone" dataKey="gauche" stroke={DATA.hands.left} strokeWidth={2} dot={{ r: 3 }} name="Main gauche" connectNulls />
+                    <Line type="monotone" dataKey="droite" stroke={DATA.hands.right} strokeWidth={2} dot={{ r: 3 }} name="Main droite" connectNulls />
                   </>
                 ) : (
-                  <Line type="monotone" dataKey="poids" stroke="#a78bfa" strokeWidth={2} dot={{ r: 3 }} name="Poids" connectNulls />
+                  <Line type="monotone" dataKey="poids" stroke={DATA.hands.left} strokeWidth={2} dot={{ r: 3 }} name="Poids" connectNulls />
                 )}
               </LineChart>
             </ResponsiveContainer>
             {suspChartData.isOneArm && (
               <div style={{ display: "flex", gap: 14, fontSize: 10, color: muted, paddingBottom: 8, justifyContent: "center" }}>
-                <span style={{ color: "#a78bfa" }}>●</span> Main gauche
-                <span style={{ color: "#f472b6" }}>●</span> Main droite
+                <span style={{ color: DATA.hands.left }}>●</span> Main gauche
+                <span style={{ color: DATA.hands.right }}>●</span> Main droite
               </div>
             )}
           </div>
@@ -132,7 +133,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
           {feedbacks === null ? (
             <div style={{ padding: "40px 0", textAlign: "center", color: muted, fontSize: 12 }}>Chargement…</div>
           ) : error ? (
-            <div style={{ padding: "20px 0", textAlign: "center", color: isDark ? "#f08070" : "#f08070", fontSize: 12 }}>{error}</div>
+            <div style={{ padding: "20px 0", textAlign: "center", color: colors(isDark).danger, fontSize: 12 }}>{error}</div>
           ) : feedbacks.length === 0 ? (
             <div style={{ padding: "48px 20px", textAlign: "center", color: muted }}>
               <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.4 }}>—</div>
@@ -161,7 +162,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                         </div>
                       </div>
                       {fb.done !== null && fb.done !== undefined && (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 4, background: fb.done ? "#4ade8020" : "#f8717120", color: fb.done ? "#82c894" : "#f08070", border: `1px solid ${fb.done ? "#4ade8044" : "#f8717144"}` }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 4, background: fb.done ? colors(isDark).successBg : colors(isDark).dangerBg, color: fb.done ? colors(isDark).success : colors(isDark).danger, border: `1px solid ${fb.done ? colors(isDark).successBorder : colors(isDark).dangerBorder}` }}>
                           {fb.done ? "✓ Réalisée" : "✗ Non réalisée"}
                         </span>
                       )}
@@ -181,7 +182,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                           {fb.quality != null && (
                             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                               <span style={{ fontSize: 10, color: muted }}>Qualité</span>
-                              <span style={{ fontSize: 12, color: "#e6c46a", letterSpacing: 1 }}>{"★".repeat(fb.quality)}{"☆".repeat(5 - fb.quality)}</span>
+                              <span style={{ fontSize: 12, color: colors(isDark).warn, letterSpacing: 1 }}>{"★".repeat(fb.quality)}{"☆".repeat(5 - fb.quality)}</span>
                             </div>
                           )}
                         </div>
@@ -200,7 +201,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                           <div key={bi} style={{ borderLeft: `3px solid ${bCfg.color || accent}99`, paddingLeft: 10 }}>
                             <div style={{ fontSize: 10, fontWeight: 700, color: bCfg.color || accent, marginBottom: 3 }}>{bf.blockName}</div>
                             {bf.suspensionData && (
-                              <div style={{ fontSize: 11, color: "#a78bfa", marginBottom: 2 }}>
+                              <div style={{ fontSize: 11, color: DATA.hands.left, marginBottom: 2 }}>
                                 {bf.suspensionData.actualWeight != null
                                   ? `Poids : ${bf.suspensionData.actualWeight >= 0 ? "+" : ""}${bf.suspensionData.actualWeight} kg`
                                   : [
@@ -219,10 +220,10 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           {/* Données de suspension */}
                           {blockFb.suspensionData && (
-                            <div style={{ background: isDark ? "#1a1410" : "#f0ede8", borderRadius: 6, padding: "8px 10px" }}>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: "#a78bfa", marginBottom: 4 }}>Poids réel</div>
+                            <div style={{ background: colors(isDark).surface, borderRadius: 6, padding: "8px 10px" }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: DATA.hands.left, marginBottom: 4 }}>Poids réel</div>
                               {blockFb.suspensionData.actualWeight != null ? (
-                                <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: DATA.hands.left }}>
                                   {blockFb.suspensionData.actualWeight >= 0 ? "+" : ""}{blockFb.suspensionData.actualWeight} kg
                                 </span>
                               ) : (
@@ -230,7 +231,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                                   {blockFb.suspensionData.actualWeightLeft != null && (
                                     <div>
                                       <div style={{ fontSize: 9, color: muted }}>Gauche</div>
-                                      <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>
+                                      <span style={{ fontSize: 13, fontWeight: 700, color: DATA.hands.left }}>
                                         {blockFb.suspensionData.actualWeightLeft >= 0 ? "+" : ""}{blockFb.suspensionData.actualWeightLeft} kg
                                       </span>
                                     </div>
@@ -238,7 +239,7 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                                   {blockFb.suspensionData.actualWeightRight != null && (
                                     <div>
                                       <div style={{ fontSize: 9, color: muted }}>Droite</div>
-                                      <span style={{ fontSize: 13, fontWeight: 700, color: "#f472b6" }}>
+                                      <span style={{ fontSize: 13, fontWeight: 700, color: DATA.hands.right }}>
                                         {blockFb.suspensionData.actualWeightRight >= 0 ? "+" : ""}{blockFb.suspensionData.actualWeightRight} kg
                                       </span>
                                     </div>
