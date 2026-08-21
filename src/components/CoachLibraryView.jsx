@@ -1,30 +1,26 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { BLOCK_TYPES } from "../lib/constants.js";
-import { getChargeColor, getSessionCharge, normalizeCharge10 } from "../lib/charge.js";
-import { SuspensionSummaryChips } from "./SuspensionSummaryChips.jsx";
-import { BlockFormModal } from "./BlockFormModal.jsx";
+import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { FeedbackHistoryModal } from "./FeedbackHistoryModal.jsx";
 import { colors } from "../theme/palette.js";
 import { RADIUS } from "../theme/makeStyles.js";
+import { disciplineList, getDiscipline } from "../lib/disciplines.js";
 import {
-  Segmented, SectionLabel, Chip, PrimaryButton, RoundIconButton, PageTitle, SANS, MONO,
+  Chip, PrimaryButton, RoundIconButton, PageTitle, SectionLabel, SportBadge, SANS, MONO,
 } from "./ui/Ascent.jsx";
 
 // ─── BIBLIOTHÈQUE ─────────────────────────────────────────────────────────────
-// Séances et blocs réutilisables. Habillage « Ascent » : cartes sombres, filets
-// de 0.5 px entre les lignes, chips en pill pour les filtres et le tri.
+// Les séances modèles, celles qu'on recharge depuis le formulaire d'ajout.
+// Habillage « Ascent » : cartes sombres, filets de 0,5 px, chips en pill.
 
-export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock, onEditBlock, onDeleteBlock }) {
+export function CoachLibraryView({ catalog, onNew, onEdit, onDelete }) {
   const { isDark } = useThemeCtx();
   const c = colors(isDark);
 
-  const [subTab,          setSubTab]          = useState("sessions"); // "sessions" | "blocks"
   const [search,          setSearch]          = useState("");
-  const [filter,          setFilter]          = useState("Tous");
+  const [discipline,      setDiscipline]      = useState("all");
   const [sort,            setSort]            = useState("date"); // "date" | "charge"
   const [confirmId,       setConfirmId]       = useState(null);
-  const [blockForm,       setBlockForm]       = useState(null); // null | { initial? }
   const [feedbackHistory, setFeedbackHistory] = useState(null); // null | { type, id, name }
 
   // ── Actions d'une ligne (retours / modifier / supprimer) ──
@@ -59,40 +55,28 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
     </div>
   );
 
-  const applySort = (arr) => {
-    if (sort === "date")   return [...arr].sort((a, b) => b.id - a.id);
-    if (sort === "charge") return [...arr].sort((a, b) => getSessionCharge(b) - getSessionCharge(a));
-    return arr;
-  };
+  // ── Filtre + tri ──
+  const sessions = (catalog || []).filter(s => {
+    const name = (s.name || s.title || "").toLowerCase();
+    if (search.trim() && !name.includes(search.trim().toLowerCase())) return false;
+    if (discipline === "all") return true;
+    return (s.discipline || "climbing") === discipline;
+  });
+  const sorted = [...sessions].sort((a, b) => sort === "charge"
+    ? getSessionCharge(b) - getSessionCharge(a)
+    : Number(b.id) - Number(a.id));
 
-  // ── Séances — le catalogue est commun à tous les comptes ──
-  const allSessions = catalog;
-  const filteredSessions = applySort(allSessions.filter(s => {
-    const matchType   = filter === "Tous" || s.type === filter;
-    const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
-    return matchType && matchSearch;
-  }));
-  const byType = {};
-  filteredSessions.forEach(s => { (byType[s.type] = byType[s.type] || []).push(s); });
-
-  // ── Blocs ──
-  const filteredBlocks = applySort((blocks || []).filter(b =>
-    (filter === "Tous" || b.blockType === filter) &&
-    b.name.toLowerCase().includes(search.toLowerCase())
-  ));
-  const byBlockType = {};
-  filteredBlocks.forEach(b => { (byBlockType[b.blockType] = byBlockType[b.blockType] || []).push(b); });
-
-  const isSessionTab = subTab === "sessions";
-  const filterOptions = isSessionTab ? ["Tous", "Grimpe", "Exercice"] : ["Tous", ...Object.keys(BLOCK_TYPES)];
+  // Groupées par discipline — l'ancien regroupement par « type » ne veut plus
+  // dire grand-chose depuis que chaque séance porte sa discipline.
+  const byDiscipline = {};
+  sorted.forEach(s => {
+    const id = getDiscipline(s.discipline || "climbing").id;
+    (byDiscipline[id] = byDiscipline[id] || []).push(s);
+  });
 
   const listCard = {
     background: c.card, border: `1px solid ${c.border}`,
     borderRadius: RADIUS.card, overflow: "hidden",
-  };
-  const rowBase = {
-    display: "flex", alignItems: "center", gap: 10,
-    padding: "13px 14px", minHeight: 56,
   };
   const emptyBox = { textAlign: "center", padding: "60px 20px", color: c.textMuted, fontFamily: SANS };
 
@@ -100,32 +84,18 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
     <div style={{ flex: 1, overflowY: "auto", background: c.bg, padding: "18px 16px 90px", fontFamily: SANS }}>
       <div style={{ maxWidth: 600, margin: "0 auto", width: "100%" }}>
 
-        {/* ── Titre ── */}
         <PageTitle isDark={isDark}>Bibliothèque</PageTitle>
-
-        {/* ── Séances / Blocs ── */}
-        <Segmented
-          isDark={isDark}
-          value={subTab}
-          onChange={key => { setSubTab(key); setSearch(""); setFilter("Tous"); setSort("date"); setConfirmId(null); }}
-          options={[{ value: "sessions", label: "Séances" }, { value: "blocks", label: "Blocs" }]}
-          style={{ marginBottom: 18 }}
-        />
 
         {/* ── Compte + création ── */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
           <div style={{ fontSize: 13, color: c.textMuted, minWidth: 0 }}>
-            {isSessionTab
-              ? `${allSessions.length} séance${allSessions.length !== 1 ? "s" : ""}`
-              : `${(blocks || []).length} bloc${(blocks || []).length !== 1 ? "s" : ""}`}
+            {(catalog || []).length} séance{(catalog || []).length !== 1 ? "s" : ""}
           </div>
           <PrimaryButton
-            isDark={isDark}
-            height={40}
-            onClick={isSessionTab ? onNew : () => setBlockForm({})}
+            isDark={isDark} height={40} onClick={onNew}
             style={{ width: "auto", padding: "0 18px", flexShrink: 0, fontSize: 14 }}
           >
-            + {isSessionTab ? "Séance" : "Bloc"}
+            + Séance
           </PrimaryButton>
         </div>
 
@@ -143,13 +113,11 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
 
         {/* ── Filtres ── */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-          {filterOptions.map(f => (
-            <Chip
-              key={f} isDark={isDark} size="sm" label={f}
-              active={filter === f}
-              color={!isSessionTab && BLOCK_TYPES[f]?.color}
-              onClick={() => setFilter(f)}
-            />
+          <Chip isDark={isDark} size="sm" label="Toutes"
+                active={discipline === "all"} onClick={() => setDiscipline("all")} />
+          {disciplineList().map(d => (
+            <Chip key={d.id} isDark={isDark} size="sm" label={d.label} color={d.color}
+                  active={discipline === d.id} onClick={() => setDiscipline(d.id)} />
           ))}
         </div>
 
@@ -162,37 +130,45 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
           ))}
         </div>
 
-        {/* ══ SÉANCES ══ */}
-        {isSessionTab && (
-          allSessions.length === 0 ? (
-            <div style={emptyBox}>
-              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: c.text }}>Aucune séance</div>
-              <div style={{ fontSize: 13 }}>Crée tes premières séances pour les retrouver dans le calendrier.</div>
+        {/* ── Liste ── */}
+        {(catalog || []).length === 0 ? (
+          <div style={emptyBox}>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: c.text }}>Aucune séance</div>
+            <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+              Coche « Enregistrer comme modèle » en créant une séance : elle se retrouvera ici,
+              et se rechargera depuis le formulaire d'ajout.
             </div>
-          ) : filteredSessions.length === 0 ? (
-            <div style={{ ...emptyBox, padding: "40px 20px", fontSize: 13 }}>Aucun résultat.</div>
-          ) : (
-            Object.entries(byType).map(([type, sessions]) => (
-              <div key={type} style={{ marginBottom: 22 }}>
-                <SectionLabel isDark={isDark}>{type}</SectionLabel>
+          </div>
+        ) : sorted.length === 0 ? (
+          <div style={{ ...emptyBox, padding: "40px 20px", fontSize: 13 }}>Aucun résultat.</div>
+        ) : (
+          Object.entries(byDiscipline).map(([dId, list]) => {
+            const d = getDiscipline(dId);
+            return (
+              <div key={dId} style={{ marginBottom: 22 }}>
+                <SectionLabel isDark={isDark} style={{ color: d.color }}>{d.label}</SectionLabel>
                 <div style={listCard}>
-                  {sessions.map((s, i) => {
+                  {list.map((s, i) => {
                     const charge = getSessionCharge(s);
-                    const tone = getChargeColor(charge);
+                    const tone = getChargeColor(charge, isDark);
                     return (
                       <div key={s.id} style={{
-                        ...rowBase,
-                        borderBottom: i === sessions.length - 1 ? "none" : `0.5px solid ${c.border}`,
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "13px 14px", minHeight: 56,
+                        borderBottom: i === list.length - 1 ? "none" : `0.5px solid ${c.border}`,
                       }}>
-                        <div style={{ width: 3, alignSelf: "stretch", borderRadius: 2, background: tone, flexShrink: 0 }} />
+                        <SportBadge disciplineId={d.id} size={28} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {s.name}
+                          <div style={{
+                            fontSize: 14, fontWeight: 600, color: c.text,
+                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                          }}>
+                            {s.name || s.title}
                           </div>
                           <div style={{ fontSize: 11, color: c.textDim, display: "flex", gap: 10, marginTop: 2 }}>
-                            {s.estimatedTime && <span>{s.estimatedTime} min</span>}
-                            {s.location     && <span>{s.location}</span>}
-                            {s.minRecovery  && <span>↺ {s.minRecovery} h</span>}
+                            {s.estimatedTime ? <span>{s.estimatedTime} min</span> : null}
+                            {s.metrics?.distanceKm ? <span>{s.metrics.distanceKm} km</span> : null}
+                            {s.location ? <span>{s.location}</span> : null}
                           </div>
                         </div>
                         <span style={{ font: `700 15px ${MONO}`, color: tone, flexShrink: 0 }}>{charge}</span>
@@ -207,77 +183,12 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
                   })}
                 </div>
               </div>
-            ))
-          )
-        )}
-
-        {/* ══ BLOCS ══ */}
-        {!isSessionTab && (
-          (blocks || []).length === 0 ? (
-            <div style={emptyBox}>
-              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: c.text }}>Aucun bloc</div>
-              <div style={{ fontSize: 13 }}>Crée des blocs réutilisables (exercices, protocoles) à assembler dans tes séances.</div>
-            </div>
-          ) : filteredBlocks.length === 0 ? (
-            <div style={{ ...emptyBox, padding: "40px 20px", fontSize: 13 }}>Aucun résultat.</div>
-          ) : (
-            Object.entries(byBlockType).map(([btype, blist]) => {
-              const cfg = BLOCK_TYPES[btype] || {};
-              const tone = cfg.color || c.textMuted;
-              return (
-                <div key={btype} style={{ marginBottom: 22 }}>
-                  <SectionLabel isDark={isDark} style={{ color: tone }}>{btype}</SectionLabel>
-                  <div style={listCard}>
-                    {blist.map((b, i) => (
-                      <div key={b.id} style={{
-                        ...rowBase,
-                        borderBottom: i === blist.length - 1 ? "none" : `0.5px solid ${c.border}`,
-                      }}>
-                        <div style={{ width: 3, alignSelf: "stretch", borderRadius: 2, background: tone, flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {b.name}
-                          </div>
-                          <div style={{ fontSize: 11, color: c.textDim, display: "flex", gap: 10, flexWrap: "wrap", marginTop: 2, alignItems: "center" }}>
-                            {b.duration && <span>{b.duration} min</span>}
-                            {cfg.hasCharge && b.charge > 0 && (
-                              <span style={{ font: `700 12px ${MONO}`, color: getChargeColor(normalizeCharge10(b.charge)) }}>
-                                {normalizeCharge10(b.charge)}
-                              </span>
-                            )}
-                            {b.blockType === "Suspension" && b.config ? (
-                              <SuspensionSummaryChips config={b.config} muted={c.textDim} />
-                            ) : b.description ? (
-                              <span style={{ maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.description}</span>
-                            ) : null}
-                          </div>
-                        </div>
-                        <ItemActions
-                          id={b.id}
-                          onEdit={() => setBlockForm({ initial: b })}
-                          onDel={onDeleteBlock}
-                          onHistory={() => setFeedbackHistory({ type: "block", id: b.id, name: b.name })}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })
-          )
+            );
+          })
         )}
       </div>
 
-      {/* ── Modal bloc ── */}
-      {blockForm !== null && (
-        <BlockFormModal
-          initial={blockForm.initial}
-          onSave={b => { (blockForm.initial ? onEditBlock : onNewBlock)(b); setBlockForm(null); }}
-          onClose={() => setBlockForm(null)}
-        />
-      )}
-
-      {/* ── Modal historique feedbacks ── */}
+      {/* ── Historique des retours ── */}
       {feedbackHistory && (
         <FeedbackHistoryModal
           type={feedbackHistory.type}

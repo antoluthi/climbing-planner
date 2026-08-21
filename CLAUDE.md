@@ -6,7 +6,7 @@ Contexte technique et état du projet pour les sessions Claude Code.
 
 - **React 19 + Vite 7** — architecture modulaire multi-fichiers
 - **PWA** via `vite-plugin-pwa` (service worker, icônes, manifest)
-- **Supabase** (`@supabase/supabase-js`) — Auth magic link + sync cloud (tables `climbing_plans`, `coach_athletes`, `sessions_catalog`, `session_blocks`, `session_feedbacks`)
+- **Supabase** (`@supabase/supabase-js`) — Auth magic link + sync cloud (tables `climbing_plans`, `coach_athletes`, `sessions_catalog`, `session_feedbacks`)
 - **Recharts** — graphiques stats (LineChart, BarChart)
 - **Deploy** : Vercel, auto-deploy sur push `master` → https://climbing-planner-theta.vercel.app/
 
@@ -22,8 +22,7 @@ src/
 │
 ├── lib/                          — utilitaires et données
 │   ├── supabase.js               — client Supabase singleton (default export)
-│   ├── constants.js              — MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, BLOCK_TYPES, GRIP_TYPES,
-│   │                               DEFAULT_SUSPENSION_CONFIG, CUSTOM_CYCLE_COLORS,
+│   ├── constants.js              — MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, CUSTOM_CYCLE_COLORS,
 │   │                               isDateInCustomCycle, getCustomCyclesForDate,
 │   │                               getDayLogWarning, getMesoColor, getMesoForDate
 │   ├── helpers.js                — getMondayOf, addDays, formatDate, weekKey, localDateStr,
@@ -32,6 +31,7 @@ src/
 │   │                               getSessionCharge, climbingCharge10, RPE_LABELS, getChargeColor,
 │   │                               VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, getNbMouvementsZone
 │   ├── storage.js                — generateId, loadData, saveData (localStorage)
+│   ├── pace.js                   — temps · distance · allure/vitesse liés (parse, format, calcul)
 │   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
 │   └── hooper.js                 — hooperLabel, hooperColor
 │
@@ -45,8 +45,7 @@ src/
 │   ├── useSwipe.js                — balayage horizontal (onglets / périodes)
 │   ├── useSupabaseSync.js         — session auth, loadFromCloud, saveToCloud, uploadNow, writeStatus
 │   ├── useCommunitySessionsSync.js — sync séances communautaires (lecture seule)
-│   ├── useSessionsCatalog.js      — CRUD sessions_catalog (bibliothèque coach)
-│   ├── useSessionBlocks.js        — CRUD session_blocks (blocs multi-séances)
+│   ├── useSessionsCatalog.js      — CRUD sessions_catalog (bibliothèque de modèles)
 │   └── useCoachAthletes.js        — relations coach-athlète (coach_athletes)
 │
 └── components/
@@ -57,17 +56,12 @@ src/
     ├── RoleOnboardingModal.jsx    — choix du rôle au 1er login
     ├── RichText.jsx               — rendu texte riche (markdown-like)
     ├── ConfirmModal.jsx           — dialogue de confirmation suppression
-    ├── CustomSessionModal.jsx     — formulaire séance personnalisée
-    ├── BlockEditor.jsx            — éditeur de bloc dans une séance
-    ├── BlockFormModal.jsx         — modal formulaire de bloc (avec config Suspension)
-    ├── SessionBuilder.jsx         — construction de séance pas à pas
-    ├── SessionPicker.jsx          — sélecteur de séance (athlète)
+    ├── session/SessionFormModal.jsx     — ajout/modification d'une séance (étape 1)
+    ├── session/SessionScheduleModal.jsx — heure + lieu (étape 2)
+    ├── session/SessionLibraryModal.jsx  — recherche dans la bibliothèque
+    ├── session/ChargeCalculatorModal.jsx — calculateur de charge (escalade)
     ├── SessionModal.jsx           — modal détail séance (feedback, déplacement)
-    ├── SessionComposerModal.jsx   — composition de séances à partir de blocs
-    ├── CoachPickerModal.jsx       — sélecteur séance/bloc (coach)
-    ├── FeedbackHistoryModal.jsx   — historique feedbacks athlète par bloc/séance
-    ├── SuspensionInfoCard.jsx     — affichage config bloc Suspension
-    ├── SuspensionSummaryChips.jsx — chips résumé config Suspension
+    ├── FeedbackHistoryModal.jsx   — historique des retours par séance
     ├── DayColumn.jsx              — colonne d'un jour (vue semaine)
     ├── MonthView.jsx              — vue mois (grille calendrier)
     ├── YearView.jsx               — vue année (12 mois)
@@ -85,7 +79,7 @@ src/
     ├── CoachAthletesSection.jsx   — section "Mes athlètes" dans ProfileView
     ├── CalendarSyncSection.jsx    — section sync calendrier (CalDAV/iCal)
     ├── ProfileView.jsx            — avatar, infos, thème, gestion athlètes
-    ├── CoachLibraryView.jsx       — bibliothèque de séances et de blocs (tous)
+    ├── CoachLibraryView.jsx       — bibliothèque de séances modèles
     ├── AccueilView.jsx            — page d'accueil (phrase contextuelle, police Newsreader)
     └── PublicPlanView.jsx         — vue publique lecture-seule (Planning d'Anto)
 ```
@@ -135,7 +129,7 @@ src/
 | `climbing_plans` | `user_id` UNIQUE, `data` JSONB, `status` (rôle), `first_name`, `last_name`, `updated_at` | own row + coach peut lire/écrire les lignes de ses athlètes |
 | `coach_athletes` | `coach_id`, `athlete_id`, `created_at` — relation M:N unique | coach gère ses propres lignes |
 | `sessions_catalog` | bibliothèque de séances du coach | own rows |
-| `session_blocks` | blocs de séances (multi-séances groupées) | own rows |
+| `session_blocks` | **plus utilisée** — la table reste, l'app n'y touche plus (blocs supprimés) | own rows |
 | `session_feedbacks` | retours athlète sur les séances | authenticated read-all |
 
 - Auth : magic link email + password, `persistSession: true`, `storageKey: "climbing-planner-auth"`
@@ -234,7 +228,7 @@ Sans cette variable, les endpoints `/api/caldav/*` et `/api/calendar/*` retourne
 | `"dash"` | Statistiques + notes + Hooper + graphiques poids/Hooper | tous |
 | `"cycles"` | CyclesTimeline ou CyclesEditor | tous (lecture seule si athlete) |
 | `"profil"` | Profil utilisateur + gestion athlètes | tous |
-| `"library"` | Bibliothèque de séances et de blocs | tous (catalogue commun) |
+| `"library"` | Bibliothèque de séances modèles | tous (catalogue commun) |
 
 Navigation : les vues calendrier (week/month/year) sont regroupées sous un bouton "Calendrier" avec sous-nav.
 
@@ -313,8 +307,9 @@ Toutes les disciplines partagent la même unité : **la charge de séance 0-10**
   intensité 1-6 × complexité 1-6) reste un *assistant* — son produit est ramené
   sur 0-10 via `climbingCharge10()` (diviseur 4.8, calibré sur l'usage réel de
   l'ancienne échelle : bloc Grimpe type 24 → 5, séance complète 36 → 8).
-- **Blocs** : chaque bloc porte une charge 0-10 ; séance détaillée = somme des
-  blocs plafonnée à 10. Autres disciplines : saisie directe 0-10.
+- **Saisie** : une séance porte une charge 0-10, réglée au curseur. Pour
+  l'escalade, le calculateur (mouvements → volume × intensité × complexité) la
+  propose.
 - **`getSessionCharge(s)`** : charge effective = `feedback.rpe` (ressenti) >
   `chargePlanned` > `charge` legacy normalisée. **Séance manquée = 0.**
   Tous les totaux (jour, semaine, heatmap, Dashboard, AccueilView) passent par
@@ -323,12 +318,60 @@ Toutes les disciplines partagent la même unité : **la charge de séance 0-10**
   `SessionModal`, **pré-rempli à la charge planifiée** — l'athlète confirme ou
   ajuste, avec delta affiché ("Plus/Moins soutenu que prévu (±n)").
   `feedback.adaptedCharge` n'est plus écrit (legacy migré → `rpe`).
-- **Migration v5** (`storage.js`) : charges > 10 divisées par 4.8 (séances +
-  blocs), `chargePlanned` recalculé, `adaptedCharge` → `rpe`. Les données non
-  migrées (catalogue coach en DB) sont normalisées à la volée par
-  `normalizeCharge10()` dans les affichages.
+- **Migration v5** (`storage.js`) : charges > 10 divisées par 4.8,
+  `chargePlanned` recalculé, `adaptedCharge` → `rpe`. **v6** : les blocs sont
+  repliés dans les notes de la séance puis supprimés. Les données non migrées
+  (catalogue en DB) sont normalisées à la volée par `normalizeCharge10()` dans
+  les affichages.
 - **Couleurs** (`getChargeColor`) : 0 repos · ≤3 léger · ≤6 modéré · ≤9 soutenu
   · >9 très lourd (valable séance et total jour).
+
+## Ajout d'une séance
+
+Deux étapes, deux modales, dans `components/session/` :
+
+1. **`SessionFormModal.jsx` — quoi.** Le nom en haut à gauche, et juste à sa
+   droite le bouton bibliothèque qui ouvre `SessionLibraryModal`. Sans modèle
+   chargé, on choisit **d'abord la discipline** : c'est elle qui décide des
+   champs.
+   - escalade / renforcement / mobilité / autre : temps + charge (l'escalade a
+     l'icône calculatrice → `ChargeCalculatorModal`) ;
+   - course / trail : **temps · distance · allure** liés + D+ facultatif ;
+   - vélo : **temps · distance · vitesse** liés + D+ facultatif.
+   En pied, deux cases au niveau du bouton : « Événement » et « Enregistrer
+   comme modèle » (c'est la seule chose qui écrit dans `sessions_catalog` —
+   le catalogue ne se remplit plus tout seul).
+2. **`SessionScheduleModal.jsx` — quand & où.** Heure de départ et lieu, avec
+   une flèche de retour en haut à gauche.
+
+**Rien n'est écrit avant la fin de la seconde étape** : le shell garde la séance
+dans un `draft` et ne la pose dans `data.weeks` (ou `data.quickSessions` pour un
+événement) qu'au « Terminer » ou au « Plus tard ». C'est ce qui permet à la
+flèche de retour de rouvrir le formulaire tel quel, sans séance fantôme.
+
+### Le trio lié (`lib/pace.js`)
+
+`allure = durée / distance`, `vitesse = distance / (durée/60)`. En renseigner
+deux calcule le troisième — celui qui se calcule est celui qui n'est pas dans
+les deux derniers champs saisis (`computeThird`), et il s'affiche en accent.
+`sanitizeClockInput` interdit les allures impossibles : taper `6:70` donne
+`6:59`. Les durées circulent en **minutes fractionnaires** (5:30/km sur 8,4 km
+ne tombe pas juste à la minute) ; `estimatedTime` reste en minutes entières
+pour le reste de l'app.
+
+### Événements
+
+Case « Événement » → la séance devient une échéance : dates début/fin, couleur
+au choix, pas de charge. Elle part dans `data.quickSessions` et remonte sur
+l'accueil en **carte de décompte** (« J-12 »), la plus proche seulement.
+
+### Plus de blocs
+
+Les blocs (Échauffement / Grimpe / Suspension…) ont été retirés de l'app :
+composants, éditeurs, feedback par bloc, filtres de bibliothèque. La migration
+`v6` de `storage.js` **replie leur contenu dans les notes** de la séance plutôt
+que de le jeter. La table `session_blocks` existe toujours côté Supabase mais
+plus personne ne l'écrit ni ne la lit.
 
 ## Points techniques importants
 

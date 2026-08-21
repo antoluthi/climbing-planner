@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getChargeColor, getSessionCharge } from "../lib/charge.js";
-import { BLOCK_TYPES, getMesoColor } from "../lib/constants.js";
+import { getMesoColor } from "../lib/constants.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { colors } from "../theme/palette.js";
 
@@ -505,23 +505,6 @@ export function DayColumn({
                           }}>
                             {s.title || s.name}
                           </span>
-                        )}
-                        {!isShort && !isNarrow && s.blocks && s.blocks.length > 0 && (
-                          <div style={{ display: "flex", gap: 2, flexWrap: "wrap", marginTop: 2 }}>
-                            {s.blocks.slice(0, 3).map((bl, bi) => {
-                              const cfg = BLOCK_TYPES[bl.type];
-                              if (!cfg) return null;
-                              return (
-                                <span key={bi} style={{
-                                  fontSize: 8, padding: "0px 4px", borderRadius: 8,
-                                  background: cfg.color + "22", color: cfg.color,
-                                  border: `1px solid ${cfg.color}44`, lineHeight: 1.6,
-                                }}>
-                                  {bl.type === "Exercices" && bl.name ? bl.name.split(" ").slice(0, 2).join(" ") : bl.type}
-                                </span>
-                              );
-                            })}
-                          </div>
                         )}
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, flexShrink: 0 }}>

@@ -20,13 +20,10 @@ import { ClimbingPlannerLogo } from "../components/Logo.jsx";
 import { SyncButtons } from "../components/SyncButtons.jsx";
 import { RoleOnboardingModal } from "../components/RoleOnboardingModal.jsx";
 import { OnboardingModal } from "../components/OnboardingModal.jsx";
-import { SessionScheduleModal } from "../components/SessionScheduleModal.jsx";
 import { ConfirmModal } from "../components/ConfirmModal.jsx";
-import { CustomSessionModal } from "../components/CustomSessionModal.jsx";
-import { SessionComposer } from "../components/SessionComposer.jsx";
-import { SessionPicker } from "../components/SessionPicker.jsx";
 import { SessionModal } from "../components/SessionModal.jsx";
-import { CoachPickerModal } from "../components/CoachPickerModal.jsx";
+import { SessionFormModal } from "../components/session/SessionFormModal.jsx";
+import { SessionScheduleModal } from "../components/session/SessionScheduleModal.jsx";
 import { DayColumn } from "../components/DayColumn.jsx";
 import { MonthView } from "../components/MonthView.jsx";
 import { YearView } from "../components/YearView.jsx";
@@ -35,11 +32,9 @@ import { CyclesView } from "../components/CyclesView.jsx";
 // sensible surtout au démarrage de la WebView Android.
 const Dashboard = lazy(() => import("../components/Dashboard.jsx").then(m => ({ default: m.Dashboard })));
 import { DayLogModal } from "../components/DayLogModal.jsx";
-import { TemplateEditorModal } from "../components/TemplateEditorModal.jsx";
 import { ProfileView } from "../components/ProfileView.jsx";
 import { CoachLibraryView } from "../components/CoachLibraryView.jsx";
 import { AccueilView } from "../components/AccueilView.jsx";
-import { QuickSessionModal } from "../components/QuickSessionModal.jsx";
 import { ToastContainer } from "../components/ToastContainer.jsx";
 import { UpdateBanner } from "../components/UpdateBanner.jsx";
 import { BottomNav } from "../components/BottomNav.jsx";
@@ -59,8 +54,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
     switchToAthlete, switchBackToCoach, pullFromCloud,
     uploadNow,
     catalog, saveUserSession, deleteUserSession,
-    dbBlocks, saveBlock,
-    communitySessions, pushToCommunity,
+    pushToCommunity,
     athletes, searchAthletes, removeAthlete, myCoaches, leaveCoach, refreshMyCoaches,
     notifications, sentInvites, unreadCount,
     markInfosRead, sendCoachRequest, respondCoachRequest,
@@ -69,7 +63,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
     addCustomCycle, updateCustomCycle, deleteCustomCycle,
     addQuickSession, editQuickSession, removeQuickSession,
     syncPlannedSessions,
-    addSessionBlock, editSessionBlock, deleteSessionBlock,
   } = useData();
 
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -77,15 +70,14 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const [sessionBuilderDay, setSessionBuilderDay] = useState(null);
   // Édition d'une séance existante : remplace en place à (weekKey, dayIndex, sessionIndex).
   const [sessionEditCtx, setSessionEditCtx] = useState(null);
-  const [picker, setPicker] = useState(null);
-  const [customSessionForm, setCustomSessionForm] = useState(null);
   const [sessionComposerForm, setSessionComposerForm] = useState(null);
-  const [templateEditor, setTemplateEditor] = useState(null);
   const [sessionModal, setSessionModal] = useState(null);
   const [logDate, setLogDate] = useState(null);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [quickSessionForm, setQuickSessionForm] = useState(null);
-  const [pendingSchedule, setPendingSchedule] = useState(null);
+  // Ajout en deux temps : le formulaire (quoi), puis « quand & où ». Rien n'est
+  // écrit tant que la seconde étape n'est pas passée — c'est ce qui permet à sa
+  // flèche de retour de rouvrir le formulaire sans laisser de séance fantôme.
+  const [draft, setDraft] = useState(null);
 
   // ── Navigation par balayage entre onglets ──
   // Même ordre que la barre du bas. Les vues calendrier partagent l'onglet
@@ -98,9 +90,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   // onglets derrière elle. `hasOpenLayers()` (pile de calques de native.js)
   // couvre tout ce qui passe par ui/Modal.jsx, SessionModal et DayLogModal ;
   // ces quatre feuilles-ci n'y sont pas inscrites, d'où le complément.
-  const overlayOpen = sessionBuilderDay !== null || !!sessionEditCtx || !!picker ||
-    !!customSessionForm || !!sessionComposerForm || !!templateEditor ||
-    !!sessionModal || !!logDate || notifOpen || !!quickSessionForm || !!pendingSchedule;
+  const overlayOpen = sessionBuilderDay !== null || !!sessionEditCtx ||
+    !!sessionComposerForm || !!sessionModal || !!logDate || notifOpen || !!draft;
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -181,11 +172,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   // ── Handlers séances ──
   const updateWeekSessions = (newSessions) => {
     setData(d => ({ ...d, weeks: { ...d.weeks, [wKey]: newSessions } }));
-  };
-
-  const addSession = (dayIndex, session) => {
-    const updated = weekSessions.map((d, i) => i === dayIndex ? [...d, { ...session, feedback: null }] : d);
-    updateWeekSessions(updated);
   };
 
   const removeSession = (dayIndex, sessionIndex) => {
@@ -347,103 +333,34 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
     setData(d => ({ ...d, moveSuggestions: (d.moveSuggestions || []).filter(x => x.id !== id) }));
   };
 
-  // ── Custom session handlers ──
-  const saveCustomSession = (customSession, targetDayIndex) => {
-    if (customSessionForm?.onSave) {
-      customSessionForm.onSave(customSession);
-      return;
-    }
-    saveUserSession(customSession);
-    syncPlannedSessions(customSession);
-    // Capture l'index d'insertion AVANT setData pour la modale schedule.
-    let scheduleInfo = null;
-    if (targetDayIndex !== undefined && targetDayIndex !== null) {
-      const mon = getMondayOf(currentDate);
-      const key = weekKey(mon);
-      const currentLen = (data.weeks[key] || [])[targetDayIndex]?.length ?? 0;
-      scheduleInfo = {
-        weekKey: key, dayIndex: targetDayIndex, sessionIndex: currentLen,
-        sessionName: customSession.name || customSession.title || "",
-        defaultStartTime: customSession.startTime || "",
-        defaultLocation: customSession.location || customSession.address || "",
-        estimatedTime: customSession.estimatedTime ?? null,
-      };
-    }
-    setData(d => {
-      let weeks = d.weeks;
-      if (targetDayIndex !== undefined && targetDayIndex !== null) {
-        const mon = getMondayOf(currentDate);
-        const key = weekKey(mon);
-        const daySessions = (d.weeks[key] || Array(7).fill(null).map(() => []))[targetDayIndex];
-        const newDay = [...daySessions, { ...customSession, feedback: null }];
-        const ws = d.weeks[key] ? [...d.weeks[key]] : Array(7).fill(null).map(() => []);
-        ws[targetDayIndex] = newDay;
-        weeks = { ...d.weeks, [key]: ws };
-      }
-      if (customSession.date && targetDayIndex === undefined) {
-        const d2 = new Date(customSession.date);
-        if (!isNaN(d2.getTime())) {
-          const mon = getMondayOf(d2);
-          const key2 = weekKey(mon);
-          const dayOfWeek = d2.getDay();
-          const di = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-          const ws2 = weeks[key2] ? [...weeks[key2]] : Array(7).fill(null).map(() => []);
-          const alreadyPlaced = ws2[di]?.some(s => s.id === customSession.id);
-          if (!alreadyPlaced) {
-            ws2[di] = [...(ws2[di] || []), { ...customSession, feedback: null }];
-            weeks = { ...weeks, [key2]: ws2 };
-          }
-        }
-      }
-      return { ...d, weeks };
-    });
-    if (session?.user?.id && targetDayIndex != null) {
-      pushToCommunity(customSession, session.user.id);
-    }
-    setCustomSessionForm(null);
-    if (scheduleInfo) setPendingSchedule(scheduleInfo);
-  };
+  // Écrit une séance neuve (ou un événement) une fois les deux étapes passées.
+  // `sched` vaut null quand l'utilisateur a choisi « Plus tard ».
+  const commitNewSession = (payload, dayIndex, sched) => {
+    const s = { ...payload, ...(sched || {}) };
+    delete s.saveAsTemplate;
 
-  // ── Handler SessionBuilder ──
-  const saveBuiltSession = (builtSession) => {
-    const dayIndex = sessionBuilderDay && typeof sessionBuilderDay === "object"
-      ? sessionBuilderDay.dayIndex
-      : sessionBuilderDay;
-    saveUserSession(builtSession);
-    syncPlannedSessions(builtSession);
-    const hasDay = dayIndex !== null && dayIndex !== undefined;
-    const mon = getMondayOf(currentDate);
-    const key = weekKey(mon);
-    if (hasDay) {
-      const currentLen = (data.weeks[key] || [])[dayIndex]?.length ?? 0;
+    if (s.mode === "event") {
+      addQuickSession(s);
+      toast.success("Événement ajouté");
+    } else if (dayIndex !== null && dayIndex !== undefined) {
+      const key = weekKey(getMondayOf(currentDate));
       setData(d => {
         const ws = d.weeks[key] ? [...d.weeks[key]] : Array(7).fill(null).map(() => []);
-        ws[dayIndex] = [...(ws[dayIndex] || []), { ...builtSession, feedback: null }];
+        ws[dayIndex] = [...(ws[dayIndex] || []), { ...s, feedback: null }];
         return { ...d, weeks: { ...d.weeks, [key]: ws } };
       });
-      setPendingSchedule({
-        weekKey: key,
-        dayIndex,
-        sessionIndex: currentLen,
-        sessionName: builtSession.name || builtSession.title || "",
-        defaultStartTime: builtSession.startTime || "",
-        defaultLocation: builtSession.location || builtSession.address || "",
-        estimatedTime: builtSession.estimatedTime ?? null,
-      });
+      toast.success("Séance ajoutée");
     }
-    if (session?.user?.id) {
-      pushToCommunity(builtSession, session.user.id);
-    }
-    setSessionBuilderDay(null);
+
+    // Le catalogue ne se remplit plus tout seul : seulement sur demande.
+    if (payload.saveAsTemplate) saveUserSession(s);
+    if (session?.user?.id) pushToCommunity(s, session.user.id);
   };
 
   const isCalendarMode = ["week", "month", "year"].includes(viewMode);
-  // Permissions dérivées du rôle du COMPTE connecté (accountRole), jamais de
+  // Le rôle qui compte est celui du COMPTE connecté (accountRole), jamais
   // data.profile.role : en vue athlète, `data` est le blob de l'athlète et son
-  // rôle ne doit pas restreindre le coach (cycles, bibliothèque, picker).
-  const isCoach = accountRole === "coach";
-  const isAuto = accountRole === "auto";
-  const hasCoachFeatures = isCoach || isAuto;
+  // rôle ne doit pas restreindre le coach.
   const actualUserRole = accountRole ?? null;
   const pendingSuggestionsIds = new Set((data.moveSuggestions || []).filter(s => s.status === "pending").map(s => s.sessionId));
 
@@ -534,6 +451,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             isLoading={!!session && !cloudLoaded}
             onOpenAccount={() => setViewMode("profil")}
             onOpenNotifications={session ? () => setNotifOpen(true) : null}
+            onOpenEvent={(ev) => setSessionBuilderDay({ initial: { ...ev, mode: "event" } })}
             unreadCount={unreadCount}
             onOpenSession={openSessionModal}
             onToggleReminder={(reminderId, dateStr) => setData(d => {
@@ -565,7 +483,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             onAddSession={(dayIdxToday) => {
               // AccueilView est toujours « aujourd'hui ». S'assurer que la
               // semaine courante de la planification contient bien today
-              // avant d'ouvrir le SessionComposer sur le bon jour.
+              // avant d'ouvrir le formulaire sur le bon jour.
               setCurrentDate(new Date());
               setSessionBuilderDay({ dayIndex: dayIdxToday });
             }}
@@ -639,10 +557,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             onNew={() => setSessionComposerForm({})}
             onEdit={s => setSessionComposerForm({ initial: s })}
             onDelete={id => deleteUserSession(id)}
-            blocks={dbBlocks}
-            onNewBlock={addSessionBlock}
-            onEditBlock={editSessionBlock}
-            onDeleteBlock={deleteSessionBlock}
           />
         );
 
@@ -928,145 +842,133 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
            Sur mobile, ces vues sont rendues par le carrousel plus haut. */}
       {!isMobile && ["dash", "cycles", "library", "profil"].includes(viewMode) && renderTab(viewMode)}
 
-      {/* ── SessionComposer (unifié) ── */}
+      {/* ── Ajout / modification d'une séance — étape 1 : quoi ── */}
       {sessionBuilderDay !== null && (() => {
         const sbd = sessionBuilderDay;
         const dayIndex = sbd && typeof sbd === "object" ? sbd.dayIndex : sbd;
-        const titlePrefill = sbd && typeof sbd === "object" ? sbd.titlePrefill : "";
         const initial = sbd && typeof sbd === "object" ? sbd.initial : null;
         const dDay = dayIndex !== null && dayIndex !== undefined ? addDays(monday, dayIndex) : null;
         const dayLabelStr = dDay ? `${DAYS[dayIndex]} ${formatDate(dDay)}` : null;
-        const defaultDateISO = dDay
-          ? `${dDay.getFullYear()}-${String(dDay.getMonth()+1).padStart(2,'0')}-${String(dDay.getDate()).padStart(2,'0')}`
-          : localDateStr(new Date());
+        const defaultDateISO = dDay ? localDateStr(dDay) : localDateStr(new Date());
+        // Modifier un événement existant : on écrit directement, il n'a pas de
+        // seconde étape à repasser.
+        const isEventEdit = !!initial?.id && initial?.mode === "event";
         return (
-          <SessionComposer
+          <SessionFormModal
             initial={initial}
-            onSave={(payload) => {
-              // Route selon le mode : event → quickSessions, sinon weeks.
-              if (payload.mode === "event") {
-                const qs = { ...payload };
-                if (initial) editQuickSession(qs); else addQuickSession(qs);
-                toast.success(initial ? "Événement modifié" : "Événement ajouté");
-                setSessionBuilderDay(null);
-              } else {
-                // dayIndex doit être set (sinon save catalogue pur)
-                saveBuiltSession(payload);
-              }
-            }}
-            onClose={() => setSessionBuilderDay(null)}
-            communitySessions={communitySessions}
-            allSessions={catalog}
-            availableBlocks={dbBlocks}
-            onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
-            onSaveBlock={saveBlock}
-            titlePrefill={titlePrefill}
             dayLabel={dayLabelStr}
             defaultDate={defaultDateISO}
+            library={catalog}
+            submitLabel={isEventEdit ? "Enregistrer" : "Suivant"}
+            onClose={() => setSessionBuilderDay(null)}
+            onSave={(payload) => {
+              setSessionBuilderDay(null);
+              if (isEventEdit) {
+                editQuickSession(payload);
+                if (payload.saveAsTemplate) saveUserSession(payload);
+                toast.success("Événement modifié");
+                return;
+              }
+              // Étape 2 : quand & où. L'écriture n'a lieu qu'à sa sortie.
+              setDraft({ payload, dayIndex, dayLabel: dayLabelStr, dayDate: dDay });
+            }}
           />
         );
       })()}
 
-      {/* ── SessionComposer en mode édition : remplace en place ── */}
+      {/* ── Étape 2 : quand & où ── */}
+      {draft && (() => {
+        const { payload, dayIndex: ddi, dayLabel: ddl, dayDate } = draft;
+        // Lieux déjà utilisés, du plus récent au plus ancien.
+        const recentLocations = (() => {
+          const all = [];
+          Object.entries(data.weeks || {}).forEach(([wk, days]) => {
+            (days || []).forEach(dayArr => {
+              (dayArr || []).forEach(s => {
+                const loc = s?.location || s?.address;
+                if (loc && typeof loc === "string") all.push({ loc: loc.trim(), wk });
+              });
+            });
+          });
+          all.sort((a, b) => b.wk.localeCompare(a.wk));
+          const seen = new Set();
+          const out = [];
+          for (const { loc } of all) {
+            if (!seen.has(loc.toLowerCase())) { seen.add(loc.toLowerCase()); out.push(loc); }
+            if (out.length >= 8) break;
+          }
+          return out;
+        })();
+        return (
+          <SessionScheduleModal
+            sessionName={payload.name}
+            dayLabel={ddl}
+            dayDate={dayDate || new Date()}
+            defaultStartTime={payload.startTime || ""}
+            defaultLocation={payload.location || ""}
+            estimatedTime={payload.estimatedTime ?? null}
+            recentLocations={recentLocations}
+            onBack={() => { setDraft(null); setSessionBuilderDay({ dayIndex: ddi, initial: payload }); }}
+            onConfirm={(sched) => { commitNewSession(payload, ddi, sched); setDraft(null); }}
+            onSkip={() => { commitNewSession(payload, ddi, null); setDraft(null); }}
+          />
+        );
+      })()}
+
+      {/* ── Modification d'une séance déjà planifiée : remplace en place ── */}
       {sessionEditCtx && (() => {
         const { weekKey: ek, dayIndex: edi, sessionIndex: esi, initial } = sessionEditCtx;
         const emonday = new Date(ek + "T00:00:00");
         const eday = addDays(emonday, edi);
-        const edayLabel = `${DAYS[edi]} ${formatDate(eday)}`;
-        const edateISO = `${eday.getFullYear()}-${String(eday.getMonth()+1).padStart(2,'0')}-${String(eday.getDate()).padStart(2,'0')}`;
         return (
-          <SessionComposer
+          <SessionFormModal
             initial={initial}
-            dayLabel={edayLabel}
-            defaultDate={edateISO}
-            communitySessions={communitySessions}
-            allSessions={catalog}
-            availableBlocks={dbBlocks}
-            onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
-            onSaveBlock={saveBlock}
+            dayLabel={`${DAYS[edi]} ${formatDate(eday)}`}
+            defaultDate={localDateStr(eday)}
+            library={catalog}
             onClose={() => setSessionEditCtx(null)}
             onSave={(payload) => {
-              // Event : route vers quickSessions (replace by id).
               if (payload.mode === "event") {
                 editQuickSession(payload);
                 toast.success("Événement modifié");
                 setSessionEditCtx(null);
                 return;
               }
-              // Sinon : remplace en place dans data.weeks, préserve le feedback.
               setData(d => {
                 const ws = (d.weeks[ek] || Array(7).fill(null).map(() => [])).map(day => [...day]);
                 if (!ws[edi]) return d;
                 const prev = ws[edi][esi];
-                ws[edi] = ws[edi].map((sx, j) =>
-                  j === esi
-                    ? { ...payload, isCustom: true, feedback: prev?.feedback ?? null }
-                    : sx
-                );
+                ws[edi] = ws[edi].map((sx, j) => j === esi
+                  ? { ...payload, isCustom: true, feedback: prev?.feedback ?? null,
+                      startTime: prev?.startTime ?? payload.startTime ?? null,
+                      endTime: prev?.endTime ?? payload.endTime ?? null,
+                      location: prev?.location ?? payload.location ?? null }
+                  : sx);
                 return { ...d, weeks: { ...d.weeks, [ek]: ws } };
               });
-              // Si la séance est aussi dans le catalogue (saveAsTemplate), sync DB.
-              if (payload.saveAsTemplate) {
-                saveUserSession(payload);
-              }
+              if (payload.saveAsTemplate) { saveUserSession(payload); syncPlannedSessions(payload); }
               toast.success("Séance modifiée");
               setSessionEditCtx(null);
             }}
           />
         );
       })()}
-      {picker && hasCoachFeatures && (
-        <CoachPickerModal
-          sessions={catalog}
-          blocks={dbBlocks}
-          onSelect={s => { setTemplateEditor({ template: s, dayIndex: picker.dayIndex, startTime: s.startTime || "", address: s.address || "", coachNote: s.coachNote || "" }); setPicker(null); }}
-          onClose={() => setPicker(null)}
-        />
-      )}
-      {picker && !hasCoachFeatures && (
-        <SessionPicker
-          onSelect={s => { setTemplateEditor({ template: s, dayIndex: picker.dayIndex, startTime: "", address: s.address || "", coachNote: "" }); setPicker(null); }}
-          onClose={() => setPicker(null)}
-          customSessions={catalog.filter(s => s.isCustom)}
-          sessions={catalog.filter(s => !s.isCustom)}
-          onCreateCustom={() => { setCustomSessionForm({ targetDay: picker.dayIndex }); setPicker(null); }}
-        />
-      )}
-      {templateEditor && (
-        <TemplateEditorModal
-          template={templateEditor.template}
-          startTime={templateEditor.startTime}
-          address={templateEditor.address}
-          coachNote={templateEditor.coachNote}
-          onConfirm={s => { addSession(templateEditor.dayIndex, s); setTemplateEditor(null); }}
-          onSaveAsTemplate={s => saveUserSession(s)}
-          onSaveBlock={b => saveBlock(b)}
-          onClose={() => setTemplateEditor(null)}
-          allSessions={catalog}
-          dbBlocks={dbBlocks}
-          onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
-        />
-      )}
-      {customSessionForm !== null && (
-        <CustomSessionModal
-          initial={customSessionForm.initial}
-          data={data}
-          onSave={cs => saveCustomSession(cs, customSessionForm.targetDay)}
-          onClose={() => setCustomSessionForm(null)}
-        />
-      )}
+
+      {/* ── Nouvelle séance de bibliothèque (sans jour) ── */}
       {sessionComposerForm !== null && (
-        <SessionComposer
+        <SessionFormModal
           initial={sessionComposerForm.initial}
-          availableBlocks={dbBlocks}
-          allSessions={catalog}
-          communitySessions={communitySessions}
-          onSaveBlock={saveBlock}
-          onCreateCustom={(type) => setCustomSessionForm({ initial: { type }, targetDay: null })}
-          onSave={s => { saveCustomSession(s, undefined); setSessionComposerForm(null); }}
+          library={catalog}
           onClose={() => setSessionComposerForm(null)}
+          onSave={(payload) => {
+            saveUserSession(payload);
+            if (sessionComposerForm.initial) syncPlannedSessions(payload);
+            toast.success(sessionComposerForm.initial ? "Séance modifiée" : "Séance enregistrée");
+            setSessionComposerForm(null);
+          }}
         />
       )}
+
       {logDate && (
         <DayLogModal
           initialDate={logDate}
@@ -1104,61 +1006,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         />
       )}
 
-      {/* ── Programmer la séance (heure + lieu après ajout) ── */}
-      {pendingSchedule && (() => {
-        const { weekKey: psKey, dayIndex: psDi, sessionIndex: psSi, sessionName: psName, defaultStartTime, defaultLocation, estimatedTime } = pendingSchedule;
-        const psMonday = new Date(psKey + "T00:00:00");
-        const psDate = addDays(psMonday, psDi);
-        const psDayLabel = `${DAYS[psDi]} ${formatDate(psDate)}`;
-        // Lieux déjà utilisés sur les 8 dernières semaines (uniques, par ordre de récence)
-        const recentLocations = (() => {
-          const all = [];
-          Object.entries(data.weeks || {}).forEach(([wk, days]) => {
-            (days || []).forEach(dayArr => {
-              (dayArr || []).forEach(s => {
-                const loc = s?.location || s?.address;
-                if (loc && typeof loc === "string") all.push({ loc: loc.trim(), wk });
-              });
-            });
-          });
-          all.sort((a, b) => b.wk.localeCompare(a.wk));
-          const seen = new Set();
-          const out = [];
-          for (const { loc } of all) {
-            if (!seen.has(loc.toLowerCase())) {
-              seen.add(loc.toLowerCase());
-              out.push(loc);
-            }
-            if (out.length >= 8) break;
-          }
-          return out;
-        })();
-        return (
-          <SessionScheduleModal
-            sessionName={psName}
-            dayLabel={psDayLabel}
-            dayDate={psDate}
-            defaultStartTime={defaultStartTime}
-            defaultLocation={defaultLocation}
-            estimatedTime={estimatedTime}
-            recentLocations={recentLocations}
-            onConfirm={({ startTime, endTime, location }) => {
-              setData(d => {
-                const ws = (d.weeks[psKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
-                if (!ws[psDi] || !ws[psDi][psSi]) return d;
-                ws[psDi] = ws[psDi].map((sx, j) => j === psSi
-                  ? { ...sx, startTime, endTime: endTime || sx.endTime || null, location }
-                  : sx);
-                return { ...d, weeks: { ...d.weeks, [psKey]: ws } };
-              });
-              setPendingSchedule(null);
-              toast.success("Séance programmée");
-            }}
-            onSkip={() => setPendingSchedule(null)}
-          />
-        );
-      })()}
-
       {/* ── Session Modal ── */}
       {sessionModal && (() => {
         const { weekKey: smKey, dayIndex: smDi, sessionIndex: smSi } = sessionModal;
@@ -1172,7 +1019,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         return (
           <SessionModal
             session={smSession}
-            dbBlocks={dbBlocks}
             dayLabel={smDayLabel}
             weekMeta={smWeekMeta}
             onClose={() => setSessionModal(null)}
@@ -1200,7 +1046,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
               });
             }}
             onEdit={() => {
-              // Réouvre SessionComposer avec la séance pré-chargée.
+              // Réouvre le formulaire avec la séance pré-chargée.
               // Le save remplace en place (préserve feedback).
               setSessionEditCtx({
                 weekKey: smKey,
@@ -1214,17 +1060,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
           />
         );
       })()}
-
-      {/* ── QuickSessionModal ── */}
-      {quickSessionForm && (
-        <QuickSessionModal
-          initial={quickSessionForm.initial}
-          defaultDate={quickSessionForm.defaultDate}
-          onSave={qs => { quickSessionForm.initial ? editQuickSession(qs) : addQuickSession(qs); setQuickSessionForm(null); }}
-          onDelete={id => { removeQuickSession(id); setQuickSessionForm(null); }}
-          onClose={() => setQuickSessionForm(null)}
-        />
-      )}
 
       {isMobile && (
         <BottomNav

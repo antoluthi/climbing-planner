@@ -34,12 +34,12 @@ export function useSessionsCatalog(userId) {
   const saveUserSession = useCallback(async (session) => {
     const uid = userIdRef.current;
     if (!supabase || !uid) return null;
+    // `extra` est un JSONB : c'est là que vivent les champs qui n'ont pas de
+    // colonne dédiée — la discipline et les mesures (distance, allure, D+).
     const extra = {};
-    if (session.warmup)   extra.warmup   = session.warmup;
-    if (session.main)     extra.main     = session.main;
-    if (session.cooldown) extra.cooldown = session.cooldown;
-    if (session.location) extra.location = session.location;
-    if (session.blocks?.length) extra.blocks = session.blocks;  // composition de blocs
+    if (session.discipline) extra.discipline = session.discipline;
+    if (session.metrics)    extra.metrics    = session.metrics;
+    if (session.location)   extra.location   = session.location;
     // Base : ne contient PAS user_id ; on l'ajoute seulement sur INSERT pour
     // ne pas écraser le créateur original lors d'un edit par un autre
     // utilisateur (catalogue partagé).
@@ -49,6 +49,7 @@ export function useSessionsCatalog(userId) {
       charge: session.charge,
       min_recovery: session.minRecovery ?? null,
       estimated_time: session.estimatedTime ?? null,
+      description: session.notes ?? session.description ?? null,
       extra: Object.keys(extra).length ? extra : null,
       is_active: true,
       sort_order: 999,
