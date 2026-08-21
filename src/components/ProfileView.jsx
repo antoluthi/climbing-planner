@@ -9,13 +9,16 @@ import supabase from "../lib/supabase.js";
 import { uploadAvatar, deleteAvatar } from "../lib/avatar-storage.js";
 import { isNative } from "../lib/native.js";
 import { toast } from "../lib/toast.js";
-import { colors } from "../theme/palette.js";
+import { colors, DATA } from "../theme/palette.js";
+import { getCustomCycleDay } from "../lib/constants.js";
+import { disciplineList } from "../lib/disciplines.js";
+import { RowCard, Row, Segmented, PillToggle, Chip, ProgressBar, RoundIconButton, SANS, MONO } from "./ui/Ascent.jsx";
 
 // ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
 
 export function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus, onUpload, onPull, onImport, toggleTheme, isDark,
   athletes, onSearchAthletes, onInviteAthlete, sentInvites, onRemoveAthlete,
-  myCoaches, onLeaveCoach, accountRole,
+  myCoaches, onLeaveCoach, accountRole, onUpdateReminder, onBack,
   viewingAthlete, onToggleViewAthlete }) {
   const { styles } = useThemeCtx();
   const profile = data.profile || {};
@@ -133,8 +136,23 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
 
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || null;
 
+  const initials = ((profile.firstName?.[0] || "") + (profile.lastName?.[0] || "")).toUpperCase() || "—";
+
   return (
     <div style={styles.profileView}>
+      {/* ── En-tête : retour + titre (prototype « Ascent ») ── */}
+      {onBack && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+          <RoundIconButton isDark={isDark} size={36} label="Retour" onClick={onBack}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+          </RoundIconButton>
+          <div style={{ fontSize: 18, fontWeight: 700, color: textColor, fontFamily: SANS }}>Compte</div>
+        </div>
+      )}
+
       {/* ── Photo + identité ── */}
       <div style={{ ...styles.profileSection }}>
         <div style={styles.profileSectionTitle}>Profil</div>
@@ -147,7 +165,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
             >
               {photoUrl
                 ? <img src={photoUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
-                : <span style={{ fontSize: 28, color: mutedColor }}>?</span>
+                : <span style={{ font: `700 22px ${MONO}`, color: accent }}>{initials}</span>
               }
               {uploadingPhoto && (
                 <div style={{
@@ -199,6 +217,98 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
           </div>
         </div>
       </div>
+
+      {/* ── Données personnelles (prototype « Ascent ») ── */}
+      <div style={styles.profileSection}>
+        <div style={styles.profileSectionTitle}>Données personnelles</div>
+        <RowCard isDark={isDark}>
+          <Row isDark={isDark} label="Taille">
+            <ProfileNumberInput isDark={isDark} value={profile.height} suffix="cm"
+              onCommit={v => onUpdateProfile({ ...profile, height: v })} />
+          </Row>
+          <Row isDark={isDark} label="Poids objectif">
+            <ProfileNumberInput isDark={isDark} value={profile.weightGoal} suffix="kg" step={0.5}
+              onCommit={v => onUpdateProfile({ ...profile, weightGoal: v })} />
+          </Row>
+          <Row isDark={isDark} label="Date de naissance">
+            <input
+              type="date"
+              value={profile.birthdate || ""}
+              onChange={e => onUpdateProfile({ ...profile, birthdate: e.target.value })}
+              style={{
+                background: "transparent", border: "none", color: colors(isDark).text,
+                fontSize: 14, fontWeight: 600, fontFamily: SANS, textAlign: "right",
+                colorScheme: isDark ? "dark" : "light", outline: "none",
+              }}
+            />
+          </Row>
+          <Row isDark={isDark} label="Unités" last>
+            <Segmented
+              isDark={isDark}
+              style={{ width: 160 }}
+              value={profile.units || "metric"}
+              onChange={v => onUpdateProfile({ ...profile, units: v })}
+              options={[{ value: "metric", label: "Métrique" }, { value: "imperial", label: "Impérial" }]}
+            />
+          </Row>
+        </RowCard>
+      </div>
+
+      {/* ── Sports pratiqués ── */}
+      <div style={styles.profileSection}>
+        <div style={styles.profileSectionTitle}>Sports</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {disciplineList().map(d => {
+            const selected = (profile.sports || []).includes(d.id);
+            return (
+              <Chip
+                key={d.id}
+                isDark={isDark}
+                label={d.label}
+                color={DATA.sports[d.id]}
+                active={selected}
+                onClick={() => {
+                  const cur = profile.sports || [];
+                  const next = selected ? cur.filter(x => x !== d.id) : [...cur, d.id];
+                  onUpdateProfile({ ...profile, sports: next });
+                }}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Compléments et rappels ── */}
+      {((data.reminders || []).length > 0 || (data.customCycles || []).length > 0) && (
+        <div style={styles.profileSection}>
+          <div style={styles.profileSectionTitle}>Compléments et rappels</div>
+          <RowCard isDark={isDark}>
+            {(data.customCycles || []).map(cyc => {
+              const pos = getCustomCycleDay(cyc, new Date());
+              if (!pos) return null;
+              return (
+                <div key={cyc.id} style={{ padding: "14px 16px", borderBottom: `0.5px solid ${borderColor}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ fontSize: 14, color: textColor, fontWeight: 600, fontFamily: SANS }}>{cyc.label}</span>
+                    <span style={{ fontSize: 12, color: mutedColor, fontFamily: SANS }}>jour {pos.day} / {pos.total}</span>
+                  </div>
+                  <ProgressBar isDark={isDark} ratio={pos.day / pos.total} />
+                </div>
+              );
+            })}
+            {(data.reminders || []).map((r, i, arr) => (
+              <Row isDark={isDark} key={r.id} label={r.name} last={i === arr.length - 1}>
+                <PillToggle
+                  isDark={isDark}
+                  label={r.name}
+                  checked={r.enabled !== false}
+                  onChange={v => onUpdateReminder?.({ ...r, enabled: v })}
+                />
+              </Row>
+            ))}
+          </RowCard>
+        </div>
+      )}
 
       {/* ── Rôle (lecture seule) ── */}
       {"role" in profile && (
@@ -431,5 +541,34 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
 
       {showCrop && <PhotoCropModal onSave={handleSavePhoto} onClose={() => setShowCrop(false)} />}
     </div>
+  );
+}
+
+// Valeur numérique éditable alignée à droite (lignes « Données personnelles »).
+// Champ non contrôlé, remonté par `key` quand la valeur change à l'extérieur :
+// évite de synchroniser un état local depuis un effet.
+function ProfileNumberInput({ isDark, value, suffix, step = 1, onCommit }) {
+  const commit = (e) => {
+    const v = parseFloat(e.currentTarget.value.replace(",", "."));
+    onCommit(isNaN(v) ? undefined : v);
+  };
+  return (
+    <span style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+      <input
+        key={String(value)}
+        type="number"
+        step={step}
+        defaultValue={value != null ? String(value) : ""}
+        placeholder="—"
+        onBlur={commit}
+        onKeyDown={e => e.key === "Enter" && e.currentTarget.blur()}
+        style={{
+          background: "transparent", border: "none", outline: "none",
+          color: colors(isDark).text, fontSize: 14, fontWeight: 600,
+          fontFamily: SANS, textAlign: "right", width: 62,
+        }}
+      />
+      <span style={{ fontSize: 13, color: colors(isDark).textMuted, fontFamily: SANS }}>{suffix}</span>
+    </span>
   );
 }

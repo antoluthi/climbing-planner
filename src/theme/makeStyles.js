@@ -319,12 +319,14 @@ export function makeStyles(isDark) {
     sleepLegendDot: { width: 8, height: 8, borderRadius: "50%", display: "inline-block", marginRight: 4 },
 
     // ── Profile view ──
-    profileView: { padding: "20px 24px", overflowY: "auto", flex: 1, maxWidth: 600, margin: "0 auto", width: "100%" },
-    profileAvatar: { width: 96, height: 96, borderRadius: "50%", background: t.surface, border: `2px solid ${t.border2}`, overflow: "hidden", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "border-color 0.15s" },
+    profileView: { padding: "20px 20px 40px", overflowY: "auto", flex: 1, maxWidth: 600, margin: "0 auto", width: "100%" },
+    profileAvatar: { width: 72, height: 72, borderRadius: "50%", background: t.accentBg, border: "none", overflow: "hidden", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "border-color 0.15s" },
     profileAvatarHint: { fontSize: 10, color: t.accent, marginTop: 6, cursor: "pointer", letterSpacing: "0.05em" },
     profileNameInput: { background: t.inputBg, border: `1px solid ${t.btnBorder}`, borderRadius: 5, padding: "8px 12px", color: t.text, fontSize: 13, fontFamily: "inherit", outline: "none", width: "100%" },
-    profileSection: { marginBottom: 28 },
-    profileSectionTitle: { fontSize: 10, fontWeight: 700, color: t.textMuted, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 12, paddingBottom: 6, borderBottom: `1px solid ${t.border}` },
+    // Section de l'écran Compte : carte « Ascent » (fond card, filet fin,
+    // rayon 16) et intitulé en petites capitales espacées au-dessus.
+    profileSection: { background: t.card, border: `1px solid ${t.border}`, borderRadius: 16, padding: 16, marginBottom: 16 },
+    profileSectionTitle: { fontSize: 12, fontWeight: 700, color: t.textDim, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 12 },
     profileRow: { display: "flex", gap: 12, marginBottom: 10, alignItems: "center" },
     profileSaveBtn: { background: t.accentBg, border: `1px solid ${t.accentBorder}`, color: t.accent, padding: "7px 18px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", letterSpacing: "0.06em" },
     profileCancelBtn: { background: "none", border: `1px solid ${t.btnBorder}`, color: t.textDim, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit" },

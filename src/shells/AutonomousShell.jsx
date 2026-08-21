@@ -38,11 +38,11 @@ import { TemplateEditorModal } from "../components/TemplateEditorModal.jsx";
 import { ProfileView } from "../components/ProfileView.jsx";
 import { CoachLibraryView } from "../components/CoachLibraryView.jsx";
 import { AccueilView } from "../components/AccueilView.jsx";
-import { DayListView } from "../components/DayListView.jsx";
 import { QuickSessionModal } from "../components/QuickSessionModal.jsx";
 import { ToastContainer } from "../components/ToastContainer.jsx";
 import { UpdateBanner } from "../components/UpdateBanner.jsx";
 import { BottomNav } from "../components/BottomNav.jsx";
+import { CalendarView } from "../components/CalendarView.jsx";
 import { toast } from "../lib/toast.js";
 import { setRootBackHandler } from "../lib/native.js";
 import { NotificationBell } from "../components/NotificationBell.jsx";
@@ -85,10 +85,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [quickSessionForm, setQuickSessionForm] = useState(null);
   const [pendingSchedule, setPendingSchedule] = useState(null);
-  const [mobileDayIdx, setMobileDayIdx] = useState(() => {
-    const dow = new Date().getDay();
-    return dow === 0 ? 6 : dow - 1;
-  });
 
   const swipeRef = useRef(null);
 
@@ -508,16 +504,20 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
     <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: data.mesocycles || [] }}>
     <div style={{
       ...styles.app,
-      height: viewMode === "week" ? "100dvh" : undefined,
+      height: viewMode === "week" && !isMobile ? "100dvh" : undefined,
       minHeight: "100dvh",
-      overflowY: viewMode === "week" ? "hidden" : "auto",
+      overflowY: viewMode === "week" && !isMobile ? "hidden" : "auto",
       overflowX: "hidden",
       paddingBottom: isMobile ? "calc(56px + env(safe-area-inset-bottom))" : 0,
     }}>
       <div style={styles.grain} />
 
-      {/* ── HEADER MOBILE ── */}
-      {isMobile ? (
+      {/* ── HEADER MOBILE ──
+           L'accueil porte son propre en-tête (date, salutation, avatar) depuis
+           la refonte « Ascent » : on masque celui du shell pour ne pas empiler
+           deux barres. Les autres onglets gardent le leur en attendant d'être
+           redessinés. */}
+      {isMobile && (viewMode === "accueil" || viewMode === "profil" || ["week", "month", "year"].includes(viewMode)) ? null : isMobile ? (
         <div style={styles.headerMobile}>
           <div style={styles.headerMobileRow1}>
             <div style={styles.headerLeft}>
@@ -630,8 +630,24 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         </div>
       )}
 
+      {/* ── Calendrier « Ascent » (mobile) ──
+           Un seul écran pour Mois / Semaine / Année, avec son propre titre et
+           sa navigation. Le bureau garde les vues historiques (grille semaine
+           7 colonnes, vue mois, vue année), que le prototype ne couvre pas. */}
+      {isMobile && ["week", "month", "year"].includes(viewMode) && (
+        <CalendarView
+          data={data}
+          currentDate={currentDate}
+          setCurrentDate={setCurrentDate}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          onOpenSession={openSessionModal}
+          onAddSession={(dayIdx) => setSessionBuilderDay(dayIdx)}
+        />
+      )}
+
       {/* ── Méta semaine — visible aussi sur mobile (TL;DR 10) ── */}
-      {(viewMode === "week" || viewMode === "month") && (() => {
+      {!isMobile && (viewMode === "week" || viewMode === "month") && (() => {
         const detected = getMesoForDate(data.mesocycles, monday);
         const color = detected?.meso?.color || (weekMeta.mesocycle ? getMesoColor(data.mesocycles, weekMeta.mesocycle) : null);
         if (!detected && !weekMeta.mesocycle) return null;
@@ -676,6 +692,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
           data={data}
           isMobile={isMobile}
           isLoading={!!session && !cloudLoaded}
+          onOpenAccount={() => setViewMode("profil")}
           onOpenSession={openSessionModal}
           onToggleReminder={(reminderId, dateStr) => setData(d => {
             const prev = d.reminderState || {};
@@ -715,80 +732,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
       )}
 
       {/* ── Vue semaine — mobile: liste 1 jour, desktop: 7 colonnes timeline ── */}
-      {viewMode === "week" && isMobile && (() => {
-        const date = addDays(monday, mobileDayIdx);
-        const isToday = date.toDateString() === new Date().toDateString();
-        const dateISO = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-        const logWarning = getDayLogWarning(data, dateISO, date);
-        return (
-          <div
-            style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, touchAction: "pan-y" }}
-            onTouchStart={(e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
-            onTouchEnd={(e) => {
-              if (!swipeRef.current) return;
-              const dx = e.changedTouches[0].clientX - swipeRef.current.x;
-              const dy = e.changedTouches[0].clientY - swipeRef.current.y;
-              swipeRef.current = null;
-              if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-                // Swipe horizontal — un jour à la fois, sans skip de semaine
-                if (dx > 0) {
-                  // → vers le passé
-                  if (mobileDayIdx > 0) setMobileDayIdx(i => i - 1);
-                  else {
-                    handlePrev();          // recule d'une semaine
-                    setMobileDayIdx(6);    // atterrit sur dimanche
-                  }
-                } else {
-                  // → vers le futur
-                  if (mobileDayIdx < 6) setMobileDayIdx(i => i + 1);
-                  else {
-                    handleNext();          // avance d'une semaine
-                    setMobileDayIdx(0);    // atterrit sur lundi
-                  }
-                }
-              }
-            }}
-          >
-            <DayListView
-              monday={monday}
-              dayIndex={mobileDayIdx}
-              setDayIndex={setMobileDayIdx}
-              sessions={weekSessions[mobileDayIdx] || []}
-              weekSessions={weekSessions}
-              weekQuickSessions={(() => {
-                // Map { isoDate: [QuickSession, …] } pour les 7 jours de la semaine
-                const map = {};
-                const qs = data.quickSessions || [];
-                for (let i = 0; i < 7; i++) {
-                  const dd = addDays(monday, i);
-                  const iso = `${dd.getFullYear()}-${String(dd.getMonth()+1).padStart(2,'0')}-${String(dd.getDate()).padStart(2,'0')}`;
-                  map[iso] = qs.filter(x => {
-                    if (x.startDate === iso) return true;
-                    if (x.endDate && x.startDate <= iso && x.endDate >= iso) return true;
-                    return false;
-                  });
-                }
-                return map;
-              })()}
-              isToday={isToday}
-              weekMeta={weekMeta}
-              logWarning={logWarning}
-              isLoading={!!session && !cloudLoaded}
-              onOpenSession={(si) => openSessionModal(wKey, mobileDayIdx, si)}
-              onOpenLog={() => setLogDate(dateISO)}
-              onAddSession={() => setSessionBuilderDay({ dayIndex: mobileDayIdx })}
-              onToggleSessionDone={(si) => toggleSessionDone(wKey, mobileDayIdx, si)}
-              quickSessions={(data.quickSessions || []).filter(qs => {
-                if (qs.startDate === dateISO) return true;
-                if (qs.endDate && qs.startDate <= dateISO && qs.endDate >= dateISO) return true;
-                return false;
-              })}
-              onOpenQuickSession={qs => setSessionBuilderDay({ initial: { ...qs, mode: "event" } })}
-              pendingSuggestionsIds={pendingSuggestionsIds}
-            />
-          </div>
-        );
-      })()}
 
       {viewMode === "week" && !isMobile && (
         <div
@@ -836,7 +779,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
       )}
 
       {/* ── Vue mois ── */}
-      {viewMode === "month" && (
+      {viewMode === "month" && !isMobile && (
         <div
           style={{ touchAction: "pan-y" }}
           onTouchStart={isMobile ? (e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } : undefined}
@@ -870,7 +813,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
       )}
 
       {/* ── Vue année ── */}
-      {viewMode === "year" && (
+      {viewMode === "year" && !isMobile && (
         <div
           style={{ touchAction: "pan-y" }}
           onTouchStart={isMobile ? (e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } : undefined}
@@ -934,6 +877,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
           reminders={data.reminders || []}
           reminderState={data.reminderState || {}}
           onAddReminder={r => setData(d => ({ ...d, reminders: [...(d.reminders || []), r] }))}
+          onBack={() => setViewMode("accueil")}
           onUpdateReminder={r => setData(d => ({ ...d, reminders: (d.reminders || []).map(x => x.id === r.id ? r : x) }))}
           onDeleteReminder={id => setData(d => {
             const reminders = (d.reminders || []).filter(r => r.id !== id);
@@ -979,6 +923,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
           }}
           sentInvites={sentInvites}
           onRemoveAthlete={removeAthlete}
+          onUpdateReminder={r => setData(d => ({ ...d, reminders: (d.reminders || []).map(x => x.id === r.id ? r : x) }))}
           myCoaches={myCoaches}
           onLeaveCoach={leaveCoach}
           accountRole={accountRole}

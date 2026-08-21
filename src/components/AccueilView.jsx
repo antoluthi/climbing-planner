@@ -1,13 +1,12 @@
-import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { getMesoForDate, getDayLogWarning } from "../lib/constants.js";
-import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, getLastKnownWeight } from "../lib/helpers.js";
+import { getMesoForDate, getCustomCycleDay } from "../lib/constants.js";
+import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
-import { hooperColor, hooperLabel } from "../lib/hooper.js";
 import { AccueilSkeleton } from "./ui/Skeleton.jsx";
-import { TodaySessionCard } from "./TodaySessionCard.jsx";
 import { getActiveRemindersForDate, isReminderCheckedOn } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
+import { Card, SectionLabel, StatValue, SportBadge, PrimaryButton, SecondaryButton,
+         RoundCheck, InitialsAvatar, SANS, MONO } from "./ui/Ascent.jsx";
 
 // ─── GREETING BY TIME OF DAY ──────────────────────────────────────────────────
 
@@ -968,632 +967,200 @@ export function AccueilView(props) {
 function AccueilViewBody({
   data, isMobile,
   onOpenSession,
-  onToggleReminder, onSaveWeight,
-  onAddNutrition, onDeleteNutrition,
+  onToggleReminder,
   onOpenLog,
   onAddSession,
-  onToggleSessionDone,
+  onOpenAccount,
 }) {
-  // onAddHooper n'est plus utilisé ici : l'édition Hooper se fait dans
-  // DayLogModal, ouvert via la carte "Journal du jour" ci-dessous.
   const { isDark } = useThemeCtx();
+  const c = colors(isDark);
 
   const today = localDateStr(new Date());
   const todayObj = new Date(today + "T12:00:00");
 
-  // Today's sessions
+  // ── Semaine courante ──
   const monday = getMondayOf(todayObj);
   const wKey = weekKey(monday);
   const dow = todayObj.getDay();
   const dayIndex = dow === 0 ? 6 : dow - 1;
   const weekSessions = data.weeks[wKey] || Array(7).fill(null).map(() => []);
   const todaySessions = weekSessions[dayIndex] || [];
-  const todayCharge = todaySessions.reduce((s, x) => s + (x.charge || 0), 0);
 
-  // Profile
+  // ── Identité ──
   const firstName = data.profile?.firstName || "";
+  const lastName = data.profile?.lastName || "";
+  const initials = ((firstName[0] || "") + (lastName[0] || "")).toUpperCase() || "—";
+  const photoUrl = data.profile?.avatarUrl || data.profile?.avatarDataUrl || "";
 
-  // ── Tokens partagés avec DayLogModal / DayListView ───────────────────────
-  const paper        = colors(isDark).card;
-  const paperDim     = colors(isDark).surface;
-  const surfaceCard  = colors(isDark).card;
-  const surfaceMuted = colors(isDark).surface;
-  const border       = colors(isDark).borderSubtle;
-  const text         = colors(isDark).text;
-  const textMid      = colors(isDark).textCard;
-  const textLight    = colors(isDark).textMuted;
-  const accent       = colors(isDark).accent;
-  const inkPrimary   = colors(isDark).text;
-
-  // ── Hooper (read-only summary, édition complète dans DayLogModal) ────────
+  // ── Journal du jour ──
   const existingHooper = (data.hooper || []).find(h => h.date === today);
-
-  // ── Rappels du jour ──
-  const activeReminders = getActiveRemindersForDate(data.reminders || [], todayObj);
-  const checkedReminders = activeReminders.filter(r => isReminderCheckedOn(data.reminderState, r.id, today));
-
-  // ── Poids (stepper inline, pré-rempli avec la dernière valeur connue) ──
   const todayWeight = data.weight?.[today] ?? null;
-  const prefillWeight = todayWeight ?? getLastKnownWeight(data, today);
-  const [weightInput, setWeightInput] = useState(
-    prefillWeight != null ? String(prefillWeight) : ""
-  );
-  const commitWeight = () => {
-    const val = parseFloat(weightInput.replace(",", "."));
-    if (!isNaN(val) && val > 0) onSaveWeight?.(today, Math.round(val * 10) / 10);
-    else if (weightInput.trim() === "") onSaveWeight?.(today, null);
-  };
-
-  // ── Nutrition ──
   const todayMeals = data.nutrition?.[today] || [];
   const totalCalories = todayMeals.reduce((s, m) => s + (m.calories || 0), 0);
   const totalProteins = todayMeals.reduce((s, m) => s + (m.proteins || 0), 0);
-  const [nutrOpen, setNutrOpen] = useState(false);
-  const [nutrForm, setNutrForm] = useState({ name: "", calories: "", proteins: "" });
-  const nutrValid = nutrForm.name.trim() && (nutrForm.calories !== "" || nutrForm.proteins !== "");
-  const handleAddMeal = () => {
-    if (!nutrValid) return;
-    const meal = {
-      id: "m_" + Date.now().toString(36),
-      name: nutrForm.name.trim(),
-      calories: nutrForm.calories !== "" ? Math.round(Number(nutrForm.calories)) : 0,
-      proteins: nutrForm.proteins !== "" ? Math.round(Number(nutrForm.proteins)) : 0,
-    };
-    onAddNutrition(today, meal);
-    setNutrForm({ name: "", calories: "", proteins: "" });
-    setNutrOpen(false);
+  const checkinDone = existingHooper != null || todayWeight != null || todayMeals.length > 0;
+
+  // ── Rappels ──
+  const activeReminders = getActiveRemindersForDate(data.reminders || [], todayObj);
+  // Un rappel dont le nom correspond à un cycle personnalisé (créatine…)
+  // affiche sa position dans le cycle.
+  const cycleFor = (name) => {
+    const cyc = (data.customCycles || []).find(
+      x => x.label && name && x.label.toLowerCase() === name.toLowerCase());
+    return cyc ? getCustomCycleDay(cyc, todayObj) : null;
   };
 
-  // ── Méso contexte ──
+  // ── Contexte pour la phrase d'accueil ──
   const mesoCtx = getMesoForDate(data.mesocycles || [], todayObj);
-  const microIdx = mesoCtx?.meso && mesoCtx?.micro
-    ? (mesoCtx.meso.microcycles || []).findIndex(m => m.id === mesoCtx.micro.id)
-    : -1;
-  const microTotal = mesoCtx?.meso?.microcycles?.length || 0;
-
-  // ── Phrase contextuelle (helper existant) ──
   const phraseCtx = buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayIndex, mesoCtx);
   const contextualPhrase = getContextualPhrase(phraseCtx);
 
-  // ── Journal du jour : état ──
-  const logWarning = getDayLogWarning(data, today, todayObj);
-  const allRemindersDone = activeReminders.length === 0 || checkedReminders.length === activeReminders.length;
-  const journalState = logWarning?.hasWarning
-    ? "warn"
-    : (existingHooper && todayWeight != null && allRemindersDone) ? "complete" : "empty";
+  // ── Barres de charge de la semaine ──
+  const dayLabels = ["L", "M", "M", "J", "V", "S", "D"];
+  const dayCharges = weekSessions.map(ds => (ds || []).reduce((sum, x) => sum + getSessionCharge(x), 0));
+  const maxCharge = Math.max(1, ...dayCharges);
 
-  const journalColors = (() => {
-    if (journalState === "warn")     return { bg: colors(isDark).surface, border: colors(isDark).border, fg: colors(isDark).accent };
-    if (journalState === "complete") return { bg: colors(isDark).successBg, border: colors(isDark).success, fg: colors(isDark).success };
-    return { bg: surfaceCard, border, fg: accent };
-  })();
+  const dateLabel = todayObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  const greeting = getGreeting(new Date().getHours(), firstName);
 
-  const journalText = journalState === "complete"
-    ? { title: "Journal complété", sub: "Tout est rempli pour aujourd'hui" }
-    : journalState === "warn"
-      ? { title: "Journal à compléter", sub: "Il manque encore des éléments" }
-      : { title: "Journal du jour", sub: "Note, poids, Hooper en un instant" };
+  const firstSession = todaySessions[0];
+  const sessionMeta = firstSession
+    ? [firstSession.duration ? firstSession.duration + " min" : null,
+       "RPE " + Math.round(getSessionCharge(firstSession))].filter(Boolean).join(" · ")
+    : null;
 
-  // ── Styles partagés ──
-  const cardLabel = {
-    fontFamily: "'Newsreader', Georgia, serif",
-    fontSize: 13, fontWeight: 500, color: text, letterSpacing: "0.02em",
-  };
-  const sectionHeading = {
-    fontSize: 11,
-    fontWeight: 500,
-    color: textLight,
-    letterSpacing: "0.1em",
-    textTransform: "uppercase",
-    fontFamily: "'Newsreader', Georgia, serif",
-    margin: "0 0 10px",
-  };
-
-  const dateFull = todayObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-  const weekN = (() => {
-    const d = new Date(todayObj);
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
-    const w1 = new Date(d.getFullYear(), 0, 4);
-    return 1 + Math.round(((d - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7);
-  })();
-
-  const chargeColors = (() => {
-    if (todayCharge < 4)  return { bg: colors(isDark).successBg, fg: colors(isDark).success };
-    if (todayCharge < 7)  return { bg: colors(isDark).warnBg, fg: colors(isDark).warn };
-    return { bg: colors(isDark).surface, fg: colors(isDark).accent };
-  })();
+  const pad = isMobile ? 16 : 20;
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-      {/* ── Hero header (gradient — même style que DayListView/DayLogModal) ── */}
-      <div
-        style={{
-          padding: isMobile ? "24px 18px 20px" : "40px 32px 28px",
-          background: isDark
-            ? `linear-gradient(180deg, ${paper}, ${paperDim})`
-            : `linear-gradient(180deg, ${paper} 0%, ${paperDim} 100%)`,
-          borderBottom: `1px solid ${border}`,
-        }}
-      >
-        {/* Eyebrow date · semaine */}
-        <div
-          style={{
-            fontSize: 11, fontWeight: 600, color: accent,
-            letterSpacing: "0.1em", textTransform: "uppercase",
-            marginBottom: 8,
-          }}
-        >
-          {dateFull} · S{String(weekN).padStart(2, "0")}
-        </div>
+    <div style={{ background: c.bg, minHeight: "100%", fontFamily: SANS }}>
 
-        {/* Greeting */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontFamily: "'Newsreader', Georgia, serif",
-                fontSize: isMobile ? 34 : 44,
-                fontWeight: 500, color: text,
-                lineHeight: 1.08, letterSpacing: "-0.01em",
-                textWrap: "balance",
-              }}
-            >
-              {getGreeting(new Date().getHours(), firstName)}
-            </div>
-
-            {/* Contextual phrase */}
-            <div
-              style={{
-                fontFamily: "'Newsreader', Georgia, serif",
-                fontSize: isMobile ? 15 : 17,
-                color: textMid, fontStyle: "italic",
-                lineHeight: 1.5, marginTop: 8,
-                maxWidth: 640,
-              }}
-            >
+      {/* ── En-tête : date, salutation, avatar ── */}
+      <div style={{ padding: `${pad + 8}px ${pad}px 0`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, color: c.textMuted, fontWeight: 600, textTransform: "capitalize" }}>{dateLabel}</div>
+          <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.4px", color: c.text, marginTop: 2 }}>{greeting}</div>
+          {contextualPhrase && (
+            <div style={{ fontSize: 13, color: c.textMuted, marginTop: 6, lineHeight: 1.45, maxWidth: 320 }}>
               {contextualPhrase}
             </div>
-          </div>
+          )}
         </div>
-
-        {/* Meta row : meso chip + charge chip */}
-        {(mesoCtx?.meso || todayCharge > 0) && (
-          <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap", alignItems: "center" }}>
-            {mesoCtx?.meso && (
-              <span style={{
-                fontSize: 11, fontWeight: 600,
-                background: mesoCtx.meso.color + "22",
-                color: mesoCtx.meso.color,
-                border: `1px solid ${mesoCtx.meso.color}44`,
-                borderRadius: 14, padding: "3px 10px",
-                letterSpacing: "0.04em",
-              }}>
-                {mesoCtx.meso.label}
-                {mesoCtx.micro && microIdx >= 0 && microTotal > 1 && (
-                  <span style={{ marginLeft: 6, opacity: 0.85 }}>· S{microIdx + 1}/{microTotal}</span>
-                )}
-              </span>
-            )}
-            {todayCharge > 0 && (
-              <span style={{
-                fontSize: 11, fontWeight: 700,
-                background: chargeColors.bg,
-                color: chargeColors.fg,
-                border: `1px solid ${chargeColors.fg}55`,
-                borderRadius: 14, padding: "3px 10px",
-              }}>
-                Charge · {todayCharge}
-              </span>
-            )}
-            {todaySessions.length > 0 && (
-              <span style={{ fontSize: 12, color: textLight }}>
-                {todaySessions.length} séance{todaySessions.length > 1 ? "s" : ""}
-              </span>
-            )}
-          </div>
-        )}
+        <InitialsAvatar isDark={isDark} initials={initials} photoUrl={photoUrl} size={40} onClick={onOpenAccount} />
       </div>
 
-      {/* ── Body ── */}
-      <div
-        style={{
-          flex: 1,
-          padding: isMobile ? "18px 16px 24px" : "24px 32px 40px",
-          maxWidth: 760,
-          width: "100%",
-          margin: "0 auto",
-          boxSizing: "border-box",
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-        }}
-      >
-        {/* ── Programme du jour ───────────────────────────────────── */}
-        <section>
-          <div style={sectionHeading}>Programme du jour</div>
-          {todaySessions.length === 0 ? (
-            <div style={{
-              background: surfaceCard, border: `1px dashed ${border}`,
-              borderRadius: 12, padding: "22px 16px",
-              textAlign: "center", color: textLight, fontSize: 13,
-            }}>
-              Pas de séance prévue aujourd'hui.
+      {/* ── Charge de la semaine ── */}
+      <div style={{ padding: `${pad}px ${pad}px 0` }}>
+        <div style={{ display: "flex", gap: 6, height: 40, alignItems: "flex-end" }}>
+          {dayCharges.map((val, i) => (
+            <div key={i} style={{ flex: 1, display: "flex", alignItems: "flex-end", height: "100%" }}>
+              <div style={{
+                width: "100%", borderRadius: 3,
+                height: `${Math.max(6, (val / maxCharge) * 100)}%`,
+                background: i === dayIndex ? c.accent : c.control,
+              }} />
             </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+          {dayLabels.map((l, i) => (
+            <div key={i} style={{
+              flex: 1, textAlign: "center", fontSize: 10, fontWeight: 700,
+              color: i === dayIndex ? c.accent : c.textDim,
+            }}>{l}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Séance du jour ── */}
+      <div style={{ padding: `${pad}px ${pad}px 0` }}>
+        <Card isDark={isDark}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 4, background: c.accent }} />
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: c.textMuted }}>
+              Séance du jour
+            </div>
+          </div>
+
+          {firstSession ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                <SportBadge disciplineId={firstSession.discipline || "climbing"} size={28} />
+                <div style={{ fontSize: 19, fontWeight: 700, color: c.text, minWidth: 0 }}>{firstSession.name}</div>
+              </div>
+              <div style={{ fontSize: 13, color: c.textMuted, marginBottom: 16 }}>{sessionMeta}</div>
+              <PrimaryButton isDark={isDark} onClick={() => onOpenSession?.(dayIndex, 0)}>
+                Voir la séance
+              </PrimaryButton>
+            </>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {todaySessions.map((session, si) => (
-                <TodaySessionCard
-                  key={si}
-                  session={session}
-                  onTap={() => onOpenSession(wKey, dayIndex, si)}
-                  onToggleDone={() => onToggleSessionDone?.(wKey, dayIndex, si)}
-                />
-              ))}
-            </div>
+            <>
+              <div style={{ fontSize: 15, color: c.textMuted, marginBottom: 16 }}>
+                Rien de prévu aujourd'hui — journée de repos.
+              </div>
+              <PrimaryButton isDark={isDark} onClick={() => onAddSession?.(dayIndex)}>
+                Ajouter une séance
+              </PrimaryButton>
+            </>
           )}
-          {onAddSession && (
-            <button
-              onClick={() => onAddSession(dayIndex)}
-              style={{
-                marginTop: 10,
-                width: "100%",
-                background: inkPrimary,
-                color: isDark ? paper : colors(isDark).onColor,
-                border: "none", borderRadius: 12,
-                padding: "12px 16px",
-                fontSize: 14, fontWeight: 600,
-                cursor: "pointer", fontFamily: "inherit",
-                letterSpacing: "0.02em",
-              }}
-            >+ Ajouter une séance</button>
-          )}
-        </section>
-
-        {/* ── Journal du jour (raccourci tappable) ─────────────────── */}
-        {onOpenLog && (
-          <button
-            onClick={() => onOpenLog(today)}
-            style={{
-              background: journalColors.bg,
-              border: `1px solid ${journalColors.border}`,
-              borderRadius: 12, padding: "12px 14px",
-              display: "flex", alignItems: "center", gap: 10,
-              width: "100%", textAlign: "left",
-              cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            <div style={{
-              width: 32, height: 32, borderRadius: "50%",
-              background: journalState === "complete" ? colors(isDark).success : journalState === "warn" ? colors(isDark).warnBg : accent + "22",
-              color: journalState === "complete" ? colors(isDark).onColor : journalState === "warn" ? colors(isDark).warn : accent,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 14, fontWeight: 700, flexShrink: 0,
-            }}>
-              {journalState === "complete" ? "✓" : journalState === "warn" ? "!" : "✎"}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: text }}>{journalText.title}</div>
-              <div style={{ fontSize: 11, color: textLight, marginTop: 1 }}>{journalText.sub}</div>
-            </div>
-            <span style={{ color: textLight, fontSize: 16 }}>›</span>
-          </button>
-        )}
-
-        {/* ── Wellness grid (mêmes cards que DayLogModal) ──────────── */}
-        <section>
-          <div style={sectionHeading}>Aujourd'hui</div>
-
-          {/* Row 1 : Poids + Créatine */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-            {/* Poids stepper */}
-            <div style={{
-              background: surfaceCard, border: `1px solid ${border}`,
-              borderRadius: 12, padding: "10px 12px",
-              flex: 1, display: "flex", alignItems: "center", gap: 8,
-            }}>
-              <span style={{ fontSize: 11, color: textLight, flex: 1 }}>Poids</span>
-              <button
-                onClick={() => {
-                  // Pas de base connue → ne rien enregistrer (éviterait un poids 0 kg).
-                  if (weightInput.trim() === "") return;
-                  const cur = parseFloat(weightInput.replace(",", ".")) || 0;
-                  const next = Math.max(0, Math.round((cur - 0.1) * 10) / 10);
-                  setWeightInput(String(next));
-                  if (next > 0) onSaveWeight?.(today, next);
-                }}
-                aria-label="Diminuer"
-                style={{
-                  width: 24, height: 24, borderRadius: "50%",
-                  background: surfaceMuted, color: accent,
-                  border: "none", cursor: "pointer",
-                  fontSize: 14, fontWeight: 700, fontFamily: "inherit",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >−</button>
-              <input
-                type="text" inputMode="decimal"
-                value={weightInput}
-                onChange={e => setWeightInput(e.target.value)}
-                onBlur={commitWeight}
-                onKeyDown={e => { if (e.key === "Enter") { commitWeight(); e.target.blur(); } }}
-                placeholder="—"
-                style={{
-                  width: 50, textAlign: "center",
-                  background: "transparent", border: "none",
-                  fontSize: 14, fontWeight: 600, color: text,
-                  fontFamily: "inherit", outline: "none",
-                }}
-              />
-              <button
-                onClick={() => {
-                  if (weightInput.trim() === "") return;
-                  const cur = parseFloat(weightInput.replace(",", ".")) || 0;
-                  const next = Math.round((cur + 0.1) * 10) / 10;
-                  setWeightInput(String(next));
-                  onSaveWeight?.(today, next);
-                }}
-                aria-label="Augmenter"
-                style={{
-                  width: 24, height: 24, borderRadius: "50%",
-                  background: surfaceMuted, color: accent,
-                  border: "none", cursor: "pointer",
-                  fontSize: 14, fontWeight: 700, fontFamily: "inherit",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >+</button>
-            </div>
-          </div>
-
-          {/* Rappels du jour (chips) */}
-          {activeReminders.length > 0 && (
-            <div style={{
-              background: surfaceCard, border: `1px solid ${border}`,
-              borderRadius: 12, padding: 14, marginBottom: 10,
-            }}>
-              <div style={{ ...cardLabel, marginBottom: 8 }}>Rappels du jour</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {activeReminders.map(rem => {
-                  const checked = isReminderCheckedOn(data.reminderState, rem.id, today);
-                  const doneBg     = colors(isDark).successBg;
-                  const doneBorder = colors(isDark).success;
-                  const doneFg     = colors(isDark).success;
-                  return (
-                    <button
-                      key={rem.id}
-                      onClick={() => onToggleReminder?.(rem.id, today)}
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 6,
-                        padding: "6px 11px", borderRadius: 999,
-                        background: checked ? doneBg : surfaceMuted,
-                        border: `1px solid ${checked ? doneBorder : border}`,
-                        color: checked ? doneFg : textMid,
-                        fontSize: 12, fontWeight: checked ? 600 : 500,
-                        cursor: "pointer", fontFamily: "inherit",
-                        transition: "background 0.12s, border-color 0.12s",
-                      }}
-                    >
-                      {checked && <span style={{ fontWeight: 700 }}>✓</span>}
-                      <span style={{
-                        width: 6, height: 6, borderRadius: "50%",
-                        background: rem.color, flexShrink: 0,
-                      }} />
-                      {rem.name}
-                    </button>
-                  );
-                })}
-              </div>
-              <div style={{ fontSize: 11, color: textLight, marginTop: 8 }}>
-                Tape pour cocher · {checkedReminders.length} / {activeReminders.length} aujourd'hui
-              </div>
-            </div>
-          )}
-
-          {/* Hooper (summary tappable, édition dans DayLogModal) */}
-          <button
-            onClick={() => onOpenLog?.(today)}
-            style={{
-              background: surfaceCard, border: `1px solid ${border}`,
-              borderRadius: 12, padding: 14, width: "100%",
-              display: "flex", alignItems: "center", gap: 12,
-              cursor: onOpenLog ? "pointer" : "default", fontFamily: "inherit",
-              textAlign: "left",
-              marginBottom: 10,
-            }}
-          >
-            <div style={{ flex: 1 }}>
-              <div style={{ ...cardLabel, marginBottom: 4 }}>Hooper</div>
-              {existingHooper ? (
-                <div style={{
-                  fontSize: 12, color: hooperColor(existingHooper.total, isDark),
-                  fontWeight: 600,
-                }}>
-                  {hooperLabel(existingHooper.total)}
-                </div>
-              ) : (
-                <div style={{ fontSize: 11, color: textLight }}>
-                  Pas encore rempli aujourd'hui
-                </div>
-              )}
-            </div>
-            <span style={{
-              fontFamily: "'Newsreader', Georgia, serif",
-              fontSize: 18, fontWeight: 700,
-              color: existingHooper ? hooperColor(existingHooper.total, isDark) : textLight,
-            }}>
-              {existingHooper ? `${existingHooper.total} / 28` : "—"}
-            </span>
-            <span style={{ color: textLight, fontSize: 16 }}>›</span>
-          </button>
-
-          {/* Nutrition card */}
-          <div style={{
-            background: surfaceCard, border: `1px solid ${border}`,
-            borderRadius: 12, padding: 14,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: nutrOpen ? 10 : 0 }}>
-              <div>
-                <div style={cardLabel}>Nutrition</div>
-                {(totalCalories > 0 || totalProteins > 0) ? (
-                  <div style={{ fontSize: 11, color: textMid, marginTop: 2 }}>
-                    {totalCalories} kcal · {totalProteins} g de protéines
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 11, color: textLight, marginTop: 2 }}>
-                    Aucun repas enregistré
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => setNutrOpen(o => !o)}
-                style={{
-                  background: "transparent", border: `1px solid ${border}`,
-                  borderRadius: 6, color: textMid,
-                  padding: "4px 12px", cursor: "pointer",
-                  fontSize: 11, fontFamily: "inherit",
-                }}
-              >
-                {nutrOpen ? "Fermer" : "+ Ajouter"}
-              </button>
-            </div>
-
-            {nutrOpen && (
-              <div style={{ marginTop: 8 }}>
-                {todayMeals.length > 0 && (
-                  <div style={{ marginBottom: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                    {todayMeals.map(m => (
-                      <div key={m.id} style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        background: paperDim, borderRadius: 8, padding: "6px 10px",
-                        fontSize: 12, color: text,
-                      }}>
-                        <span style={{ flex: 1, fontWeight: 500 }}>{m.name}</span>
-                        <span style={{ color: textLight, fontSize: 11 }}>{m.calories} kcal · {m.proteins} g</span>
-                        <button
-                          onClick={() => onDeleteNutrition(today, m.id)}
-                          aria-label="Supprimer"
-                          style={{
-                            background: "none", border: "none",
-                            cursor: "pointer", color: colors(isDark).danger,
-                            fontSize: 12, padding: "0 4px", lineHeight: 1,
-                            fontFamily: "inherit",
-                          }}
-                        >✕</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  <input
-                    type="text"
-                    placeholder="Repas (Déjeuner, Poulet riz…)"
-                    value={nutrForm.name}
-                    onChange={e => setNutrForm(f => ({ ...f, name: e.target.value }))}
-                    style={{
-                      background: paperDim, border: `1px solid ${border}`,
-                      borderRadius: 8, padding: "8px 10px",
-                      fontSize: 13, fontFamily: "inherit", color: text,
-                      outline: "none",
-                    }}
-                  />
-                  <div style={{ display: "flex", gap: 7 }}>
-                    <input
-                      type="number" min={0}
-                      placeholder="Calories"
-                      value={nutrForm.calories}
-                      onChange={e => setNutrForm(f => ({ ...f, calories: e.target.value }))}
-                      style={{
-                        flex: 1,
-                        background: paperDim, border: `1px solid ${border}`,
-                        borderRadius: 8, padding: "8px 10px",
-                        fontSize: 13, fontFamily: "inherit", color: text,
-                        outline: "none",
-                      }}
-                    />
-                    <input
-                      type="number" min={0}
-                      placeholder="Protéines (g)"
-                      value={nutrForm.proteins}
-                      onChange={e => setNutrForm(f => ({ ...f, proteins: e.target.value }))}
-                      style={{
-                        flex: 1,
-                        background: paperDim, border: `1px solid ${border}`,
-                        borderRadius: 8, padding: "8px 10px",
-                        fontSize: 13, fontFamily: "inherit", color: text,
-                        outline: "none",
-                      }}
-                    />
-                  </div>
-                  <button
-                    onClick={handleAddMeal}
-                    disabled={!nutrValid}
-                    style={{
-                      alignSelf: "flex-start",
-                      background: nutrValid ? inkPrimary : border,
-                      color: nutrValid ? (isDark ? paper : colors(isDark).onColor) : textLight,
-                      border: "none", borderRadius: 8,
-                      padding: "8px 16px",
-                      fontSize: 13, fontWeight: 600,
-                      cursor: nutrValid ? "pointer" : "not-allowed",
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    Ajouter
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* ── Objectifs à venir ────────────────────────────────────── */}
-        {(() => {
-          const allObj = (data.quickSessions || []).filter(qs => qs.isObjective);
-          const upcoming = allObj
-            .filter(o => (o.endDate || o.startDate) >= today)
-            .sort((a, b) => a.startDate.localeCompare(b.startDate));
-          if (upcoming.length === 0) return null;
-          return (
-            <section>
-              <div style={sectionHeading}>Objectifs à venir</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {upcoming.map(o => {
-                  const daysUntil = Math.ceil((new Date(o.startDate + "T00:00:00") - new Date(today + "T12:00:00")) / 864e5);
-                  const c = o.color || colors(isDark).warn;
-                  return (
-                    <div key={o.id} style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      background: surfaceCard,
-                      border: `1px solid ${border}`,
-                      borderLeft: `4px solid ${c}`,
-                      borderRadius: 12, padding: "10px 14px",
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          fontSize: 13, fontWeight: 600, color: text,
-                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        }}>{o.name}</div>
-                        <div style={{ fontSize: 11, color: c, marginTop: 2, fontWeight: 500 }}>
-                          {new Date(o.startDate + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}
-                          {daysUntil > 0 ? ` — dans ${daysUntil} jour${daysUntil > 1 ? "s" : ""}` : daysUntil === 0 ? " — aujourd'hui" : ""}
-                        </div>
-                      </div>
-                      {o.content && (
-                        <span style={{
-                          fontSize: 11, color: textLight,
-                          maxWidth: 140, overflow: "hidden",
-                          textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        }}>{o.content}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })()}
+        </Card>
       </div>
+
+      {/* ── Journal du jour ── */}
+      <div style={{ padding: `${pad}px ${pad}px 0` }}>
+        <Card isDark={isDark}>
+          <SectionLabel isDark={isDark} style={{ margin: "0 0 12px" }}>Journal du jour</SectionLabel>
+
+          {checkinDone ? (
+            <>
+              <div style={{ display: "flex", gap: 18, marginBottom: 16, flexWrap: "wrap" }}>
+                <StatValue isDark={isDark} value={totalCalories || "—"} unit="kcal" />
+                <StatValue isDark={isDark} value={totalProteins ? totalProteins + "g" : "—"} unit="protéines" />
+                <StatValue isDark={isDark} value={todayWeight != null ? todayWeight : "—"} unit="kg" />
+                <StatValue isDark={isDark} value={existingHooper?.total ?? "—"} unit="bien-être" accent />
+              </div>
+              <SecondaryButton isDark={isDark} onClick={() => onOpenLog?.(today)}>
+                Modifier le journal
+              </SecondaryButton>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 14, color: c.textMuted, marginBottom: 16, lineHeight: 1.45 }}>
+                Poids, nutrition et ressenti — une minute pour garder le suivi juste.
+              </div>
+              <PrimaryButton isDark={isDark} height={44} onClick={() => onOpenLog?.(today)}>
+                Remplir aujourd'hui
+              </PrimaryButton>
+            </>
+          )}
+        </Card>
+      </div>
+
+      {/* ── Rappels ── */}
+      {activeReminders.length > 0 && (
+        <div style={{ padding: `${pad}px ${pad}px ${pad}px` }}>
+          <Card isDark={isDark} padding={16}>
+            <SectionLabel isDark={isDark} style={{ margin: "4px 4px 4px" }}>Rappels</SectionLabel>
+            <div style={{ padding: "0 4px" }}>
+              {activeReminders.map(r => {
+                const done = isReminderCheckedOn(data.reminderState, r.id, today);
+                const cyc = cycleFor(r.name);
+                const cycle = cyc ? ` · jour ${cyc.day} / ${cyc.total}` : "";
+                return (
+                  <RoundCheck
+                    key={r.id}
+                    isDark={isDark}
+                    checked={done}
+                    onChange={() => onToggleReminder?.(r.id, today)}
+                    label={r.name + cycle}
+                  />
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      <div style={{ height: 24 }} />
     </div>
   );
 }

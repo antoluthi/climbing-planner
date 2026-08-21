@@ -63,26 +63,34 @@ function NavIcon({ kind, size = 22 }) {
           <path d="M4 5h5M14 5h-2" />
         </svg>
       );
+    case "db":
+      return (
+        <svg {...common}>
+          <ellipse cx="12" cy="6" rx="7" ry="3" />
+          <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+          <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+        </svg>
+      );
     default:
       return null;
   }
 }
 
 const TABS = [
-  { key: "accueil", label: "Accueil",  icon: "home"  },
-  { key: "week",    label: "Semaine",  icon: "cal"   },
-  { key: "cycles",  label: "Cycles",   icon: "cycle" },
-  { key: "dash",    label: "Stats",    icon: "chart" },
+  { key: "accueil", label: "Accueil",    icon: "home"  },
+  { key: "week",    label: "Calendrier", icon: "cal"   },
+  { key: "cycles",  label: "Cycles",     icon: "cycle" },
+  { key: "dash",    label: "Stats",      icon: "chart" },
+  { key: "library", label: "Database",   icon: "db"    },
 ];
 
 export function BottomNav({ viewMode, onChange, extraTabs }) {
   const { isDark } = useThemeCtx();
 
-  const bg          = colors(isDark).card;
-  const border      = colors(isDark).borderSubtle;
+  const bg          = colors(isDark).bgScrim;   // semi-transparent + flou
+  const border      = colors(isDark).border;
   const textMuted   = colors(isDark).textMuted;
   const accent      = colors(isDark).accent;
-  const accentBg    = colors(isDark).borderSubtle;
 
   // viewMode "week"/"month"/"year" → tous matchent l'onglet "week"
   const activeKey = ["month", "year"].includes(viewMode) ? "week" : viewMode;
@@ -99,10 +107,9 @@ export function BottomNav({ viewMode, onChange, extraTabs }) {
         right: 0,
         zIndex: Z.sticky,
         background: bg,
-        borderTop: `1px solid ${border}`,
-        boxShadow: isDark
-          ? "0 -2px 12px rgba(0,0,0,0.35)"
-          : "0 -2px 12px rgba(0,0,0,0.06)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderTop: `0.5px solid ${border}`,
         display: "flex",
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
@@ -136,9 +143,6 @@ export function BottomNav({ viewMode, onChange, extraTabs }) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: 12,
-                background: active ? accentBg : "transparent",
-                transition: "background 0.15s",
                 color: active ? accent : textMuted,
               }}
             >
