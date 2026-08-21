@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSwipe } from "../hooks/useSwipe.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { colors, DATA } from "../theme/palette.js";
-import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions } from "../lib/helpers.js";
+import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, isEventItem } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
 import { Card, Segmented, RoundIconButton, SportBadge, SportDot, PageTitle, SANS, MONO } from "./ui/Ascent.jsx";
 
@@ -22,6 +22,12 @@ function dayColor(sessions) {
   return DATA.sports[first.discipline] || DATA.sports.custom;
 }
 
+// Une échéance ressort du calendrier par un bandeau à sa couleur, là où une
+// séance n'a qu'un point.
+function eventOf(sessions) {
+  return (sessions || []).find(isEventItem) || null;
+}
+
 function Chevron({ dir = "left", size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -33,7 +39,7 @@ function Chevron({ dir = "left", size = 18 }) {
 
 export function CalendarView({
   data, currentDate, setCurrentDate, viewMode, setViewMode,
-  onOpenSession, onAddSession,
+  onOpenSession, onAddSession, onOpenEvent,
 }) {
   const { isDark } = useThemeCtx();
   const c = colors(isDark);
@@ -187,27 +193,45 @@ export function CalendarView({
               </>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {selectedSessions.map((s, i) => (
-                  <button
-                    key={s.id || i}
-                    onClick={() => onOpenSession?.(weekKey(getMondayOf(selectedObj)), dayIndexOf(selectedObj), i)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 12, width: "100%",
-                      background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left",
-                    }}
-                  >
-                    <SportBadge disciplineId={s.discipline || "custom"} size={32} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>{s.name}</div>
-                      <div style={{ fontSize: 12, color: c.textMuted, marginTop: 2 }}>
-                        {[s.time, s.duration ? s.duration + " min" : null].filter(Boolean).join(" · ")}
+                {selectedSessions.map((s, i) => {
+                  const ev = isEventItem(s);
+                  // L'index de séance ne vaut que pour data.weeks : une échéance
+                  // n'y est pas, elle s'ouvre par son objet.
+                  const sessionIndex = selectedSessions.slice(0, i).filter(x => !isEventItem(x)).length;
+                  const tone = ev ? (s.color || c.accent) : null;
+                  return (
+                    <button
+                      key={s.id || i}
+                      onClick={() => ev
+                        ? onOpenEvent?.(s)
+                        : onOpenSession?.(weekKey(getMondayOf(selectedObj)), dayIndexOf(selectedObj), sessionIndex)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 12, width: "100%",
+                        background: ev ? tone + "1e" : "none",
+                        border: "none", cursor: "pointer", textAlign: "left",
+                        padding: ev ? "10px 12px" : 0,
+                        borderRadius: ev ? 12 : 0,
+                        borderLeft: ev ? `3px solid ${tone}` : "none",
+                      }}
+                    >
+                      <SportBadge disciplineId={s.discipline || "custom"} size={32} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>{s.name}</div>
+                        <div style={{ fontSize: 12, color: ev ? tone : c.textMuted, marginTop: 2 }}>
+                          {ev
+                            ? ["Échéance", eventRangeLabel(s)].filter(Boolean).join(" · ")
+                            : [s.startTime, s.estimatedTime ? s.estimatedTime + " min" : null]
+                                .filter(Boolean).join(" · ")}
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ font: `700 13px ${MONO}`, color: c.accent }}>
-                      {Math.round(getSessionCharge(s))}
-                    </div>
-                  </button>
-                ))}
+                      {getSessionCharge(s) > 0 && (
+                        <div style={{ font: `700 13px ${MONO}`, color: tone || c.accent }}>
+                          {Math.round(getSessionCharge(s))}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </Card>
@@ -215,6 +239,13 @@ export function CalendarView({
       )}
     </div>
   );
+}
+
+// « du 2 au 4 septembre » pour une échéance qui court sur plusieurs jours.
+function eventRangeLabel(ev) {
+  if (!ev?.endDate || ev.endDate <= ev.startDate) return null;
+  const f = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  return `du ${f(ev.startDate)} au ${f(ev.endDate)}`;
 }
 
 // Index lundi=0 … dimanche=6, comme data.weeks.
@@ -253,7 +284,8 @@ function MonthGrid({ isDark, data, currentDate, selected, setSelected, today }) 
             const iso = localDateStr(date);
             const inMonth = date.getMonth() === month;
             const sessions = getDaySessions(data, date);
-            const dot = dayColor(sessions);
+            const ev = eventOf(sessions);
+            const dot = dayColor(sessions.filter(x => !isEventItem(x)));
             const isSelected = iso === selected;
             const isToday = iso === today;
             return (
@@ -263,8 +295,9 @@ function MonthGrid({ isDark, data, currentDate, selected, setSelected, today }) 
                 style={{
                   flex: 1, aspectRatio: "1", margin: 2, borderRadius: 10, border: "none", cursor: "pointer",
                   display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
-                  background: isSelected ? c.accent : "transparent",
+                  background: isSelected ? c.accent : ev ? (ev.color || c.accent) + "26" : "transparent",
                   opacity: inMonth ? (sessions.length ? 1 : 0.55) : 0.25,
+                  position: "relative", overflow: "hidden",
                 }}
               >
                 <div style={{
@@ -274,6 +307,12 @@ function MonthGrid({ isDark, data, currentDate, selected, setSelected, today }) 
                   {date.getDate()}
                 </div>
                 <SportDot color={isSelected ? c.textOnAccent : dot || "transparent"} size={5} />
+                {ev && (
+                  <div style={{
+                    position: "absolute", left: 0, right: 0, bottom: 0, height: 3,
+                    background: ev.color || c.accent,
+                  }} />
+                )}
               </button>
             );
           })}
@@ -295,7 +334,8 @@ function WeekStrip({ isDark, data, currentDate, selected, setSelected, today }) 
         {days.map((date, i) => {
           const iso = localDateStr(date);
           const sessions = getDaySessions(data, date);
-          const dot = dayColor(sessions);
+          const ev = eventOf(sessions);
+          const dot = dayColor(sessions.filter(x => !isEventItem(x)));
           const isSelected = iso === selected;
           const isToday = iso === today;
           return (
@@ -306,7 +346,8 @@ function WeekStrip({ isDark, data, currentDate, selected, setSelected, today }) 
                 flex: 1, borderRadius: 12, border: "none", cursor: "pointer",
                 padding: "10px 0", display: "flex", flexDirection: "column",
                 alignItems: "center", gap: 5,
-                background: isSelected ? c.accent : c.control,
+                background: isSelected ? c.accent : ev ? (ev.color || c.accent) + "26" : c.control,
+                boxShadow: ev && !isSelected ? `inset 0 -3px 0 ${ev.color || c.accent}` : undefined,
               }}
             >
               <div style={{
@@ -357,7 +398,9 @@ function YearGrid({ isDark, data, year, onPickMonth }) {
               <div key={wi} style={{ display: "flex", gap: 2, marginBottom: 2 }}>
                 {week.map((date, di) => {
                   const inMonth = date.getMonth() === m;
-                  const dot = inMonth ? dayColor(getDaySessions(data, date)) : null;
+                  const dayItems = inMonth ? getDaySessions(data, date) : [];
+                  const ev = eventOf(dayItems);
+                  const dot = ev ? (ev.color || null) : dayColor(dayItems);
                   return (
                     <div key={di} style={{
                       flex: 1, aspectRatio: "1", borderRadius: 1,

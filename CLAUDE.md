@@ -25,10 +25,10 @@ src/
 │   ├── constants.js              — MESOCYCLES, DEFAULT_MESOCYCLES, DAYS, CUSTOM_CYCLE_COLORS,
 │   │                               isDateInCustomCycle, getCustomCyclesForDate,
 │   │                               getDayLogWarning, getMesoColor, getMesoForDate
-│   ├── helpers.js                — getMondayOf, addDays, formatDate, weekKey, localDateStr,
-│   │                               calcEndTime, migrateWeekKeys, getDaySessions, getDayCharge, getMonthWeeks
+│   ├── helpers.js                — getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime,
+│   │                               migrateWeekKeys, isEventItem, getDaySessions, getDayCharge, getMonthWeeks
 │   ├── charge.js                 — échelle de charge unifiée 0-10 : normalizeCharge10,
-│   │                               getSessionCharge, climbingCharge10, RPE_LABELS, getChargeColor,
+│   │                               getSessionCharge, climbingCharge10, RPE_LABELS, chargeLabel, getChargeColor,
 │   │                               VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, getNbMouvementsZone
 │   ├── storage.js                — generateId, loadData, saveData (localStorage)
 │   ├── pace.js                   — temps · distance · allure/vitesse liés (parse, format, calcul)
@@ -325,6 +325,10 @@ Toutes les disciplines partagent la même unité : **la charge de séance 0-10**
   les affichages.
 - **Couleurs** (`getChargeColor`) : 0 repos · ≤3 léger · ≤6 modéré · ≤9 soutenu
   · >9 très lourd (valable séance et total jour).
+- **Libellés** (`RPE_LABELS` / `chargeLabel()`) : l'échelle Borg CR-10 en toutes
+  lettres — 1 rien · 4 confortable · 7 dur · 10 maximal — affichée à côté du
+  chiffre partout où la charge se règle (formulaire de séance, calculateur,
+  retour de l'athlète).
 
 ## Ajout d'une séance
 
@@ -359,11 +363,23 @@ les deux derniers champs saisis (`computeThird`), et il s'affiche en accent.
 ne tombe pas juste à la minute) ; `estimatedTime` reste en minutes entières
 pour le reste de l'app.
 
-### Événements
+### Échéances (case « Événement »)
 
-Case « Événement » → la séance devient une échéance : dates début/fin, couleur
-au choix, pas de charge. Elle part dans `data.quickSessions` et remonte sur
-l'accueil en **carte de décompte** (« J-12 »), la plus proche seulement.
+Une échéance n'a **ni heure de départ ni durée** — ça n'a pas de sens sur deux
+jours. Elle porte : des dates début/fin, une couleur, une **charge** et une
+note. Pas de seconde étape non plus : le bouton enregistre directement.
+
+- Stockage : `data.quickSessions` (jamais `data.weeks`).
+- `isEventItem(s)` (`lib/helpers.js`) reconnaît une échéance ; `getDaySessions`
+  la renvoie pour **chaque jour de sa plage**, pas seulement le premier — c'est
+  ce qui la fait apparaître sur toute sa durée dans les calendriers.
+- Dans le calendrier mobile elle ressort par un **fond teinté + un bandeau bas**
+  à sa couleur (une séance n'a qu'un point) ; la ligne du jour affiche
+  « Échéance · du 19 au 20 août ».
+- Un clic dessus rouvre `SessionFormModal` en édition, avec une corbeille en
+  en-tête pour la supprimer. Décocher « Événement » la convertit en séance :
+  elle quitte `quickSessions` et repasse par « quand & où » à sa date.
+- L'accueil affiche la plus proche en **carte de décompte** (« J-12 »).
 
 ### Plus de blocs
 

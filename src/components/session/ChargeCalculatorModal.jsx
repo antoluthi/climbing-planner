@@ -6,7 +6,7 @@ import { RADIUS, Z } from "../../theme/makeStyles.js";
 import { PrimaryButton, RoundIconButton, SANS, MONO } from "../ui/Ascent.jsx";
 import {
   VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES,
-  getNbMouvementsZone, climbingCharge10, getChargeColor, getZoneColor,
+  getNbMouvementsZone, climbingCharge10, getChargeColor, getZoneColor, chargeLabel,
 } from "../../lib/charge.js";
 
 // ─── CALCULATEUR DE CHARGE (ESCALADE) ─────────────────────────────────────────
@@ -122,10 +122,15 @@ export function ChargeCalculatorModal({ initialCharge = 5, onApply, onClose }) {
           <div style={{ font: `800 30px ${MONO}`, color: getChargeColor(shown, isDark), lineHeight: 1 }}>
             {shown}<span style={{ fontSize: 14, opacity: 0.5 }}>/10</span>
           </div>
-          <div style={{ fontSize: 12, color: c.textMuted, flex: 1, lineHeight: 1.4 }}>
-            {computed == null
-              ? "Renseigne le nombre de mouvements pour obtenir une charge."
-              : `Volume ${volZone} × intensité ${intens} × complexité ${comp}`}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: getChargeColor(shown, isDark) }}>
+              {chargeLabel(shown)}
+            </div>
+            <div style={{ fontSize: 12, color: c.textMuted, lineHeight: 1.4, marginTop: 2 }}>
+              {computed == null
+                ? "Renseigne le nombre de mouvements pour obtenir une charge."
+                : `Volume ${volZone} × intensité ${intens} × complexité ${comp}`}
+            </div>
           </div>
         </div>
 

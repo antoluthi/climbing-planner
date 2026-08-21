@@ -56,6 +56,12 @@ export function migrateWeekKeys(data) {
   return { ...data, weeks: newWeeks };
 }
 
+// Une échéance : elle vit dans data.quickSessions, couvre parfois plusieurs
+// jours, et n'a ni heure ni durée.
+export function isEventItem(s) {
+  return s?.mode === "event" || s?.isQuick === true;
+}
+
 export function getDaySessions(data, date) {
   const dateStr = localDateStr(date);
   const monday = getMondayOf(date);
@@ -64,8 +70,11 @@ export function getDaySessions(data, date) {
   const day = date.getDay();
   const idx = day === 0 ? 6 : day - 1;
   const weekSessions = ws?.[idx] || [];
-  const quickSessions = (data.quickSessions || []).filter(s => s.startDate === dateStr);
-  return [...weekSessions, ...quickSessions];
+  // Une échéance peut s'étaler sur plusieurs jours : elle apparaît sur chacun
+  // d'eux, pas seulement le premier.
+  const events = (data.quickSessions || []).filter(e =>
+    e.startDate && e.startDate <= dateStr && (e.endDate || e.startDate) >= dateStr);
+  return [...weekSessions, ...events];
 }
 
 export function getDayCharge(data, date) {
