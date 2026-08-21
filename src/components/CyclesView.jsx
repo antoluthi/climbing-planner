@@ -11,6 +11,7 @@ import {
   DAY_NAMES_SHORT,
 } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
+import { PageTitle, PrimaryButton } from "./ui/Ascent.jsx";
 
 export function CyclesView({
   mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso,
@@ -46,10 +47,18 @@ export function CyclesView({
 
   return (
     <div style={styles.cyclesView}>
-      <div style={styles.cyclesHeader}>
-        <span style={styles.cyclesTitle}>Cycles d'entraînement</span>
-        <button style={styles.cycleAddMesoBtn} onClick={onAddMeso}>＋ Nouveau mésocycle</button>
-      </div>
+      <PageTitle
+        isDark={isDark}
+        style={{ marginBottom: 20 }}
+        right={
+          <PrimaryButton isDark={isDark} height={36} onClick={onAddMeso}
+                         style={{ width: "auto", padding: "0 16px", fontSize: 13 }}>
+            + Mésocycle
+          </PrimaryButton>
+        }
+      >
+        Cycles
+      </PageTitle>
 
       {mesocycles.length === 0 && (
         <div style={{ color: styles.dashText, fontSize: 12, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>

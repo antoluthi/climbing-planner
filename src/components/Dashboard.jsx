@@ -7,6 +7,7 @@ import { SleepSection } from "./SleepSection.jsx";
 import { DashboardSkeleton } from "./ui/Skeleton.jsx";
 import { getSessionCharge } from "../lib/charge.js";
 import { colors } from "../theme/palette.js";
+import { PageTitle } from "./ui/Ascent.jsx";
 
 // ─── Spline cubique monotone passant par chaque point ────────────────────────
 // Recharts a déjà type='monotone' qui dessine une spline cubique
@@ -307,12 +308,13 @@ function DashboardBody({ data, onUpdateSleep }) {
 
   return (
     <div style={styles.dashboard}>
+      <PageTitle isDark={isDark} style={{ marginBottom: 20 }}>Stats</PageTitle>
+
       {/* Activity heatmap */}
       <ActivityHeatmap data={data} />
 
       {/* Range selector row */}
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 10, gap: 4 }}>
-        <div style={{ ...styles.dashTitle, marginBottom: 0, flex: 1 }}>Statistiques</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 10, gap: 4 }}>
         <RangeBtn r="jour" label="Jours" />
         <RangeBtn r="sem" label="Sem" />
         <RangeBtn r="mois" label="Mois" />

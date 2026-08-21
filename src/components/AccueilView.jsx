@@ -7,6 +7,7 @@ import { generateId } from "../lib/storage.js";
 import { AccueilSkeleton } from "./ui/Skeleton.jsx";
 import { getActiveRemindersForDate, isReminderCheckedOn } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
+import { BellIcon } from "./NotificationBell.jsx";
 import { Card, SectionLabel, StatValue, SportBadge, PrimaryButton, SecondaryButton,
          RoundCheck, InitialsAvatar, SANS, MONO } from "./ui/Ascent.jsx";
 
@@ -972,6 +973,8 @@ function AccueilViewBody({
   onAddSession,
   onOpenAccount,
   onAddNutrition,
+  onOpenNotifications,
+  unreadCount = 0,
 }) {
   const { isDark } = useThemeCtx();
   const c = colors(isDark);
@@ -1069,7 +1072,40 @@ function AccueilViewBody({
             </div>
           )}
         </div>
-        <InitialsAvatar isDark={isDark} initials={initials} photoUrl={photoUrl} size={40} onClick={onOpenAccount} />
+        {/* Cloche et avatar — seuls points d'entrée « compte » de l'app depuis
+            que les autres écrans ont perdu l'en-tête du shell. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {onOpenNotifications && (
+            <button
+              onClick={onOpenNotifications}
+              aria-label={unreadCount > 0
+                ? `Notifications — ${unreadCount} non lue${unreadCount > 1 ? "s" : ""}`
+                : "Notifications"}
+              title="Notifications"
+              style={{
+                position: "relative", width: 40, height: 40, borderRadius: 20,
+                background: c.control, border: "none", padding: 0, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: unreadCount > 0 ? c.accent : c.textMuted, flexShrink: 0,
+              }}
+            >
+              <BellIcon size={19} />
+              {unreadCount > 0 && (
+                <span style={{
+                  position: "absolute", top: 1, right: 1,
+                  minWidth: 16, height: 16, borderRadius: 8,
+                  background: c.danger, color: c.onColor,
+                  fontSize: 9, fontWeight: 700, lineHeight: "16px",
+                  padding: "0 3px", textAlign: "center",
+                  boxShadow: `0 0 0 2px ${c.bg}`,
+                }}>
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+          )}
+          <InitialsAvatar isDark={isDark} initials={initials} photoUrl={photoUrl} size={40} onClick={onOpenAccount} />
+        </div>
       </div>
 
       {/* ── Charge de la semaine ── */}

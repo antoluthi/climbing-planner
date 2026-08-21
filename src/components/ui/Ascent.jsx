@@ -68,6 +68,27 @@ export function Row({ isDark, label, value, onClick, last = false, children }) {
   );
 }
 
+// ── Titre de page ────────────────────────────────────────────────────────────
+// Le grand titre en tête d'écran (Accueil, Calendrier, Cycles, Stats,
+// Bibliothèque). `right` accueille l'action principale de la page.
+export function PageTitle({ isDark, children, right, style }) {
+  const c = colors(isDark);
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      gap: 12, marginBottom: 14, ...style,
+    }}>
+      <div style={{
+        fontSize: 26, fontWeight: 800, letterSpacing: "-0.3px",
+        color: c.text, fontFamily: SANS, minWidth: 0,
+      }}>
+        {children}
+      </div>
+      {right}
+    </div>
+  );
+}
+
 // ── Intitulé de section ──────────────────────────────────────────────────────
 export function SectionLabel({ isDark, children, style }) {
   return (
