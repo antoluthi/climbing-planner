@@ -14,6 +14,8 @@ on:
     branches:
       - master
       - 'claude/**' # toute branche de travail produit son APK de test
+    paths-ignore:
+      - '**.md' # un commit de doc seul ne justifie pas un build Android
   workflow_dispatch: # build à la demande depuis l'onglet Actions
 
 permissions:
