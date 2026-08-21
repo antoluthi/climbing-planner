@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
-import { Caillou } from "../Caillou.jsx";
 
 // ─── SKELETON ─────────────────────────────────────────────────────────────────
 // Silhouette d'attente avec animation de pulse douce (pas de spinner).
@@ -83,17 +81,10 @@ export function DashboardSkeleton() {
 }
 
 // AccueilView skeleton : header + grosse phrase + liste de séances du jour
-// Si l'attente dépasse 800ms, on superpose un Caillou loading centré.
 export function AccueilSkeleton() {
   const { isDark } = useThemeCtx();
   const surface = isDark ? "#241b13" : "#ffffff";
   const border  = isDark ? "#3a2e22" : "#e6dfd1";
-  const textTitle = isDark ? "#e6d8bc" : "#3a2e22";
-  const [showMascot, setShowMascot] = useState(false);
-  useEffect(() => {
-    const id = setTimeout(() => setShowMascot(true), 800);
-    return () => clearTimeout(id);
-  }, []);
   return (
     <div
       role="status"
@@ -120,25 +111,6 @@ export function AccueilSkeleton() {
           </div>
         ))}
       </div>
-      {showMascot && (
-        <div
-          style={{
-            position: "absolute", inset: 0,
-            display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center",
-            gap: 16, pointerEvents: "none",
-            transition: "opacity 200ms ease",
-          }}
-        >
-          <Caillou state="loading" size={160} />
-          <div style={{
-            fontFamily: "'Newsreader', Georgia, serif",
-            fontSize: 16, color: textTitle, letterSpacing: "0.02em",
-          }}>
-            Récupération de la semaine…
-          </div>
-        </div>
-      )}
     </div>
   );
 }

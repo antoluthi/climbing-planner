@@ -1,7 +1,6 @@
 import { useState } from "react";
 import supabase from "../lib/supabase.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { Caillou } from "./Caillou.jsx";
 import { isNative, AUTH_CALLBACK_URL } from "../lib/native.js";
 
 export function AuthPanel({ session, onAuthChange, fullWidth }) {
@@ -139,10 +138,7 @@ export function AuthPanel({ session, onAuthChange, fullWidth }) {
   if (mode === "signup") return (
     <div style={barStyle}>
       {sent ? (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-          <Caillou state="curious" size={110} />
-          <span style={styles.authSentMsg}>Compte créé — confirme ton adresse via l'email reçu, puis connecte-toi.</span>
-        </div>
+        <span style={styles.authSentMsg}>Compte créé — confirme ton adresse via l'email reçu, puis connecte-toi.</span>
       ) : (
         <>
           <input
@@ -175,10 +171,7 @@ export function AuthPanel({ session, onAuthChange, fullWidth }) {
   if (mode === "magiclink") return (
     <div style={barStyle}>
       {sent ? (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-          <Caillou state="curious" size={110} />
-          <span style={styles.authSentMsg}>Lien envoyé — vérifiez vos mails</span>
-        </div>
+        <span style={styles.authSentMsg}>Lien envoyé — vérifiez vos mails</span>
       ) : (
         <>
           <input

@@ -1,7 +1,6 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { TodaySessionCard } from "./TodaySessionCard.jsx";
 import { SessionCardSkeleton } from "./ui/Skeleton.jsx";
-import { Caillou } from "./Caillou.jsx";
 import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { DAYS, getMesoColor } from "../lib/constants.js";
 import { addDays } from "../lib/helpers.js";
@@ -215,9 +214,6 @@ export function DayListView({
             display: "flex", flexDirection: "column",
             alignItems: "center", gap: 10,
           }}>
-            {(!weekSessions || weekSessions.every(d => !d || d.length === 0)) && (
-              <Caillou state="curious" size={130} />
-            )}
             <span>Aucune séance prévue pour ce jour.</span>
           </div>
         ) : (

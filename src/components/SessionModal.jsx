@@ -6,7 +6,6 @@ import { getMondayOf, addDays, weekKey } from "../lib/helpers.js";
 import { RichText } from "./RichText.jsx";
 import { SuspensionInfoCard } from "./SuspensionInfoCard.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
-import { Caillou } from "./Caillou.jsx";
 import { Z } from "../theme/makeStyles.js";
 import { pushLayer, lockBodyScroll } from "../lib/native.js";
 import { getDiscipline, METRIC_LABELS } from "../lib/disciplines.js";
@@ -158,8 +157,8 @@ export function SessionModal({
   });
 
   // Confirmation "Merci pour ton retour." — overlay affiché après enregistrement
-  // d'un ressenti (sessionDone). Le persist s'exécute à la fermeture de l'overlay
-  // pour que la modale reste montée le temps de jouer l'anim du Caillou success.
+  // d'un ressenti (sessionDone). Le persist s'exécute à la fermeture de l'overlay,
+  // au clic de l'utilisateur.
   const [showThanks, setShowThanks] = useState(false);
   const persistAndClose = () => {
     onSave({
@@ -832,7 +831,6 @@ export function SessionModal({
               boxShadow: "0 16px 40px rgba(0,0,0,0.25)",
             }}
           >
-            <Caillou state="success" size={100} />
             <div style={{
               fontFamily: "'Newsreader', Georgia, serif",
               fontSize: 22, fontWeight: 500, color: text,
