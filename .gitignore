@@ -33,3 +33,7 @@ android/build/
 # Claude Code worktrees & temp patches
 .claude/worktrees/
 patch_*.cjs
+
+# Keystores de signature Android — ne doivent jamais être versionnés
+*.jks
+*.keystore

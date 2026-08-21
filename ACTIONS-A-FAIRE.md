@@ -24,36 +24,69 @@ juillet. Tout est passé. Ce qui suit est l'état réel.
 
 ## 1 · Keystore de signature — la vraie action restante (~10 min, une fois)
 
-**Pourquoi c'est le sujet n°1** : tu partages l'APK à d'autres personnes, et la
-CI construit en `assembleDebug`. Le keystore de debug n'est pas versionné —
-Gradle en régénère un sur le runner GitHub, donc **la signature peut changer
-d'un build à l'autre**. Android refuse d'installer une mise à jour signée par
-une autre clé : tes utilisateurs verront « application non installée » et
-devront désinstaller l'app (donc se reconnecter) avant de réinstaller.
+**Pourquoi c'est le sujet n°1** : tu partages l'APK à d'autres personnes, et sans
+keystore la CI construit en `assembleDebug`. Le keystore de debug n'est pas
+versionné — Gradle en régénère un sur le runner GitHub, donc **la signature
+change d'un build à l'autre** (vérifié : trois builds, trois certificats
+différents). Android refuse d'installer une mise à jour signée par une autre
+clé : « application non installée », et il faut désinstaller (donc se
+reconnecter) avant de réinstaller.
 
-Sur ta machine :
+Le code est déjà câblé côté `android/app/build.gradle` et CI : il ne s'active
+qu'à la présence des secrets ci-dessous. Sans eux, la CI produit exactement
+l'APK debug d'avant — rien n'est bloqué.
 
-```bash
-keytool -genkeypair -v -keystore climbing-planner.jks \
-  -alias climbing-planner -keyalg RSA -keysize 2048 -validity 10000
+> **Ordre à respecter** : crée le keystore **avant** d'installer le prochain APK.
+> Sinon tu désinstalles deux fois (une pour l'APK debug, une pour le signé).
+
+### Sur ton PC (Windows / PowerShell)
+
+Android Studio n'est **pas** nécessaire — seul `keytool` l'est, livré avec
+n'importe quel JDK.
+
+```powershell
+# 1. Java, une fois. FERME ET ROUVRE PowerShell ensuite, sinon keytool
+#    restera « non reconnu » (PowerShell ne relit le PATH qu'au démarrage).
+winget install Microsoft.OpenJDK.21
+
+# 2. retrouver keytool (PATH, sinon chemin direct du JDK)
+$kt = (Get-Command keytool -ErrorAction SilentlyContinue).Source
+if (-not $kt) { $kt = (Get-ChildItem "C:\Program Files\Microsoft\jdk-*\bin\keytool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }
+$kt   # doit afficher un chemin
+
+# 3. générer la clé (une seule ligne)
+& $kt -genkeypair -v -keystore "$HOME\climbing-planner.jks" -alias climbing-planner -keyalg RSA -keysize 2048 -validity 10000
+
+# 4. copier la clé encodée dans le presse-papier
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\climbing-planner.jks")) | Set-Clipboard
 ```
 
-⚠️ **Garde le `.jks` et les mots de passe hors du repo, et sauvegarde-les.**
-Keystore perdu = plus aucune mise à jour possible pour les gens qui ont déjà
-installé l'app ; il faut leur faire désinstaller/réinstaller.
+À l'étape 3, `keytool` demande :
+- un **mot de passe** que tu choisis (6 caractères minimum, redemandé une 2e
+  fois) — **rien ne s'affiche pendant la frappe**, c'est normal ;
+- nom / unité / ville / région / pays → **Entrée** partout pour laisser vide ;
+- confirmation → `yes` ;
+- « mot de passe de la clé » → **Entrée** pour reprendre le même.
 
-Puis **GitHub → Settings → Secrets and variables → Actions** :
+⚠️ **Sauvegarde `climbing-planner.jks` hors du PC** (OneDrive, clé USB) et garde
+le mot de passe. Keystore perdu = plus aucune mise à jour installable pour les
+gens qui ont déjà l'app ; il faudrait leur faire désinstaller/réinstaller.
+Ne le commite jamais dans le repo.
 
-```
-ANDROID_KEYSTORE_BASE64   = sortie de `base64 -w0 climbing-planner.jks`
-ANDROID_KEYSTORE_PASSWORD = <mot de passe du store>
-ANDROID_KEY_ALIAS         = climbing-planner
-ANDROID_KEY_PASSWORD      = <mot de passe de la clé>
-```
+### Les 4 secrets GitHub
 
-Quand c'est fait, dis-le : le `signingConfig` dans `android/app/build.gradle` et
-la bascule de la CI sur `assembleRelease` restent à câbler. En attendant, le
-build debug marche — c'est la stabilité entre mises à jour qui n'est pas garantie.
+<https://github.com/antoluthi/climbing-planner/settings/secrets/actions> →
+« New repository secret », quatre fois :
+
+| Name | Secret |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | Ctrl+V (le presse-papier de l'étape 4) |
+| `ANDROID_KEYSTORE_PASSWORD` | le mot de passe choisi |
+| `ANDROID_KEY_ALIAS` | `climbing-planner` |
+| `ANDROID_KEY_PASSWORD` | le même mot de passe (si Entrée à l'étape 3) |
+
+Au build suivant, l'étape « Préparer le keystore de signature » doit afficher
+« APK signé avec la clé de release » au lieu d'un avertissement.
 
 ---
 
