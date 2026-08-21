@@ -81,7 +81,7 @@ const TABS = [
   { key: "week",    label: "Calendrier", icon: "cal"   },
   { key: "cycles",  label: "Cycles",     icon: "cycle" },
   { key: "dash",    label: "Stats",      icon: "chart" },
-  { key: "library", label: "Database",   icon: "db"    },
+  { key: "library", label: "Bibliothèque", icon: "db" },
 ];
 
 export function BottomNav({ viewMode, onChange, extraTabs }) {

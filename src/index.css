@@ -39,3 +39,22 @@ body { overflow-x: hidden; }
 .cp-skeleton {
   animation: cp-pulse 1.4s ease-in-out infinite;
 }
+
+/* ── Glissement au changement d'onglet ──
+   La transformation est transitoire : elle se termine sur `none`, ce qui rend
+   à la barre d'onglets fixe son positionnement normal une fois l'animation
+   passée. */
+@keyframes cp-slide-from-right {
+  from { transform: translateX(28px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+@keyframes cp-slide-from-left {
+  from { transform: translateX(-28px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.cp-slide-left  { animation: cp-slide-from-right 0.22s ease-out; }
+.cp-slide-right { animation: cp-slide-from-left  0.22s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-slide-left, .cp-slide-right { animation: none; }
+}

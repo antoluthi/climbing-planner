@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { useSwipe } from "../hooks/useSwipe.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { colors, DATA } from "../theme/palette.js";
-import { getMondayOf, addDays, localDateStr, getDaySessions } from "../lib/helpers.js";
+import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
 import { Card, Segmented, RoundIconButton, SportBadge, SportDot, SANS, MONO } from "./ui/Ascent.jsx";
 
@@ -62,10 +63,24 @@ export function CalendarView({
       ? `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`
       : String(currentDate.getFullYear());
 
+  // Zone de balayage du calendrier : change de période, et s'arrête là.
+  // `stopPropagation` empêche le geste de remonter jusqu'au conteneur de page,
+  // qui lui change d'onglet — sans ça, un swipe sur la grille ferait les deux.
+  const gridSwipe = useSwipe({
+    onLeft:  () => step(1),
+    onRight: () => step(-1),
+    stopPropagation: true,
+  });
+
   const pad = 20;
 
   return (
-    <div style={{ background: c.bg, minHeight: "100%", fontFamily: SANS }}>
+    <div style={{
+      background: c.bg, minHeight: "100%", fontFamily: SANS,
+      // Sur grand écran la colonne reste étroite : sans ça les boutons
+      // pleine largeur s'étirent sur tout le moniteur.
+      maxWidth: 600, margin: "0 auto", width: "100%",
+    }}>
 
       {/* ── Titre + sélecteur de vue ── */}
       <div style={{ padding: `${pad + 8}px ${pad}px 12px` }}>
@@ -77,8 +92,8 @@ export function CalendarView({
           value={mode}
           onChange={setViewMode}
           options={[
-            { value: "month", label: "Mois" },
             { value: "week", label: "Semaine" },
+            { value: "month", label: "Mois" },
             { value: "year", label: "Année" },
           ]}
         />
@@ -99,6 +114,7 @@ export function CalendarView({
         </RoundIconButton>
       </div>
 
+      <div {...gridSwipe} data-swipe="calendar-grid" style={{ touchAction: "pan-y" }}>
       {mode === "month" && (
         <MonthGrid
           isDark={isDark} data={data} currentDate={currentDate}
@@ -119,6 +135,7 @@ export function CalendarView({
           onPickMonth={(m) => { setCurrentDate(new Date(currentDate.getFullYear(), m, 1)); setViewMode("month"); }}
         />
       )}
+      </div>
 
       {/* ── Détail du jour sélectionné (mois et semaine) ── */}
       {mode !== "year" && (
@@ -146,7 +163,7 @@ export function CalendarView({
                 {selectedSessions.map((s, i) => (
                   <button
                     key={s.id || i}
-                    onClick={() => onOpenSession?.(dayIndexOf(selectedObj), i)}
+                    onClick={() => onOpenSession?.(weekKey(getMondayOf(selectedObj)), dayIndexOf(selectedObj), i)}
                     style={{
                       display: "flex", alignItems: "center", gap: 12, width: "100%",
                       background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left",

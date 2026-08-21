@@ -1,564 +1,272 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { addDays, localDateStr, getLastKnownWeight } from "../lib/helpers.js";
+import { localDateStr, getLastKnownWeight } from "../lib/helpers.js";
 import { hooperColor, hooperLabel } from "../lib/hooper.js";
-import { Z } from "../theme/makeStyles.js";
+import { Z, RADIUS } from "../theme/makeStyles.js";
 import { pushLayer, lockBodyScroll } from "../lib/native.js";
-import {
-  getActiveRemindersForDate,
-  isReminderCheckedOn,
-  formatRecurrence,
-} from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
+import { PrimaryButton, SecondaryButton, RoundIconButton, SANS, MONO } from "./ui/Ascent.jsx";
 
-// ─── DAYLOG MODAL — refonte cards intelligentes ──────────────────────────────
-// Header avec progress bar, sections en cards, Hooper en grid 2×2,
-// onboarding inline via icône ?, auto-save debounce.
+// ─── JOURNAL DU JOUR — assistant en trois étapes ──────────────────────────────
+// Hooper → Poids → Notes, avec une barre de progression en haut et une
+// navigation Précédent / Suivant en bas. Chaque étape enregistre en la quittant,
+// donc abandonner en cours de route ne perd que l'étape courante.
+//
+// Les rappels ne sont plus ici : leur place est l'écran Cycles.
 
+// Les quatre dimensions du score Hooper, chacune notée de 1 à 7.
+// L'échelle et le calcul ne changent pas : total = somme des quatre (4-28),
+// interprété par hooperLabel() / hooperColor().
 const HCRIT = [
-  { key: "fatigue",  label: "Fatigue",     sub: "épuisement général" },
-  { key: "stress",   label: "Stress",      sub: "mental / émotionnel" },
-  { key: "soreness", label: "Courbatures", sub: "douleurs musculaires" },
-  { key: "sleep",    label: "Sommeil ↓",   sub: "1 = excellent · 7 = très mauvais" },
+  { key: "sleep",    label: "Sommeil",     low: "excellent",  high: "très mauvais" },
+  { key: "fatigue",  label: "Fatigue",     low: "en forme",   high: "épuisé" },
+  { key: "stress",   label: "Stress",      low: "serein",     high: "sous pression" },
+  { key: "soreness", label: "Courbatures", low: "aucune",     high: "très douloureux" },
 ];
 
-const HOOPER_HELP = "Le score Hooper évalue ta forme du jour sur 4 dimensions (sommeil, fatigue, stress, courbatures). Suivi sur la durée, il aide à détecter le surentraînement.";
+const STEPS = ["Ressenti", "Poids", "Notes"];
 
-export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleReminder, onSaveWeight, onAddHooper }) {
+export function DayLogModal({ initialDate, data, onClose, onSaveNote, onSaveWeight, onAddHooper }) {
   const { isDark } = useThemeCtx();
-  const today = localDateStr(new Date());
-  const [dateISO, setDateISO] = useState(initialDate);
+  const c = colors(isDark);
+  const dateISO = initialDate || localDateStr(new Date());
   const dateObj = new Date(dateISO + "T12:00:00");
-  const isToday = dateISO === today;
-  const isFutureDay = dateISO > today;
 
-  const requestCloseRef = useRef(null);
-
-  // Pile de calques : bouton retour Android + Échap top-only + scroll lock.
-  const layerRef = useRef(null);
-  useEffect(() => {
-    const layer = pushLayer(() => requestCloseRef.current?.());
-    layerRef.current = layer;
-    const unlock = lockBodyScroll();
-    return () => { layer.remove(); unlock(); };
-  }, []);
-
-  useEffect(() => {
-    const h = e => {
-      if (e.key === "Escape" && layerRef.current?.isTop()) requestCloseRef.current?.();
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, []);
-
-  // ── Note state ──
-  const [noteText, setNoteText] = useState(data.notes?.[dateISO] || "");
-  const [noteSaved, setNoteSaved] = useState(data.notes?.[dateISO] || "");
-  useEffect(() => {
-    setNoteText(data.notes?.[dateISO] || "");
-    setNoteSaved(data.notes?.[dateISO] || "");
-  }, [dateISO]);
-  const noteDirty = noteText !== noteSaved;
-
-  // ── Weight (pré-rempli avec la dernière valeur connue) ──
-  const weightForDate = (iso) => {
-    if (data.weight?.[iso] != null) return String(data.weight[iso]);
-    const last = getLastKnownWeight(data, iso);
-    return last != null ? String(last) : "";
-  };
-  const [weightInput, setWeightInput] = useState(() => weightForDate(dateISO));
-  useEffect(() => {
-    setWeightInput(weightForDate(dateISO));
-  }, [dateISO]);
-  // Le "saved" reste la vraie valeur enregistrée pour cette date (sinon "").
-  const weightSavedStr = data.weight?.[dateISO] != null ? String(data.weight[dateISO]) : "";
-  const weightDirty = weightInput.trim() !== weightSavedStr;
-
-  // ── Rappels du jour ──
-  const activeReminders = getActiveRemindersForDate(data.reminders || [], dateObj);
-  const checkedReminders = activeReminders.filter(r => isReminderCheckedOn(data.reminderState, r.id, dateISO));
-  const allRemindersChecked = activeReminders.length > 0 && checkedReminders.length === activeReminders.length;
+  const [step, setStep] = useState(0);
 
   // ── Hooper ──
   const existingH = (data.hooper || []).find(h => h.date === dateISO);
   const [hForm, setHForm] = useState(
     existingH
-      ? { fatigue: existingH.fatigue, stress: existingH.stress, soreness: existingH.soreness, sleep: existingH.sleep }
-      : { fatigue: null, stress: null, soreness: null, sleep: null }
+      ? { sleep: existingH.sleep, fatigue: existingH.fatigue, stress: existingH.stress, soreness: existingH.soreness }
+      : { sleep: 4, fatigue: 4, stress: 4, soreness: 4 }
   );
+  const hTotal = HCRIT.reduce((sum, cr) => sum + (hForm[cr.key] || 0), 0);
+
+  // ── Poids ──
+  const [weightStr, setWeightStr] = useState(() => {
+    const w = data.weight?.[dateISO];
+    if (w != null) return String(w);
+    const last = getLastKnownWeight(data, dateISO);
+    return last != null ? String(last) : "";
+  });
+
+  // ── Notes ──
+  const [noteText, setNoteText] = useState(data.notes?.[dateISO] || "");
+
+  // ── Pile de calques : Échap et bouton retour Android ──
+  const requestCloseRef = useRef(null);
   useEffect(() => {
-    const h = (data.hooper || []).find(e => e.date === dateISO);
-    setHForm(h
-      ? { fatigue: h.fatigue, stress: h.stress, soreness: h.soreness, sleep: h.sleep }
-      : { fatigue: null, stress: null, soreness: null, sleep: null }
-    );
-  }, [dateISO]);
-  const hAnyFilled = hForm.fatigue || hForm.stress || hForm.soreness || hForm.sleep;
-  const hAllFilled = hForm.fatigue && hForm.stress && hForm.soreness && hForm.sleep;
-  const hTotal = hAnyFilled ? (hForm.fatigue || 0) + (hForm.stress || 0) + (hForm.soreness || 0) + (hForm.sleep || 0) : null;
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [microToast, setMicroToast] = useState("");
-  const microToastTimer = useRef(null);
+    const layer = pushLayer(() => requestCloseRef.current?.());
+    const unlock = lockBodyScroll();
+    const onKey = (e) => { if (e.key === "Escape" && layer.isTop()) requestCloseRef.current?.(); };
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("keydown", onKey); layer.remove(); unlock(); };
+  }, []);
 
-  // Progress segments: notes, weight, rappels (si applicables), hooper
-  const progress = useMemo(() => {
-    const segs = [];
-    segs.push({ key: "notes",  on: !!noteSaved.trim() || !!noteText.trim() });
-    segs.push({ key: "weight", on: !!weightSavedStr.trim() });
-    segs.push({
-      key: "reminders",
-      // OK si aucun rappel actif ce jour, ou si tout est coché
-      on: activeReminders.length === 0 || allRemindersChecked,
-    });
-    segs.push({ key: "hooper", on: existingH?.total != null }); // partiel ≠ complet
-    return segs;
-  }, [noteSaved, noteText, weightSavedStr, activeReminders.length, allRemindersChecked, existingH]);
-  const filledCount = progress.filter(s => s.on).length;
-
-  // ── Auto-save on blur (debounced via blur events) ──
-  const showMicroToast = (msg) => {
-    setMicroToast(msg);
-    clearTimeout(microToastTimer.current);
-    microToastTimer.current = setTimeout(() => setMicroToast(""), 1600);
-  };
-
-  const flushNote = () => {
-    if (noteDirty) {
-      onSaveNote(dateISO, noteText);
-      setNoteSaved(noteText);
-      showMicroToast("Note enregistrée");
+  // Enregistre l'étape que l'on quitte — rien n'est perdu si on ferme en route.
+  const persistStep = (i) => {
+    if (i === 0) {
+      onAddHooper?.({
+        date: dateISO,
+        time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+        ...hForm,
+        total: hTotal,
+      });
+    } else if (i === 1) {
+      const v = parseFloat(weightStr.replace(",", "."));
+      if (!isNaN(v) && v > 0) onSaveWeight?.(dateISO, Math.round(v * 10) / 10);
+      else if (weightStr.trim() === "") onSaveWeight?.(dateISO, null);
+    } else if (i === 2) {
+      onSaveNote?.(dateISO, noteText);
     }
   };
-  const saveWeight = (val) => {
-    const rounded = Math.round(val * 10) / 10;
-    onSaveWeight(dateISO, rounded);
-    showMicroToast("Poids enregistré");
-  };
-  const flushWeight = () => {
-    if (!weightDirty) return;
-    const val = parseFloat(weightInput.replace(",", "."));
-    if (!isNaN(val) && val > 0) saveWeight(val);
-    else if (weightInput.trim() === "") onSaveWeight(dateISO, null);
-  };
-  const flushHooper = (form) => {
-    const existing = (data.hooper || []).find(h => h.date === dateISO);
-    if (existing && form.fatigue === existing.fatigue && form.stress === existing.stress &&
-        form.soreness === existing.soreness && form.sleep === existing.sleep) return;
-    // Entrée partielle : les critères sont persistés mais total reste null —
-    // un total partiel (ex. 3/28) fausserait stats, heatmap et warnings.
-    const filled = form.fatigue && form.stress && form.soreness && form.sleep;
-    const total = filled ? form.fatigue + form.stress + form.soreness + form.sleep : null;
-    onAddHooper({ date: dateISO, time: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), ...form, total });
-    showMicroToast(filled ? "Hooper enregistré" : "Hooper enregistré (partiel)");
+
+  const close = () => { persistStep(step); onClose(); };
+  // Le calque ne connaît qu'une référence : on la garde à jour hors rendu.
+  useEffect(() => { requestCloseRef.current = close; });
+
+  const goTo = (next) => {
+    persistStep(step);
+    if (next < 0 || next >= STEPS.length) { onClose(); return; }
+    setStep(next);
   };
 
-  const requestClose = () => {
-    if (noteDirty) flushNote();
-    onClose();
-  };
-  requestCloseRef.current = requestClose;
-
-  // ── Tokens ──
-  const paper        = colors(isDark).card;
-  const paperDim     = colors(isDark).surface;
-  const surfaceCard  = colors(isDark).card;
-  const surfaceMuted = colors(isDark).surface;
-  const border       = colors(isDark).borderSubtle;
-  const borderStrong = colors(isDark).border;
-  const text         = colors(isDark).text;
-  const textMid      = colors(isDark).textCard;
-  const textLight    = colors(isDark).textMuted;
-  const accent       = colors(isDark).accent;
-  const inkPrimary   = colors(isDark).text;
-
-  const dateFull = dateObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-  const weekN = (() => {
-    const d = new Date(dateObj);
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
-    const w1 = new Date(d.getFullYear(), 0, 4);
-    return 1 + Math.round(((d - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7);
-  })();
-
-  const cardLabel = {
-    fontFamily: "'Newsreader', Georgia, serif",
-    fontSize: 13,
-    fontWeight: 500,
-    color: text,
-    letterSpacing: "0.02em",
-  };
+  const dateLabel = dateObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 
   return (
     <div
+      onClick={close}
       style={{
-        position: "fixed", inset: 0,
-        background: "rgba(0,0,0,0.55)",
-        backdropFilter: "blur(3px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: Z.daylog, padding: "20px 12px",
+        position: "fixed", inset: 0, zIndex: Z.daylog,
+        background: c.overlayBg, display: "flex",
+        alignItems: "center", justifyContent: "center", padding: 16,
       }}
-      onClick={e => { if (e.target === e.currentTarget) requestClose(); }}
     >
       <div
+        onClick={e => e.stopPropagation()}
         style={{
-          background: paper,
-          border: `1px solid ${borderStrong}`,
-          borderRadius: 18,
-          width: "100%",
-          maxWidth: 480,
-          maxHeight: "92vh",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.25)",
+          background: c.modalBg, border: `1px solid ${c.border}`,
+          borderRadius: RADIUS.cardLg, width: "min(420px, 100%)",
+          maxHeight: "90vh", display: "flex", flexDirection: "column",
+          overflow: "hidden", fontFamily: SANS,
         }}
       >
-        {/* ── Header ────────────────────────────── */}
-        <div style={{
-          padding: "16px 18px 14px",
-          background: isDark
-            ? `linear-gradient(180deg, ${paper}, ${paperDim})`
-            : `linear-gradient(180deg, ${paper} 0%, ${paperDim} 100%)`,
-          borderBottom: `1px solid ${border}`,
-          flexShrink: 0,
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: accent, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                {dateFull} · S{String(weekN).padStart(2, "0")}
-              </div>
-              <div style={{ fontFamily: "'Newsreader', Georgia, serif", fontSize: 22, fontWeight: 500, color: text, marginTop: 2 }}>
-                Journal du jour
-                {isFutureDay && <span style={{ fontSize: 11, color: textLight, marginLeft: 8, fontFamily: "'Inter', sans-serif", letterSpacing: "0.05em" }}>(à venir)</span>}
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button
-                onClick={() => setDateISO(prev => addDays(new Date(prev + "T12:00:00"), -1).toISOString().slice(0, 10))}
-                style={navBtnStyle({ border, textLight })}
-                aria-label="Jour précédent"
-              >‹</button>
-              <button
-                onClick={() => setDateISO(prev => addDays(new Date(prev + "T12:00:00"), 1).toISOString().slice(0, 10))}
-                style={navBtnStyle({ border, textLight })}
-                aria-label="Jour suivant"
-              >›</button>
-              <button
-                onClick={requestClose}
-                aria-label="Fermer"
-                style={{ background: "none", border: "none", color: textLight, cursor: "pointer", fontSize: 18, padding: "0 4px", lineHeight: 1, fontFamily: "inherit", marginLeft: 4 }}
-              >✕</button>
-            </div>
-          </div>
-          {/* Progress bar */}
-          <div style={{ display: "flex", gap: 4, marginTop: 14 }} aria-label={`${filledCount} sur ${progress.length} sections complétées`}>
-            {progress.map(seg => (
-              <div
-                key={seg.key}
-                style={{
-                  flex: 1, height: 4, borderRadius: 2,
-                  background: seg.on ? accent : border,
-                  transition: "background 0.2s",
-                }}
-              />
-            ))}
-          </div>
-          <div style={{ fontSize: 10, color: textLight, marginTop: 6, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-            {filledCount}/{progress.length} complété{filledCount > 1 ? "s" : ""}
-          </div>
+        {/* ── Progression ── */}
+        <div style={{ height: 4, background: c.control, flexShrink: 0 }}>
+          <div style={{
+            height: "100%", width: `${((step + 1) / STEPS.length) * 100}%`,
+            background: c.accent, transition: "width 0.25s ease",
+          }} />
         </div>
 
-        {/* ── Body scrollable ─────────────────────────── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px 8px", display: "flex", flexDirection: "column", gap: 12 }}>
-
-          {/* Card 1 : Notes "Comment ça va ?" */}
-          <div style={cardStyle({ surfaceCard, border })}>
-            <div style={{ ...cardLabel, marginBottom: 10 }}>Comment ça va ?</div>
-            <textarea
-              value={noteText}
-              onChange={e => setNoteText(e.target.value)}
-              onBlur={flushNote}
-              placeholder="3 lignes, 30 secondes — comment se sent ton corps, ta tête, ta motivation ?"
-              style={{
-                width: "100%", boxSizing: "border-box",
-                background: paperDim, border: `1px solid ${border}`,
-                borderRadius: 8, padding: "8px 10px",
-                fontSize: 13, fontFamily: "inherit", color: text,
-                lineHeight: 1.5, minHeight: 80, resize: "vertical", outline: "none",
-              }}
-            />
-          </div>
-
-          {/* Row poids + créatine */}
-          <div style={{ display: "flex", gap: 8 }}>
-            {/* Poids stepper */}
-            <div style={{ ...cardStyle({ surfaceCard, border }), padding: "10px 12px", flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 11, color: textLight, flex: 1 }}>Poids</span>
-                <button
-                  onClick={() => {
-                    // Pas de base connue → ne rien enregistrer (sinon on écrirait
-                    // un poids absurde de 0 ou 0,1 kg dans les stats).
-                    if (weightInput.trim() === "") return;
-                    const cur = parseFloat(weightInput.replace(",", ".")) || 0;
-                    const next = Math.max(0, Math.round((cur - 0.1) * 10) / 10);
-                    setWeightInput(String(next));
-                    if (next > 0) saveWeight(next);
-                  }}
-                  style={stepperBtn({ surfaceMuted, accent })}
-                  aria-label="Diminuer"
-                >−</button>
-                <input
-                  type="text" inputMode="decimal"
-                  value={weightInput}
-                  onChange={e => setWeightInput(e.target.value)}
-                  onBlur={flushWeight}
-                  onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
-                  placeholder="—"
-                  style={{
-                    width: 50, textAlign: "center",
-                    background: "transparent", border: "none",
-                    fontSize: 14, fontWeight: 600, color: text,
-                    fontFamily: "inherit", outline: "none",
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    if (weightInput.trim() === "") return;
-                    const cur = parseFloat(weightInput.replace(",", ".")) || 0;
-                    const next = Math.round((cur + 0.1) * 10) / 10;
-                    setWeightInput(String(next));
-                    saveWeight(next);
-                  }}
-                  style={stepperBtn({ surfaceMuted, accent })}
-                  aria-label="Augmenter"
-                >+</button>
-              </div>
+        {/* ── En-tête ── */}
+        <div style={{
+          padding: "16px 18px 12px", display: "flex", alignItems: "center",
+          gap: 12, flexShrink: 0,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: "1px",
+              textTransform: "uppercase", color: c.textDim,
+            }}>
+              {STEPS[step]} · {step + 1}/{STEPS.length}
             </div>
-
+            <div style={{ fontSize: 17, fontWeight: 700, color: c.text, marginTop: 3, textTransform: "capitalize" }}>
+              {dateLabel}
+            </div>
           </div>
+          <RoundIconButton isDark={isDark} size={32} label="Fermer" onClick={close}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2.4" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </RoundIconButton>
+        </div>
 
-          {/* Rappels du jour */}
-          {activeReminders.length > 0 && (
-            <div style={cardStyle({ surfaceCard, border })}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <span style={{ ...cardLabel }}>Rappels du jour</span>
-                <span style={{ fontSize: 11, color: textLight }}>
-                  {checkedReminders.length} / {activeReminders.length} cochés
+        {/* ── Corps ── */}
+        <div style={{ padding: "4px 18px 18px", overflowY: "auto", flex: 1 }}>
+          {step === 0 && (
+            <>
+              {HCRIT.map(cr => (
+                <HooperSlider
+                  key={cr.key}
+                  isDark={isDark}
+                  crit={cr}
+                  value={hForm[cr.key]}
+                  onChange={v => setHForm(f => ({ ...f, [cr.key]: v }))}
+                />
+              ))}
+              <div style={{
+                display: "flex", alignItems: "baseline", justifyContent: "space-between",
+                marginTop: 18, paddingTop: 14, borderTop: `0.5px solid ${c.border}`,
+              }}>
+                <span style={{ fontSize: 13, color: c.textMuted }}>Score du jour</span>
+                <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <span style={{ font: `700 22px ${MONO}`, color: hooperColor(hTotal, isDark) }}>{hTotal}</span>
+                  <span style={{ fontSize: 12, color: c.textMuted }}>{hooperLabel(hTotal)}</span>
                 </span>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {activeReminders.map(rem => {
-                  const checked = isReminderCheckedOn(data.reminderState, rem.id, dateISO);
-                  return (
-                    <ReminderCheckRow
-                      key={rem.id}
-                      reminder={rem}
-                      checked={checked}
-                      onToggle={() => onToggleReminder?.(rem.id, dateISO)}
-                      isDark={isDark}
-                      tokens={{ surfaceCard, paperDim, border, text, textMid, textLight }}
-                    />
-                  );
-                })}
+            </>
+          )}
+
+          {step === 1 && (
+            <div style={{ paddingTop: 8 }}>
+              <div style={{ fontSize: 13, color: c.textMuted, marginBottom: 14 }}>
+                Pré-rempli avec ta dernière valeur connue — ajuste si besoin.
               </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, justifyContent: "center" }}>
+                <RoundIconButton isDark={isDark} size={40} label="Moins"
+                  onClick={() => setWeightStr(w => {
+                    const v = parseFloat(w.replace(",", ".")) || 0;
+                    return v > 0.1 ? String(Math.round((v - 0.1) * 10) / 10) : w;
+                  })}>
+                  <span style={{ fontSize: 20, lineHeight: 1 }}>−</span>
+                </RoundIconButton>
+                <input
+                  type="number" step="0.1" inputMode="decimal"
+                  value={weightStr}
+                  placeholder="—"
+                  onChange={e => setWeightStr(e.target.value)}
+                  style={{
+                    font: `700 30px ${MONO}`, color: c.text, background: "transparent",
+                    border: "none", outline: "none", width: 130, textAlign: "center",
+                  }}
+                />
+                <RoundIconButton isDark={isDark} size={40} label="Plus"
+                  onClick={() => setWeightStr(w => {
+                    const v = parseFloat(w.replace(",", "."));
+                    return String(Math.round(((isNaN(v) ? 0 : v) + 0.1) * 10) / 10);
+                  })}>
+                  <span style={{ fontSize: 20, lineHeight: 1 }}>+</span>
+                </RoundIconButton>
+              </div>
+              <div style={{ textAlign: "center", fontSize: 12, color: c.textDim, marginTop: 6 }}>kg</div>
             </div>
           )}
 
-          {/* Card Hooper */}
-          <div style={cardStyle({ surfaceCard, border })}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={cardLabel}>Hooper</span>
-                <button
-                  onClick={() => setHelpOpen(v => !v)}
-                  aria-label="À quoi sert le Hooper ?"
-                  style={{
-                    width: 18, height: 18, borderRadius: "50%",
-                    background: accent + "22", color: accent,
-                    fontSize: 10, fontWeight: 700, border: "none",
-                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                    fontFamily: "inherit",
-                  }}
-                >?</button>
+          {step === 2 && (
+            <div style={{ paddingTop: 8 }}>
+              <div style={{ fontSize: 13, color: c.textMuted, marginBottom: 12 }}>
+                Sensations, contexte, ce que tu veux retenir de la journée.
               </div>
-              <span style={{
-                fontFamily: "'Newsreader', Georgia, serif", fontSize: 16, fontWeight: 700,
-                color: hTotal ? hooperColor(hTotal, isDark) : textLight,
-              }}>
-                {hTotal ? `${hTotal} / 28` : "—"}
-              </span>
+              <textarea
+                autoFocus
+                value={noteText}
+                onChange={e => setNoteText(e.target.value)}
+                placeholder="Note du jour…"
+                rows={7}
+                style={{
+                  width: "100%", background: c.control, border: "none",
+                  borderRadius: RADIUS.control, padding: 14, color: c.text,
+                  fontSize: 14, fontFamily: SANS, lineHeight: 1.5,
+                  outline: "none", resize: "vertical",
+                }}
+              />
             </div>
-            {helpOpen && (
-              <div style={{
-                background: accent + "12", border: `1px solid ${accent}33`,
-                borderRadius: 6, padding: "8px 10px", marginBottom: 10,
-                fontSize: 11, color: textMid, lineHeight: 1.5,
-              }}>
-                {HOOPER_HELP}
-              </div>
-            )}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {HCRIT.map(({ key, label, sub }) => {
-                const val = hForm[key];
-                // Code couleur : sleep est inversé (1 = bon, 7 = mauvais)
-                // mais standard Hooper : tous les indicateurs vont dans le même sens (1 = bon, 7 = mauvais)
-                const colorForVal = (v) => {
-                  if (!v) return null;
-                  if (v <= 3) return colors(isDark).success;
-                  if (v <= 5) return colors(isDark).warn;
-                  return colors(isDark).danger;
-                };
-                const valColor = colorForVal(val);
-                return (
-                  <div key={key} style={{ background: paperDim, border: `1px solid ${border}`, borderRadius: 8, padding: "8px 10px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <span style={{ fontSize: 11, color: textMid, fontWeight: 500 }}>{label}</span>
-                      <span style={{
-                        fontFamily: "'Newsreader', Georgia, serif",
-                        fontSize: 13, fontWeight: 700,
-                        color: valColor || textLight,
-                      }}>
-                        {val ?? "—"}
-                      </span>
-                    </div>
-                    {/* 7 dots */}
-                    <div style={{ display: "flex", gap: 3 }}>
-                      {[1, 2, 3, 4, 5, 6, 7].map(v => {
-                        const on = val != null && v <= val;
-                        const isWarn = on && v >= 6;
-                        return (
-                          <button
-                            key={v}
-                            onClick={() => {
-                              const updated = { ...hForm, [key]: v };
-                              setHForm(updated);
-                              flushHooper(updated);
-                            }}
-                            aria-label={`${label} ${v}`}
-                            style={{
-                              flex: 1, height: 6, borderRadius: 3,
-                              background: on
-                                ? (isWarn ? colors(isDark).danger : (v >= 4 ? colors(isDark).warn : colors(isDark).success))
-                                : border,
-                              border: "none", cursor: "pointer", padding: 0,
-                              transition: "background 0.1s",
-                            }}
-                          />
-                        );
-                      })}
-                    </div>
-                    <div style={{ fontSize: 9, color: textLight, marginTop: 4, letterSpacing: "0.02em" }}>{sub}</div>
-                  </div>
-                );
-              })}
-            </div>
-            {hTotal !== null && (
-              <div style={{ fontSize: 11, color: textLight, marginTop: 10 }}>
-                <span style={{ color: hooperColor(hTotal, isDark), fontWeight: 600 }}>{hAllFilled ? hooperLabel(hTotal) : `${hTotal} (partiel)`}</span>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        {/* ── Footer sticky ─────────────────────────── */}
+        {/* ── Navigation ── */}
         <div style={{
-          padding: "10px 18px",
-          background: paperDim,
-          borderTop: `1px solid ${border}`,
-          flexShrink: 0,
-          position: "relative",
+          display: "flex", gap: 10, padding: "12px 18px 18px",
+          borderTop: `0.5px solid ${c.border}`, flexShrink: 0,
         }}>
-          {microToast && (
-            <div style={{
-              position: "absolute", top: -38, right: 16,
-              background: inkPrimary, color: isDark ? paper : colors(isDark).onColor,
-              fontSize: 11, padding: "6px 10px", borderRadius: 6,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
-              fontFamily: "inherit",
-            }}>
-              {microToast}
-            </div>
+          {step > 0 && (
+            <SecondaryButton isDark={isDark} height={46} style={{ flex: 1 }} onClick={() => goTo(step - 1)}>
+              Précédent
+            </SecondaryButton>
           )}
-          <div style={{ fontSize: 10, color: textLight, textAlign: "center", letterSpacing: "0.04em" }}>
-            Sauvegarde automatique
-          </div>
+          <PrimaryButton isDark={isDark} height={46} style={{ flex: 2 }} onClick={() => goTo(step + 1)}>
+            {step === STEPS.length - 1 ? "Terminer" : "Suivant"}
+          </PrimaryButton>
         </div>
       </div>
     </div>
   );
 }
 
-function cardStyle({ surfaceCard, border }) {
-  return {
-    background: surfaceCard,
-    border: `1px solid ${border}`,
-    borderRadius: 12,
-    padding: 14,
-  };
-}
-
-function navBtnStyle({ border, textLight }) {
-  return {
-    background: "none", border: `1px solid ${border}`, borderRadius: 6,
-    color: textLight, cursor: "pointer", fontSize: 16, fontFamily: "inherit",
-    width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-    lineHeight: 1,
-  };
-}
-
-function stepperBtn({ surfaceMuted, accent }) {
-  return {
-    width: 24, height: 24, borderRadius: "50%",
-    background: surfaceMuted, color: accent,
-    border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700,
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontFamily: "inherit",
-  };
-}
-
-// ─── ReminderCheckRow ────────────────────────────────────────────────────────
-function ReminderCheckRow({ reminder, checked, onToggle, isDark, tokens }) {
-  const { surfaceCard, paperDim, border, text, textMid, textLight } = tokens;
-  const doneBg = colors(isDark).successBg;
-  const doneBorder = colors(isDark).success;
-  const doneFg = colors(isDark).success;
+// ── Curseur d'une dimension Hooper (1-7) ─────────────────────────────────────
+function HooperSlider({ isDark, crit, value, onChange }) {
+  const c = colors(isDark);
   return (
-    <button
-      onClick={onToggle}
-      style={{
-        display: "flex", alignItems: "center", gap: 12,
-        background: checked ? doneBg : surfaceCard,
-        border: `1px solid ${checked ? doneBorder : border}`,
-        borderRadius: 10, padding: "10px 12px",
-        cursor: "pointer", fontFamily: "inherit",
-        textAlign: "left", width: "100%",
-        transition: "background 0.12s, border-color 0.12s",
-      }}
-    >
-      <div style={{
-        width: 3, height: 22, borderRadius: 2,
-        background: reminder.color, flexShrink: 0,
-      }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: checked ? doneFg : text }}>
-          {reminder.name}
-        </div>
-        <div style={{ fontSize: 11, color: textLight, marginTop: 2 }}>
-          {formatRecurrence(reminder.recurrence)}
-          {reminder.endDate ? ` · jusqu'au ${reminder.endDate}` : ""}
-        </div>
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: c.text }}>{crit.label}</span>
+        <span style={{ font: `700 15px ${MONO}`, color: c.accent }}>{value}</span>
       </div>
-      <span
-        style={{
-          width: 22, height: 22, borderRadius: 6,
-          background: checked ? doneFg : "transparent",
-          border: `1.5px solid ${checked ? doneFg : border}`,
-          color: colors(isDark).onColor, fontSize: 13, fontWeight: 700,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >{checked ? "✓" : ""}</span>
-    </button>
+      <input
+        type="range"
+        min="1" max="7" step="1"
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        aria-label={crit.label}
+        style={{ width: "100%", accentColor: c.accent, cursor: "pointer" }}
+      />
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+        <span style={{ fontSize: 11, color: c.textDim }}>1 · {crit.low}</span>
+        <span style={{ fontSize: 11, color: c.textDim }}>7 · {crit.high}</span>
+      </div>
+    </div>
   );
 }

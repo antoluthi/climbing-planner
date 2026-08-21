@@ -14,6 +14,16 @@ export const TYPE = {
   mono:     { fontFamily: "'JetBrains Mono', Menlo, Consolas, monospace", fontSize: 12 },
 };
 
+// ─── RAYONS ───────────────────────────────────────────────────────────────────
+// Le design « Ascent » n'a plus d'angles quasi droits : les contrôles sont des
+// pills, les cartes ont un rayon généreux. Un seul endroit pour l'ajuster.
+export const RADIUS = {
+  pill:    999,  // boutons, chips, segments
+  control: 12,   // champs, petits conteneurs cliquables
+  card:    16,   // cartes
+  cardLg:  18,   // grandes cartes
+};
+
 export const SPACE = {
   0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 7: 32, 8: 48,
 };
@@ -312,7 +322,7 @@ export function makeStyles(isDark) {
     dashTooltipBg: t.surface,
     dashTooltipText: t.text,
     // ── Sleep ──
-    sleepImportBtn: { fontSize: 11, padding: "4px 10px", borderRadius: 5, border: `1px solid ${t.border2}`, background: t.accentFaint, color: t.accent, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.03em", whiteSpace: "nowrap" },
+    sleepImportBtn: { fontSize: 11, padding: "4px 10px", borderRadius: RADIUS.pill, border: `1px solid ${t.border2}`, background: t.accentFaint, color: t.accent, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.03em", whiteSpace: "nowrap" },
     sleepEmptyMsg: { textAlign: "center", padding: "28px 0", color: t.textMuted, fontSize: 12 },
     sleepCard: { background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4, flex: "1 1 80px" },
     sleepLegend: { display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8 },
@@ -348,13 +358,13 @@ export function makeStyles(isDark) {
     cycleMicroDot: { width: 6, height: 6, borderRadius: "50%", flexShrink: 0 },
     cycleMicroLabelInput: { flex: "1 1 140px", background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "4px 8px", color: t.text, fontSize: 12, fontFamily: "inherit" },
     cycleMicroDurInput: { width: 44, background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 4, padding: "4px 6px", color: t.textDim, fontSize: 11, fontFamily: "inherit", textAlign: "center" },
-    cycleDeleteBtn: { background: "none", border: "none", color: t.textMuted, cursor: "pointer", fontSize: 14, padding: "2px 6px", borderRadius: 4 },
+    cycleDeleteBtn: { background: "none", border: "none", color: t.textMuted, cursor: "pointer", fontSize: 14, padding: "2px 6px", borderRadius: RADIUS.pill },
     confirmOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: Z.nested, backdropFilter: "blur(4px)" },
     confirmModal: { background: t.surface, border: `1px solid ${t.border}`, borderRadius: 10, padding: "20px 24px", width: "min(300px, 90vw)", boxShadow: "0 8px 32px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column", gap: 14 },
     confirmTitle: { fontSize: 14, fontWeight: 600, color: t.text, textAlign: "center" },
     confirmSub: { fontSize: 12, color: t.textDim, textAlign: "center", marginTop: -6 },
     confirmBtnRow: { display: "flex", gap: 8, justifyContent: "center" },
-    confirmDeleteBtn: { background: t.danger, border: "none", borderRadius: 6, color: t.textOnAccent, padding: "8px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
+    confirmDeleteBtn: { background: t.danger, border: "none", borderRadius: RADIUS.pill, color: t.textOnAccent, padding: "8px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
     confirmCancelBtn: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.text, padding: "8px 22px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" },
     cycleAddMicroBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 4, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit", marginTop: 4 },
     cycleAddMesoBtn: { fontSize: 11, color: t.accent, background: t.accentFaint, border: `1px dashed ${t.accentBorder}`, borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em" },
@@ -417,7 +427,7 @@ export function makeStyles(isDark) {
     customFormSlider: { flex: 1, accentColor: t.accent },
     mesoHint: { fontSize: 10, color: t.navColor, letterSpacing: "0.04em", padding: "4px 8px", background: t.accentFaint, borderRadius: 4, display: "inline-flex", gap: 6 },
     // ── Charge calculator ──
-    calcBtn: { fontSize: 11, padding: "2px 8px", borderRadius: 4, border: `1px solid ${t.border2}`, background: t.accentFaint, color: t.accent, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.03em", whiteSpace: "nowrap" },
+    calcBtn: { fontSize: 11, padding: "2px 8px", borderRadius: RADIUS.pill, border: `1px solid ${t.border2}`, background: t.accentFaint, color: t.accent, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.03em", whiteSpace: "nowrap" },
     calcPanel: { background: t.surface2, border: `1px solid ${t.border2}`, borderRadius: 7, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 },
     calcRow: { display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" },
     calcField: { display: "flex", flexDirection: "column", gap: 4, flex: "1 1 100px" },
@@ -426,7 +436,7 @@ export function makeStyles(isDark) {
     calcInput: { background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 5, padding: "6px 8px", color: t.text, fontSize: 12, fontFamily: "inherit", outline: "none", width: "100%" },
     calcResultRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
     calcResultVal: { fontSize: 20, fontWeight: 700 },
-    calcApplyBtn: { fontSize: 12, padding: "5px 14px", borderRadius: 5, border: "none", background: t.accent, color: t.textOnAccent, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
+    calcApplyBtn: { fontSize: 12, padding: "5px 14px", borderRadius: RADIUS.pill, border: "none", background: t.accent, color: t.textOnAccent, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
     calcVolumeHint: { fontSize: 10, color: t.textDim, fontStyle: "italic" },
     // ── Info panel (reference tables) ──
     infoOverlay: { position: "fixed", inset: 0, background: t.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", zIndex: Z.nested, backdropFilter: "blur(4px)" },

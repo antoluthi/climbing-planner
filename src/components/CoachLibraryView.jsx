@@ -6,9 +6,19 @@ import { SuspensionSummaryChips } from "./SuspensionSummaryChips.jsx";
 import { BlockFormModal } from "./BlockFormModal.jsx";
 import { FeedbackHistoryModal } from "./FeedbackHistoryModal.jsx";
 import { colors } from "../theme/palette.js";
+import { RADIUS } from "../theme/makeStyles.js";
+import {
+  Segmented, SectionLabel, Chip, PrimaryButton, RoundIconButton, SANS, MONO,
+} from "./ui/Ascent.jsx";
+
+// ─── BIBLIOTHÈQUE ─────────────────────────────────────────────────────────────
+// Séances et blocs réutilisables. Habillage « Ascent » : cartes sombres, filets
+// de 0.5 px entre les lignes, chips en pill pour les filtres et le tri.
 
 export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock, onEditBlock, onDeleteBlock }) {
   const { isDark } = useThemeCtx();
+  const c = colors(isDark);
+
   const [subTab,          setSubTab]          = useState("sessions"); // "sessions" | "blocks"
   const [search,          setSearch]          = useState("");
   const [filter,          setFilter]          = useState("Tous");
@@ -17,27 +27,35 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
   const [blockForm,       setBlockForm]       = useState(null); // null | { initial? }
   const [feedbackHistory, setFeedbackHistory] = useState(null); // null | { type, id, name }
 
-  const bg      = colors(isDark).successBg;
-  const surface = colors(isDark).card;
-  const border  = colors(isDark).successBg;
-  const text    = colors(isDark).text;
-  const muted   = colors(isDark).success;
-  const accent  = colors(isDark).accent;
-  const danger  = colors(isDark).danger;
-
-  // ── Shared item row ──
+  // ── Actions d'une ligne (retours / modifier / supprimer) ──
   const ItemActions = ({ id, onEdit: doEdit, onDel, onHistory }) => confirmId === id ? (
     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-      <button onClick={() => { onDel(id); setConfirmId(null); }} style={{ background: danger, border: "none", borderRadius: 5, color: colors(isDark).onColor, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}>Supprimer</button>
-      <button onClick={() => setConfirmId(null)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Annuler</button>
+      <Chip isDark={isDark} size="sm" label="Supprimer" active color={c.danger}
+            onClick={() => { onDel(id); setConfirmId(null); }} />
+      <Chip isDark={isDark} size="sm" label="Annuler" onClick={() => setConfirmId(null)} />
     </div>
   ) : (
-    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+    <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
       {onHistory && (
-        <button onClick={onHistory} title="Retours athlètes" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: accent, padding: "5px 8px", cursor: "pointer", fontSize: 11, lineHeight: 1, fontFamily: "inherit", letterSpacing: "0.02em" }}>Feedback</button>
+        <RoundIconButton isDark={isDark} size={30} label="Retours des athlètes" onClick={onHistory}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 11.5a8.4 8.4 0 01-9 8.4 9 9 0 01-3.9-.9L3 21l1.9-4.6A8.4 8.4 0 0121 11.5z" />
+          </svg>
+        </RoundIconButton>
       )}
-      <button onClick={doEdit} title="Modifier" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>✎</button>
-      <button onClick={() => setConfirmId(id)} title="Supprimer" style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: danger + "bb", padding: "5px 9px", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>✕</button>
+      <RoundIconButton isDark={isDark} size={30} label="Modifier" onClick={doEdit}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" />
+        </svg>
+      </RoundIconButton>
+      <RoundIconButton isDark={isDark} size={30} label="Supprimer" onClick={() => setConfirmId(id)}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={c.danger}
+             strokeWidth="2.4" strokeLinecap="round">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </RoundIconButton>
     </div>
   );
 
@@ -47,8 +65,8 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
     return arr;
   };
 
-  // ── Séances tab — toutes les séances (communautaires) ──
-  const allSessions = catalog; // plus de filtre isCustom
+  // ── Séances — le catalogue est commun à tous les comptes ──
+  const allSessions = catalog;
   const filteredSessions = applySort(allSessions.filter(s => {
     const matchType   = filter === "Tous" || s.type === filter;
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
@@ -57,7 +75,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
   const byType = {};
   filteredSessions.forEach(s => { (byType[s.type] = byType[s.type] || []).push(s); });
 
-  // ── Blocs tab ──
+  // ── Blocs ──
   const filteredBlocks = applySort((blocks || []).filter(b =>
     (filter === "Tous" || b.blockType === filter) &&
     b.name.toLowerCase().includes(search.toLowerCase())
@@ -68,118 +86,127 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
   const isSessionTab = subTab === "sessions";
   const filterOptions = isSessionTab ? ["Tous", "Grimpe", "Exercice"] : ["Tous", ...Object.keys(BLOCK_TYPES)];
 
+  const listCard = {
+    background: c.card, border: `1px solid ${c.border}`,
+    borderRadius: RADIUS.card, overflow: "hidden",
+  };
+  const rowBase = {
+    display: "flex", alignItems: "center", gap: 10,
+    padding: "13px 14px", minHeight: 56,
+  };
+  const emptyBox = { textAlign: "center", padding: "60px 20px", color: c.textMuted, fontFamily: SANS };
+
   return (
-    <div style={{ flex: 1, overflowY: "auto", background: bg, padding: "20px 16px" }}>
-      <div style={{ maxWidth: 660, margin: "0 auto" }}>
+    <div style={{ flex: 1, overflowY: "auto", background: c.bg, padding: "18px 16px 90px", fontFamily: SANS }}>
+      <div style={{ maxWidth: 600, margin: "0 auto", width: "100%" }}>
 
-        {/* ── Sub-tabs ── */}
-        <div style={{ display: "flex", gap: 0, marginBottom: 22, background: surface, border: `1px solid ${border}`, borderRadius: 8, padding: 3 }}>
-          {[{ key: "sessions", label: "Séances" }, { key: "blocks", label: "Blocs" }].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => { setSubTab(key); setSearch(""); setFilter("Tous"); setSort("date"); setConfirmId(null); }}
-              style={{
-                flex: 1, padding: "8px 0", border: "none", borderRadius: 6, cursor: "pointer",
-                fontFamily: "inherit", fontSize: 12, fontWeight: 600,
-                background: subTab === key ? (colors(isDark).successBg) : "none",
-                color: subTab === key ? accent : muted,
-              }}
-            >{label}</button>
-          ))}
-        </div>
+        {/* ── Séances / Blocs ── */}
+        <Segmented
+          isDark={isDark}
+          value={subTab}
+          onChange={key => { setSubTab(key); setSearch(""); setFilter("Tous"); setSort("date"); setConfirmId(null); }}
+          options={[{ value: "sessions", label: "Séances" }, { value: "blocks", label: "Blocs" }]}
+          style={{ marginBottom: 20 }}
+        />
 
-        {/* ── Header : titre + bouton ── */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: text }}>
-              {isSessionTab ? "Mes séances" : "Mes blocs"}
+        {/* ── Titre + création ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: c.text, letterSpacing: "-0.3px" }}>
+              {isSessionTab ? "Séances" : "Blocs"}
             </div>
-            <div style={{ fontSize: 11, color: muted, marginTop: 1 }}>
+            <div style={{ fontSize: 12, color: c.textDim, marginTop: 2 }}>
               {isSessionTab
                 ? `${allSessions.length} séance${allSessions.length !== 1 ? "s" : ""}`
                 : `${(blocks || []).length} bloc${(blocks || []).length !== 1 ? "s" : ""}`}
             </div>
           </div>
-          <button
+          <PrimaryButton
+            isDark={isDark}
+            height={40}
             onClick={isSessionTab ? onNew : () => setBlockForm({})}
-            style={{ background: accent, border: "none", borderRadius: 7, color: colors(isDark).onColor, padding: "9px 16px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 700, letterSpacing: "0.03em", boxShadow: `0 2px 10px ${accent}44` }}
+            style={{ width: "auto", padding: "0 18px", flexShrink: 0, fontSize: 14 }}
           >
-            ＋ {isSessionTab ? "Nouvelle séance" : "Nouveau bloc"}
-          </button>
+            + {isSessionTab ? "Séance" : "Bloc"}
+          </PrimaryButton>
         </div>
 
-        {/* ── Recherche + filtres ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
-          <input
-            style={{ background: surface, border: `1px solid ${border}`, borderRadius: 6, padding: "7px 12px", color: text, fontSize: 12, fontFamily: "inherit", outline: "none" }}
-            placeholder="Rechercher…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {filterOptions.map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  style={{
-                    padding: "5px 10px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit",
-                    fontWeight: filter === f ? 600 : 400,
-                    background: filter === f ? (colors(isDark).successBg) : "none",
-                    border: `1px solid ${filter === f ? accent + "88" : border}`,
-                    color: filter === f ? accent : muted,
-                  }}
-                >{f}</button>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <span style={{ fontSize: 10, color: muted }}>Trier :</span>
-              {[["date", "Date ↓"], ["charge", "Charge ↓"]].map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setSort(key)}
-                  style={{
-                    padding: "4px 9px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit",
-                    fontWeight: sort === key ? 600 : 400,
-                    background: sort === key ? (colors(isDark).successBg) : "none",
-                    border: `1px solid ${sort === key ? accent + "88" : border}`,
-                    color: sort === key ? accent : muted,
-                  }}
-                >{label}</button>
-              ))}
-            </div>
-          </div>
+        {/* ── Recherche ── */}
+        <input
+          style={{
+            width: "100%", background: c.control, border: "none", outline: "none",
+            borderRadius: RADIUS.pill, padding: "11px 18px", color: c.text,
+            fontSize: 14, fontFamily: SANS, marginBottom: 12,
+          }}
+          placeholder="Rechercher…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+
+        {/* ── Filtres ── */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+          {filterOptions.map(f => (
+            <Chip
+              key={f} isDark={isDark} size="sm" label={f}
+              active={filter === f}
+              color={!isSessionTab && BLOCK_TYPES[f]?.color}
+              onClick={() => setFilter(f)}
+            />
+          ))}
+        </div>
+
+        {/* ── Tri ── */}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 22 }}>
+          <span style={{ fontSize: 12, color: c.textDim }}>Trier</span>
+          {[["date", "Récent"], ["charge", "Charge"]].map(([key, label]) => (
+            <Chip key={key} isDark={isDark} size="sm" label={label}
+                  active={sort === key} onClick={() => setSort(key)} />
+          ))}
         </div>
 
         {/* ══ SÉANCES ══ */}
         {isSessionTab && (
           allSessions.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "60px 20px", color: muted }}>
-
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: text }}>Aucune séance</div>
-              <div style={{ fontSize: 12 }}>Créez vos premières séances pour les retrouver dans le calendrier.</div>
+            <div style={emptyBox}>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: c.text }}>Aucune séance</div>
+              <div style={{ fontSize: 13 }}>Crée tes premières séances pour les retrouver dans le calendrier.</div>
             </div>
           ) : filteredSessions.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 20px", color: muted, fontSize: 12 }}>Aucun résultat.</div>
+            <div style={{ ...emptyBox, padding: "40px 20px", fontSize: 13 }}>Aucun résultat.</div>
           ) : (
             Object.entries(byType).map(([type, sessions]) => (
-              <div key={type} style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: muted, marginBottom: 8, paddingBottom: 5, borderBottom: `1px solid ${border}` }}>{type}</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {sessions.map(s => (
-                    <div key={s.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${getChargeColor(getSessionCharge(s))}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</div>
-                        <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10 }}>
-                          {s.estimatedTime && <span>{s.estimatedTime} min</span>}
-                          {s.location     && <span>{s.location}</span>}
-                          {s.minRecovery  && <span>↺ {s.minRecovery}h récup</span>}
+              <div key={type} style={{ marginBottom: 22 }}>
+                <SectionLabel isDark={isDark}>{type}</SectionLabel>
+                <div style={listCard}>
+                  {sessions.map((s, i) => {
+                    const charge = getSessionCharge(s);
+                    const tone = getChargeColor(charge);
+                    return (
+                      <div key={s.id} style={{
+                        ...rowBase,
+                        borderBottom: i === sessions.length - 1 ? "none" : `0.5px solid ${c.border}`,
+                      }}>
+                        <div style={{ width: 3, alignSelf: "stretch", borderRadius: 2, background: tone, flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {s.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: c.textDim, display: "flex", gap: 10, marginTop: 2 }}>
+                            {s.estimatedTime && <span>{s.estimatedTime} min</span>}
+                            {s.location     && <span>{s.location}</span>}
+                            {s.minRecovery  && <span>↺ {s.minRecovery} h</span>}
+                          </div>
                         </div>
+                        <span style={{ font: `700 15px ${MONO}`, color: tone, flexShrink: 0 }}>{charge}</span>
+                        <ItemActions
+                          id={s.id}
+                          onEdit={() => onEdit(s)}
+                          onDel={onDelete}
+                          onHistory={() => setFeedbackHistory({ type: "session", id: s.id, name: s.name })}
+                        />
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 9px", borderRadius: 4, flexShrink: 0, background: getChargeColor(getSessionCharge(s)) + "28", color: getChargeColor(getSessionCharge(s)), border: `1px solid ${getChargeColor(getSessionCharge(s))}55` }}>⚡{getSessionCharge(s)}</span>
-                      <ItemActions id={s.id} onEdit={() => onEdit(s)} onDel={onDelete} onHistory={() => setFeedbackHistory({ type: "session", id: s.id, name: s.name })} />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))
@@ -189,37 +216,50 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
         {/* ══ BLOCS ══ */}
         {!isSessionTab && (
           (blocks || []).length === 0 ? (
-            <div style={{ textAlign: "center", padding: "60px 20px", color: muted }}>
-
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: text }}>Aucun bloc</div>
-              <div style={{ fontSize: 12 }}>Créez des blocs réutilisables (exercices, protocoles) à assembler dans vos séances.</div>
+            <div style={emptyBox}>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: c.text }}>Aucun bloc</div>
+              <div style={{ fontSize: 13 }}>Crée des blocs réutilisables (exercices, protocoles) à assembler dans tes séances.</div>
             </div>
           ) : filteredBlocks.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 20px", color: muted, fontSize: 12 }}>Aucun résultat.</div>
+            <div style={{ ...emptyBox, padding: "40px 20px", fontSize: 13 }}>Aucun résultat.</div>
           ) : (
             Object.entries(byBlockType).map(([btype, blist]) => {
               const cfg = BLOCK_TYPES[btype] || {};
+              const tone = cfg.color || c.textMuted;
               return (
-                <div key={btype} style={{ marginBottom: 24 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: cfg.color || muted, marginBottom: 8, paddingBottom: 5, borderBottom: `1px solid ${border}` }}>
-                    {btype}
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {blist.map(b => (
-                      <div key={b.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${cfg.color || colors(isDark).textMuted}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                <div key={btype} style={{ marginBottom: 22 }}>
+                  <SectionLabel isDark={isDark} style={{ color: tone }}>{btype}</SectionLabel>
+                  <div style={listCard}>
+                    {blist.map((b, i) => (
+                      <div key={b.id} style={{
+                        ...rowBase,
+                        borderBottom: i === blist.length - 1 ? "none" : `0.5px solid ${c.border}`,
+                      }}>
+                        <div style={{ width: 3, alignSelf: "stretch", borderRadius: 2, background: tone, flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</div>
-                          <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                            {b.duration    && <span>⏱ {b.duration} min</span>}
-                            {cfg.hasCharge && b.charge > 0 && <span style={{ color: getChargeColor(normalizeCharge10(b.charge)) }}>⚡{normalizeCharge10(b.charge)}</span>}
+                          <div style={{ fontSize: 14, fontWeight: 600, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {b.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: c.textDim, display: "flex", gap: 10, flexWrap: "wrap", marginTop: 2, alignItems: "center" }}>
+                            {b.duration && <span>{b.duration} min</span>}
+                            {cfg.hasCharge && b.charge > 0 && (
+                              <span style={{ font: `700 12px ${MONO}`, color: getChargeColor(normalizeCharge10(b.charge)) }}>
+                                {normalizeCharge10(b.charge)}
+                              </span>
+                            )}
                             {b.blockType === "Suspension" && b.config ? (
-                              <SuspensionSummaryChips config={b.config} muted={muted} />
+                              <SuspensionSummaryChips config={b.config} muted={c.textDim} />
                             ) : b.description ? (
                               <span style={{ maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.description}</span>
                             ) : null}
                           </div>
                         </div>
-                        <ItemActions id={b.id} onEdit={() => setBlockForm({ initial: b })} onDel={onDeleteBlock} onHistory={() => setFeedbackHistory({ type: "block", id: b.id, name: b.name })} />
+                        <ItemActions
+                          id={b.id}
+                          onEdit={() => setBlockForm({ initial: b })}
+                          onDel={onDeleteBlock}
+                          onHistory={() => setFeedbackHistory({ type: "block", id: b.id, name: b.name })}
+                        />
                       </div>
                     ))}
                   </div>
