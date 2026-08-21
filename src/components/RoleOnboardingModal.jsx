@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Modal, ModalHeader, ModalBody, ModalFooter, modalTokens } from "./ui/Modal.jsx";
 import { Button } from "./ui/Button.jsx";
+import { colors } from "../theme/palette.js";
 
 // Choix du rôle au 1er login. C'est une porte d'entrée : pas de fermeture
 // (ni Esc, ni clic-extérieur), un choix explicite requis avant de continuer.
@@ -34,7 +35,7 @@ export function RoleOnboardingModal({ onSelect }) {
                 aria-pressed={active}
                 style={{
                   textAlign: "left", cursor: "pointer",
-                  background: active ? (isDark ? "#3a2616" : "#f3ece2") : T.surface,
+                  background: active ? (colors(isDark).surface) : T.surface,
                   border: `1.5px solid ${active ? T.accent : T.border}`,
                   borderRadius: 10, padding: "14px 16px",
                   transition: "border-color 0.15s, background 0.15s",

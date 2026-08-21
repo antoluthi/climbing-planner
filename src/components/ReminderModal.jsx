@@ -12,6 +12,7 @@ import {
   newReminderId,
   formatRecurrence,
 } from "../lib/reminders.js";
+import { colors } from "../theme/palette.js";
 
 // ─── REMINDER MODAL ──────────────────────────────────────────────────────────
 // Création / édition d'un rappel journalier.
@@ -116,7 +117,7 @@ export function ReminderModal({ reminder, onSave, onDelete, onClose }) {
                         padding: "8px 0",
                         background: active ? color : T.surface,
                         border: `1px solid ${active ? color : T.border}`,
-                        borderRadius: 8, color: active ? "#1a1f1c" : T.textMid,
+                        borderRadius: 8, color: active ? colors(isDark).textOnAccent : T.textMid,
                         fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                       }}
                     >{DAY_NAMES_TWO[d]}</button>

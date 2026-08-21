@@ -10,6 +10,7 @@ import {
   formatRecurrence,
   DAY_NAMES_SHORT,
 } from "../lib/reminders.js";
+import { colors } from "../theme/palette.js";
 
 export function CyclesView({
   mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso,
@@ -172,7 +173,7 @@ export function CyclesView({
         </div>
 
         {(customCycles || []).length === 0 && (
-          <div style={{ color: isDark ? "#8a7d68" : "#9a9890", fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 4 }}>
+          <div style={{ color: colors(isDark).textMuted, fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 4 }}>
             Aucun cycle personnalisé. Ex : créatine, décharge, compétition…
           </div>
         )}
@@ -202,7 +203,7 @@ export function CyclesView({
         <div style={styles.customCyclesSectionHeader}>
           <div>
             <div style={styles.customCyclesSectionTitle}>Rappels journaliers</div>
-            <div style={{ fontSize: 11, color: isDark ? "#8a9090" : "#8a7f70", marginTop: 2, fontStyle: "italic" }}>
+            <div style={{ fontSize: 11, color: colors(isDark).textMuted, marginTop: 2, fontStyle: "italic" }}>
               Affichés dans le journal du jour quand applicables.
             </div>
           </div>
@@ -215,7 +216,7 @@ export function CyclesView({
         </div>
 
         {reminders.length === 0 && (
-          <div style={{ color: isDark ? "#5a6060" : "#9a9890", fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 4 }}>
+          <div style={{ color: colors(isDark).textMuted, fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 4 }}>
             Aucun rappel. Ex : créatine, étirements, vitamine D…
           </div>
         )}
@@ -288,13 +289,13 @@ export function CyclesView({
 
 // ─── ReminderCard ────────────────────────────────────────────────────────────
 function ReminderCard({ reminder, completionRate, isDark, styles, disabled, onClick }) {
-  const text     = isDark ? "#e8e4de" : "#2a2218";
-  const textMid  = isDark ? "#a4a09a" : "#5a4d3c";
-  const textLight= isDark ? "#7a7570" : "#8a7f70";
-  const border   = isDark ? "#2a302a" : "#e6dfd1";
-  const accent   = isDark ? "#c8906a" : "#8b4c20";
-  const surface  = isDark ? "#1f2421" : "#ffffff";
-  const surface2 = isDark ? "#222a23" : "#f0ebde";
+  const text     = colors(isDark).text;
+  const textMid  = colors(isDark).textCard;
+  const textLight= colors(isDark).textMuted;
+  const border   = colors(isDark).borderSubtle;
+  const accent   = colors(isDark).accent;
+  const surface  = colors(isDark).card;
+  const surface2 = colors(isDark).surface;
 
   const isDaily = reminder.recurrence?.kind !== "weekdays";
   const activeDays = isDaily ? [0, 1, 2, 3, 4, 5, 6] : (reminder.recurrence?.days || []);
@@ -335,7 +336,7 @@ function ReminderCard({ reminder, completionRate, isDark, styles, disabled, onCl
                   style={{
                     width: 14, height: 14, borderRadius: 3,
                     background: active ? reminder.color + (isDark ? "" : "cc") : surface2,
-                    color: active ? (isDark ? "#1a1f1c" : "#fff") : textLight,
+                    color: active ? (colors(isDark).card) : textLight,
                     fontSize: 8, fontWeight: 700,
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}

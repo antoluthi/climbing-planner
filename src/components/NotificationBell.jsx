@@ -1,3 +1,4 @@
+import { colors } from "../theme/palette.js";
 // ─── CLOCHE DE NOTIFICATIONS ──────────────────────────────────────────────────
 // Icône cloche (SVG trait, hérite de currentColor) + pastille du nombre de
 // notifications non lues. Ouvre le NotificationsPanel.
@@ -17,8 +18,8 @@ export function BellIcon({ size = 18 }) {
 }
 
 export function NotificationBell({ unreadCount, onClick, isDark, active }) {
-  const accent = isDark ? "#e0a875" : "#8b4c20";
-  const badgeBg = isDark ? "#f08070" : "#b83030";
+  const accent = colors(isDark).accent;
+  const badgeBg = colors(isDark).danger;
   return (
     <button
       onClick={onClick}
@@ -26,12 +27,12 @@ export function NotificationBell({ unreadCount, onClick, isDark, active }) {
       title="Notifications"
       style={{
         position: "relative",
-        background: active ? (isDark ? "#3a2616" : "#ecddd4") : "none",
-        border: `1px solid ${active ? accent : (isDark ? "#3a2e22" : "#ddd0c2")}`,
+        background: active ? (colors(isDark).borderSubtle) : "none",
+        border: `1px solid ${active ? accent : (colors(isDark).border)}`,
         borderRadius: 8,
         width: 32, height: 32,
         display: "flex", alignItems: "center", justifyContent: "center",
-        color: unreadCount > 0 ? accent : (isDark ? "#a89a82" : "#8a7f70"),
+        color: unreadCount > 0 ? accent : (colors(isDark).textMuted),
         cursor: "pointer", padding: 0, flexShrink: 0,
       }}
     >
@@ -40,10 +41,10 @@ export function NotificationBell({ unreadCount, onClick, isDark, active }) {
         <span style={{
           position: "absolute", top: -5, right: -5,
           minWidth: 15, height: 15, borderRadius: 8,
-          background: badgeBg, color: "#fff",
+          background: badgeBg, color: colors(isDark).onColor,
           fontSize: 9, fontWeight: 700, lineHeight: "15px",
           padding: "0 3px", textAlign: "center",
-          boxShadow: `0 0 0 2px ${isDark ? "#1a1410" : "#ede7de"}`,
+          boxShadow: `0 0 0 2px ${colors(isDark).surface}`,
         }}>
           {unreadCount > 9 ? "9+" : unreadCount}
         </span>

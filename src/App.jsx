@@ -9,6 +9,7 @@ import { AuthPanel } from "./components/AuthPanel.jsx";
 import { PublicPlanView } from "./components/PublicPlanView.jsx";
 import { DayNightToggle } from "./components/DayNightToggle.jsx";
 import { syncSystemBars } from "./lib/native.js";
+import { colors } from "./theme/palette.js";
 
 export default function App() {
   const { session, setSession, authChecked } = useAuth();
@@ -23,16 +24,20 @@ export default function App() {
   // APK : aligne le style des icônes de la barre de statut/navigation Android
   // sur le thème de l'app (no-op sur le web).
   useEffect(() => { syncSystemBars(isDark); }, [isDark]);
+  // Les quelques règles CSS statiques (survols) lisent la palette par ici.
+  useEffect(() => {
+    document.documentElement.style.setProperty("--cp-tint", colors(isDark).tint);
+  }, [isDark]);
 
   const [publicPlanUser, setPublicPlanUser] = useState(null);
   const [showProfilePicker, setShowProfilePicker] = useState(false);
   const [publicProfiles, setPublicProfiles] = useState(null);
 
-  const accent = isDark ? "#e0a875" : "#8b4c20";
+  const accent = colors(isDark).accent;
 
   if (!authChecked) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: isDark ? "#1a1410" : "#f0f0f0" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: colors(isDark).surface }}>
         <div style={{ color: accent, fontSize: 28, fontWeight: 300, letterSpacing: "0.1em" }}>…</div>
       </div>
     );
@@ -51,14 +56,14 @@ export default function App() {
   }
 
   if (supabase && !session) {
-    const loginBrown = isDark ? "#e0a875" : "#5c3317";
+    const loginBrown = colors(isDark).accent;
     const loginBrownBg = isDark ? "rgba(184,101,26,0.18)" : "rgba(139,76,32,0.08)";
     const loginBrownBorder = isDark ? "rgba(184,101,26,0.55)" : "rgba(139,76,32,0.4)";
-    const loginBorder = isDark ? "#2e2419" : "#ddd0c2";
+    const loginBorder = colors(isDark).border;
     const loginStyles = {
       ...styles,
       authBtn: { ...styles.authBtn, background: loginBrownBg, border: `1px solid ${loginBrownBorder}`, color: loginBrown },
-      authLogoutBtn: { ...styles.authLogoutBtn, color: isDark ? "#c4b69c" : "#8b6650" },
+      authLogoutBtn: { ...styles.authLogoutBtn, color: colors(isDark).textDim },
     };
 
     const openProfilePicker = async () => {
@@ -87,16 +92,16 @@ export default function App() {
           minHeight: "100vh", position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
           flexDirection: "column", gap: 24,
-          background: isDark ? "#1a1410" : "#ede7de",
+          background: colors(isDark).surface,
         }}>
           <div style={{ position: "absolute", top: 16, right: 16 }}>
             <DayNightToggle
               isDark={isDark}
               onToggle={toggleTheme}
               style={{
-                border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
+                border: `1px solid ${colors(isDark).border}`,
                 borderRadius: 8,
-                color: isDark ? "#c4b69c" : "#6a6258",
+                color: colors(isDark).textDim,
               }}
             />
           </div>
@@ -108,7 +113,7 @@ export default function App() {
           }}>Climbing Planner</div>
 
           <div style={{
-            background: isDark ? "#241b13" : "#faf6f1",
+            background: colors(isDark).card,
             borderRadius: 12, padding: "28px 24px",
             boxShadow: `0 4px 28px rgba(92, 51, 23, ${isDark ? "0.35" : "0.10"})`,
             minWidth: 300, border: `1px solid ${loginBorder}`,
@@ -128,7 +133,7 @@ export default function App() {
                 borderBottom: showProfilePicker ? `1px solid ${loginBorder}` : "none",
                 padding: "13px 20px",
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                color: isDark ? "#a89a82" : "#8a7060",
+                color: colors(isDark).textMuted,
                 cursor: "pointer", fontFamily: "inherit",
                 fontSize: 13, letterSpacing: "0.03em",
               }}
@@ -139,11 +144,11 @@ export default function App() {
 
             {showProfilePicker && (
               publicProfiles === null ? (
-                <div style={{ padding: "14px 20px", color: isDark ? "#8a7d68" : "#aaa89e", fontSize: 13 }}>
+                <div style={{ padding: "14px 20px", color: colors(isDark).borderStrong, fontSize: 13 }}>
                   Chargement…
                 </div>
               ) : publicProfiles.filter(p => p.firstName || p.lastName).length === 0 ? (
-                <div style={{ padding: "14px 20px", color: isDark ? "#8a7d68" : "#aaa89e", fontSize: 13 }}>
+                <div style={{ padding: "14px 20px", color: colors(isDark).borderStrong, fontSize: 13 }}>
                   Aucun planning public disponible.
                 </div>
               ) : (
@@ -162,7 +167,7 @@ export default function App() {
                         cursor: "pointer", textAlign: "left",
                         transition: "background 0.15s",
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = isDark ? "#1f1810" : "#f0ebe0"}
+                      onMouseEnter={e => e.currentTarget.style.background = colors(isDark).surface}
                       onMouseLeave={e => e.currentTarget.style.background = "none"}
                     >
                       {p.avatarUrl ? (
@@ -174,19 +179,19 @@ export default function App() {
                       ) : (
                         <div style={{
                           width: 32, height: 32, borderRadius: "50%",
-                          background: isDark ? "#2a2018" : "#e4ddd4",
+                          background: colors(isDark).borderSubtle,
                           display: "flex", alignItems: "center", justifyContent: "center",
                           fontSize: 12, fontWeight: 700,
-                          color: isDark ? "#a89a82" : "#8a7060",
+                          color: colors(isDark).textMuted,
                           flexShrink: 0,
                         }}>
                           {initials}
                         </div>
                       )}
-                      <span style={{ fontSize: 13, color: isDark ? "#e0d4c0" : "#2a2218", fontWeight: 500 }}>
+                      <span style={{ fontSize: 13, color: colors(isDark).text, fontWeight: 500 }}>
                         {fullName}
                       </span>
-                      <span style={{ marginLeft: "auto", color: isDark ? "#4a3e30" : "#c8c0b4", fontSize: 12 }}>→</span>
+                      <span style={{ marginLeft: "auto", color: colors(isDark).border, fontSize: 12 }}>→</span>
                     </button>
                   );
                 })

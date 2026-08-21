@@ -5,19 +5,20 @@ import { Field, TextInput, Textarea, Select, ColorSwatches, SegmentedControl } f
 import { Button } from "./ui/Button.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { useConfirmClose } from "../hooks/useConfirmClose.js";
+import { colors, DATA } from "../theme/palette.js";
+import { useThemeCtx } from "../theme/ThemeContext.jsx";
 
 // ─── DEADLINE MODAL ───────────────────────────────────────────────────────────
 
 const DEADLINE_TYPES = ["competition", "sortie", "objectif"];
 const DEADLINE_TYPE_LABELS = { competition: "Compétition", sortie: "Sortie", objectif: "Objectif" };
 
-const DEADLINE_COLORS = [
-  "#f0805a", "#f0a060", "#f59e0b", "#22d3ee",
-  "#a78bfa", "#7da7f0", "#82c894", "#e879f9",
-  "#e0a875", "#94a3b8", "#f0a060", "#f0c46a",
-];
+// Couleurs proposées à l'utilisateur : enregistrées dans ses données, donc
+// indépendantes du thème (cf. DATA.picker).
+const DEADLINE_COLORS = DATA.picker;
 
 export function DeadlineModal({ initial, onSave, onClose }) {
+  const { isDark } = useThemeCtx();
   const { requestClose, markDirty, confirmOpen, confirmProps } = useConfirmClose(onClose);
   const [label, _setLabel] = useState(initial?.label || "");
   const setLabel = v => { markDirty(); _setLabel(v); };
@@ -93,7 +94,7 @@ export function DeadlineModal({ initial, onSave, onClose }) {
       </ModalBody>
       <ModalFooter>
         <Button variant="secondary" size="md" onClick={requestClose}>Annuler</Button>
-        <Button variant="primary" size="md" disabled={!canSave} onClick={handleSave} style={canSave ? { background: color, color: "#fff" } : undefined}>
+        <Button variant="primary" size="md" disabled={!canSave} onClick={handleSave} style={canSave ? { background: color, color: colors(isDark).onColor } : undefined}>
           {initial ? "Enregistrer" : "Créer"}
         </Button>
       </ModalFooter>

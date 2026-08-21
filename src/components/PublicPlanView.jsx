@@ -9,6 +9,7 @@ import { MonthView } from "./MonthView.jsx";
 import { YearView } from "./YearView.jsx";
 import { DayNightToggle } from "./DayNightToggle.jsx";
 import { RichText } from "./RichText.jsx";
+import { colors } from "../theme/palette.js";
 
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -43,12 +44,12 @@ function AvatarCircle({ url, firstName, lastName, size = 36, accent }) {
 
 // ── Session card (shared between mobile/desktop) ────────────────────────────
 function SessionCard({ session, isDark, compact = false }) {
-  const accent = isDark ? "#e0a875" : "#8b4c20";
+  const accent = colors(isDark).accent;
   const chargeColor = getChargeColor(session.charge || 0);
-  const textMain = isDark ? "#f0e6d0" : "#2a2218";
-  const textMid = isDark ? "#c4b69c" : "#6a6258";
-  const textLight = isDark ? "#8a7d68" : "#aaa89e";
-  const cardBg = isDark ? "#15100b" : "#faf6f0";
+  const textMain = colors(isDark).text;
+  const textMid = colors(isDark).textDim;
+  const textLight = colors(isDark).borderStrong;
+  const cardBg = colors(isDark).card;
   const description = session.description?.toString().trim();
   const location = session.location?.trim();
   const blocks = session.blocks || [];
@@ -69,7 +70,7 @@ function SessionCard({ session, isDark, compact = false }) {
     }}>
       {/* Time */}
       {session.startTime && (
-        <div style={{ fontSize: compact ? 9 : 11, color: isDark ? "#82c894" : "#5a8a60", fontWeight: 700, lineHeight: 1 }}>
+        <div style={{ fontSize: compact ? 9 : 11, color: colors(isDark).success, fontWeight: 700, lineHeight: 1 }}>
           {session.startTime}{session.endTime ? ` – ${session.endTime}` : ""}
         </div>
       )}
@@ -138,12 +139,12 @@ function SessionCard({ session, isDark, compact = false }) {
 // ── Session detail modal ────────────────────────────────────────────────────
 function SessionDetailModal({ session, isDark, onClose }) {
   const styles = makeStyles(isDark);
-  const accent = isDark ? "#e0a875" : "#8b4c20";
-  const textMain = isDark ? "#f0e6d0" : "#2a2218";
-  const textMid = isDark ? "#c4b69c" : "#6a6258";
-  const textLight = isDark ? "#8a7d68" : "#aaa89e";
-  const bg = isDark ? "#1e1610" : "#fdf9f4";
-  const border = isDark ? "#2e2419" : "#d8d0c4";
+  const accent = colors(isDark).accent;
+  const textMain = colors(isDark).text;
+  const textMid = colors(isDark).textDim;
+  const textLight = colors(isDark).borderStrong;
+  const bg = colors(isDark).card;
+  const border = colors(isDark).border;
   const chargeColor = getChargeColor(session.charge || 0);
   const blocks = session.blocks || [];
   const description = session.description?.toString().trim();
@@ -184,7 +185,7 @@ function SessionDetailModal({ session, isDark, onClose }) {
               {session.title || session.name}
             </div>
             {session.startTime && (
-              <div style={{ fontSize: 12, color: isDark ? "#82c894" : "#5a8a60", fontWeight: 600, marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: colors(isDark).success, fontWeight: 600, marginTop: 4 }}>
                 {session.startTime}{session.endTime ? ` – ${session.endTime}` : ""}
               </div>
             )}
@@ -215,7 +216,7 @@ function SessionDetailModal({ session, isDark, onClose }) {
           {session.duration && (
             <span style={{
               fontSize: 11, color: textMid,
-              background: isDark ? "#2a2018" : "#e8e2d8",
+              background: colors(isDark).borderSubtle,
               borderRadius: 5, padding: "3px 8px",
             }}>
               ⏱ {session.duration} min
@@ -224,7 +225,7 @@ function SessionDetailModal({ session, isDark, onClose }) {
           {location && (
             <span style={{
               fontSize: 11, color: textMid,
-              background: isDark ? "#2a2018" : "#e8e2d8",
+              background: colors(isDark).borderSubtle,
               borderRadius: 5, padding: "3px 8px",
             }}>
               📍 {location}
@@ -247,7 +248,7 @@ function SessionDetailModal({ session, isDark, onClose }) {
             </div>
             {blocks.map((bl, i) => (
               <div key={i} style={{
-                background: isDark ? "#241b13" : "#f0ebe0",
+                background: colors(isDark).surface,
                 borderRadius: 8, padding: "10px 12px",
                 borderLeft: `3px solid ${getChargeColor(bl.charge || 0)}`,
               }}>
@@ -276,7 +277,7 @@ function PublicWeekView({ data, currentDate }) {
   const [selectedSession, setSelectedSession] = useState(null);
   const monday = getMondayOf(currentDate);
   const today = new Date();
-  const accent = isDark ? "#e0a875" : "#8b4c20";
+  const accent = colors(isDark).accent;
 
   const days = DAYS_SHORT.map((dayLabel, di) => {
     const date = addDays(monday, di);
@@ -297,41 +298,41 @@ function PublicWeekView({ data, currentDate }) {
                 <div key={di} style={{
                   display: "flex", alignItems: "center", gap: 12,
                   padding: "8px 12px",
-                  background: isDark ? "#1a1410" : "#eee8dc",
+                  background: colors(isDark).borderSubtle,
                   borderRadius: 8,
-                  border: `1px solid ${isDark ? "#2a2018" : "#d8d0c4"}`,
+                  border: `1px solid ${colors(isDark).border}`,
                   opacity: 0.55,
                 }}>
-                  <div style={{ fontSize: 13, color: isDark ? "#8a7d68" : "#aaa89e", flex: 1 }}>{capitalized}</div>
-                  <div style={{ fontSize: 12, color: isDark ? "#3a2e22" : "#ccc8be" }}>Repos</div>
+                  <div style={{ fontSize: 13, color: colors(isDark).borderStrong, flex: 1 }}>{capitalized}</div>
+                  <div style={{ fontSize: 12, color: colors(isDark).border }}>Repos</div>
                 </div>
               );
             }
             return (
               <div key={di} style={{
-                background: isDark ? "#241b13" : "#e8e2d8",
+                background: colors(isDark).borderSubtle,
                 borderRadius: 10,
-                border: isToday ? `2px solid ${accent}` : `1px solid ${isDark ? "#2e2419" : "#ccc6b8"}`,
+                border: isToday ? `2px solid ${accent}` : `1px solid ${colors(isDark).border}`,
                 overflow: "hidden",
               }}>
                 <div style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   padding: "10px 14px",
-                  background: isToday ? (isDark ? "#1f2a1f" : "#d4edda") : "transparent",
-                  borderBottom: hasSessions ? `1px solid ${isDark ? "#2e2419" : "#d0c8bc"}` : "none",
+                  background: isToday ? (colors(isDark).successBg) : "transparent",
+                  borderBottom: hasSessions ? `1px solid ${colors(isDark).border}` : "none",
                 }}>
                   <div>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: isToday ? accent : (isDark ? "#f0e6d0" : "#2a2218") }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: isToday ? accent : (colors(isDark).text) }}>
                       {capitalized}
                     </span>
                     {isToday && (
-                      <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: accent, background: isDark ? "#1f2a1f" : "#c8f0cc", borderRadius: 4, padding: "1px 6px" }}>
+                      <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: accent, background: colors(isDark).successBg, borderRadius: 4, padding: "1px 6px" }}>
                         Aujourd'hui
                       </span>
                     )}
                   </div>
                   {hasSessions && (
-                    <div style={{ fontSize: 12, color: isDark ? "#a89a82" : "#8aaa8a", fontWeight: 600 }}>
+                    <div style={{ fontSize: 12, color: colors(isDark).success, fontWeight: 600 }}>
                       {sessions.length} séance{sessions.length > 1 ? "s" : ""}
                     </div>
                   )}
@@ -362,18 +363,18 @@ function PublicWeekView({ data, currentDate }) {
         {days.map(({ dayLabel, date, sessions, isToday }, di) => (
           <div key={di} style={{
             flex: 1, minWidth: 120,
-            background: isDark ? "#241b13" : "#e8e2d8",
+            background: colors(isDark).borderSubtle,
             borderRadius: 10, padding: "10px 8px",
-            border: isToday ? `2px solid ${accent}` : `1px solid ${isDark ? "#2e2419" : "#ccc6b8"}`,
+            border: isToday ? `2px solid ${accent}` : `1px solid ${colors(isDark).border}`,
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "#c4b69c" : "#7a7060", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: colors(isDark).textDim, textTransform: "uppercase", letterSpacing: "0.08em" }}>
               {dayLabel}
             </div>
-            <div style={{ fontSize: 11, color: isDark ? "#8a7d68" : "#aaa89e", marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: colors(isDark).borderStrong, marginBottom: 8 }}>
               {formatDate(date)}
             </div>
             {sessions.length === 0
-              ? <div style={{ fontSize: 10, color: isDark ? "#3a2e22" : "#ccc8be" }}>—</div>
+              ? <div style={{ fontSize: 10, color: colors(isDark).border }}>—</div>
               : sessions.map((s, si) => (
                 <div key={si} style={{ marginBottom: 5, cursor: "pointer" }} onClick={() => setSelectedSession(s)}>
                   <SessionCard session={s} isDark={isDark} compact />
@@ -404,7 +405,7 @@ export function PublicPlanView({ onBack, userId, firstName, lastName, avatarUrl 
   });
 
   const styles = makeStyles(isDark);
-  const accent = isDark ? "#e0a875" : "#8b4c20";
+  const accent = colors(isDark).accent;
   const mesocycles = planData?.mesocycles || [];
   const displayName = [firstName, lastName].filter(Boolean).join(" ") || "Planning";
 
@@ -444,8 +445,8 @@ export function PublicPlanView({ onBack, userId, firstName, lastName, avatarUrl 
       onClick={() => setViewMode(mode)}
       style={{
         background: viewMode === mode ? accent : "none",
-        border: `1px solid ${viewMode === mode ? accent : isDark ? "#3a2e22" : "#ccc6b8"}`,
-        color: viewMode === mode ? (isDark ? "#0f1a0f" : "#fff") : isDark ? "#c4b69c" : "#6a6258",
+        border: `1px solid ${viewMode === mode ? accent : colors(isDark).border}`,
+        color: viewMode === mode ? (colors(isDark).card) : colors(isDark).textDim,
         borderRadius: 6, padding: "5px 14px", fontSize: 12,
         cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
       }}
@@ -462,9 +463,9 @@ export function PublicPlanView({ onBack, userId, firstName, lastName, avatarUrl 
           <button
             onClick={onBack}
             style={{
-              background: "none", border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
+              background: "none", border: `1px solid ${colors(isDark).border}`,
               borderRadius: 8, padding: "6px 14px",
-              color: isDark ? "#c4b69c" : "#6a6258",
+              color: colors(isDark).textDim,
               cursor: "pointer", fontFamily: "inherit", fontSize: 13, flexShrink: 0,
             }}
           >
@@ -491,7 +492,7 @@ export function PublicPlanView({ onBack, userId, firstName, lastName, avatarUrl 
           <DayNightToggle
             isDark={isDark}
             onToggle={toggleThemePub}
-            style={{ border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`, borderRadius: 8 }}
+            style={{ border: `1px solid ${colors(isDark).border}`, borderRadius: 8 }}
           />
         </div>
 
@@ -499,7 +500,7 @@ export function PublicPlanView({ onBack, userId, firstName, lastName, avatarUrl 
         <div style={{
           display: "flex", alignItems: "center", gap: 12,
           padding: "12px 16px",
-          borderBottom: `1px solid ${isDark ? "#2e2419" : "#d8d3ca"}`,
+          borderBottom: `1px solid ${colors(isDark).border}`,
           flexWrap: "wrap",
         }}>
           <div style={{ display: "flex", gap: 6 }}>
@@ -518,7 +519,7 @@ export function PublicPlanView({ onBack, userId, firstName, lastName, avatarUrl 
         {loading ? (
           <div style={{ display: "flex", justifyContent: "center", padding: 60, color: accent, fontSize: 24 }}>…</div>
         ) : !planData ? (
-          <div style={{ padding: 40, textAlign: "center", color: isDark ? "#555" : "#aaa" }}>
+          <div style={{ padding: 40, textAlign: "center", color: colors(isDark).borderStrong }}>
             Planning non disponible.
           </div>
         ) : viewMode === "week" ? (

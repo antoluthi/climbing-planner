@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { localDateStr } from "../lib/helpers.js";
+import { colors } from "../theme/palette.js";
 
 // ─── NOTES JOURNALIÈRES ──────────────────────────────────────────────────────
 
@@ -30,9 +31,9 @@ export function DailyNotesSection({ notes, onSave }) {
 
   const taStyle = {
     width: "100%", boxSizing: "border-box",
-    background: isDark ? "#241b13" : "#e8e3da",
-    border: `1px solid ${isDark ? "#3a2e22" : "#ccc6b8"}`,
-    borderRadius: 6, color: isDark ? "#f0e6d0" : "#2a2218",
+    background: colors(isDark).borderSubtle,
+    border: `1px solid ${colors(isDark).border}`,
+    borderRadius: 6, color: colors(isDark).text,
     fontSize: 12, fontFamily: "inherit", lineHeight: 1.5,
     padding: "10px 12px", resize: "vertical", minHeight: 72,
     outline: "none", transition: "border-color 0.15s",
@@ -58,8 +59,8 @@ export function DailyNotesSection({ notes, onSave }) {
       {recent.length > 0 && (
         <div style={{ marginTop: 10 }}>
           {recent.map(([d, t]) => (
-            <div key={d} style={{ marginBottom: 6, fontSize: 11, color: isDark ? "#a89a82" : "#a89a82" }}>
-              <span style={{ fontWeight: 600, marginRight: 6, color: isDark ? "#a89a82" : "#8a7060" }}>{fmtDate(d)}</span>
+            <div key={d} style={{ marginBottom: 6, fontSize: 11, color: colors(isDark).textMuted }}>
+              <span style={{ fontWeight: 600, marginRight: 6, color: colors(isDark).textMuted }}>{fmtDate(d)}</span>
               {t.length > 100 ? t.slice(0, 100) + "…" : t}
             </div>
           ))}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "../lib/toast.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Z } from "../theme/makeStyles.js";
+import { colors } from "../theme/palette.js";
 
 // ─── TOAST CONTAINER ──────────────────────────────────────────────────────────
 // S'abonne au store et affiche en bas, avec UNDO et auto-dismiss.
@@ -15,11 +16,11 @@ export function ToastContainer({ isMobile }) {
 
   if (items.length === 0) return null;
 
-  const text = isDark ? "#f0e6d0" : "#fcf8ef";
-  const surface = isDark ? "#2a2218" : "#2a2218";
-  const accent = isDark ? "#e0a875" : "#e0a875";
-  const success = "#82c894";
-  const error = "#f08070";
+  const text = colors(isDark).toastText;
+  const surface = colors(isDark).toastBg;
+  const accent = colors(isDark).warn;
+  const success = colors(isDark).success;
+  const error = colors(isDark).danger;
 
   return (
     <div

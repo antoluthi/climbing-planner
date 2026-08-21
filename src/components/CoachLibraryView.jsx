@@ -5,6 +5,7 @@ import { getChargeColor, getSessionCharge, normalizeCharge10 } from "../lib/char
 import { SuspensionSummaryChips } from "./SuspensionSummaryChips.jsx";
 import { BlockFormModal } from "./BlockFormModal.jsx";
 import { FeedbackHistoryModal } from "./FeedbackHistoryModal.jsx";
+import { colors } from "../theme/palette.js";
 
 export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onNewBlock, onEditBlock, onDeleteBlock }) {
   const { isDark } = useThemeCtx();
@@ -16,18 +17,18 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
   const [blockForm,       setBlockForm]       = useState(null); // null | { initial? }
   const [feedbackHistory, setFeedbackHistory] = useState(null); // null | { type, id, name }
 
-  const bg      = isDark ? "#241b13" : "#f3f7f4";
-  const surface = isDark ? "#241b13" : "#ffffff";
-  const border  = isDark ? "#3a2e22" : "#daeade";
-  const text    = isDark ? "#f0e6d0" : "#1a2e1f";
-  const muted   = isDark ? "#a89a82" : "#6b8c72";
-  const accent  = isDark ? "#e0a875" : "#8b4c20";
-  const danger  = isDark ? "#f08070" : "#f08070";
+  const bg      = colors(isDark).successBg;
+  const surface = colors(isDark).card;
+  const border  = colors(isDark).successBg;
+  const text    = colors(isDark).text;
+  const muted   = colors(isDark).success;
+  const accent  = colors(isDark).accent;
+  const danger  = colors(isDark).danger;
 
   // ── Shared item row ──
   const ItemActions = ({ id, onEdit: doEdit, onDel, onHistory }) => confirmId === id ? (
     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-      <button onClick={() => { onDel(id); setConfirmId(null); }} style={{ background: danger, border: "none", borderRadius: 5, color: "#fff", padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}>Supprimer</button>
+      <button onClick={() => { onDel(id); setConfirmId(null); }} style={{ background: danger, border: "none", borderRadius: 5, color: colors(isDark).onColor, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}>Supprimer</button>
       <button onClick={() => setConfirmId(null)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: muted, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>Annuler</button>
     </div>
   ) : (
@@ -80,7 +81,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
               style={{
                 flex: 1, padding: "8px 0", border: "none", borderRadius: 6, cursor: "pointer",
                 fontFamily: "inherit", fontSize: 12, fontWeight: 600,
-                background: subTab === key ? (isDark ? "#3a2e22" : "#d4e8db") : "none",
+                background: subTab === key ? (colors(isDark).successBg) : "none",
                 color: subTab === key ? accent : muted,
               }}
             >{label}</button>
@@ -101,7 +102,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
           </div>
           <button
             onClick={isSessionTab ? onNew : () => setBlockForm({})}
-            style={{ background: accent, border: "none", borderRadius: 7, color: "#fff", padding: "9px 16px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 700, letterSpacing: "0.03em", boxShadow: `0 2px 10px ${accent}44` }}
+            style={{ background: accent, border: "none", borderRadius: 7, color: colors(isDark).onColor, padding: "9px 16px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 700, letterSpacing: "0.03em", boxShadow: `0 2px 10px ${accent}44` }}
           >
             ＋ {isSessionTab ? "Nouvelle séance" : "Nouveau bloc"}
           </button>
@@ -124,7 +125,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
                   style={{
                     padding: "5px 10px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit",
                     fontWeight: filter === f ? 600 : 400,
-                    background: filter === f ? (isDark ? "#3a2e22" : "#d4e8db") : "none",
+                    background: filter === f ? (colors(isDark).successBg) : "none",
                     border: `1px solid ${filter === f ? accent + "88" : border}`,
                     color: filter === f ? accent : muted,
                   }}
@@ -140,7 +141,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
                   style={{
                     padding: "4px 9px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit",
                     fontWeight: sort === key ? 600 : 400,
-                    background: sort === key ? (isDark ? "#3a2e22" : "#d4e8db") : "none",
+                    background: sort === key ? (colors(isDark).successBg) : "none",
                     border: `1px solid ${sort === key ? accent + "88" : border}`,
                     color: sort === key ? accent : muted,
                   }}
@@ -205,7 +206,7 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {blist.map(b => (
-                      <div key={b.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${cfg.color || "#a89a82"}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                      <div key={b.id} style={{ background: surface, border: `1px solid ${border}`, borderLeft: `3px solid ${cfg.color || colors(isDark).textMuted}`, borderRadius: 7, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</div>
                           <div style={{ fontSize: 10, color: muted, display: "flex", gap: 10, flexWrap: "wrap" }}>

@@ -1,3 +1,4 @@
+import { DATA } from "../theme/palette.js";
 // ─── DISCIPLINES ──────────────────────────────────────────────────────────────
 // Catalogue des disciplines supportées par le composer unifié.
 // Chaque discipline définit ses types de blocs, son calculateur de charge,
@@ -7,7 +8,7 @@ export const DISCIPLINES = {
   climbing: {
     id: "climbing",
     label: "Escalade",
-    color: "#8b4c20",
+    color: DATA.picker[0],
     iconId: "climbing",
     blockTypes: ["Échauffement", "Grimpe", "Suspension", "Exercices", "Étirements", "Retour au calme"],
     chargeCalculator: "climbing-volume",
@@ -18,7 +19,7 @@ export const DISCIPLINES = {
   running: {
     id: "running",
     label: "Course",
-    color: "#2563eb",
+    color: DATA.picker[5],
     iconId: "running",
     blockTypes: ["Échauffement", "Footing", "Fractionné", "Côtes", "Sortie longue", "Récup"],
     chargeCalculator: "rpe-duration",
@@ -28,7 +29,7 @@ export const DISCIPLINES = {
   cycling: {
     id: "cycling",
     label: "Vélo",
-    color: "#15803d",
+    color: DATA.picker[3],
     iconId: "cycling",
     blockTypes: ["Échauffement", "Z2", "Tempo", "Seuil", "VO2", "Récup"],
     chargeCalculator: "rpe-duration",
@@ -38,7 +39,7 @@ export const DISCIPLINES = {
   strength: {
     id: "strength",
     label: "Renforcement",
-    color: "#6d28d9",
+    color: DATA.picker[6],
     iconId: "strength",
     blockTypes: ["Échauffement", "Force max", "Hypertrophie", "Power", "Mobilité", "Retour calme"],
     chargeCalculator: "rpe-duration",
@@ -48,7 +49,7 @@ export const DISCIPLINES = {
   mobility: {
     id: "mobility",
     label: "Mobilité",
-    color: "#0891b2",
+    color: DATA.picker[4],
     iconId: "mobility",
     blockTypes: ["Mobilité", "Yoga", "Étirements", "Respiration", "Récup active"],
     chargeCalculator: "rpe-duration",
@@ -58,7 +59,7 @@ export const DISCIPLINES = {
   custom: {
     id: "custom",
     label: "Autre",
-    color: "#8a7f70",
+    color: DATA.picker[11],
     iconId: "custom",
     blockTypes: ["Effort", "Repos", "Libre"],
     chargeCalculator: "rpe-duration",

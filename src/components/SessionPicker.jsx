@@ -4,6 +4,7 @@ import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { Modal, ModalHeader, ModalFooter, modalTokens } from "./ui/Modal.jsx";
 import { TextInput } from "./ui/Field.jsx";
 import { Button } from "./ui/Button.jsx";
+import { colors } from "../theme/palette.js";
 
 // ─── MODAL: Ajouter une séance ────────────────────────────────────────────────
 
@@ -59,8 +60,8 @@ export function SessionPicker({ onSelect, onClose, customSessions, onCreateCusto
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <span style={{
             fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 5, flexShrink: 0,
-            background: s.type === "Grimpe" ? T.accent + "22" : (isDark ? "#2a3340" : "#e0e8f0"),
-            color: s.type === "Grimpe" ? T.accent : (isDark ? "#9bb4cc" : "#5a6878"),
+            background: s.type === "Grimpe" ? T.accent + "22" : (colors(isDark).infoBg),
+            color: s.type === "Grimpe" ? T.accent : (colors(isDark).info),
           }}>{s.type}</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
             <span style={{ fontSize: 13, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>

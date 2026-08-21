@@ -1,8 +1,9 @@
 import { useRef } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
+import { colors } from "../theme/palette.js";
 
 export function SyncButtons({ data, onImport, compact, syncStatus, session, onUpload, onPull }) {
-  const { styles } = useThemeCtx();
+  const { styles, isDark } = useThemeCtx();
   const importRef = useRef(null);
 
   const handleExport = () => {
@@ -40,9 +41,9 @@ export function SyncButtons({ data, onImport, compact, syncStatus, session, onUp
     : syncStatus === "saved" ? "✓"
     : syncStatus === "offline" ? "—"
     : null;
-  const syncColor = syncStatus === "saved" ? "#e0a875"
-    : syncStatus === "offline" ? "#f0a060"
-    : "#555";
+  const syncColor = syncStatus === "saved" ? colors(isDark).accent
+    : syncStatus === "offline" ? colors(isDark).warn
+    : colors(isDark).textDim;
 
   return (
     <div style={styles.syncBtns}>
@@ -54,12 +55,12 @@ export function SyncButtons({ data, onImport, compact, syncStatus, session, onUp
         }>{syncIcon}</span>
       )}
       {session && onUpload && (
-        <button style={{ ...btnStyle, color: "#e0a875" }} onClick={onUpload} title="Envoyer mes données vers le cloud (écraser)">
+        <button style={{ ...btnStyle, color: colors(isDark).accent }} onClick={onUpload} title="Envoyer mes données vers le cloud (écraser)">
           ↑
         </button>
       )}
       {session && onPull && (
-        <button style={{ ...btnStyle, color: "#7da7f0" }} onClick={onPull} title="Charger les données depuis le cloud (écraser local)">
+        <button style={{ ...btnStyle, color: colors(isDark).info }} onClick={onPull} title="Charger les données depuis le cloud (écraser local)">
           ↓
         </button>
       )}

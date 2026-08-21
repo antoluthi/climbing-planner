@@ -5,6 +5,7 @@ import { getChargeColor, getSessionCharge, normalizeCharge10 } from "../lib/char
 import { Modal, ModalHeader, ModalFooter, modalTokens } from "./ui/Modal.jsx";
 import { Field, TextInput, Textarea } from "./ui/Field.jsx";
 import { Button } from "./ui/Button.jsx";
+import { colors } from "../theme/palette.js";
 
 // ─── COACH PICKER MODAL ───────────────────────────────────────────────────────
 
@@ -73,7 +74,7 @@ export function CoachPickerModal({ sessions, blocks, onSelect, onClose }) {
   const ItemRow = ({ item, type }) => {
     const isSel = selected?.item.id === item.id && selected?.type === type;
     const cfg   = type === "block" ? (BLOCK_TYPES[item.blockType] || {}) : null;
-    const color = type === "block" ? (cfg?.color || "#a89a82") : getChargeColor(getSessionCharge(item));
+    const color = type === "block" ? (cfg?.color || colors(isDark).textMuted) : getChargeColor(getSessionCharge(item));
     const dur   = type === "session" ? item.estimatedTime : item.duration;
     return (
       <button

@@ -48,6 +48,7 @@ import { setRootBackHandler } from "../lib/native.js";
 import { NotificationBell } from "../components/NotificationBell.jsx";
 import { NotificationsPanel } from "../components/NotificationsPanel.jsx";
 import { getSessionCharge } from "../lib/charge.js";
+import { colors } from "../theme/palette.js";
 
 export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const { session, setSession, syncStatus } = useAuth();
@@ -486,21 +487,21 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const profilePhoto = data.profile?.avatarUrl || data.profile?.avatarDataUrl || "";
   const profileBtn = (
     <button
-      style={{ ...styles.profileBtn, ...(viewMode === "profil" ? { borderColor: isDark ? "#e0a875" : "#8b4c20", background: isDark ? "#3a2616" : "#ecddd4" } : {}) }}
+      style={{ ...styles.profileBtn, ...(viewMode === "profil" ? { borderColor: colors(isDark).accent, background: colors(isDark).borderSubtle } : {}) }}
       onClick={() => setViewMode("profil")}
       title="Profil"
     >
       {profilePhoto
         ? <img src={profilePhoto} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
-        : <span style={{ fontSize: 11, color: isDark ? "#a89a82" : "#8a7f70" }}>—</span>
+        : <span style={{ fontSize: 11, color: colors(isDark).textMuted }}>—</span>
       }
     </button>
   );
 
   const syncDot = syncStatus === "saving"
-    ? <span style={{ fontSize: 11, color: "#a89a82" }} title="Synchronisation…">⟳</span>
-    : syncStatus === "saved" ? <span style={{ fontSize: 11, color: isDark ? "#e0a875" : "#8b4c20" }} title="Synchronisé">✓</span>
-    : syncStatus === "offline" ? <span style={{ fontSize: 11, color: "#f0a060" }} title="Hors ligne">—</span>
+    ? <span style={{ fontSize: 11, color: colors(isDark).textMuted }} title="Synchronisation…">⟳</span>
+    : syncStatus === "saved" ? <span style={{ fontSize: 11, color: colors(isDark).accent }} title="Synchronisé">✓</span>
+    : syncStatus === "offline" ? <span style={{ fontSize: 11, color: colors(isDark).warn }} title="Hors ligne">—</span>
     : null;
 
   return (
@@ -611,17 +612,17 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
 
       {/* ── Bandeau vue athlète ── */}
       {viewingAthlete && (
-        <div style={{ background: isDark ? "#3a2616" : "#f0e4d8", borderBottom: `1px solid ${isDark ? "#5a3a18" : "#c8a080"}`, padding: "7px 18px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: isDark ? "#e0a875" : "#8b4c20", fontWeight: 700, letterSpacing: "0.05em" }}>
+        <div style={{ background: colors(isDark).borderSubtle, borderBottom: `1px solid ${colors(isDark).borderStrong}`, padding: "7px 18px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: colors(isDark).accent, fontWeight: 700, letterSpacing: "0.05em" }}>
             VUE ATHLÈTE
           </span>
-          <span style={{ fontSize: 12, color: isDark ? "#f0d8b8" : "#5c3010", fontWeight: 600 }}>
+          <span style={{ fontSize: 12, color: colors(isDark).accent, fontWeight: 600 }}>
             {viewingAthlete.firstName} {viewingAthlete.lastName}
           </span>
           <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
             <button
               onClick={switchBackToCoach}
-              style={{ background: isDark ? "#3a2616" : "#ecddd4", border: `1px solid ${isDark ? "#e0a87566" : "#8b4c2066"}`, borderRadius: 5, color: isDark ? "#e0a875" : "#8b4c20", padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
+              style={{ background: colors(isDark).borderSubtle, border: `1px solid ${colors(isDark).accentBorder}`, borderRadius: 5, color: colors(isDark).accent, padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600 }}
             >
               ← Retour à ma vue
             </button>
@@ -641,9 +642,9 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         const microTotal = detected?.meso?.microcycles?.length || 0;
         return (
           <div style={{
-            background: (color || "#a89a82") + "14",
-            borderBottom: `1px solid ${color || "#a89a82"}28`,
-            borderLeft: `3px solid ${color || "#a89a82"}`,
+            background: (color || colors(isDark).textMuted) + "14",
+            borderBottom: `1px solid ${color || colors(isDark).textMuted}28`,
+            borderLeft: `3px solid ${color || colors(isDark).textMuted}`,
             padding: isMobile ? "6px 14px" : "5px 20px",
             display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
             flexShrink: 0,
@@ -664,7 +665,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
                 </span>
               </>
             )}
-            {weekMeta.note && <span style={{ fontSize: 10, fontStyle: "italic", color: isDark ? "#a89a82" : "#a89a82" }}>"{weekMeta.note}"</span>}
+            {weekMeta.note && <span style={{ fontSize: 10, fontStyle: "italic", color: colors(isDark).textMuted }}>"{weekMeta.note}"</span>}
           </div>
         );
       })()}

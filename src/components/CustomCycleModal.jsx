@@ -7,6 +7,7 @@ import { Field, TextInput, Textarea, ColorSwatches, Toggle } from "./ui/Field.js
 import { Button } from "./ui/Button.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { useConfirmClose } from "../hooks/useConfirmClose.js";
+import { colors } from "../theme/palette.js";
 
 // ─── CUSTOM CYCLE MODAL ───────────────────────────────────────────────────────
 
@@ -96,7 +97,7 @@ export function CustomCycleModal({ initial, onSave, onClose }) {
       </ModalBody>
       <ModalFooter>
         <Button variant="secondary" size="md" onClick={requestClose}>Annuler</Button>
-        <Button variant="primary" size="md" disabled={!canSave} onClick={handleSave} style={canSave ? { background: color, color: "#fff" } : undefined}>
+        <Button variant="primary" size="md" disabled={!canSave} onClick={handleSave} style={canSave ? { background: color, color: colors(isDark).onColor } : undefined}>
           {initial ? "Enregistrer" : "Créer"}
         </Button>
       </ModalFooter>

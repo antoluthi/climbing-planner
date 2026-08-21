@@ -1,10 +1,11 @@
+import { colors } from "../theme/palette.js";
 // ─── CUSTOM CHECKBOX ─────────────────────────────────────────────────────────
 // Theme-aware checkbox replacement. Uses a styled div so no browser defaults.
 
 export function CustomCheckbox({ checked, onChange, isDark, accent, size = 16 }) {
   const borderColor = checked
     ? accent
-    : (isDark ? "#a89a82" : "#c4b69c");
+    : (colors(isDark).borderStrong);
   const bg = checked ? accent : "transparent";
 
   return (
@@ -29,7 +30,7 @@ export function CustomCheckbox({ checked, onChange, isDark, accent, size = 16 })
     >
       {checked && (
         <svg width={size * 0.6} height={size * 0.5} viewBox="0 0 10 8" fill="none" style={{ display: "block" }}>
-          <path d="M1 4L3.5 6.5L9 1" stroke={isDark ? "#15100b" : "#fff"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M1 4L3.5 6.5L9 1" stroke={colors(isDark).card} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}
     </div>

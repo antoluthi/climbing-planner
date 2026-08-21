@@ -9,6 +9,7 @@ import {
   isReminderCheckedOn,
   formatRecurrence,
 } from "../lib/reminders.js";
+import { colors } from "../theme/palette.js";
 
 // ─── DAYLOG MODAL — refonte cards intelligentes ──────────────────────────────
 // Header avec progress bar, sections en cards, Hooper en grid 2×2,
@@ -158,17 +159,17 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
   requestCloseRef.current = requestClose;
 
   // ── Tokens ──
-  const paper        = isDark ? "#241b13" : "#fcf8ef";
-  const paperDim     = isDark ? "#15100b" : "#f7f1e2";
-  const surfaceCard  = isDark ? "#241b13" : "#ffffff";
-  const surfaceMuted = isDark ? "#2e2419" : "#f0ebde";
-  const border       = isDark ? "#3a2e22" : "#e6dfd1";
-  const borderStrong = isDark ? "#3a2e22" : "#d8d0bf";
-  const text         = isDark ? "#f0e6d0" : "#2a2218";
-  const textMid      = isDark ? "#c4b69c" : "#5a4d3c";
-  const textLight    = isDark ? "#a89a82" : "#8a7f70";
-  const accent       = isDark ? "#e0a875" : "#8b4c20";
-  const inkPrimary   = isDark ? "#e6d8bc" : "#2a2218";
+  const paper        = colors(isDark).card;
+  const paperDim     = colors(isDark).surface;
+  const surfaceCard  = colors(isDark).card;
+  const surfaceMuted = colors(isDark).surface;
+  const border       = colors(isDark).borderSubtle;
+  const borderStrong = colors(isDark).border;
+  const text         = colors(isDark).text;
+  const textMid      = colors(isDark).textCard;
+  const textLight    = colors(isDark).textMuted;
+  const accent       = colors(isDark).accent;
+  const inkPrimary   = colors(isDark).text;
 
   const dateFull = dateObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   const weekN = (() => {
@@ -404,9 +405,9 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
                 // mais standard Hooper : tous les indicateurs vont dans le même sens (1 = bon, 7 = mauvais)
                 const colorForVal = (v) => {
                   if (!v) return null;
-                  if (v <= 3) return "#82c894";
-                  if (v <= 5) return "#e6c46a";
-                  return "#b83030";
+                  if (v <= 3) return colors(isDark).success;
+                  if (v <= 5) return colors(isDark).warn;
+                  return colors(isDark).danger;
                 };
                 const valColor = colorForVal(val);
                 return (
@@ -438,7 +439,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
                             style={{
                               flex: 1, height: 6, borderRadius: 3,
                               background: on
-                                ? (isWarn ? "#b83030" : (v >= 4 ? "#e6c46a" : "#82c894"))
+                                ? (isWarn ? colors(isDark).danger : (v >= 4 ? colors(isDark).warn : colors(isDark).success))
                                 : border,
                               border: "none", cursor: "pointer", padding: 0,
                               transition: "background 0.1s",
@@ -471,7 +472,7 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onToggleRe
           {microToast && (
             <div style={{
               position: "absolute", top: -38, right: 16,
-              background: inkPrimary, color: isDark ? paper : "#fff",
+              background: inkPrimary, color: isDark ? paper : colors(isDark).onColor,
               fontSize: 11, padding: "6px 10px", borderRadius: 6,
               boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
               fontFamily: "inherit",
@@ -519,9 +520,9 @@ function stepperBtn({ surfaceMuted, accent }) {
 // ─── ReminderCheckRow ────────────────────────────────────────────────────────
 function ReminderCheckRow({ reminder, checked, onToggle, isDark, tokens }) {
   const { surfaceCard, paperDim, border, text, textMid, textLight } = tokens;
-  const doneBg = isDark ? "#1a2a1d" : "#e3f0e5";
-  const doneBorder = isDark ? "#2a4a30" : "#a8d0a8";
-  const doneFg = isDark ? "#82c894" : "#2e6b3f";
+  const doneBg = colors(isDark).successBg;
+  const doneBorder = colors(isDark).success;
+  const doneFg = colors(isDark).success;
   return (
     <button
       onClick={onToggle}
@@ -553,7 +554,7 @@ function ReminderCheckRow({ reminder, checked, onToggle, isDark, tokens }) {
           width: 22, height: 22, borderRadius: 6,
           background: checked ? doneFg : "transparent",
           border: `1.5px solid ${checked ? doneFg : border}`,
-          color: "#fff", fontSize: 13, fontWeight: 700,
+          color: colors(isDark).onColor, fontSize: 13, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
           flexShrink: 0,
         }}

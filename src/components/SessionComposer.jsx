@@ -10,6 +10,7 @@ import { DisciplineIcon } from "./DisciplineIcon.jsx";
 import { Z } from "../theme/makeStyles.js";
 import { useConfirmClose } from "../hooks/useConfirmClose.js";
 import { ConfirmModal } from "./ConfirmModal.jsx";
+import { colors, DATA } from "../theme/palette.js";
 
 // ─── SESSION COMPOSER (unifié) ────────────────────────────────────────────────
 // Remplace SessionBuilder / SessionComposerModal / CustomSessionModal /
@@ -22,7 +23,8 @@ import { ConfirmModal } from "./ConfirmModal.jsx";
 //   - 'simple' | 'detailed' → addSession (data.weeks)
 //   - 'event'               → addQuickSession (data.quickSessions)
 
-const EVENT_COLORS = ["#c0392b", "#f0a060", "#e6c46a", "#2e6b3f", "#0891b2", "#2563eb", "#6d28d9", "#8a7f70"];
+// Enregistrée avec l'événement → palette fixe (cf. DATA.picker).
+const EVENT_COLORS = DATA.picker.slice(0, 8);
 
 // ── Running metric helpers ────────────────────────────────────────────────
 // Parse "MM:SS" or plain number → fractional minutes. Returns null on failure.
@@ -361,17 +363,17 @@ export function SessionComposer({
   useEffect(() => { handleSaveRef.current = handleSave; });
 
   // ── Tokens visuels (alignés avec les autres modales) ─────────────────────
-  const paper        = isDark ? "#241b13" : "#fcf8ef";
-  const paperDim     = isDark ? "#15100b" : "#f7f1e2";
-  const surfaceCard  = isDark ? "#241b13" : "#ffffff";
-  const surfaceInput = isDark ? "#15100b" : "#fcf8ef";
-  const border       = isDark ? "#3a2e22" : "#e6dfd1";
-  const borderStrong = isDark ? "#3a2e22" : "#d8d0bf";
-  const text         = isDark ? "#f0e6d0" : "#2a2218";
-  const textMid      = isDark ? "#c4b69c" : "#5a4d3c";
-  const textLight    = isDark ? "#a89a82" : "#8a7f70";
-  const accent       = isDark ? "#e0a875" : "#8b4c20";
-  const inkPrimary   = isDark ? "#e6d8bc" : "#2a2218";
+  const paper        = colors(isDark).card;
+  const paperDim     = colors(isDark).surface;
+  const surfaceCard  = colors(isDark).card;
+  const surfaceInput = colors(isDark).card;
+  const border       = colors(isDark).borderSubtle;
+  const borderStrong = colors(isDark).border;
+  const text         = colors(isDark).text;
+  const textMid      = colors(isDark).textCard;
+  const textLight    = colors(isDark).textMuted;
+  const accent       = colors(isDark).accent;
+  const inkPrimary   = colors(isDark).text;
 
   const disciplineCfg = getDiscipline(discipline);
   const labelStyle = {
@@ -534,7 +536,7 @@ export function SessionComposer({
             sub="Stage, compétition, jour multi-jour (sans charge)."
             checked={isEvent}
             onChange={() => requestEventToggle()}
-            color="#c0392b"
+            color={DATA.picker[9]}
             tokens={{ surfaceCard, border, text, textLight }}
           />
 
@@ -619,7 +621,7 @@ export function SessionComposer({
             disabled={!canSave}
             style={{
               background: canSave ? inkPrimary : border,
-              color: canSave ? (isDark ? "#15100b" : "#fff") : textLight,
+              color: canSave ? (colors(isDark).card) : textLight,
               border: "none", padding: "9px 22px",
               fontSize: 13, fontWeight: 600, borderRadius: 8,
               cursor: canSave ? "pointer" : "not-allowed",
@@ -685,12 +687,12 @@ function ToggleCard({ title, sub, checked, onChange, color, tokens }) {
       </div>
       <div style={{
         width: 36, height: 20, borderRadius: 11,
-        background: checked ? color : "#aaa",
+        background: checked ? color : tokens.borderStrong,
         position: "relative", flexShrink: 0, transition: "background 0.2s",
       }}>
         <div style={{
           position: "absolute", top: 2, left: checked ? 18 : 2,
-          width: 16, height: 16, borderRadius: "50%", background: "#fff",
+          width: 16, height: 16, borderRadius: "50%", background: tokens.onColor,
           transition: "left 0.2s",
         }} />
       </div>
@@ -901,7 +903,7 @@ function ChargePlannedPips({ value, onChange, color, tokens }) {
               style={{
                 height: 26, borderRadius: 5, border: "none",
                 background: active ? color : (border),
-                color: active ? "#fff" : textLight,
+                color: active ? tokens.onColor : textLight,
                 fontSize: 11, fontWeight: 600, cursor: "pointer",
                 fontFamily: "inherit", transition: "background 0.1s",
               }}
@@ -1252,7 +1254,7 @@ function BlockEditorCompact({
         <button
           onClick={e => { e.stopPropagation(); onRemove(); }}
           aria-label="Supprimer le bloc"
-          style={{ background: "none", border: "none", color: "#b05050", cursor: "pointer", padding: "3px 6px", fontSize: 13, fontFamily: "inherit" }}
+          style={{ background: "none", border: "none", color: tokens.danger, cursor: "pointer", padding: "3px 6px", fontSize: 13, fontFamily: "inherit" }}
         >✕</button>
         <span style={{ color: textLight, fontSize: 11 }}>{expanded ? "▲" : "▼"}</span>
       </div>

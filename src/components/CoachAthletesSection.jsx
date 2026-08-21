@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { colors } from "../theme/palette.js";
 
 // ─── COACH ATHLETES SECTION (inside ProfileView) ─────────────────────────────
 
@@ -8,9 +9,9 @@ export function CoachAthletesSection({ athletes, onSearch, onInvite, sentInvites
   const [loading, setLoading] = useState(false);
   const [inviteMsg, setInviteMsg] = useState(null); // feedback après envoi
 
-  const bg      = isDark ? "#241b13" : "#f3f7f4";
-  const surface = isDark ? "#241b13" : "#ffffff";
-  const border  = isDark ? "#3a2e22" : "#daeade";
+  const bg      = colors(isDark).successBg;
+  const surface = colors(isDark).card;
+  const border  = colors(isDark).successBg;
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -43,7 +44,7 @@ export function CoachAthletesSection({ athletes, onSearch, onInvite, sentInvites
           {athletes.map(a => {
             const isViewing = viewingAthlete?.userId === a.userId;
             return (
-              <div key={a.relationId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: isViewing ? (isDark ? "#3a2616" : "#e4f5ea") : surface, border: `1px solid ${isViewing ? accent + "88" : border}`, borderRadius: 7, transition: "all 0.15s" }}>
+              <div key={a.relationId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: isViewing ? (colors(isDark).successBg) : surface, border: `1px solid ${isViewing ? accent + "88" : border}`, borderRadius: 7, transition: "all 0.15s" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: isViewing ? accent : textColor }}>
                     {a.firstName} {a.lastName}
@@ -51,14 +52,14 @@ export function CoachAthletesSection({ athletes, onSearch, onInvite, sentInvites
                 </div>
                 <button
                   onClick={() => onToggle(isViewing ? null : a)}
-                  style={{ background: isViewing ? accent : "none", border: `1px solid ${isViewing ? accent : border}`, borderRadius: 5, color: isViewing ? "#fff" : mutedColor, padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600, whiteSpace: "nowrap" }}
+                  style={{ background: isViewing ? accent : "none", border: `1px solid ${isViewing ? accent : border}`, borderRadius: 5, color: isViewing ? colors(isDark).onColor : mutedColor, padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 600, whiteSpace: "nowrap" }}
                 >
                   {isViewing ? "✓ En vue" : "Voir"}
                 </button>
                 <button
                   onClick={() => onRemove(a.relationId)}
                   title="Retirer cet athlète"
-                  style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: isDark ? "#f08070" : "#f08070", padding: "4px 8px", cursor: "pointer", fontSize: 12, lineHeight: 1 }}
+                  style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, color: colors(isDark).danger, padding: "4px 8px", cursor: "pointer", fontSize: 12, lineHeight: 1 }}
                 >
                   ✕
                 </button>
@@ -88,7 +89,7 @@ export function CoachAthletesSection({ athletes, onSearch, onInvite, sentInvites
         <button
           onClick={handleSearch}
           disabled={!query.trim() || loading}
-          style={{ background: accent, border: "none", borderRadius: 6, color: "#fff", padding: "7px 14px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 700, opacity: (!query.trim() || loading) ? 0.5 : 1 }}
+          style={{ background: accent, border: "none", borderRadius: 6, color: colors(isDark).onColor, padding: "7px 14px", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 700, opacity: (!query.trim() || loading) ? 0.5 : 1 }}
         >
           {loading ? "…" : "Chercher"}
         </button>
@@ -113,7 +114,7 @@ export function CoachAthletesSection({ athletes, onSearch, onInvite, sentInvites
               ) : (
                 <button
                   onClick={() => handleInvite(r.userId)}
-                  style={{ background: isDark ? "#3a2e22" : "#d4e8db", border: `1px solid ${accent}66`, borderRadius: 5, color: accent, padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 700 }}
+                  style={{ background: colors(isDark).successBg, border: `1px solid ${accent}66`, borderRadius: 5, color: accent, padding: "4px 12px", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 700 }}
                 >
                   {inviteDeclined(r.userId) ? "Réinviter" : "Inviter"}
                 </button>
@@ -126,8 +127,8 @@ export function CoachAthletesSection({ athletes, onSearch, onInvite, sentInvites
       {inviteMsg && (
         <div style={{
           marginTop: 8, padding: "8px 12px", borderRadius: 7, fontSize: 12, lineHeight: 1.5,
-          background: inviteMsg.type === "error" ? (isDark ? "#2a1612" : "#fbecec") : (isDark ? "#1a2a1d" : "#e3f0e5"),
-          color: inviteMsg.type === "error" ? "#f08070" : (isDark ? "#82c894" : "#2e6b3f"),
+          background: inviteMsg.type === "error" ? (colors(isDark).dangerBg) : (colors(isDark).successBg),
+          color: inviteMsg.type === "error" ? colors(isDark).danger : (colors(isDark).success),
         }}>
           {inviteMsg.text}
         </div>

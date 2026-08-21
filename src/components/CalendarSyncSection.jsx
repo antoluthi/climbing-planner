@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { appOrigin } from "../lib/native.js";
+import { colors } from "../theme/palette.js";
 
 // ─── CALENDAR SYNC SECTION ─────────────────────────────────────────────────────
 
@@ -32,8 +33,8 @@ export function CalendarSyncSection({ profile, onUpdateProfile, isDark, accent, 
     onUpdateProfile({ ...rest, calendarToken: null });
   };
 
-  const inputStyle = { flex: 1, minWidth: 160, background: isDark ? "#15100b" : "#ddd7cc", border: `1px solid ${borderColor}`, borderRadius: 5, color: mutedColor, padding: "7px 10px", fontSize: 11, fontFamily: "monospace", outline: "none" };
-  const copyBtnStyle = (copied) => ({ background: copied ? accent : "none", border: `1px solid ${copied ? accent : btnBorder}`, color: copied ? "#0a1a0f" : accent, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: copied ? 600 : 400, transition: "all 0.2s", whiteSpace: "nowrap" });
+  const inputStyle = { flex: 1, minWidth: 160, background: colors(isDark).borderSubtle, border: `1px solid ${borderColor}`, borderRadius: 5, color: mutedColor, padding: "7px 10px", fontSize: 11, fontFamily: "monospace", outline: "none" };
+  const copyBtnStyle = (copied) => ({ background: copied ? accent : "none", border: `1px solid ${copied ? accent : btnBorder}`, color: copied ? colors(isDark).textOnAccent : accent, padding: "7px 14px", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: copied ? 600 : 400, transition: "all 0.2s", whiteSpace: "nowrap" });
 
   return (
     <div style={styles.profileSection}>
@@ -46,7 +47,7 @@ export function CalendarSyncSection({ profile, onUpdateProfile, isDark, accent, 
       {!token ? (
         <button
           onClick={generateToken}
-          style={{ background: accent, border: "none", color: "#0a1a0f", padding: "8px 18px", borderRadius: 5, cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 600 }}
+          style={{ background: accent, border: "none", color: colors(isDark).textOnAccent, padding: "8px 18px", borderRadius: 5, cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 600 }}
         >
           Générer les liens de synchronisation
         </button>
@@ -62,7 +63,7 @@ export function CalendarSyncSection({ profile, onUpdateProfile, isDark, accent, 
           </div>
 
           {/* Instructions CalDAV */}
-          <div style={{ fontSize: 10, color: mutedColor, marginBottom: 12, lineHeight: 1.6, background: isDark ? "#1a1410" : "#e8e2d8", borderRadius: 5, padding: "8px 10px" }}>
+          <div style={{ fontSize: 10, color: mutedColor, marginBottom: 12, lineHeight: 1.6, background: colors(isDark).borderSubtle, borderRadius: 5, padding: "8px 10px" }}>
             <div style={{ marginBottom: 3 }}><span style={{ color: textColor }}>Apple Calendar / iOS</span> — Réglages → Calendrier → Comptes → Ajouter → Autre → Compte CalDAV → coller l&apos;URL</div>
             <div style={{ marginBottom: 3 }}><span style={{ color: textColor }}>Thunderbird</span> — Nouveau Calendrier → Sur le réseau → Format : CalDAV → coller l&apos;URL</div>
             <div><span style={{ color: textColor }}>DAVx⁵ (Android)</span> — Ajouter compte → Connexion manuelle → URL CalDAV → coller l&apos;URL</div>

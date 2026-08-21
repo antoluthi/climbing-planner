@@ -4,6 +4,7 @@ import { SessionCardSkeleton } from "./ui/Skeleton.jsx";
 import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { DAYS, getMesoColor } from "../lib/constants.js";
 import { addDays } from "../lib/helpers.js";
+import { colors } from "../theme/palette.js";
 
 // ─── DAY LIST VIEW (mobile) ──────────────────────────────────────────────────
 // Vue jour en liste de cards pour mobile, remplace la timeline 7 colonnes
@@ -34,15 +35,15 @@ export function DayListView({
 }) {
   const { isDark, mesocycles } = useThemeCtx();
 
-  const paper        = isDark ? "#241b13" : "#fcf8ef";
-  const paperDim     = isDark ? "#15100b" : "#f7f1e2";
-  const surfaceCard  = isDark ? "#241b13" : "#ffffff";
-  const border       = isDark ? "#3a2e22" : "#e6dfd1";
-  const text         = isDark ? "#f0e6d0" : "#2a2218";
-  const textMid      = isDark ? "#c4b69c" : "#5a4d3c";
-  const textLight    = isDark ? "#a89a82" : "#8a7f70";
-  const accent       = isDark ? "#e0a875" : "#8b4c20";
-  const inkPrimary   = isDark ? "#e6d8bc" : "#2a2218";
+  const paper        = colors(isDark).card;
+  const paperDim     = colors(isDark).surface;
+  const surfaceCard  = colors(isDark).card;
+  const border       = colors(isDark).borderSubtle;
+  const text         = colors(isDark).text;
+  const textMid      = colors(isDark).textCard;
+  const textLight    = colors(isDark).textMuted;
+  const accent       = colors(isDark).accent;
+  const inkPrimary   = colors(isDark).text;
 
   const day = addDays(monday, dayIndex);
   const dayLabelFull = day.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
@@ -73,8 +74,8 @@ export function DayListView({
   })();
 
   const journalColors = (() => {
-    if (journalState === "warn")     return { bg: isDark ? "#2a1612" : "#fbecdc", border: isDark ? "#5a3a18" : "#f0c890", fg: isDark ? "#e6c46a" : "#8a4f10" };
-    if (journalState === "complete") return { bg: isDark ? "#1a2a1d" : "#e7f2e0", border: isDark ? "#5a3a18" : "#a8d0a8", fg: isDark ? "#82c894" : "#2e6b3f" };
+    if (journalState === "warn")     return { bg: colors(isDark).surface, border: colors(isDark).border, fg: colors(isDark).accent };
+    if (journalState === "complete") return { bg: colors(isDark).successBg, border: colors(isDark).success, fg: colors(isDark).success };
     return { bg: surfaceCard, border: border, fg: accent };
   })();
 
@@ -97,7 +98,7 @@ export function DayListView({
           const iso = `${di.getFullYear()}-${String(di.getMonth()+1).padStart(2,'0')}-${String(di.getDate()).padStart(2,'0')}`;
           const dayQuickCount = (weekQuickSessions?.[iso]?.length) || 0;
           const totalCount = daySessionsCount + dayQuickCount;
-          const dotColor = active ? "#fff" : (isI ? accent : textLight);
+          const dotColor = active ? colors(isDark).onColor : (isI ? accent : textLight);
           return (
             <button
               key={i}
@@ -106,7 +107,7 @@ export function DayListView({
                 flex: 1, minWidth: 42,
                 padding: "6px 4px 4px", borderRadius: 8,
                 background: active ? accent : "transparent",
-                color: active ? "#fff" : (isI ? accent : textMid),
+                color: active ? colors(isDark).onColor : (isI ? accent : textMid),
                 border: active ? "none" : `1px solid ${border}`,
                 cursor: "pointer", fontFamily: "inherit",
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
@@ -188,8 +189,8 @@ export function DayListView({
         >
           <div style={{
             width: 32, height: 32, borderRadius: "50%",
-            background: journalState === "complete" ? "#2e6b3f" : journalState === "warn" ? "#f0c890" : accent + "22",
-            color: journalState === "complete" ? "#fff" : journalState === "warn" ? "#8a4f10" : accent,
+            background: journalState === "complete" ? colors(isDark).success : journalState === "warn" ? colors(isDark).warnBg : accent + "22",
+            color: journalState === "complete" ? colors(isDark).onColor : journalState === "warn" ? colors(isDark).warn : accent,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 14, fontWeight: 700, flexShrink: 0,
           }}>
@@ -263,7 +264,7 @@ export function DayListView({
           onClick={onAddSession}
           style={{
             background: inkPrimary,
-            color: isDark ? paper : "#fff",
+            color: isDark ? paper : colors(isDark).onColor,
             border: "none", borderRadius: 12,
             padding: "12px 16px",
             fontSize: 14, fontWeight: 600,

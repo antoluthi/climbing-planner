@@ -3,6 +3,7 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Modal, ModalHeader, ModalBody, modalTokens } from "./ui/Modal.jsx";
 import { Button } from "./ui/Button.jsx";
 import { BellIcon } from "./NotificationBell.jsx";
+import { colors } from "../theme/palette.js";
 
 // ─── PANNEAU DE NOTIFICATIONS ─────────────────────────────────────────────────
 // Liste des notifications reçues. Deux familles :
@@ -116,7 +117,7 @@ export function NotificationsPanel({
               key={n.id}
               style={{
                 display: "flex", gap: 10, alignItems: "flex-start",
-                background: unread ? (isDark ? "#2e2115" : "#f6efe2") : T.surface,
+                background: unread ? (colors(isDark).surface) : T.surface,
                 border: `1px solid ${unread ? T.accent + "44" : T.border}`,
                 borderRadius: 10, padding: "10px 12px",
               }}
@@ -129,7 +130,7 @@ export function NotificationsPanel({
                 <div style={{ fontSize: 10, color: T.textLight, marginTop: 3 }}>
                   {timeAgo(n.created_at)}
                   {answered && (
-                    <span style={{ marginLeft: 6, fontWeight: 600, color: n.status === "accepted" ? (isDark ? "#82c894" : "#2e6b3f") : T.textLight }}>
+                    <span style={{ marginLeft: 6, fontWeight: 600, color: n.status === "accepted" ? (colors(isDark).success) : T.textLight }}>
                       {n.status === "accepted" ? "· Acceptée" : "· Refusée"}
                     </span>
                   )}

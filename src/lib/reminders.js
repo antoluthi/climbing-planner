@@ -1,3 +1,4 @@
+import { DATA } from "../theme/palette.js";
 // ─── REMINDERS ───────────────────────────────────────────────────────────────
 // Système de rappels journaliers configurables.
 // Structure dans data :
@@ -10,16 +11,7 @@
 //   reminderState = { [reminderId]: { [dateStr]: true } }
 
 // Palette autorisée pour les rappels.
-export const REMINDER_COLORS = [
-  "#e0a875", // cuivre
-  "#82c894", // menthe
-  "#7da7f0", // bleu
-  "#b89cf0", // violet
-  "#f0a060", // orange
-  "#f08070", // corail
-  "#e6c46a", // ambre
-  "#6a5d4c", // neutre
-];
+export const REMINDER_COLORS = DATA.picker;
 
 const DAY_LABELS_SHORT = ["D", "L", "M", "M", "J", "V", "S"];
 const DAY_LABELS_TWO   = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];

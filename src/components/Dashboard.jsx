@@ -6,6 +6,7 @@ import { ActivityHeatmap } from "./ActivityHeatmap.jsx";
 import { SleepSection } from "./SleepSection.jsx";
 import { DashboardSkeleton } from "./ui/Skeleton.jsx";
 import { getSessionCharge } from "../lib/charge.js";
+import { colors } from "../theme/palette.js";
 
 // ─── Spline cubique monotone passant par chaque point ────────────────────────
 // Recharts a déjà type='monotone' qui dessine une spline cubique
@@ -27,10 +28,10 @@ function hooperLabel(total) {
 }
 
 function hooperColor(total, isDark) {
-  if (total <= 10) return isDark ? "#82c894" : "#82c894";
-  if (total <= 14) return isDark ? "#e0a875" : "#8b4c20";
-  if (total <= 17) return isDark ? "#f0a060" : "#f0a060";
-  return isDark ? "#f08070" : "#f08070";
+  if (total <= 10) return colors(isDark).success;
+  if (total <= 14) return colors(isDark).accent;
+  if (total <= 17) return colors(isDark).warn;
+  return colors(isDark).danger;
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
@@ -350,10 +351,10 @@ function DashboardBody({ data, onUpdateSleep }) {
             <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
               interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
             <YAxis tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
-            <Bar dataKey="charge" name="Charge" fill={isDark ? "#e0a875" : "#8b4c20"} radius={[3, 3, 0, 0]} maxBarSize={36}>
+            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: colors(isDark).tint }} />
+            <Bar dataKey="charge" name="Charge" fill={colors(isDark).accent} radius={[3, 3, 0, 0]} maxBarSize={36}>
               {range === "jour" && chartData.map((entry, i) => (
-                <Cell key={i} fill={entry.isToday ? (isDark ? "#f0c46a" : "#e6c46a") : (isDark ? "#e0a875" : "#8b4c20")} />
+                <Cell key={i} fill={entry.isToday ? (colors(isDark).warn) : (colors(isDark).accent)} />
               ))}
             </Bar>
           </BarChart>
@@ -372,8 +373,8 @@ function DashboardBody({ data, onUpdateSleep }) {
             {/* Spline cubique monotone : passe exactement par chaque point
                 mesuré, enjambe les gaps via connectNulls */}
             <Line type="monotone" dataKey="avgRpe" name="RPE"
-              stroke="#f0a060" strokeWidth={2}
-              dot={{ r: 3, fill: "#f0a060" }} activeDot={{ r: 5 }}
+              stroke={colors(isDark).warn} strokeWidth={2}
+              dot={{ r: 3, fill: colors(isDark).warn }} activeDot={{ r: 5 }}
               connectNulls />
           </LineChart>
         </ResponsiveContainer>
@@ -392,8 +393,8 @@ function DashboardBody({ data, onUpdateSleep }) {
               {/* Spline cubique monotone : passe exactement par chaque
                   mesure, enjambe les jours sans valeur. */}
               <Line type="monotone" dataKey="kg" name="Poids"
-                stroke={isDark ? "#7da7f0" : "#2563eb"} strokeWidth={2}
-                dot={{ r: 3, fill: isDark ? "#7da7f0" : "#2563eb" }} activeDot={{ r: 5 }}
+                stroke={colors(isDark).info} strokeWidth={2}
+                dot={{ r: 3, fill: colors(isDark).info }} activeDot={{ r: 5 }}
                 connectNulls />
             </LineChart>
           </ResponsiveContainer>
@@ -409,10 +410,10 @@ function DashboardBody({ data, onUpdateSleep }) {
               <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
                 interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
               <YAxis domain={[0, 28]} ticks={[0, 7, 14, 17, 20, 28]} tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => v != null ? [v + ` — ${hooperLabel(v)}`, "Hooper"] : null} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }} />
-              <ReferenceLine y={14} stroke={isDark ? "#e0a87528" : "#8b4c2033"} strokeDasharray="4 4" />
-              <ReferenceLine y={17} stroke="#f9731633" strokeDasharray="4 4" />
-              <ReferenceLine y={20} stroke="#f8717133" strokeDasharray="4 4" />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => v != null ? [v + ` — ${hooperLabel(v)}`, "Hooper"] : null} cursor={{ fill: colors(isDark).tint }} />
+              <ReferenceLine y={14} stroke={colors(isDark).accentBorder} strokeDasharray="4 4" />
+              <ReferenceLine y={17} stroke={colors(isDark).warnBorder} strokeDasharray="4 4" />
+              <ReferenceLine y={20} stroke={colors(isDark).dangerBorder} strokeDasharray="4 4" />
               <Bar dataKey="total" name="Hooper" radius={[3, 3, 0, 0]} maxBarSize={36}>
                 {hooperChartData.map((entry, i) => (
                   <Cell key={i} fill={entry.total != null ? hooperColor(entry.total, isDark) : "transparent"} />
@@ -427,8 +428,8 @@ function DashboardBody({ data, onUpdateSleep }) {
         <div style={styles.dashSection}>
           <div style={styles.dashSectionTitle}>Nutrition — {rangeLabel}</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 10, color: isDark ? "#f0a060" : "#f0a060", fontWeight: 700 }}>■ Calories (kcal)</span>
-            <span style={{ fontSize: 10, color: isDark ? "#82c894" : "#82c894", fontWeight: 700 }}>■ Protéines (g)</span>
+            <span style={{ fontSize: 10, color: colors(isDark).warn, fontWeight: 700 }}>■ Calories (kcal)</span>
+            <span style={{ fontSize: 10, color: colors(isDark).success, fontWeight: 700 }}>■ Protéines (g)</span>
           </div>
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={nutritionChartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }} barCategoryGap="15%">
@@ -437,10 +438,10 @@ function DashboardBody({ data, onUpdateSleep }) {
                 interval={range === "an" || range === "jour" ? 0 : "preserveStartEnd"} />
               <YAxis yAxisId="cal" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis yAxisId="prot" orientation="right" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? "#ffffff08" : "#00000008" }}
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: colors(isDark).tint }}
                 formatter={(v, name) => v != null ? [name === "cal" ? `${v} kcal` : `${v} g`, name === "cal" ? "Calories" : "Protéines"] : null} />
-              <Bar yAxisId="cal" dataKey="cal" name="cal" fill={isDark ? "#f0a060" : "#f0a060"} radius={[3, 3, 0, 0]} maxBarSize={28} />
-              <Bar yAxisId="prot" dataKey="prot" name="prot" fill={isDark ? "#82c894" : "#10b981"} radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Bar yAxisId="cal" dataKey="cal" name="cal" fill={colors(isDark).warn} radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Bar yAxisId="prot" dataKey="prot" name="prot" fill={colors(isDark).success} radius={[3, 3, 0, 0]} maxBarSize={28} />
             </BarChart>
           </ResponsiveContainer>
         </div>
