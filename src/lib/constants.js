@@ -90,6 +90,26 @@ export function getDayLogWarning(data, dateISO, dateObj) {
   return { hasWarning: hooperMissing || creatineMissing, hooperMissing, creatineMissing };
 }
 
+
+// Position dans un cycle répétitif : { day, total } ou null hors période.
+// Sert au compteur « jour 12 / 30 » de l'écran Compte et de l'accueil.
+export function getCustomCycleDay(cycle, date) {
+  if (!cycle?.startDate || !isDateInCustomCycle(cycle, date)) return null;
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const start = new Date(cycle.startDate + "T00:00:00");
+  const startNorm = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const elapsed = Math.round((d - startNorm) / 86400000);
+  if (!cycle.isRepetitive) {
+    const end = cycle.endDate ? new Date(cycle.endDate + "T00:00:00") : null;
+    const total = end ? Math.round((end - startNorm) / 86400000) + 1 : elapsed + 1;
+    return { day: elapsed + 1, total };
+  }
+  const onDays = (cycle.onWeeks || 4) * 7;
+  const offDays = (cycle.offWeeks || 0) * 7;
+  const period = onDays + offDays;
+  return { day: (elapsed % period) + 1, total: onDays };
+}
+
 export function getMesoColor(mesocycles, label) {
   const found = (mesocycles || []).find(m => m.label === label)?.color;
   return found || MESOCYCLES.find(m => m.label === label)?.color || DATA.fallback;

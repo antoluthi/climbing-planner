@@ -23,6 +23,7 @@ export function newReminderId() {
 // Renvoie true si le rappel est actif à la `date` (Date object).
 export function isReminderActiveOn(reminder, date) {
   if (!reminder || !date) return false;
+  if (reminder.enabled === false) return false;   // désactivé depuis le Compte
   const iso = toISODate(date);
 
   if (reminder.startDate && iso < reminder.startDate) return false;

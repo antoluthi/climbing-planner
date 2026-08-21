@@ -297,8 +297,22 @@ littéral hex ne subsiste ailleurs dans `src/` — c'est vérifiable :
 grep -rn '#[0-9a-f]\{3,8\}' src/ --include=*.jsx --include=*.js | grep -v palette.js
 ```
 
-- Chrome **noir & blanc** neutre, **accent chaud** unique (terracotta) pour
-  l'interactif, couleurs **désaturées** réservées aux données.
+- Design **« Ascent »** (prototype `Ascent Climbing Planner.dc.html`, à la racine —
+  référence pour les écrans restant à refaire). Sombre = valeurs exactes du
+  prototype : fond `#000`, cartes `#121212`, filets `rgba(255,255,255,0.08)`,
+  accent orange `#FF4500`. Le clair en est la transposition (le prototype ne le
+  décrit pas).
+- `DATA.sports` : 7 couleurs de sport, **fixes dans les deux thèmes** car
+  recopiées dans les séances. Escalade `#FF4500` · Course `#5FE0C0` · Vélo
+  `#6C8CFF` · Trail `#E0C25F` · Renforcement `#A78BFF` · Mobilité `#FF8FA3` ·
+  Autre `#9A9A9A`.
+- `components/ui/Ascent.jsx` : primitives du système — `Card`, `RowCard`/`Row`,
+  `SectionLabel`, `StatValue`, `SportBadge`, `SportDot`, `Segmented`,
+  `PillToggle`, `RoundIconButton`, `Chip`, `RoundCheck`, `ProgressBar`,
+  `InitialsAvatar`, plus les constantes `SANS` / `MONO`.
+- Écrans refaits : **Accueil**, **Calendrier** (`CalendarView.jsx`, Mois/Semaine/
+  Année, mobile uniquement — le bureau garde les vues historiques) et **Compte**.
+  Cycles, Stats et Database héritent de la palette sans être redessinés.
 - `PALETTE.light` / `PALETTE.dark` : mêmes clés, ~48 tokens sémantiques
   (`bg`, `surface`, `card`, `border`, `text`, `textMuted`, `accent`,
   `success`/`warn`/`danger`/`info` avec variantes `*Bg` / `*Border`…).

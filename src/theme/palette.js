@@ -10,136 +10,134 @@
 // `light` et `dark` ont exactement les mêmes clés.
 
 // ── Neutres ──────────────────────────────────────────────────────────────────
-// Le fond est légèrement cassé (#fafafa / #0a0a0a) pour que les cartes, elles
-// franchement blanches ou noires, se détachent sans ombre portée.
+// Le sombre reprend les valeurs exactes du prototype « Ascent » : noir pur,
+// cartes #121212, filets blancs à 8 %. Le clair en est la transposition — le
+// prototype ne le décrit pas.
 const light = {
   // Fonds
-  bg:            "#fafafa",
-  bgAlt:         "#f4f4f5",   // barres, bandeaux secondaires
-  surface:       "#ffffff",   // panneaux
-  surface2:      "#f4f4f5",   // panneau enfoncé
-  card:          "#ffffff",   // cartes flottantes
-  cardAlt:       "#fafafa",
+  bg:            "#ffffff",
+  bgAlt:         "#f7f7f8",
+  surface:       "#f7f7f8",
+  surface2:      "#f0f0f1",
+  card:          "#f7f7f8",
+  cardAlt:       "#ffffff",
   modalBg:       "#ffffff",
-  inputBg:       "#ffffff",
+  inputBg:       "#f0f0f1",
   overlayBg:     "rgba(0,0,0,0.35)",
-  headerGrad:    "linear-gradient(180deg, #ffffff 0%, #fafafa 100%)",
-  tint:          "rgba(0,0,0,0.03)",       // survol/zébrure à peine visible
-  bgScrim:       "rgba(250,250,250,0.93)", // fond quasi opaque (barres collantes)
-  bgVeil:        "rgba(250,250,250,0.33)", // voile léger
+  headerGrad:    "linear-gradient(180deg, #ffffff 0%, #ffffff 100%)",
+  tint:          "rgba(0,0,0,0.03)",
+  bgScrim:       "rgba(255,255,255,0.86)",
+  bgVeil:        "rgba(255,255,255,0.33)",
 
-  // Bordures
-  border:        "#e4e4e7",
-  borderSubtle:  "#f0f0f1",
-  borderStrong:  "#d4d4d8",
-  gridGap:       "#ececed",
-  dashedBorder:  "#d4d4d8",
+  // Surface des contrôles : boutons ronds, pistes d'interrupteur, boutons
+  // secondaires. C'est le rgba(255,255,255,0.08) du prototype, inversé.
+  control:       "rgba(0,0,0,0.06)",
+  controlHover:  "rgba(0,0,0,0.10)",
+
+  // Bordures — filet unique, très discret
+  border:        "rgba(0,0,0,0.08)",
+  borderSubtle:  "rgba(0,0,0,0.05)",
+  borderStrong:  "rgba(0,0,0,0.14)",
+  gridGap:       "rgba(0,0,0,0.06)",
+  dashedBorder:  "rgba(0,0,0,0.14)",
 
   // Texte
-  text:          "#18181b",
-  textTitle:     "#09090b",
-  textCard:      "#27272a",
-  textMuted:     "#71717a",
-  textDim:       "#a1a1aa",
+  text:          "#000000",
+  textTitle:     "#000000",
+  textCard:      "rgba(0,0,0,0.72)",
+  textMuted:     "rgba(0,0,0,0.5)",
+  textDim:       "rgba(0,0,0,0.35)",
   textOnAccent:  "#ffffff",
-  textOnSolid:   "#ffffff",   // texte sur un aplat noir
+  textOnSolid:   "#ffffff",
 
-  // Aplat neutre fort (boutons principaux en N&B)
-  solid:         "#18181b",
-  solidHover:    "#27272a",
+  solid:         "#000000",
+  solidHover:    "rgba(0,0,0,0.82)",
 
-  // Toasts et bandeaux : surface inversée en thème clair, simplement surélevée
-  // en thème sombre (un toast blanc sur fond noir serait aveuglant).
-  // Marque posée sur une surface colorée (pastille d'un sélecteur, curseur d'un
-  // interrupteur, texte sur un aplat d'accent). Blanche dans les deux thèmes :
-  // les couleurs qui la portent sont toutes en demi-teinte.
   onColor:       "#ffffff",
+  toastBg:       "#121212",
+  toastText:     "#ffffff",
 
-  toastBg:       "#18181b",
-  toastText:     "#fafafa",
+  // Accent — même orange dans les deux thèmes, lisible sur blanc comme sur noir
+  accent:        "#ff4500",
+  accentHover:   "#e63e00",
+  accentBg:      "rgba(255,69,0,0.10)",
+  accentBorder:  "rgba(255,69,0,0.35)",
+  accentFaint:   "rgba(255,69,0,0.06)",
+  accentSolid:   "rgba(255,69,0,0.18)",
 
-  // Accent chaud
-  accent:        "#b04a24",
-  accentHover:   "#933d1d",
-  accentBg:      "#fdf1ec",
-  accentBorder:  "#b04a2455",
-  accentFaint:   "#b04a2418",
-  accentSolid:   "#b04a2433",
-
-  // Sémantique (désaturée)
-  success:       "#4d7a5b",
-  successBg:     "#eef4ef",
-  successBorder: "#4d7a5b44",
-  warn:          "#8a6a35",
-  warnBg:        "#f7f3ea",
-  warnBorder:    "#8a6a3544",
-  danger:        "#a44a4a",
-  dangerBg:      "#f9eeee",
-  dangerBorder:  "#a44a4a44",
-  info:          "#4a6b8a",
-  infoBg:        "#eef2f6",
-  infoBorder:    "#4a6b8a44",
+  // Sémantique
+  success:       "#1c8a5a",
+  successBg:     "rgba(28,138,90,0.10)",
+  successBorder: "rgba(28,138,90,0.30)",
+  warn:          "#a8760a",
+  warnBg:        "rgba(168,118,10,0.10)",
+  warnBorder:    "rgba(168,118,10,0.30)",
+  danger:        "#c0392b",
+  dangerBg:      "rgba(192,57,43,0.10)",
+  dangerBorder:  "rgba(192,57,43,0.30)",
+  info:          "#3a63c8",
+  infoBg:        "rgba(58,99,200,0.10)",
+  infoBorder:    "rgba(58,99,200,0.30)",
 };
 
 const dark = {
-  bg:            "#0a0a0a",
-  bgAlt:         "#121212",
-  surface:       "#161616",
-  surface2:      "#1f1f1f",
-  card:          "#161616",
-  cardAlt:       "#1c1c1c",
-  modalBg:       "#161616",
-  inputBg:       "#121212",
-  overlayBg:     "rgba(0,0,0,0.75)",
-  headerGrad:    "linear-gradient(180deg, #121212 0%, #0a0a0a 100%)",
+  bg:            "#000000",
+  bgAlt:         "#0a0a0a",
+  surface:       "#121212",
+  surface2:      "#1a1a1a",
+  card:          "#121212",
+  cardAlt:       "#181818",
+  modalBg:       "#121212",
+  inputBg:       "rgba(255,255,255,0.06)",
+  overlayBg:     "rgba(0,0,0,0.7)",
+  headerGrad:    "linear-gradient(180deg, #000000 0%, #000000 100%)",
   tint:          "rgba(255,255,255,0.04)",
-  bgScrim:       "rgba(10,10,10,0.93)",
-  bgVeil:        "rgba(10,10,10,0.33)",
+  bgScrim:       "rgba(0,0,0,0.86)",
+  bgVeil:        "rgba(0,0,0,0.33)",
 
-  border:        "#2a2a2a",
-  borderSubtle:  "#1f1f1f",
-  borderStrong:  "#3d3d3d",
-  gridGap:       "#000000",
-  dashedBorder:  "#3d3d3d",
+  control:       "rgba(255,255,255,0.08)",
+  controlHover:  "rgba(255,255,255,0.14)",
 
-  text:          "#ededed",
+  border:        "rgba(255,255,255,0.08)",
+  borderSubtle:  "rgba(255,255,255,0.05)",
+  borderStrong:  "rgba(255,255,255,0.16)",
+  gridGap:       "rgba(255,255,255,0.06)",
+  dashedBorder:  "rgba(255,255,255,0.16)",
+
+  text:          "#ffffff",
   textTitle:     "#ffffff",
-  textCard:      "#d4d4d4",
-  textMuted:     "#8f8f8f",
-  textDim:       "#6b6b6b",
-  textOnAccent:  "#0a0a0a",
-  textOnSolid:   "#0a0a0a",
+  textCard:      "rgba(255,255,255,0.72)",
+  textMuted:     "rgba(255,255,255,0.5)",
+  textDim:       "rgba(255,255,255,0.35)",
+  textOnAccent:  "#ffffff",
+  textOnSolid:   "#000000",
 
-  solid:         "#ededed",
-  solidHover:    "#ffffff",
+  solid:         "#ffffff",
+  solidHover:    "rgba(255,255,255,0.9)",
 
-  // Marque posée sur une surface colorée (pastille d'un sélecteur, curseur d'un
-  // interrupteur, texte sur un aplat d'accent). Blanche dans les deux thèmes :
-  // les couleurs qui la portent sont toutes en demi-teinte.
   onColor:       "#ffffff",
+  toastBg:       "#1a1a1a",
+  toastText:     "#ffffff",
 
-  toastBg:       "#1f1f1f",
-  toastText:     "#ededed",
+  accent:        "#ff4500",
+  accentHover:   "#ff6428",
+  accentBg:      "rgba(255,69,0,0.14)",
+  accentBorder:  "rgba(255,69,0,0.45)",
+  accentFaint:   "rgba(255,69,0,0.08)",
+  accentSolid:   "rgba(255,69,0,0.22)",
 
-  accent:        "#e8926a",
-  accentHover:   "#f0a37f",
-  accentBg:      "#241610",
-  accentBorder:  "#e8926a55",
-  accentFaint:   "#e8926a1f",
-  accentSolid:   "#e8926a33",
-
-  success:       "#8fb89a",
-  successBg:     "#16201a",
-  successBorder: "#8fb89a44",
-  warn:          "#c9a95e",
-  warnBg:        "#211c12",
-  warnBorder:    "#c9a95e44",
-  danger:        "#c26b74",
-  dangerBg:      "#221416",
-  dangerBorder:  "#c26b7444",
-  info:          "#7f9bbd",
-  infoBg:        "#141a21",
-  infoBorder:    "#7f9bbd44",
+  success:       "#5fe0c0",
+  successBg:     "rgba(95,224,192,0.12)",
+  successBorder: "rgba(95,224,192,0.35)",
+  warn:          "#e0c25f",
+  warnBg:        "rgba(224,194,95,0.12)",
+  warnBorder:    "rgba(224,194,95,0.35)",
+  danger:        "#ff6b5f",
+  dangerBg:      "rgba(255,107,95,0.12)",
+  dangerBorder:  "rgba(255,107,95,0.35)",
+  info:          "#6c8cff",
+  infoBg:        "rgba(108,140,255,0.12)",
+  infoBorder:    "rgba(108,140,255,0.35)",
 };
 
 export const PALETTE = { light, dark };
@@ -164,6 +162,20 @@ export const DATA = {
   hooper: {
     light: ["#4d7a5b", "#8a6a35", "#a44a4a"],
     dark:  ["#8fb89a", "#c9a95e", "#c26b74"],
+  },
+
+  // Couleurs de sport — badge lettré sur fond `couleur + 14 %`.
+  // Escalade, Course, Vélo, Trail et Autre viennent du prototype « Ascent » ;
+  // Renforcement et Mobilité sont une extension (le prototype n'a que 5 sports).
+  // Identiques dans les deux thèmes : elles sont recopiées dans les séances.
+  sports: {
+    climbing: "#ff4500",
+    running:  "#5fe0c0",
+    cycling:  "#6c8cff",
+    trail:    "#e0c25f",
+    strength: "#a78bff",
+    mobility: "#ff8fa3",
+    custom:   "#9a9a9a",
   },
 
   // Palette de sélection proposée à l'utilisateur (couleur d'un objectif, d'une

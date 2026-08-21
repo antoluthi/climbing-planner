@@ -1,0 +1,304 @@
+import { colors, DATA } from "../../theme/palette.js";
+import { getDiscipline } from "../../lib/disciplines.js";
+
+// ─── PRIMITIVES « ASCENT » ────────────────────────────────────────────────────
+// Les six motifs que le prototype répète d'un écran à l'autre. Les extraire ici
+// évite de les recopier dans chaque vue — et fait que retoucher un rayon ou une
+// épaisseur de filet se fait à un seul endroit.
+//
+// Toutes les couleurs viennent de la palette : aucun littéral ici.
+
+export const SANS = "-apple-system, system-ui, 'Segoe UI', Roboto, sans-serif";
+export const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
+
+// ── Carte ────────────────────────────────────────────────────────────────────
+export function Card({ isDark, children, padding = 20, radius = 18, style, onClick }) {
+  const c = colors(isDark);
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: c.card,
+        border: `1px solid ${c.border}`,
+        borderRadius: radius,
+        padding,
+        cursor: onClick ? "pointer" : undefined,
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Filet de séparation interne — 0.5px, plutôt que d'imbriquer des cartes.
+export function Divider({ isDark }) {
+  return <div style={{ height: 0.5, background: colors(isDark).border }} />;
+}
+
+// Carte à lignes : chaque enfant est séparé par un filet, sans padding externe.
+export function RowCard({ isDark, children, style }) {
+  const c = colors(isDark);
+  return (
+    <div style={{
+      background: c.card, border: `1px solid ${c.border}`,
+      borderRadius: 16, overflow: "hidden", ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+export function Row({ isDark, label, value, onClick, last = false, children }) {
+  const c = colors(isDark);
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: 12, padding: "14px 16px", minHeight: 48,
+        borderBottom: last ? "none" : `0.5px solid ${c.border}`,
+        cursor: onClick ? "pointer" : undefined,
+      }}
+    >
+      <span style={{ fontSize: 14, color: c.textMuted, fontFamily: SANS }}>{label}</span>
+      {children ?? <span style={{ fontSize: 14, fontWeight: 600, color: c.text, fontFamily: SANS }}>{value}</span>}
+    </div>
+  );
+}
+
+// ── Intitulé de section ──────────────────────────────────────────────────────
+export function SectionLabel({ isDark, children, style }) {
+  return (
+    <div style={{
+      fontSize: 12, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
+      color: colors(isDark).textDim, fontFamily: SANS, margin: "0 4px 8px", ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// ── Valeur chiffrée (rendu « data ») ─────────────────────────────────────────
+export function StatValue({ isDark, value, unit, accent = false, size = 18 }) {
+  const c = colors(isDark);
+  return (
+    <div>
+      <div style={{ font: `700 ${size}px ${MONO}`, color: accent ? c.accent : c.text }}>{value}</div>
+      {unit && <div style={{ fontSize: 11, color: c.textDim, fontFamily: SANS, marginTop: 2 }}>{unit}</div>}
+    </div>
+  );
+}
+
+// ── Badge lettré d'un sport ──────────────────────────────────────────────────
+export function SportBadge({ disciplineId, size = 28, radius }) {
+  const d = getDiscipline(disciplineId);
+  const color = DATA.sports[disciplineId] || DATA.sports.custom;
+  return (
+    <div
+      title={d?.label || ""}
+      style={{
+        width: size, height: size, borderRadius: radius ?? size / 2,
+        background: `${color}24`,           // ≈ 14 % d'opacité
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        font: `700 ${Math.round(size * 0.45)}px ${MONO}`, color,
+      }}
+    >
+      {(d?.label || "?").charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+// Pastille ronde d'un sport (point sous un numéro de jour)
+export function SportDot({ disciplineId, size = 5, color }) {
+  const value = color || DATA.sports[disciplineId] || "transparent";
+  return <div style={{ width: size, height: size, borderRadius: size, background: value, flexShrink: 0 }} />;
+}
+
+// ── Sélecteur segmenté (pill) ────────────────────────────────────────────────
+export function Segmented({ isDark, options, value, onChange, style }) {
+  const c = colors(isDark);
+  return (
+    <div style={{
+      display: "flex", background: c.control, borderRadius: 10, padding: 3, gap: 2, ...style,
+    }}>
+      {options.map(o => {
+        const active = o.value === value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            style={{
+              flex: 1, padding: "8px 0", borderRadius: 8, border: "none", cursor: "pointer",
+              fontSize: 13, fontWeight: 700, fontFamily: SANS,
+              background: active ? c.accent : "transparent",
+              color: active ? c.textOnAccent : c.textMuted,
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Interrupteur pill ────────────────────────────────────────────────────────
+export function PillToggle({ isDark, checked, onChange, label }) {
+  const c = colors(isDark);
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      style={{
+        width: 44, height: 26, borderRadius: 13, border: "none", cursor: "pointer",
+        background: checked ? c.accent : c.control, position: "relative",
+        transition: "background 0.15s", flexShrink: 0, padding: 0,
+      }}
+    >
+      <div style={{
+        position: "absolute", top: 3, left: checked ? 21 : 3,
+        width: 20, height: 20, borderRadius: 10, background: c.onColor,
+        transition: "left 0.15s",
+      }} />
+    </button>
+  );
+}
+
+// ── Bouton rond d'icône ──────────────────────────────────────────────────────
+export function RoundIconButton({ isDark, onClick, children, size = 36, label }) {
+  const c = colors(isDark);
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      style={{
+        width: size, height: size, borderRadius: size / 2, background: c.control,
+        border: "none", color: c.text, cursor: "pointer", flexShrink: 0,
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Boutons pleine largeur ───────────────────────────────────────────────────
+export function PrimaryButton({ isDark, onClick, children, height = 48, style }) {
+  const c = colors(isDark);
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: "100%", height, borderRadius: 12, border: "none", cursor: "pointer",
+        background: c.accent, color: c.textOnAccent,
+        fontSize: 15, fontWeight: 700, fontFamily: SANS, letterSpacing: "0.2px", ...style,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function SecondaryButton({ isDark, onClick, children, height = 40, style }) {
+  const c = colors(isDark);
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: "100%", height, borderRadius: 10, border: "none", cursor: "pointer",
+        background: c.control, color: c.text,
+        fontSize: 13, fontWeight: 700, fontFamily: SANS, ...style,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Chip sélectionnable ──────────────────────────────────────────────────────
+// Prend la couleur du sport quand elle est fournie, l'accent sinon.
+export function Chip({ isDark, label, active, onClick, color }) {
+  const c = colors(isDark);
+  const tone = color || c.accent;
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "10px 16px", borderRadius: 12, cursor: "pointer",
+        fontSize: 14, fontWeight: 600, fontFamily: SANS,
+        background: active ? `${tone}24` : c.control,
+        color: active ? tone : c.textMuted,
+        border: `1.5px solid ${active ? tone : "transparent"}`,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ── Case ronde à cocher (rappels) ────────────────────────────────────────────
+export function RoundCheck({ isDark, checked, onChange, label }) {
+  const c = colors(isDark);
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      role="checkbox"
+      aria-checked={checked}
+      style={{
+        display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
+        background: "none", border: "none", cursor: "pointer", textAlign: "left", width: "100%",
+      }}
+    >
+      <div style={{
+        width: 22, height: 22, borderRadius: 11, flexShrink: 0,
+        border: `1.5px solid ${checked ? c.accent : c.borderStrong}`,
+        background: checked ? c.accent : "transparent",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        {checked && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke={c.textOnAccent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </div>
+      <div style={{ fontSize: 14, color: c.text, flex: 1, fontFamily: SANS }}>{label}</div>
+    </button>
+  );
+}
+
+// ── Barre de progression ─────────────────────────────────────────────────────
+export function ProgressBar({ isDark, ratio }) {
+  const c = colors(isDark);
+  const pct = Math.max(0, Math.min(1, ratio || 0)) * 100;
+  return (
+    <div style={{ height: 5, borderRadius: 3, background: c.control, overflow: "hidden" }}>
+      <div style={{ height: "100%", width: `${pct}%`, borderRadius: 3, background: c.accent }} />
+    </div>
+  );
+}
+
+// ── Avatar initiales ─────────────────────────────────────────────────────────
+export function InitialsAvatar({ isDark, initials, size = 40, onClick, photoUrl }) {
+  const c = colors(isDark);
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Compte"
+      style={{
+        width: size, height: size, borderRadius: size / 2, border: "none", padding: 0,
+        background: c.accentBg, cursor: onClick ? "pointer" : "default",
+        display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
+        flexShrink: 0,
+      }}
+    >
+      {photoUrl
+        ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        : <span style={{ font: `700 ${Math.round(size * 0.35)}px ${MONO}`, color: c.accent }}>{initials}</span>}
+    </button>
+  );
+}
