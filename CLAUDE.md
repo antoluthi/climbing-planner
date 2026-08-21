@@ -42,6 +42,7 @@ src/
 │
 ├── hooks/
 │   ├── useWindowWidth.js          — largeur fenêtre réactive
+│   ├── useSwipe.js                — balayage horizontal (onglets / périodes)
 │   ├── useSupabaseSync.js         — session auth, loadFromCloud, saveToCloud, uploadNow, writeStatus
 │   ├── useCommunitySessionsSync.js — sync séances communautaires (lecture seule)
 │   ├── useSessionsCatalog.js      — CRUD sessions_catalog (bibliothèque coach)
@@ -73,7 +74,7 @@ src/
     ├── CyclesView.jsx             — wrapper locked/unlocked cycles
     ├── CustomCycleModal.jsx       — formulaire cycle personnalisé
     ├── DailyNotesSection.jsx      — notes + checkbox créatine
-    ├── DayLogModal.jsx            — modal journal quotidien (note, créatine, poids, Hooper)
+    ├── DayLogModal.jsx            — assistant journal quotidien (Hooper → poids → notes)
     ├── Dashboard.jsx              — stats + graphiques poids & Hooper
     ├── ActivityHeatmap.jsx        — heatmap d'activité GitHub-style
     ├── SleepSection.jsx           — section sommeil (graphiques, import CSV)
@@ -83,7 +84,7 @@ src/
     ├── CoachAthletesSection.jsx   — section "Mes athlètes" dans ProfileView
     ├── CalendarSyncSection.jsx    — section sync calendrier (CalDAV/iCal)
     ├── ProfileView.jsx            — avatar, infos, thème, gestion athlètes
-    ├── CoachLibraryView.jsx       — bibliothèque de séances (coach uniquement)
+    ├── CoachLibraryView.jsx       — bibliothèque de séances et de blocs (tous)
     ├── AccueilView.jsx            — page d'accueil (phrase contextuelle, police Newsreader)
     └── PublicPlanView.jsx         — vue publique lecture-seule (Planning d'Anto)
 ```
@@ -232,7 +233,7 @@ Sans cette variable, les endpoints `/api/caldav/*` et `/api/calendar/*` retourne
 | `"dash"` | Statistiques + notes + Hooper + graphiques poids/Hooper | tous |
 | `"cycles"` | CyclesTimeline ou CyclesEditor | tous (lecture seule si athlete) |
 | `"profil"` | Profil utilisateur + gestion athlètes | tous |
-| `"library"` | Bibliothèque de séances | coach / auto uniquement |
+| `"library"` | Bibliothèque de séances et de blocs | tous (catalogue commun) |
 
 Navigation : les vues calendrier (week/month/year) sont regroupées sous un bouton "Calendrier" avec sous-nav.
 
@@ -242,6 +243,22 @@ Navigation : les vues calendrier (week/month/year) sont regroupées sous un bout
 - **Clic sur le label de date** (ex: "9 mars – 15 mars") → `setCurrentDate(new Date())` pour revenir à la période actuelle
   - Curseur `pointer` uniquement si on n'est pas déjà sur la période en cours
   - Tooltip : "Aller à la semaine en cours" / "Aller au mois en cours" / "Aller à l'année en cours"
+
+## Navigation par swipe (mobile)
+
+Deux zones distinctes, pour qu'un geste ne fasse jamais deux choses :
+
+- **Sur la page** → onglet précédent/suivant dans l'ordre de la barre du bas
+  (Accueil, Calendrier, Cycles, Stats, Bibliothèque), avec une animation de
+  glissement (`.cp-slide-left` / `.cp-slide-right`, 0,22 s, dans `index.css` ;
+  neutralisée par `prefers-reduced-motion`).
+- **Sur la grille du calendrier** → période précédente/suivante. La grille passe
+  `stopPropagation: true` à `useSwipe`, donc son geste ne remonte pas au
+  conteneur de page.
+
+`hooks/useSwipe.js` : seuil 60 px, dominance horizontale 1,5× (pour ne pas
+capturer un scroll). Les deux zones portent un attribut `data-swipe`
+(`page` / `calendar-grid`) qui sert aux tests pilotés.
 
 ## Système de charge unifié (0-10)
 
@@ -310,9 +327,16 @@ grep -rn '#[0-9a-f]\{3,8\}' src/ --include=*.jsx --include=*.js | grep -v palett
   `SectionLabel`, `StatValue`, `SportBadge`, `SportDot`, `Segmented`,
   `PillToggle`, `RoundIconButton`, `Chip`, `RoundCheck`, `ProgressBar`,
   `InitialsAvatar`, plus les constantes `SANS` / `MONO`.
-- Écrans refaits : **Accueil**, **Calendrier** (`CalendarView.jsx`, Mois/Semaine/
-  Année, mobile uniquement — le bureau garde les vues historiques) et **Compte**.
-  Cycles, Stats et Database héritent de la palette sans être redessinés.
+- Écrans refaits : **Accueil**, **Calendrier** (`CalendarView.jsx`, Semaine/Mois/
+  Année, mobile uniquement — le bureau garde les vues historiques), **Compte**,
+  **Bibliothèque** et le **journal du jour**. Cycles et Stats héritent de la
+  palette sans être redessinés.
+- `RADIUS` (`theme/makeStyles.js`) : `pill` 999 · `control` 12 · `card` 16 ·
+  `cardLg` 18. Les boutons partagés (primitives `ui/Ascent.jsx`, `ui/Button.jsx`)
+  sont en pill ; cartes et badges gardent leurs rayons.
+- Largeur des écrans refaits bornée à **600 px centrés** : sur un navigateur
+  large les boutons ne s'étirent plus. Les vues bureau historiques (grille
+  semaine, mois, année, stats) gardent la pleine largeur, elles en ont besoin.
 - `PALETTE.light` / `PALETTE.dark` : mêmes clés, ~48 tokens sémantiques
   (`bg`, `surface`, `card`, `border`, `text`, `textMuted`, `accent`,
   `success`/`warn`/`danger`/`info` avec variantes `*Bg` / `*Border`…).
@@ -343,9 +367,15 @@ Pour retoucher l'apparence : éditer `palette.js`, rien d'autre.
 - Charge rating activé pour Suspension et Retour au calme
 
 ### DayLogModal (`components/DayLogModal.jsx`)
-- Modale quotidienne accessible depuis chaque colonne `DayColumn` (bouton journal)
-- Regroupe : note du jour, checkbox créatine, poids, Hooper
-- Bouton "Enregistrer" dirty-aware (désactivé si pas de changement)
+- Assistant en **trois étapes** : **Ressenti (Hooper) → Poids → Notes**, avec une
+  barre de progression en haut de la modale et une navigation Précédent /
+  Suivant en pied.
+- Hooper en **curseurs** 1-7 (sommeil, fatigue, stress, courbatures) — l'échelle
+  et le calcul ne changent pas : `total` = somme des quatre, lu par
+  `hooperLabel()` / `hooperColor()`.
+- Chaque étape **enregistre en la quittant** (`persistStep`) : fermer en route ne
+  perd que l'étape courante.
+- Les rappels n'y sont plus : leur place est l'écran Cycles.
 
 ### Dashboard — graphiques (`components/Dashboard.jsx`)
 - Graphique poids : scaffold période complète avec données manquantes nulles

@@ -10,15 +10,14 @@ import { uploadAvatar, deleteAvatar } from "../lib/avatar-storage.js";
 import { isNative } from "../lib/native.js";
 import { toast } from "../lib/toast.js";
 import { colors, DATA } from "../theme/palette.js";
-import { getCustomCycleDay } from "../lib/constants.js";
 import { disciplineList } from "../lib/disciplines.js";
-import { RowCard, Row, Segmented, PillToggle, Chip, ProgressBar, RoundIconButton, SANS, MONO } from "./ui/Ascent.jsx";
+import { RowCard, Row, Segmented, Chip, RoundIconButton, SANS, MONO } from "./ui/Ascent.jsx";
 
 // ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
 
 export function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus, onUpload, onPull, onImport, toggleTheme, isDark,
   athletes, onSearchAthletes, onInviteAthlete, sentInvites, onRemoveAthlete,
-  myCoaches, onLeaveCoach, accountRole, onUpdateReminder, onBack,
+  myCoaches, onLeaveCoach, accountRole, onBack,
   viewingAthlete, onToggleViewAthlete }) {
   const { styles } = useThemeCtx();
   const profile = data.profile || {};
@@ -277,38 +276,6 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
           })}
         </div>
       </div>
-
-      {/* ── Compléments et rappels ── */}
-      {((data.reminders || []).length > 0 || (data.customCycles || []).length > 0) && (
-        <div style={styles.profileSection}>
-          <div style={styles.profileSectionTitle}>Compléments et rappels</div>
-          <RowCard isDark={isDark}>
-            {(data.customCycles || []).map(cyc => {
-              const pos = getCustomCycleDay(cyc, new Date());
-              if (!pos) return null;
-              return (
-                <div key={cyc.id} style={{ padding: "14px 16px", borderBottom: `0.5px solid ${borderColor}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                    <span style={{ fontSize: 14, color: textColor, fontWeight: 600, fontFamily: SANS }}>{cyc.label}</span>
-                    <span style={{ fontSize: 12, color: mutedColor, fontFamily: SANS }}>jour {pos.day} / {pos.total}</span>
-                  </div>
-                  <ProgressBar isDark={isDark} ratio={pos.day / pos.total} />
-                </div>
-              );
-            })}
-            {(data.reminders || []).map((r, i, arr) => (
-              <Row isDark={isDark} key={r.id} label={r.name} last={i === arr.length - 1}>
-                <PillToggle
-                  isDark={isDark}
-                  label={r.name}
-                  checked={r.enabled !== false}
-                  onChange={v => onUpdateReminder?.({ ...r, enabled: v })}
-                />
-              </Row>
-            ))}
-          </RowCard>
-        </div>
-      )}
 
       {/* ── Rôle (lecture seule) ── */}
       {"role" in profile && (

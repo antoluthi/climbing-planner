@@ -1,7 +1,9 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
+import { useState } from "react";
 import { getMesoForDate, getCustomCycleDay } from "../lib/constants.js";
 import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
+import { generateId } from "../lib/storage.js";
 import { AccueilSkeleton } from "./ui/Skeleton.jsx";
 import { getActiveRemindersForDate, isReminderCheckedOn } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
@@ -294,8 +296,6 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
 // ─── CONTEXTUAL GREETING PHRASE ───────────────────────────────────────────────
 
 function getContextualPhrase(ctx) {
-  const sn = ctx.sessionName; // shortcut
-
   // ── 1. Toutes les séances faites ──
   if (ctx.allDone) {
     const n = ctx.doneSessions.length;
@@ -971,6 +971,7 @@ function AccueilViewBody({
   onOpenLog,
   onAddSession,
   onOpenAccount,
+  onAddNutrition,
 }) {
   const { isDark } = useThemeCtx();
   const c = colors(isDark);
@@ -999,6 +1000,24 @@ function AccueilViewBody({
   const totalCalories = todayMeals.reduce((s, m) => s + (m.calories || 0), 0);
   const totalProteins = todayMeals.reduce((s, m) => s + (m.proteins || 0), 0);
   const checkinDone = existingHooper != null || todayWeight != null || todayMeals.length > 0;
+
+  // ── Ajout d'un repas ──
+  // La nutrition n'est pas une étape du journal : elle se saisit ici, au fil de
+  // la journée, depuis les chiffres de la carte.
+  const [mealOpen, setMealOpen] = useState(false);
+  const [meal, setMeal] = useState({ name: "", calories: "", proteins: "" });
+  const mealValid = meal.name.trim() && (meal.calories !== "" || meal.proteins !== "");
+  const submitMeal = () => {
+    if (!mealValid) return;
+    onAddNutrition?.(today, {
+      id: generateId("m"),
+      name: meal.name.trim(),
+      calories: meal.calories !== "" ? Math.round(Number(meal.calories)) : 0,
+      proteins: meal.proteins !== "" ? Math.round(Number(meal.proteins)) : 0,
+    });
+    setMeal({ name: "", calories: "", proteins: "" });
+    setMealOpen(false);
+  };
 
   // ── Rappels ──
   const activeReminders = getActiveRemindersForDate(data.reminders || [], todayObj);
@@ -1032,7 +1051,12 @@ function AccueilViewBody({
   const pad = isMobile ? 16 : 20;
 
   return (
-    <div style={{ background: c.bg, minHeight: "100%", fontFamily: SANS }}>
+    <div style={{
+      background: c.bg, minHeight: "100%", fontFamily: SANS,
+      // Sur grand écran la colonne reste étroite : sans ça les boutons
+      // pleine largeur s'étirent sur tout le moniteur.
+      maxWidth: 600, margin: "0 auto", width: "100%",
+    }}>
 
       {/* ── En-tête : date, salutation, avatar ── */}
       <div style={{ padding: `${pad + 8}px ${pad}px 0`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -1088,7 +1112,7 @@ function AccueilViewBody({
                 <div style={{ fontSize: 19, fontWeight: 700, color: c.text, minWidth: 0 }}>{firstSession.name}</div>
               </div>
               <div style={{ fontSize: 13, color: c.textMuted, marginBottom: 16 }}>{sessionMeta}</div>
-              <PrimaryButton isDark={isDark} onClick={() => onOpenSession?.(dayIndex, 0)}>
+              <PrimaryButton isDark={isDark} onClick={() => onOpenSession?.(wKey, dayIndex, 0)}>
                 Voir la séance
               </PrimaryButton>
             </>
@@ -1117,7 +1141,45 @@ function AccueilViewBody({
                 <StatValue isDark={isDark} value={totalProteins ? totalProteins + "g" : "—"} unit="protéines" />
                 <StatValue isDark={isDark} value={todayWeight != null ? todayWeight : "—"} unit="kg" />
                 <StatValue isDark={isDark} value={existingHooper?.total ?? "—"} unit="bien-être" accent />
+                <button
+                  onClick={() => setMealOpen(o => !o)}
+                  style={{
+                    marginLeft: "auto", alignSelf: "flex-start",
+                    background: c.control, border: "none", borderRadius: 999,
+                    color: c.text, fontSize: 12, fontWeight: 700, fontFamily: SANS,
+                    padding: "6px 12px", cursor: "pointer",
+                  }}
+                >
+                  {mealOpen ? "Annuler" : "+ repas"}
+                </button>
               </div>
+
+              {mealOpen && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                  <input
+                    autoFocus
+                    placeholder="Nom du repas"
+                    value={meal.name}
+                    onChange={e => setMeal(m => ({ ...m, name: e.target.value }))}
+                    style={mealInput(c)}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="number" placeholder="kcal" value={meal.calories}
+                      onChange={e => setMeal(m => ({ ...m, calories: e.target.value }))}
+                      style={{ ...mealInput(c), flex: 1 }}
+                    />
+                    <input
+                      type="number" placeholder="protéines (g)" value={meal.proteins}
+                      onChange={e => setMeal(m => ({ ...m, proteins: e.target.value }))}
+                      style={{ ...mealInput(c), flex: 1 }}
+                    />
+                  </div>
+                  <SecondaryButton isDark={isDark} onClick={submitMeal} style={{ opacity: mealValid ? 1 : 0.5 }}>
+                    Ajouter le repas
+                  </SecondaryButton>
+                </div>
+              )}
               <SecondaryButton isDark={isDark} onClick={() => onOpenLog?.(today)}>
                 Modifier le journal
               </SecondaryButton>
@@ -1163,4 +1225,13 @@ function AccueilViewBody({
       <div style={{ height: 24 }} />
     </div>
   );
+}
+
+// Champ de saisie d'un repas — même allure que les contrôles « Ascent ».
+function mealInput(c) {
+  return {
+    background: c.control, border: "none", borderRadius: 12,
+    padding: "10px 12px", color: c.text, fontSize: 14, fontFamily: SANS,
+    outline: "none", width: "100%",
+  };
 }

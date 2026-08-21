@@ -1,14 +1,15 @@
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
 import { colors } from "../../theme/palette.js";
+import { RADIUS } from "../../theme/makeStyles.js";
 
 // ─── BUTTON ───────────────────────────────────────────────────────────────────
 // Composant bouton unifié. Variantes : primary, secondary, ghost, danger.
 // Tailles : sm, md, lg.
 
 const SIZE_STYLES = {
-  sm: { padding: "5px 12px", fontSize: 11, borderRadius: 6 },
-  md: { padding: "8px 16px", fontSize: 13, borderRadius: 8 },
-  lg: { padding: "11px 22px", fontSize: 14, borderRadius: 10 },
+  sm: { padding: "5px 12px", fontSize: 11, borderRadius: RADIUS.pill },
+  md: { padding: "8px 16px", fontSize: 13, borderRadius: RADIUS.pill },
+  lg: { padding: "11px 22px", fontSize: 14, borderRadius: RADIUS.pill },
 };
 
 export function Button({

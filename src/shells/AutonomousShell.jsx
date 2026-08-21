@@ -11,6 +11,7 @@ import { ThemeContext } from "../theme/ThemeContext.jsx";
 
 // ── Hooks & Context ──
 import { useWindowWidth } from "../hooks/useWindowWidth.js";
+import { useSwipe } from "../hooks/useSwipe.js";
 import { useAuth } from "../context/AuthContext.js";
 import { useData } from "../context/DataContext.js";
 
@@ -86,7 +87,28 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const [quickSessionForm, setQuickSessionForm] = useState(null);
   const [pendingSchedule, setPendingSchedule] = useState(null);
 
-  const swipeRef = useRef(null);
+  // ── Navigation par balayage entre onglets ──
+  // Même ordre que la barre du bas. Les vues calendrier partagent l'onglet
+  // "week" : un swipe de page depuis Mois ou Année revient donc sur Cycles ou
+  // Accueil, comme depuis Semaine.
+  const TAB_ORDER = ["accueil", "week", "cycles", "dash", "library"];
+  const [slideDir, setSlideDir] = useState(null);
+  const slideTimer = useRef(null);
+  const goToTab = (delta) => {
+    const cur = ["month", "year"].includes(viewMode) ? "week" : viewMode;
+    const i = TAB_ORDER.indexOf(cur);
+    if (i < 0) return;
+    const next = TAB_ORDER[i + delta];
+    if (!next) return;
+    setSlideDir(delta > 0 ? "left" : "right");
+    clearTimeout(slideTimer.current);
+    slideTimer.current = setTimeout(() => setSlideDir(null), 260);
+    setViewMode(next);
+  };
+  const pageSwipe = useSwipe({
+    onLeft:  () => isMobile && goToTab(1),
+    onRight: () => isMobile && goToTab(-1),
+  });
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -458,7 +480,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         { mode: "calendar", label: "Calendrier" },
         { mode: "dash", label: "Stats" },
         { mode: "cycles", label: "Cycles" },
-        ...(hasCoachFeatures ? [{ mode: "library", label: "Séances" }] : []),
+        { mode: "library", label: "Bibliothèque" },
       ].map(({ mode, label }) => (
         <button
           key={mode}
@@ -502,7 +524,11 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
 
   return (
     <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: data.mesocycles || [] }}>
-    <div style={{
+    <div
+      {...(isMobile ? pageSwipe : {})}
+      data-swipe="page"
+      className={slideDir ? `cp-slide-${slideDir}` : undefined}
+      style={{
       ...styles.app,
       height: viewMode === "week" && !isMobile ? "100dvh" : undefined,
       minHeight: "100dvh",
@@ -570,7 +596,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             <div>
               <div style={styles.appTitle}>PLANIF ESCALADE</div>
               <div style={styles.appSub}>
-                {viewMode === "accueil" ? "Accueil" : viewMode === "week" ? "Calendrier — semaine" : viewMode === "month" ? "Calendrier — mois" : viewMode === "year" ? "Calendrier — année" : viewMode === "dash" ? "Statistiques" : viewMode === "cycles" ? "Cycles" : "Profil"} · Bloc
+                {viewMode === "accueil" ? "Accueil" : viewMode === "week" ? "Calendrier — semaine" : viewMode === "month" ? "Calendrier — mois" : viewMode === "year" ? "Calendrier — année" : viewMode === "dash" ? "Statistiques" : viewMode === "cycles" ? "Cycles" : viewMode === "library" ? "Bibliothèque" : "Profil"} · Bloc
               </div>
             </div>
           </div>
@@ -780,19 +806,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
 
       {/* ── Vue mois ── */}
       {viewMode === "month" && !isMobile && (
-        <div
-          style={{ touchAction: "pan-y" }}
-          onTouchStart={isMobile ? (e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } : undefined}
-          onTouchEnd={isMobile ? (e) => {
-            if (!swipeRef.current) return;
-            const dx = e.changedTouches[0].clientX - swipeRef.current.x;
-            const dy = e.changedTouches[0].clientY - swipeRef.current.y;
-            swipeRef.current = null;
-            if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-              if (dx > 0) handlePrev(); else handleNext();
-            }
-          } : undefined}
-        >
+        <div style={{ touchAction: "pan-y" }}>
         <MonthView
           data={data}
           currentDate={currentDate}
@@ -814,19 +828,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
 
       {/* ── Vue année ── */}
       {viewMode === "year" && !isMobile && (
-        <div
-          style={{ touchAction: "pan-y" }}
-          onTouchStart={isMobile ? (e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } : undefined}
-          onTouchEnd={isMobile ? (e) => {
-            if (!swipeRef.current) return;
-            const dx = e.changedTouches[0].clientX - swipeRef.current.x;
-            const dy = e.changedTouches[0].clientY - swipeRef.current.y;
-            swipeRef.current = null;
-            if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-              if (dx > 0) handlePrev(); else handleNext();
-            }
-          } : undefined}
-        >
+        <div style={{ touchAction: "pan-y" }}>
         <YearView
           data={data}
           currentDate={currentDate}
@@ -878,7 +880,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
           reminderState={data.reminderState || {}}
           onAddReminder={r => setData(d => ({ ...d, reminders: [...(d.reminders || []), r] }))}
           onBack={() => setViewMode("accueil")}
-          onUpdateReminder={r => setData(d => ({ ...d, reminders: (d.reminders || []).map(x => x.id === r.id ? r : x) }))}
           onDeleteReminder={id => setData(d => {
             const reminders = (d.reminders || []).filter(r => r.id !== id);
             const reminderState = { ...(d.reminderState || {}) };
@@ -1077,12 +1078,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
           data={data}
           onClose={() => setLogDate(null)}
           onSaveNote={(date, text) => setData(d => ({ ...d, notes: { ...(d.notes || {}), [date]: text } }))}
-          onToggleReminder={(reminderId, dateStr) => setData(d => {
-            const prev = d.reminderState || {};
-            const forR = prev[reminderId] ? { ...prev[reminderId] } : {};
-            if (forR[dateStr]) delete forR[dateStr]; else forR[dateStr] = true;
-            return { ...d, reminderState: { ...prev, [reminderId]: forR } };
-          })}
           onSaveWeight={(date, kg) => setData(d => {
             const w = { ...(d.weight || {}) };
             if (kg == null) delete w[date]; else w[date] = kg;
@@ -1240,7 +1235,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         <BottomNav
           viewMode={viewMode}
           onChange={(k) => setViewMode(k)}
-          extraTabs={hasCoachFeatures ? [{ key: "library", label: "Bibli", icon: "library" }] : []}
         />
       )}
       {/* ── Panneau de notifications (cloche) ── */}

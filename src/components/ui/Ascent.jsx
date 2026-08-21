@@ -1,4 +1,5 @@
 import { colors, DATA } from "../../theme/palette.js";
+import { RADIUS } from "../../theme/makeStyles.js";
 import { getDiscipline } from "../../lib/disciplines.js";
 
 // ─── PRIMITIVES « ASCENT » ────────────────────────────────────────────────────
@@ -120,7 +121,7 @@ export function Segmented({ isDark, options, value, onChange, style }) {
   const c = colors(isDark);
   return (
     <div style={{
-      display: "flex", background: c.control, borderRadius: 10, padding: 3, gap: 2, ...style,
+      display: "flex", background: c.control, borderRadius: RADIUS.pill, padding: 3, gap: 2, ...style,
     }}>
       {options.map(o => {
         const active = o.value === value;
@@ -129,7 +130,7 @@ export function Segmented({ isDark, options, value, onChange, style }) {
             key={o.value}
             onClick={() => onChange(o.value)}
             style={{
-              flex: 1, padding: "8px 0", borderRadius: 8, border: "none", cursor: "pointer",
+              flex: 1, padding: "8px 0", borderRadius: RADIUS.pill, border: "none", cursor: "pointer",
               fontSize: 13, fontWeight: 700, fontFamily: SANS,
               background: active ? c.accent : "transparent",
               color: active ? c.textOnAccent : c.textMuted,
@@ -193,7 +194,7 @@ export function PrimaryButton({ isDark, onClick, children, height = 48, style })
     <button
       onClick={onClick}
       style={{
-        width: "100%", height, borderRadius: 12, border: "none", cursor: "pointer",
+        width: "100%", height, borderRadius: RADIUS.pill, border: "none", cursor: "pointer",
         background: c.accent, color: c.textOnAccent,
         fontSize: 15, fontWeight: 700, fontFamily: SANS, letterSpacing: "0.2px", ...style,
       }}
@@ -209,7 +210,7 @@ export function SecondaryButton({ isDark, onClick, children, height = 40, style 
     <button
       onClick={onClick}
       style={{
-        width: "100%", height, borderRadius: 10, border: "none", cursor: "pointer",
+        width: "100%", height, borderRadius: RADIUS.pill, border: "none", cursor: "pointer",
         background: c.control, color: c.text,
         fontSize: 13, fontWeight: 700, fontFamily: SANS, ...style,
       }}
@@ -221,18 +222,20 @@ export function SecondaryButton({ isDark, onClick, children, height = 40, style 
 
 // ── Chip sélectionnable ──────────────────────────────────────────────────────
 // Prend la couleur du sport quand elle est fournie, l'accent sinon.
-export function Chip({ isDark, label, active, onClick, color }) {
+export function Chip({ isDark, label, active, onClick, color, size = "md", style }) {
   const c = colors(isDark);
   const tone = color || c.accent;
+  const sm = size === "sm";
   return (
     <button
       onClick={onClick}
       style={{
-        padding: "10px 16px", borderRadius: 12, cursor: "pointer",
-        fontSize: 14, fontWeight: 600, fontFamily: SANS,
+        padding: sm ? "6px 12px" : "10px 16px", borderRadius: RADIUS.pill, cursor: "pointer",
+        fontSize: sm ? 12 : 14, fontWeight: 600, fontFamily: SANS,
         background: active ? `${tone}24` : c.control,
         color: active ? tone : c.textMuted,
         border: `1.5px solid ${active ? tone : "transparent"}`,
+        ...style,
       }}
     >
       {label}
