@@ -50,6 +50,7 @@ src/
 │   └── useCoachAthletes.js        — relations coach-athlète (coach_athletes)
 │
 └── components/
+    ├── ui/SwipePager.jsx          — carrousel de pages (balayage au doigt entre onglets)
     ├── Logo.jsx                   — ClimbingPlannerLogo (SVG hexagone)
     ├── SyncButtons.jsx            — boutons export/import/sync
     ├── AuthPanel.jsx              — panneau auth (password + magic link)
@@ -240,25 +241,68 @@ Navigation : les vues calendrier (week/month/year) sont regroupées sous un bout
 ## Navigation date
 
 - Flèches ← → : changer de période
-- **Clic sur le label de date** (ex: "9 mars – 15 mars") → `setCurrentDate(new Date())` pour revenir à la période actuelle
+- **Clic sur le label de date** (ex: "9 mars – 15 mars", "2028") → retour à la
+  période courante **sans changer de vue** : depuis 2028 en vue année on revient
+  à l'année en cours, toujours en année. Câblé des deux côtés — en-tête bureau
+  du shell et `CalendarView.jsx` (mobile), qui remet aussi le jour sélectionné
+  sur aujourd'hui.
   - Curseur `pointer` uniquement si on n'est pas déjà sur la période en cours
   - Tooltip : "Aller à la semaine en cours" / "Aller au mois en cours" / "Aller à l'année en cours"
+  - Quand on y est : mention « Semaine / Mois / Année en cours » sous le libellé
 
 ## Navigation par swipe (mobile)
 
-Deux zones distinctes, pour qu'un geste ne fasse jamais deux choses :
+Deux zones distinctes, pour qu'un geste ne fasse jamais deux choses.
 
-- **Sur la page** → onglet précédent/suivant dans l'ordre de la barre du bas
-  (Accueil, Calendrier, Cycles, Stats, Bibliothèque), avec une animation de
-  glissement (`.cp-slide-left` / `.cp-slide-right`, 0,22 s, dans `index.css` ;
-  neutralisée par `prefers-reduced-motion`).
-- **Sur la grille du calendrier** → période précédente/suivante. La grille passe
-  `stopPropagation: true` à `useSwipe`, donc son geste ne remonte pas au
-  conteneur de page.
+### Carrousel de pages (`components/ui/SwipePager.jsx`)
 
-`hooks/useSwipe.js` : seuil 60 px, dominance horizontale 1,5× (pour ne pas
-capturer un scroll). Les deux zones portent un attribut `data-swipe`
-(`page` / `calendar-grid`) qui sert aux tests pilotés.
+Balayage sur la page → onglet précédent/suivant dans l'ordre de la barre du bas
+(Accueil, Calendrier, Cycles, Stats, Bibliothèque). **La page suit le doigt** :
+trois calques au plus (précédent, courant, suivant) superposés en absolu, seul
+le courant monté au repos.
+
+- Voisins montés dès `|dx| ≥ 4 px` et `|dx| > |dy|` — un tap ne monte rien.
+- Axe verrouillé à 10 px, horizontal si `|dx| > |dy| × 1,2` ; sinon le geste
+  revient au défilement vertical.
+- Validation si le déplacement dépasse 25 % de la largeur **ou** si la vitesse
+  (moyennée sur 100 ms) dépasse 0,35 px/ms. On valide *puis* on anime (260 ms) :
+  l'indicateur de la barre du bas s'allume quand la page part.
+- Bords de la liste : résistance élastique (× 0,35), pas de bouclage.
+- `prefers-reduced-motion` supprime l'animation de fin.
+
+Deux pièges consignés en tête du fichier :
+
+1. **`transform` et `position: fixed`** — un `transform` sur un ancêtre fait que
+   ses descendants `fixed` (toutes les modales, rendues dans les vues) se
+   positionnent par rapport à lui. Au repos, le calque courant est donc en
+   `transform: none`, jamais `translate3d(0,0,0)`.
+2. **React n'écrit pas le `transform`** : il est piloté à la main dans `place()`.
+   Le doubler en style inline ferait que React, croyant la valeur inchangée,
+   laisserait un transform périmé.
+
+Conséquences sur la mise en page mobile (`shells/AutonomousShell.jsx`) : le
+conteneur de l'app ne défile plus (`height: 100dvh; overflow: hidden`), **chaque
+calque défile pour son propre compte**, et la barre du bas — `position: fixed`,
+hors du pager — ne bouge jamais. `renderTab(mode)` sait dessiner n'importe quel
+onglet (le pager en affiche deux à la fois) ; le compte reste hors du carrousel.
+
+**Aucun geste quand une modale est ouverte** : le pager consulte
+`hasOpenLayers()` (pile de calques de `lib/native.js`, alimentée par
+`ui/Modal.jsx`, `SessionModal` et `DayLogModal`) et reçoit en plus
+`enabled={!overlayOpen}` du shell, pour les quatre feuilles qui ne passent pas
+par `ui/Modal.jsx`.
+
+### Grille du calendrier
+
+Balayage sur la grille → période précédente/suivante, **d'un coup** (pas de
+carrousel ici). La grille passe `stopPropagation: true` à `useSwipe`, et le
+pager ignore de son côté tout geste démarré dans `[data-swipe="calendar-grid"]`
+— le `stopPropagation` d'un handler React ne peut pas arrêter un listener posé
+plus bas dans l'arbre.
+
+`hooks/useSwipe.js` : seuil 60 px, dominance horizontale 1,5×. Les deux zones
+portent un attribut `data-swipe` (`page` / `calendar-grid`), et chaque calque du
+pager un `data-pane` — utilisés par les tests pilotés.
 
 ## Système de charge unifié (0-10)
 

@@ -11,7 +11,7 @@ import { ThemeContext } from "../theme/ThemeContext.jsx";
 
 // ── Hooks & Context ──
 import { useWindowWidth } from "../hooks/useWindowWidth.js";
-import { useSwipe } from "../hooks/useSwipe.js";
+import { SwipePager } from "../components/ui/SwipePager.jsx";
 import { useAuth } from "../context/AuthContext.js";
 import { useData } from "../context/DataContext.js";
 
@@ -89,26 +89,18 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
 
   // ── Navigation par balayage entre onglets ──
   // Même ordre que la barre du bas. Les vues calendrier partagent l'onglet
-  // "week" : un swipe de page depuis Mois ou Année revient donc sur Cycles ou
-  // Accueil, comme depuis Semaine.
+  // "week" : depuis Mois ou Année, un balayage mène donc à Cycles ou Accueil,
+  // comme depuis Semaine.
   const TAB_ORDER = ["accueil", "week", "cycles", "dash", "library"];
-  const [slideDir, setSlideDir] = useState(null);
-  const slideTimer = useRef(null);
-  const goToTab = (delta) => {
-    const cur = ["month", "year"].includes(viewMode) ? "week" : viewMode;
-    const i = TAB_ORDER.indexOf(cur);
-    if (i < 0) return;
-    const next = TAB_ORDER[i + delta];
-    if (!next) return;
-    setSlideDir(delta > 0 ? "left" : "right");
-    clearTimeout(slideTimer.current);
-    slideTimer.current = setTimeout(() => setSlideDir(null), 260);
-    setViewMode(next);
-  };
-  const pageSwipe = useSwipe({
-    onLeft:  () => isMobile && goToTab(1),
-    onRight: () => isMobile && goToTab(-1),
-  });
+  const tabIndex = TAB_ORDER.indexOf(["month", "year"].includes(viewMode) ? "week" : viewMode);
+
+  // Une modale ouverte doit geler le balayage — sinon on fait défiler les
+  // onglets derrière elle. `hasOpenLayers()` (pile de calques de native.js)
+  // couvre tout ce qui passe par ui/Modal.jsx, SessionModal et DayLogModal ;
+  // ces quatre feuilles-ci n'y sont pas inscrites, d'où le complément.
+  const overlayOpen = sessionBuilderDay !== null || !!sessionEditCtx || !!picker ||
+    !!customSessionForm || !!sessionComposerForm || !!templateEditor ||
+    !!sessionModal || !!logDate || notifOpen || !!quickSessionForm || !!pendingSchedule;
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -522,73 +514,221 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
     : syncStatus === "offline" ? <span style={{ fontSize: 11, color: colors(isDark).warn }} title="Hors ligne">—</span>
     : null;
 
+  // ── Rendu d'un onglet ──────────────────────────────────────────────────────
+  // Le carrousel a besoin de savoir dessiner *n'importe quel* onglet, pas
+  // seulement le courant : pendant un glissement, deux pages sont à l'écran.
+  // D'où cette fonction, appelée par le pager sur mobile et directement par le
+  // bureau. Le calendrier n'y figure que pour mobile : le bureau garde ses
+  // vues historiques (grille 7 colonnes, mois, année).
+  const renderMobileHeader = (mode) => {
+    if (!["cycles", "dash", "library"].includes(mode)) return null;
+    return (
+      <div style={styles.headerMobile}>
+        <div style={styles.headerMobileRow1}>
+          <div style={styles.headerLeft}>
+            <ClimbingPlannerLogo isDark={isDark} size={36} />
+            <div style={styles.appTitle}>PLANIF ESCALADE</div>
+          </div>
+          <div style={styles.headerMobileRight}>
+            {syncDot && <span style={{ marginRight: 4 }}>{syncDot}</span>}
+            <div style={styles.totalChargeMobile}>
+              <span style={styles.totalChargeNum}>{totalPeriodCharge}</span>
+              <span style={styles.totalChargeLabel}>charge</span>
+            </div>
+          </div>
+        </div>
+        {/* La navigation principale est en bas (BottomNav) : ici, seulement la
+            cloche et l'accès au compte. */}
+        <div style={{ ...styles.headerMobileRow2, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+            {notifBell}
+            {profileBtn}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTab = (mode) => {
+    switch (mode) {
+      case "accueil":
+        return (
+          <AccueilView
+            data={data}
+            isMobile={isMobile}
+            isLoading={!!session && !cloudLoaded}
+            onOpenAccount={() => setViewMode("profil")}
+            onOpenSession={openSessionModal}
+            onToggleReminder={(reminderId, dateStr) => setData(d => {
+              const prev = d.reminderState || {};
+              const forR = prev[reminderId] ? { ...prev[reminderId] } : {};
+              if (forR[dateStr]) delete forR[dateStr]; else forR[dateStr] = true;
+              return { ...d, reminderState: { ...prev, [reminderId]: forR } };
+            })}
+            onSaveWeight={(date, kg) => setData(d => {
+              const w = { ...(d.weight || {}) };
+              if (kg == null) delete w[date]; else w[date] = kg;
+              return { ...d, weight: w };
+            })}
+            onAddHooper={entry => setData(d => {
+              const existing = (d.hooper || []).filter(h => h.date !== entry.date);
+              return { ...d, hooper: [...existing, entry].sort((a, b) => a.date.localeCompare(b.date)) };
+            })}
+            onAddNutrition={(dateISO, meal) => setData(d => {
+              const dayMeals = [...(d.nutrition?.[dateISO] || []), meal];
+              return { ...d, nutrition: { ...(d.nutrition || {}), [dateISO]: dayMeals } };
+            })}
+            onDeleteNutrition={(dateISO, mealId) => setData(d => {
+              const dayMeals = (d.nutrition?.[dateISO] || []).filter(m => m.id !== mealId);
+              const nutrition = { ...(d.nutrition || {}) };
+              if (dayMeals.length === 0) delete nutrition[dateISO]; else nutrition[dateISO] = dayMeals;
+              return { ...d, nutrition };
+            })}
+            onOpenLog={(dateISO) => setLogDate(dateISO || localDateStr(new Date()))}
+            onAddSession={(dayIdxToday) => {
+              // AccueilView est toujours « aujourd'hui ». S'assurer que la
+              // semaine courante de la planification contient bien today
+              // avant d'ouvrir le SessionComposer sur le bon jour.
+              setCurrentDate(new Date());
+              setSessionBuilderDay({ dayIndex: dayIdxToday });
+            }}
+            onToggleSessionDone={(wKeyArg, dayIdx, si) => toggleSessionDone(wKeyArg, dayIdx, si)}
+          />
+        );
+
+      case "week":
+        return (
+          <CalendarView
+            data={data}
+            currentDate={currentDate}
+            setCurrentDate={setCurrentDate}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            onOpenSession={openSessionModal}
+            onAddSession={(dayIdx) => setSessionBuilderDay(dayIdx)}
+          />
+        );
+
+      case "dash":
+        return (
+          <Suspense fallback={<div style={{ padding: 40, textAlign: "center", opacity: 0.5 }}>…</div>}>
+            <Dashboard
+              data={data}
+              isLoading={!!session && !cloudLoaded}
+              onUpdateSleep={newRows => setData(d => {
+                const map = Object.fromEntries((d.sleep || []).map(r => [r.date, r]));
+                for (const r of newRows) map[r.date] = r;
+                return { ...d, sleep: Object.values(map).sort((a, b) => a.date.localeCompare(b.date)) };
+              })}
+            />
+          </Suspense>
+        );
+
+      case "cycles":
+        return (
+          <CyclesView
+            mesocycles={data.mesocycles || []}
+            onAddMeso={addMesocycle}
+            onUpdateMeso={updateMesocycle}
+            onDeleteMeso={deleteMesocycle}
+            onAddMicro={addMicrocycle}
+            onUpdateMicro={updateMicrocycle}
+            onDeleteMicro={deleteMicrocycle}
+            customCycles={data.customCycles || []}
+            onAddCustomCycle={addCustomCycle}
+            onUpdateCustomCycle={updateCustomCycle}
+            onDeleteCustomCycle={deleteCustomCycle}
+            locked={!!data.cyclesLocked}
+            onSetLocked={val => setData(d => ({ ...d, cyclesLocked: val }))}
+            canEdit={accountRole !== "athlete"}
+            objectives={(data.quickSessions || []).filter(qs => qs.isObjective)}
+            reminders={data.reminders || []}
+            reminderState={data.reminderState || {}}
+            onAddReminder={r => setData(d => ({ ...d, reminders: [...(d.reminders || []), r] }))}
+            onBack={() => setViewMode("accueil")}
+            onDeleteReminder={id => setData(d => {
+              const reminders = (d.reminders || []).filter(r => r.id !== id);
+              const reminderState = { ...(d.reminderState || {}) };
+              delete reminderState[id];
+              return { ...d, reminders, reminderState };
+            })}
+          />
+        );
+
+      case "library":
+        return (
+          <CoachLibraryView
+            catalog={catalog}
+            onNew={() => setSessionComposerForm({})}
+            onEdit={s => setSessionComposerForm({ initial: s })}
+            onDelete={id => deleteUserSession(id)}
+            blocks={dbBlocks}
+            onNewBlock={addSessionBlock}
+            onEditBlock={editSessionBlock}
+            onDeleteBlock={deleteSessionBlock}
+          />
+        );
+
+      case "profil":
+        return (
+          <ProfileView
+            data={data}
+            onUpdateProfile={profile => setData(d => ({ ...d, profile }))}
+            session={session}
+            onAuthChange={setSession}
+            syncStatus={syncStatus}
+            onUpload={session ? () => uploadNow(data, session.user.id) : null}
+            onPull={session ? pullFromCloud : null}
+            onImport={setData}
+            onBack={() => setViewMode("accueil")}
+            toggleTheme={toggleTheme}
+            isDark={isDark}
+            athletes={athletes}
+            onSearchAthletes={searchAthletes}
+            onInviteAthlete={athleteUserId => {
+              const fromName = [data.profile?.firstName, data.profile?.lastName].filter(Boolean).join(" ") || "Un coach";
+              return sendCoachRequest(athleteUserId, fromName);
+            }}
+            sentInvites={sentInvites}
+            onRemoveAthlete={removeAthlete}
+            onUpdateReminder={r => setData(d => ({ ...d, reminders: (d.reminders || []).map(x => x.id === r.id ? r : x) }))}
+            myCoaches={myCoaches}
+            onLeaveCoach={leaveCoach}
+            accountRole={accountRole}
+            viewingAthlete={viewingAthlete}
+            onToggleViewAthlete={a => { if (a) { switchToAthlete(a).then(() => setViewMode("week")); } else { switchBackToCoach(); } }}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Marge basse des pages mobiles : la barre du bas les recouvre.
+  const NAV_PAD = "calc(56px + env(safe-area-inset-bottom))";
+
   return (
     <ThemeContext.Provider value={{ styles, isDark, toggleTheme, mesocycles: data.mesocycles || [] }}>
     <div
-      {...(isMobile ? pageSwipe : {})}
-      data-swipe="page"
-      className={slideDir ? `cp-slide-${slideDir}` : undefined}
       style={{
       ...styles.app,
-      height: viewMode === "week" && !isMobile ? "100dvh" : undefined,
+      // Sur mobile, ce conteneur ne défile plus : chaque page du carrousel
+      // défile pour son propre compte, ce qui laisse la barre du bas immobile
+      // pendant qu'une page glisse.
+      height: isMobile || (viewMode === "week" && !isMobile) ? "100dvh" : undefined,
       minHeight: "100dvh",
-      overflowY: viewMode === "week" && !isMobile ? "hidden" : "auto",
+      overflowY: isMobile || (viewMode === "week" && !isMobile) ? "hidden" : "auto",
       overflowX: "hidden",
-      paddingBottom: isMobile ? "calc(56px + env(safe-area-inset-bottom))" : 0,
     }}>
       <div style={styles.grain} />
 
-      {/* ── HEADER MOBILE ──
-           L'accueil porte son propre en-tête (date, salutation, avatar) depuis
-           la refonte « Ascent » : on masque celui du shell pour ne pas empiler
-           deux barres. Les autres onglets gardent le leur en attendant d'être
-           redessinés. */}
-      {isMobile && (viewMode === "accueil" || viewMode === "profil" || ["week", "month", "year"].includes(viewMode)) ? null : isMobile ? (
-        <div style={styles.headerMobile}>
-          <div style={styles.headerMobileRow1}>
-            <div style={styles.headerLeft}>
-              <ClimbingPlannerLogo isDark={isDark} size={36} />
-              <div style={styles.appTitle}>PLANIF ESCALADE</div>
-            </div>
-            <div style={styles.headerMobileRight}>
-              {syncDot && <span style={{ marginRight: 4 }}>{syncDot}</span>}
-              {viewMode !== "profil" && (
-                <div style={styles.totalChargeMobile}>
-                  <span style={styles.totalChargeNum}>{totalPeriodCharge}</span>
-                  <span style={styles.totalChargeLabel}>charge</span>
-                </div>
-              )}
-            </div>
-          </div>
-          {/* Sur mobile la barre nav principale est en bas (BottomNav).
-              On garde seulement le bouton profil dans l'entête. */}
-          <div style={{ ...styles.headerMobileRow2, justifyContent: "flex-end" }}>
-            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-              {notifBell}
-              {profileBtn}
-            </div>
-          </div>
-          {isCalendarMode && (
-            <>
-              <div style={{ display: "flex", justifyContent: "center", padding: "4px 16px 0", borderTop: `1px solid ${styles.subtleBorder}` }}>
-                {calSubToggle}
-              </div>
-              <div style={styles.weekNavMobile}>
-                <button style={styles.navBtn} onClick={handlePrev}>←</button>
-                <div
-                  style={{ ...styles.weekLabel, cursor: isCurrentPeriod ? "default" : "pointer" }}
-                  onClick={isCurrentPeriod ? undefined : handleDateGoToCurrent}
-                  title={isCurrentPeriod ? undefined : viewMode === "week" ? "Aller à la semaine en cours" : viewMode === "month" ? "Aller au mois en cours" : "Aller à l'année en cours"}
-                >
-                  <div style={styles.weekRange}>{periodLabel}</div>
-                  {isCurrentPeriod && <div style={styles.weekCurrent}>{periodCurrentLabel}</div>}
-                </div>
-                <button style={styles.navBtn} onClick={handleNext}>→</button>
-              </div>
-            </>
-          )}
-        </div>
-      ) : (
+      {/* ── HEADER ──
+           Sur mobile, l'en-tête appartient à la page : il est rendu dans le
+           calque du carrousel (renderMobileHeader) pour glisser avec elle.
+           Accueil, calendrier et compte portent le leur depuis la refonte
+           « Ascent » et n'en reçoivent pas. */}
+      {!isMobile && (
         /* ── HEADER DESKTOP ── */
         <div style={styles.header}>
           <div style={styles.headerLeft}>
@@ -656,20 +796,34 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         </div>
       )}
 
-      {/* ── Calendrier « Ascent » (mobile) ──
-           Un seul écran pour Mois / Semaine / Année, avec son propre titre et
-           sa navigation. Le bureau garde les vues historiques (grille semaine
-           7 colonnes, vue mois, vue année), que le prototype ne couvre pas. */}
-      {isMobile && ["week", "month", "year"].includes(viewMode) && (
-        <CalendarView
-          data={data}
-          currentDate={currentDate}
-          setCurrentDate={setCurrentDate}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          onOpenSession={openSessionModal}
-          onAddSession={(dayIdx) => setSessionBuilderDay(dayIdx)}
+      {/* ── Carrousel de pages (mobile) ──
+           Les cinq onglets de la barre du bas, navigables au doigt : la page
+           suit la main et laisse voir la suivante. Le compte n'en fait pas
+           partie — on y accède par l'avatar, et on en revient par sa flèche. */}
+      {isMobile && tabIndex >= 0 && (
+        <SwipePager
+          index={tabIndex}
+          count={TAB_ORDER.length}
+          keyOf={i => TAB_ORDER[i]}
+          onIndexChange={i => setViewMode(TAB_ORDER[i])}
+          enabled={!overlayOpen}
+          paneStyle={{ paddingBottom: NAV_PAD }}
+          renderPage={i => {
+            const mode = TAB_ORDER[i];
+            return (
+              <>
+                {renderMobileHeader(mode)}
+                {renderTab(mode)}
+              </>
+            );
+          }}
         />
+      )}
+
+      {isMobile && viewMode === "profil" && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: NAV_PAD }}>
+          {renderTab("profil")}
+        </div>
       )}
 
       {/* ── Méta semaine — visible aussi sur mobile (TL;DR 10) ── */}
@@ -712,52 +866,10 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         );
       })()}
 
-      {/* ── Accueil ── */}
-      {viewMode === "accueil" && (
-        <AccueilView
-          data={data}
-          isMobile={isMobile}
-          isLoading={!!session && !cloudLoaded}
-          onOpenAccount={() => setViewMode("profil")}
-          onOpenSession={openSessionModal}
-          onToggleReminder={(reminderId, dateStr) => setData(d => {
-            const prev = d.reminderState || {};
-            const forR = prev[reminderId] ? { ...prev[reminderId] } : {};
-            if (forR[dateStr]) delete forR[dateStr]; else forR[dateStr] = true;
-            return { ...d, reminderState: { ...prev, [reminderId]: forR } };
-          })}
-          onSaveWeight={(date, kg) => setData(d => {
-            const w = { ...(d.weight || {}) };
-            if (kg == null) delete w[date]; else w[date] = kg;
-            return { ...d, weight: w };
-          })}
-          onAddHooper={entry => setData(d => {
-            const existing = (d.hooper || []).filter(h => h.date !== entry.date);
-            return { ...d, hooper: [...existing, entry].sort((a, b) => a.date.localeCompare(b.date)) };
-          })}
-          onAddNutrition={(dateISO, meal) => setData(d => {
-            const dayMeals = [...(d.nutrition?.[dateISO] || []), meal];
-            return { ...d, nutrition: { ...(d.nutrition || {}), [dateISO]: dayMeals } };
-          })}
-          onDeleteNutrition={(dateISO, mealId) => setData(d => {
-            const dayMeals = (d.nutrition?.[dateISO] || []).filter(m => m.id !== mealId);
-            const nutrition = { ...(d.nutrition || {}) };
-            if (dayMeals.length === 0) delete nutrition[dateISO]; else nutrition[dateISO] = dayMeals;
-            return { ...d, nutrition };
-          })}
-          onOpenLog={(dateISO) => setLogDate(dateISO || localDateStr(new Date()))}
-          onAddSession={(dayIdxToday) => {
-            // AccueilView est toujours « aujourd'hui ». S'assurer que la
-            // semaine courante de la planification contient bien today
-            // avant d'ouvrir le SessionComposer sur le bon jour.
-            setCurrentDate(new Date());
-            setSessionBuilderDay({ dayIndex: dayIdxToday });
-          }}
-          onToggleSessionDone={(wKeyArg, dayIdx, si) => toggleSessionDone(wKeyArg, dayIdx, si)}
-        />
-      )}
+      {/* ── Accueil (bureau) ── */}
+      {!isMobile && viewMode === "accueil" && renderTab("accueil")}
 
-      {/* ── Vue semaine — mobile: liste 1 jour, desktop: 7 colonnes timeline ── */}
+      {/* ── Vue semaine — bureau : 7 colonnes timeline ── */}
 
       {viewMode === "week" && !isMobile && (
         <div
@@ -843,95 +955,9 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         </div>
       )}
 
-      {/* ── Dashboard ── */}
-      {viewMode === "dash" && (
-        <Suspense fallback={<div style={{ padding: 40, textAlign: "center", opacity: 0.5 }}>…</div>}>
-          <Dashboard
-            data={data}
-            isLoading={!!session && !cloudLoaded}
-            onUpdateSleep={newRows => setData(d => {
-              const map = Object.fromEntries((d.sleep || []).map(r => [r.date, r]));
-              for (const r of newRows) map[r.date] = r;
-              return { ...d, sleep: Object.values(map).sort((a, b) => a.date.localeCompare(b.date)) };
-            })}
-          />
-        </Suspense>
-      )}
-
-      {/* ── Cycles ── */}
-      {viewMode === "cycles" && (
-        <CyclesView
-          mesocycles={data.mesocycles || []}
-          onAddMeso={addMesocycle}
-          onUpdateMeso={updateMesocycle}
-          onDeleteMeso={deleteMesocycle}
-          onAddMicro={addMicrocycle}
-          onUpdateMicro={updateMicrocycle}
-          onDeleteMicro={deleteMicrocycle}
-          customCycles={data.customCycles || []}
-          onAddCustomCycle={addCustomCycle}
-          onUpdateCustomCycle={updateCustomCycle}
-          onDeleteCustomCycle={deleteCustomCycle}
-          locked={!!data.cyclesLocked}
-          onSetLocked={val => setData(d => ({ ...d, cyclesLocked: val }))}
-          canEdit={accountRole !== "athlete"}
-          objectives={(data.quickSessions || []).filter(qs => qs.isObjective)}
-          reminders={data.reminders || []}
-          reminderState={data.reminderState || {}}
-          onAddReminder={r => setData(d => ({ ...d, reminders: [...(d.reminders || []), r] }))}
-          onBack={() => setViewMode("accueil")}
-          onDeleteReminder={id => setData(d => {
-            const reminders = (d.reminders || []).filter(r => r.id !== id);
-            const reminderState = { ...(d.reminderState || {}) };
-            delete reminderState[id];
-            return { ...d, reminders, reminderState };
-          })}
-        />
-      )}
-
-      {/* ── Bibliothèque coach ── */}
-      {viewMode === "library" && (
-        <CoachLibraryView
-          catalog={catalog}
-          onNew={() => setSessionComposerForm({})}
-          onEdit={s => setSessionComposerForm({ initial: s })}
-          onDelete={id => deleteUserSession(id)}
-          blocks={dbBlocks}
-          onNewBlock={addSessionBlock}
-          onEditBlock={editSessionBlock}
-          onDeleteBlock={deleteSessionBlock}
-        />
-      )}
-
-      {/* ── Profil ── */}
-      {viewMode === "profil" && (
-        <ProfileView
-          data={data}
-          onUpdateProfile={profile => setData(d => ({ ...d, profile }))}
-          session={session}
-          onAuthChange={setSession}
-          syncStatus={syncStatus}
-          onUpload={session ? () => uploadNow(data, session.user.id) : null}
-          onPull={session ? pullFromCloud : null}
-          onImport={setData}
-          toggleTheme={toggleTheme}
-          isDark={isDark}
-          athletes={athletes}
-          onSearchAthletes={searchAthletes}
-          onInviteAthlete={athleteUserId => {
-            const fromName = [data.profile?.firstName, data.profile?.lastName].filter(Boolean).join(" ") || "Un coach";
-            return sendCoachRequest(athleteUserId, fromName);
-          }}
-          sentInvites={sentInvites}
-          onRemoveAthlete={removeAthlete}
-          onUpdateReminder={r => setData(d => ({ ...d, reminders: (d.reminders || []).map(x => x.id === r.id ? r : x) }))}
-          myCoaches={myCoaches}
-          onLeaveCoach={leaveCoach}
-          accountRole={accountRole}
-          viewingAthlete={viewingAthlete}
-          onToggleViewAthlete={a => { if (a) { switchToAthlete(a).then(() => setViewMode("week")); } else { switchBackToCoach(); } }}
-        />
-      )}
+      {/* ── Stats, cycles, bibliothèque et compte (bureau) ──
+           Sur mobile, ces vues sont rendues par le carrousel plus haut. */}
+      {!isMobile && ["dash", "cycles", "library", "profil"].includes(viewMode) && renderTab(viewMode)}
 
       {/* ── SessionComposer (unifié) ── */}
       {sessionBuilderDay !== null && (() => {
