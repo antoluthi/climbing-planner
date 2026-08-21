@@ -28,7 +28,6 @@ export function SessionModal({
 }) {
   const { isDark, mesocycles } = useThemeCtx();
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
   const [showMove, setShowMove] = useState(false);
   const [notesOpen, setNotesOpen] = useState(!!session.feedback?.notes);
   const [kebabOpen, setKebabOpen] = useState(false);
@@ -493,22 +492,9 @@ export function SessionModal({
                 )}
               </div>
 
-              {/* Lien détail de la séance — toujours visible */}
-              <div style={{ paddingTop: 4 }}>
-                <button
-                  onClick={() => setShowDetails(v => !v)}
-                  style={{
-                    background: "none", border: "none", padding: 0,
-                    color: accent, fontSize: 13, fontWeight: 500,
-                    cursor: "pointer", fontFamily: "inherit",
-                  }}
-                >
-                  {showDetails ? "▲ Masquer le détail de la séance" : `Voir le détail de la séance →`}
-                </button>
-              </div>
-
-              {/* Détail technique (accordion) — toujours quelque chose à montrer */}
-              {showDetails && (
+              {/* Détail de la séance — toujours déplié : il y a toujours quelque
+                  chose à montrer, ne serait-ce que le récapitulatif. */}
+              {(
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 8 }}>
 
                   {/* Séances anciennes : échauffement / cœur / retour au calme */}

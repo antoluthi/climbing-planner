@@ -52,6 +52,10 @@ export function SessionFormModal({
   submitLabel = "Enregistrer",
   // Une échéance n'a pas de seconde étape : le bouton ne dit pas « Suivant ».
   eventSubmitLabel,
+  // Les deux cases du pied n'ont de sens qu'à la création : modifier une séance
+  // déjà enregistrée (planning ou bibliothèque) ne doit pas les proposer.
+  allowEvent = true,
+  allowTemplate = true,
   onSave,
   onDelete,
   onClose,
@@ -499,9 +503,13 @@ export function SessionFormModal({
           fontFamily: SANS,
         }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 150 }}>
-            <RoundCheck isDark={isDark} checked={isEvent} onChange={setIsEvent} label="Événement" />
-            <RoundCheck isDark={isDark} checked={saveAsTemplate} onChange={setSaveAsTemplate}
-                        label="Enregistrer comme modèle" />
+            {allowEvent && (
+              <RoundCheck isDark={isDark} checked={isEvent} onChange={setIsEvent} label="Événement" />
+            )}
+            {allowTemplate && (
+              <RoundCheck isDark={isDark} checked={saveAsTemplate} onChange={setSaveAsTemplate}
+                          label="Enregistrer comme modèle" />
+            )}
           </div>
           <PrimaryButton
             isDark={isDark}
