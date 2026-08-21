@@ -60,6 +60,7 @@ src/
     ├── session/SessionScheduleModal.jsx — heure + lieu (étape 2)
     ├── session/SessionLibraryModal.jsx  — recherche dans la bibliothèque
     ├── session/ChargeCalculatorModal.jsx — calculateur de charge (escalade)
+    ├── session/EventDetailModal.jsx     — aperçu d'une échéance (décompte, charge, note)
     ├── SessionModal.jsx           — modal détail séance (feedback, déplacement)
     ├── FeedbackHistoryModal.jsx   — historique des retours par séance
     ├── DayColumn.jsx              — colonne d'un jour (vue semaine)
@@ -224,7 +225,7 @@ Sans cette variable, les endpoints `/api/caldav/*` et `/api/calendar/*` retourne
 | `"accueil"` | Page d'accueil — **vue par défaut** au démarrage | tous |
 | `"week"` | Vue semaine (7 colonnes DayColumn) | tous |
 | `"month"` | Vue mois (grille calendrier) | tous |
-| `"year"` | Vue année (12 mois) | tous |
+| `"year"` | Vue année (12 mois) — mois courant encadré à l'accent et **centré à l'ouverture** (`scrollIntoView({ block: "center" })`), aujourd'hui encadré dans sa case | tous |
 | `"dash"` | Statistiques + notes + Hooper + graphiques poids/Hooper | tous |
 | `"cycles"` | CyclesTimeline ou CyclesEditor | tous (lecture seule si athlete) |
 | `"profil"` | Profil utilisateur + gestion athlètes | tous |
@@ -344,7 +345,10 @@ Deux étapes, deux modales, dans `components/session/` :
    - vélo : **temps · distance · vitesse** liés + D+ facultatif.
    En pied, deux cases au niveau du bouton : « Événement » et « Enregistrer
    comme modèle » (c'est la seule chose qui écrit dans `sessions_catalog` —
-   le catalogue ne se remplit plus tout seul).
+   le catalogue ne se remplit plus tout seul). Elles n'ont de sens qu'à la
+   création : `allowEvent` / `allowTemplate` les masquent quand on modifie une
+   séance déjà planifiée ou une entrée de bibliothèque. Seule l'édition d'une
+   échéance garde « Événement », pour pouvoir la reconvertir en séance.
 2. **`SessionScheduleModal.jsx` — quand & où.** Heure de départ et lieu, avec
    une flèche de retour en haut à gauche.
 
@@ -376,9 +380,11 @@ note. Pas de seconde étape non plus : le bouton enregistre directement.
 - Dans le calendrier mobile elle ressort par un **fond teinté + un bandeau bas**
   à sa couleur (une séance n'a qu'un point) ; la ligne du jour affiche
   « Échéance · du 19 au 20 août ».
-- Un clic dessus rouvre `SessionFormModal` en édition, avec une corbeille en
-  en-tête pour la supprimer. Décocher « Événement » la convertit en séance :
-  elle quitte `quickSessions` et repasse par « quand & où » à sa date.
+- Un clic dessus ouvre `EventDetailModal` — l'équivalent de `SessionModal`
+  pour une échéance : décompte, dates, charge en toutes lettres, note, puis
+  **Modifier** (qui ouvre le formulaire) ou **Supprimer**. Décocher
+  « Événement » dans le formulaire la convertit en séance : elle quitte
+  `quickSessions` et repasse par « quand & où » à sa date.
 - L'accueil affiche la plus proche en **carte de décompte** (« J-12 »).
 
 ### Plus de blocs
@@ -477,6 +483,12 @@ Pour retoucher l'apparence : éditer `palette.js`, rien d'autre.
 - `SuspensionInfoCard` : résumé visuel de la config dans `SessionModal`
 - Feedback poids + graphique évolution dans `FeedbackHistoryModal`
 - Charge rating activé pour Suspension et Retour au calme
+
+### SessionModal — détail toujours déplié
+Le détail d'une séance (récapitulatif, mesures, notes) est affiché d'emblée :
+il n'y a plus de bouton « Voir le détail de la séance ». Le repli qui subsiste
+dans cette modale est celui des **notes de retour** de l'athlète, qui est autre
+chose.
 
 ### DayLogModal (`components/DayLogModal.jsx`)
 - Assistant en **trois étapes** : **Ressenti (Hooper) → Poids → Notes**, avec une

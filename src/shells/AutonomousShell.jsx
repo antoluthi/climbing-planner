@@ -24,6 +24,7 @@ import { ConfirmModal } from "../components/ConfirmModal.jsx";
 import { SessionModal } from "../components/SessionModal.jsx";
 import { SessionFormModal } from "../components/session/SessionFormModal.jsx";
 import { SessionScheduleModal } from "../components/session/SessionScheduleModal.jsx";
+import { EventDetailModal } from "../components/session/EventDetailModal.jsx";
 import { DayColumn } from "../components/DayColumn.jsx";
 import { MonthView } from "../components/MonthView.jsx";
 import { YearView } from "../components/YearView.jsx";
@@ -73,6 +74,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   const [sessionComposerForm, setSessionComposerForm] = useState(null);
   const [sessionModal, setSessionModal] = useState(null);
   const [logDate, setLogDate] = useState(null);
+  // Aperçu d'une échéance — l'équivalent de SessionModal pour une séance.
+  const [eventDetail, setEventDetail] = useState(null);
   const [notifOpen, setNotifOpen] = useState(false);
   // Ajout en deux temps : le formulaire (quoi), puis « quand & où ». Rien n'est
   // écrit tant que la seconde étape n'est pas passée — c'est ce qui permet à sa
@@ -91,7 +94,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   // couvre tout ce qui passe par ui/Modal.jsx, SessionModal et DayLogModal ;
   // ces quatre feuilles-ci n'y sont pas inscrites, d'où le complément.
   const overlayOpen = sessionBuilderDay !== null || !!sessionEditCtx ||
-    !!sessionComposerForm || !!sessionModal || !!logDate || notifOpen || !!draft;
+    !!sessionComposerForm || !!sessionModal || !!logDate || notifOpen || !!draft || !!eventDetail;
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -453,7 +456,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             isLoading={!!session && !cloudLoaded}
             onOpenAccount={() => setViewMode("profil")}
             onOpenNotifications={session ? () => setNotifOpen(true) : null}
-            onOpenEvent={(ev) => setSessionBuilderDay({ initial: { ...ev, mode: "event" } })}
+            onOpenEvent={(ev) => setEventDetail(ev)}
             unreadCount={unreadCount}
             onOpenSession={openSessionModal}
             onToggleReminder={(reminderId, dateStr) => setData(d => {
@@ -503,7 +506,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             setViewMode={setViewMode}
             onOpenSession={openSessionModal}
             onAddSession={(dayIdx) => setSessionBuilderDay(dayIdx)}
-            onOpenEvent={(ev) => setSessionBuilderDay({ initial: { ...ev, mode: "event" } })}
+            onOpenEvent={(ev) => setEventDetail(ev)}
           />
         );
 
@@ -782,7 +785,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
                     return false;
                   })}
                   dateISO={dateISO}
-                  onOpenQuickSession={qs => setSessionBuilderDay({ initial: { ...qs, mode: "event" } })}
+                  onOpenQuickSession={qs => setEventDetail(qs)}
                   onRemoveQuickSession={id => removeQuickSession(id)}
                   onOpenSession={(si) => openSessionModal(wKey, i, si)}
                   onRemove={(si) => removeSession(i, si)}
@@ -864,6 +867,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             library={catalog}
             submitLabel={isEventEdit ? "Enregistrer" : "Suivant"}
             eventSubmitLabel="Enregistrer"
+            allowTemplate={!isEventEdit}
             onClose={() => setSessionBuilderDay(null)}
             onDelete={isEventEdit ? () => {
               removeQuickSession(initial.id);
@@ -944,6 +948,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             dayLabel={`${DAYS[edi]} ${formatDate(eday)}`}
             defaultDate={localDateStr(eday)}
             library={catalog}
+            allowEvent={false}
+            allowTemplate={false}
             onClose={() => setSessionEditCtx(null)}
             onSave={(payload) => {
               if (payload.mode === "event") {
@@ -977,12 +983,31 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         <SessionFormModal
           initial={sessionComposerForm.initial}
           library={catalog}
+          allowEvent={false}
+          allowTemplate={false}
           onClose={() => setSessionComposerForm(null)}
           onSave={(payload) => {
             saveUserSession(payload);
             if (sessionComposerForm.initial) syncPlannedSessions(payload);
             toast.success(sessionComposerForm.initial ? "Séance modifiée" : "Séance enregistrée");
             setSessionComposerForm(null);
+          }}
+        />
+      )}
+
+      {/* ── Aperçu d'une échéance ── */}
+      {eventDetail && (
+        <EventDetailModal
+          event={eventDetail}
+          onClose={() => setEventDetail(null)}
+          onEdit={() => {
+            setSessionBuilderDay({ initial: { ...eventDetail, mode: "event" } });
+            setEventDetail(null);
+          }}
+          onDelete={() => {
+            removeQuickSession(eventDetail.id);
+            setEventDetail(null);
+            toast.success("Échéance supprimée");
           }}
         />
       )}

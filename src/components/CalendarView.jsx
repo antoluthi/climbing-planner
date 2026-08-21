@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSwipe } from "../hooks/useSwipe.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { colors, DATA } from "../theme/palette.js";
@@ -164,7 +164,7 @@ export function CalendarView({
 
       {mode === "year" && (
         <YearGrid
-          isDark={isDark} data={data} year={currentDate.getFullYear()}
+          isDark={isDark} data={data} year={currentDate.getFullYear()} today={today}
           onPickMonth={(m) => { setCurrentDate(new Date(currentDate.getFullYear(), m, 1)); setViewMode("month"); }}
         />
       )}
@@ -372,8 +372,19 @@ function WeekStrip({ isDark, data, currentDate, selected, setSelected, today }) 
 }
 
 // ── Vue année : 12 mini-grilles de points ────────────────────────────────────
-function YearGrid({ isDark, data, year, onPickMonth }) {
+// Le mois courant se signale par sa bordure accent et se place au milieu de
+// l'écran à l'ouverture : arriver en janvier quand on est en décembre oblige à
+// faire défiler toute l'année pour retrouver aujourd'hui.
+function YearGrid({ isDark, data, year, today, onPickMonth }) {
   const c = colors(isDark);
+  const todayObj = new Date(today + "T12:00:00");
+  const currentMonth = todayObj.getFullYear() === year ? todayObj.getMonth() : null;
+  const currentRef = useRef(null);
+
+  useEffect(() => {
+    currentRef.current?.scrollIntoView({ block: "center" });
+  }, [year]);
+
   return (
     <div style={{
       padding: "4px 20px 24px", display: "grid",
@@ -384,27 +395,41 @@ function YearGrid({ isDark, data, year, onPickMonth }) {
         const start = getMondayOf(first);
         const weeks = Array.from({ length: 6 }, (_, w) =>
           Array.from({ length: 7 }, (_, d) => addDays(start, w * 7 + d)));
+        const isCurrent = m === currentMonth;
         return (
           <div
             key={m}
+            ref={isCurrent ? currentRef : undefined}
             onClick={() => onPickMonth(m)}
             style={{
-              background: c.card, border: `1px solid ${c.border}`,
+              background: c.card,
+              border: `1px solid ${isCurrent ? c.accent : c.border}`,
               borderRadius: 14, padding: 12, cursor: "pointer",
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 700, color: c.textCard, marginBottom: 8 }}>{label}</div>
+            <div style={{
+              fontSize: 12, fontWeight: 700, marginBottom: 8,
+              color: isCurrent ? c.accent : c.textCard,
+            }}>
+              {label}
+            </div>
             {weeks.map((week, wi) => (
               <div key={wi} style={{ display: "flex", gap: 2, marginBottom: 2 }}>
                 {week.map((date, di) => {
                   const inMonth = date.getMonth() === m;
+                  const isToday = inMonth && localDateStr(date) === today;
                   const dayItems = inMonth ? getDaySessions(data, date) : [];
                   const ev = eventOf(dayItems);
                   const dot = ev ? (ev.color || null) : dayColor(dayItems);
                   return (
                     <div key={di} style={{
-                      flex: 1, aspectRatio: "1", borderRadius: 1,
-                      background: dot || (inMonth ? c.control : "transparent"),
+                      flex: 1, aspectRatio: "1",
+                      borderRadius: isToday ? 3 : 1,
+                      // Aujourd'hui : encadré à l'accent — et teinté quand la
+                      // journée est vide, sans quoi le repère se perd à cette
+                      // taille de case.
+                      background: dot || (isToday ? c.accent + "55" : inMonth ? c.control : "transparent"),
+                      boxShadow: isToday ? `0 0 0 1.5px ${c.accent}` : undefined,
                     }} />
                   );
                 })}
