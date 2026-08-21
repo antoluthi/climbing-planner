@@ -4,7 +4,7 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { colors, DATA } from "../theme/palette.js";
 import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
-import { Card, Segmented, RoundIconButton, SportBadge, SportDot, SANS, MONO } from "./ui/Ascent.jsx";
+import { Card, Segmented, RoundIconButton, SportBadge, SportDot, PageTitle, SANS, MONO } from "./ui/Ascent.jsx";
 
 // ─── CALENDRIER (refonte « Ascent ») ──────────────────────────────────────────
 // Un seul écran, trois vues : Mois, Semaine, Année. Reprend la mise en page du
@@ -99,9 +99,7 @@ export function CalendarView({
 
       {/* ── Titre + sélecteur de vue ── */}
       <div style={{ padding: `${pad + 8}px ${pad}px 12px` }}>
-        <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.3px", color: c.text, marginBottom: 14 }}>
-          Calendrier
-        </div>
+        <PageTitle isDark={isDark}>Calendrier</PageTitle>
         <Segmented
           isDark={isDark}
           value={mode}

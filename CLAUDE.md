@@ -368,13 +368,22 @@ grep -rn '#[0-9a-f]\{3,8\}' src/ --include=*.jsx --include=*.js | grep -v palett
   `#6C8CFF` · Trail `#E0C25F` · Renforcement `#A78BFF` · Mobilité `#FF8FA3` ·
   Autre `#9A9A9A`.
 - `components/ui/Ascent.jsx` : primitives du système — `Card`, `RowCard`/`Row`,
-  `SectionLabel`, `StatValue`, `SportBadge`, `SportDot`, `Segmented`,
-  `PillToggle`, `RoundIconButton`, `Chip`, `RoundCheck`, `ProgressBar`,
-  `InitialsAvatar`, plus les constantes `SANS` / `MONO`.
+  `PageTitle`, `SectionLabel`, `StatValue`, `SportBadge`, `SportDot`,
+  `Segmented`, `PillToggle`, `RoundIconButton`, `Chip`, `RoundCheck`,
+  `ProgressBar`, `InitialsAvatar`, plus les constantes `SANS` / `MONO`.
 - Écrans refaits : **Accueil**, **Calendrier** (`CalendarView.jsx`, Semaine/Mois/
   Année, mobile uniquement — le bureau garde les vues historiques), **Compte**,
-  **Bibliothèque** et le **journal du jour**. Cycles et Stats héritent de la
-  palette sans être redessinés.
+  **Bibliothèque** et le **journal du jour**.
+- **Chaque page porte son titre** (`PageTitle` : 26 px, 800, `right` pour
+  l'action principale) — Accueil excepté, qui a sa salutation. Il n'y a plus
+  d'en-tête de shell sur mobile : ni logo, ni « PLANIF ESCALADE », ni total de
+  charge, ni avatar au-dessus de Cycles, Stats et Bibliothèque. **La cloche de
+  notifications et l'avatar vivent sur l'accueil**, à droite de la salutation —
+  seuls points d'entrée vers le compte et les notifications. Le bureau, lui,
+  garde son en-tête global.
+- Le **contenu** de Cycles (éditeur de mésocycles) et de Stats hérite de la
+  palette sans avoir été redessiné : cadres, champs et boutons y sont encore
+  ceux d'avant la refonte.
 - `RADIUS` (`theme/makeStyles.js`) : `pill` 999 · `control` 12 · `card` 16 ·
   `cardLg` 18. Les boutons partagés (primitives `ui/Ascent.jsx`, `ui/Button.jsx`)
   sont en pill ; cartes et badges gardent leurs rayons.

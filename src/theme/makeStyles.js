@@ -118,19 +118,6 @@ export function makeStyles(isDark) {
     totalChargeNum: { fontSize: 28, fontWeight: 700, color: t.text, lineHeight: 1 },
     totalChargeLabel: { display: "block", fontSize: 9, color: t.textMuted, letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 2 },
 
-    headerMobile: {
-      display: "flex", flexDirection: "column",
-      borderBottom: `1px solid ${t.border2}`, position: "relative", zIndex: 1, background: t.headerGrad,
-    },
-    headerMobileRow1: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px 6px" },
-    headerMobileRow2: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 16px 8px" },
-    headerMobileRight: { display: "flex", alignItems: "center", gap: 8 },
-    weekNavMobile: {
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "6px 16px 10px", borderTop: `1px solid ${t.subtleBorder}`,
-    },
-    totalChargeMobile: { textAlign: "right" },
-
     viewToggle: { display: "flex", gap: 2 },
     viewToggleBtn: {
       background: "none", border: `1px solid ${t.btnBorder}`, color: t.textDim,
@@ -306,7 +293,6 @@ export function makeStyles(isDark) {
     yearDayEmpty: t.dayEmpty,
 
     dashboard: { padding: "20px 24px", overflowY: "auto", flex: 1 },
-    dashTitle: { fontSize: 11, fontWeight: 700, color: t.navColor, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 20 },
     dashCards: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28 },
     dashCard: {
       background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8,
@@ -345,8 +331,6 @@ export function makeStyles(isDark) {
 
     // ── Cycles view ──
     cyclesView: { padding: "20px 24px", overflowY: "auto", flex: 1 },
-    cyclesHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
-    cyclesTitle: { fontSize: 11, fontWeight: 700, color: t.navColor, letterSpacing: "0.1em", textTransform: "uppercase" },
     cycleCard: { background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, marginBottom: 12, overflow: "hidden" },
     cycleMesoRow: { display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", flexWrap: "wrap" },
     cycleColorInput: { width: 28, height: 28, borderRadius: 4, border: `1px solid ${t.border}`, padding: 0, cursor: "pointer", background: "none" },
@@ -384,9 +368,6 @@ export function makeStyles(isDark) {
     customCycleDot: { width: 5, height: 5, borderRadius: "50%", opacity: 0.9 },
     // ── Timeline ──
     timelineWrap: { padding: "20px 24px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column" },
-    timelineTopBar: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 },
-    timelineTitle: { fontSize: 13, fontWeight: 700, color: t.text, letterSpacing: "0.06em", textTransform: "uppercase" },
-    timelineEditBtn: { display: "flex", alignItems: "center", gap: 6, background: t.inputBg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.textDim, padding: "6px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" },
     timelineSaveBtn: { display: "flex", alignItems: "center", gap: 8, background: t.accentBg, border: `1px solid ${t.accentBorder}`, borderRadius: 7, color: t.accent, padding: "10px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.03em", marginTop: 32, alignSelf: "center" },
     timelineRow: { display: "flex", alignItems: "stretch", marginBottom: 10, gap: 0 },
     timelineLabelCol: { width: 148, flexShrink: 0, paddingRight: 14, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 },

@@ -520,35 +520,10 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
   // D'où cette fonction, appelée par le pager sur mobile et directement par le
   // bureau. Le calendrier n'y figure que pour mobile : le bureau garde ses
   // vues historiques (grille 7 colonnes, mois, année).
-  const renderMobileHeader = (mode) => {
-    if (!["cycles", "dash", "library"].includes(mode)) return null;
-    return (
-      <div style={styles.headerMobile}>
-        <div style={styles.headerMobileRow1}>
-          <div style={styles.headerLeft}>
-            <ClimbingPlannerLogo isDark={isDark} size={36} />
-            <div style={styles.appTitle}>PLANIF ESCALADE</div>
-          </div>
-          <div style={styles.headerMobileRight}>
-            {syncDot && <span style={{ marginRight: 4 }}>{syncDot}</span>}
-            <div style={styles.totalChargeMobile}>
-              <span style={styles.totalChargeNum}>{totalPeriodCharge}</span>
-              <span style={styles.totalChargeLabel}>charge</span>
-            </div>
-          </div>
-        </div>
-        {/* La navigation principale est en bas (BottomNav) : ici, seulement la
-            cloche et l'accès au compte. */}
-        <div style={{ ...styles.headerMobileRow2, justifyContent: "flex-end" }}>
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-            {notifBell}
-            {profileBtn}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
+  //
+  // Sur mobile, chaque page porte son propre titre (« Calendrier », « Cycles »,
+  // « Stats », « Bibliothèque ») : plus d'en-tête de shell au-dessus. La cloche
+  // et l'avatar vivent désormais sur l'accueil.
   const renderTab = (mode) => {
     switch (mode) {
       case "accueil":
@@ -558,6 +533,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             isMobile={isMobile}
             isLoading={!!session && !cloudLoaded}
             onOpenAccount={() => setViewMode("profil")}
+            onOpenNotifications={session ? () => setNotifOpen(true) : null}
+            unreadCount={unreadCount}
             onOpenSession={openSessionModal}
             onToggleReminder={(reminderId, dateStr) => setData(d => {
               const prev = d.reminderState || {};
@@ -808,15 +785,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
           onIndexChange={i => setViewMode(TAB_ORDER[i])}
           enabled={!overlayOpen}
           paneStyle={{ paddingBottom: NAV_PAD }}
-          renderPage={i => {
-            const mode = TAB_ORDER[i];
-            return (
-              <>
-                {renderMobileHeader(mode)}
-                {renderTab(mode)}
-              </>
-            );
-          }}
+          renderPage={i => renderTab(TAB_ORDER[i])}
         />
       )}
 

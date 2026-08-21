@@ -8,6 +8,7 @@ import {
   DAY_NAMES_SHORT,
 } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
+import { PageTitle, SecondaryButton } from "./ui/Ascent.jsx";
 
 // ─── CYCLES TIMELINE ─────────────────────────────────────────────────────────
 
@@ -81,11 +82,19 @@ export function CyclesTimeline({
 
   return (
     <div ref={containerRef} style={styles.timelineWrap} onClick={() => setPopover(null)}>
-      {/* Top bar */}
-      <div style={styles.timelineTopBar}>
-        <span style={styles.timelineTitle}>Planification</span>
-        {onEdit && <button style={styles.timelineEditBtn} onClick={onEdit}>Modifier</button>}
-      </div>
+      {/* Titre de page — même facture que l'accueil et le calendrier */}
+      <PageTitle
+        isDark={isDark}
+        style={{ marginBottom: 24 }}
+        right={onEdit && (
+          <SecondaryButton isDark={isDark} height={36} onClick={onEdit}
+                           style={{ width: "auto", padding: "0 18px" }}>
+            Modifier
+          </SecondaryButton>
+        )}
+      >
+        Cycles
+      </PageTitle>
 
       {/* Empty state */}
       {mesocycles.length === 0 && (

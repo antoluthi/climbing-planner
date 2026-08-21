@@ -8,7 +8,7 @@ import { FeedbackHistoryModal } from "./FeedbackHistoryModal.jsx";
 import { colors } from "../theme/palette.js";
 import { RADIUS } from "../theme/makeStyles.js";
 import {
-  Segmented, SectionLabel, Chip, PrimaryButton, RoundIconButton, SANS, MONO,
+  Segmented, SectionLabel, Chip, PrimaryButton, RoundIconButton, PageTitle, SANS, MONO,
 } from "./ui/Ascent.jsx";
 
 // ─── BIBLIOTHÈQUE ─────────────────────────────────────────────────────────────
@@ -100,26 +100,24 @@ export function CoachLibraryView({ catalog, onNew, onEdit, onDelete, blocks, onN
     <div style={{ flex: 1, overflowY: "auto", background: c.bg, padding: "18px 16px 90px", fontFamily: SANS }}>
       <div style={{ maxWidth: 600, margin: "0 auto", width: "100%" }}>
 
+        {/* ── Titre ── */}
+        <PageTitle isDark={isDark}>Bibliothèque</PageTitle>
+
         {/* ── Séances / Blocs ── */}
         <Segmented
           isDark={isDark}
           value={subTab}
           onChange={key => { setSubTab(key); setSearch(""); setFilter("Tous"); setSort("date"); setConfirmId(null); }}
           options={[{ value: "sessions", label: "Séances" }, { value: "blocks", label: "Blocs" }]}
-          style={{ marginBottom: 20 }}
+          style={{ marginBottom: 18 }}
         />
 
-        {/* ── Titre + création ── */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: c.text, letterSpacing: "-0.3px" }}>
-              {isSessionTab ? "Séances" : "Blocs"}
-            </div>
-            <div style={{ fontSize: 12, color: c.textDim, marginTop: 2 }}>
-              {isSessionTab
-                ? `${allSessions.length} séance${allSessions.length !== 1 ? "s" : ""}`
-                : `${(blocks || []).length} bloc${(blocks || []).length !== 1 ? "s" : ""}`}
-            </div>
+        {/* ── Compte + création ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 13, color: c.textMuted, minWidth: 0 }}>
+            {isSessionTab
+              ? `${allSessions.length} séance${allSessions.length !== 1 ? "s" : ""}`
+              : `${(blocks || []).length} bloc${(blocks || []).length !== 1 ? "s" : ""}`}
           </div>
           <PrimaryButton
             isDark={isDark}
