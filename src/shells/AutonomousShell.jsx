@@ -333,17 +333,19 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
     setData(d => ({ ...d, moveSuggestions: (d.moveSuggestions || []).filter(x => x.id !== id) }));
   };
 
-  // Écrit une séance neuve (ou un événement) une fois les deux étapes passées.
+  // Écrit une séance neuve une fois les deux étapes passées. La date décide de
+  // la semaine ET du jour : s'appuyer sur `currentDate` se tromperait dès que
+  // la séance appartient à une autre semaine que celle affichée.
   // `sched` vaut null quand l'utilisateur a choisi « Plus tard ».
-  const commitNewSession = (payload, dayIndex, sched) => {
+  const commitNewSession = (payload, dateISO, sched) => {
     const s = { ...payload, ...(sched || {}) };
     delete s.saveAsTemplate;
 
-    if (s.mode === "event") {
-      addQuickSession(s);
-      toast.success("Événement ajouté");
-    } else if (dayIndex !== null && dayIndex !== undefined) {
-      const key = weekKey(getMondayOf(currentDate));
+    if (dateISO) {
+      const dayDate = new Date(dateISO + "T12:00:00");
+      const key = weekKey(getMondayOf(dayDate));
+      const dow = dayDate.getDay();
+      const dayIndex = dow === 0 ? 6 : dow - 1;
       setData(d => {
         const ws = d.weeks[key] ? [...d.weeks[key]] : Array(7).fill(null).map(() => []);
         ws[dayIndex] = [...(ws[dayIndex] || []), { ...s, feedback: null }];
@@ -501,6 +503,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             setViewMode={setViewMode}
             onOpenSession={openSessionModal}
             onAddSession={(dayIdx) => setSessionBuilderDay(dayIdx)}
+            onOpenEvent={(ev) => setSessionBuilderDay({ initial: { ...ev, mode: "event" } })}
           />
         );
 
@@ -536,7 +539,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             locked={!!data.cyclesLocked}
             onSetLocked={val => setData(d => ({ ...d, cyclesLocked: val }))}
             canEdit={accountRole !== "athlete"}
-            objectives={(data.quickSessions || []).filter(qs => qs.isObjective)}
+            objectives={data.quickSessions || []}
             reminders={data.reminders || []}
             reminderState={data.reminderState || {}}
             onAddReminder={r => setData(d => ({ ...d, reminders: [...(d.reminders || []), r] }))}
@@ -816,7 +819,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             const di = dow === 0 ? 6 : dow - 1;
             openSessionModal(wKey2, di, si);
           }}
-          objectives={(data.quickSessions || []).filter(qs => qs.isObjective)}
+          objectives={data.quickSessions || []}
         />
         </div>
       )}
@@ -850,8 +853,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         const dDay = dayIndex !== null && dayIndex !== undefined ? addDays(monday, dayIndex) : null;
         const dayLabelStr = dDay ? `${DAYS[dayIndex]} ${formatDate(dDay)}` : null;
         const defaultDateISO = dDay ? localDateStr(dDay) : localDateStr(new Date());
-        // Modifier un événement existant : on écrit directement, il n'a pas de
-        // seconde étape à repasser.
+        // Une échéance existante se modifie sur place ; une échéance neuve
+        // n'a pas d'étape « quand & où » à passer, ses dates sont déjà là.
         const isEventEdit = !!initial?.id && initial?.mode === "event";
         return (
           <SessionFormModal
@@ -860,17 +863,27 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             defaultDate={defaultDateISO}
             library={catalog}
             submitLabel={isEventEdit ? "Enregistrer" : "Suivant"}
+            eventSubmitLabel="Enregistrer"
             onClose={() => setSessionBuilderDay(null)}
+            onDelete={isEventEdit ? () => {
+              removeQuickSession(initial.id);
+              setSessionBuilderDay(null);
+              toast.success("Échéance supprimée");
+            } : undefined}
             onSave={(payload) => {
               setSessionBuilderDay(null);
-              if (isEventEdit) {
-                editQuickSession(payload);
+              if (payload.mode === "event") {
+                if (isEventEdit) editQuickSession(payload); else addQuickSession(payload);
                 if (payload.saveAsTemplate) saveUserSession(payload);
-                toast.success("Événement modifié");
+                toast.success(isEventEdit ? "Échéance modifiée" : "Échéance ajoutée");
                 return;
               }
+              // Une échéance dont on décoche la case devient une séance : elle
+              // quitte les échéances et passe par « quand & où » à sa date.
+              const targetISO = isEventEdit ? (initial.startDate || defaultDateISO) : defaultDateISO;
+              if (isEventEdit) removeQuickSession(initial.id);
               // Étape 2 : quand & où. L'écriture n'a lieu qu'à sa sortie.
-              setDraft({ payload, dayIndex, dayLabel: dayLabelStr, dayDate: dDay });
+              setDraft({ payload, dateISO: targetISO, dayLabel: dayLabelStr, dayDate: dDay });
             }}
           />
         );
@@ -878,7 +891,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
 
       {/* ── Étape 2 : quand & où ── */}
       {draft && (() => {
-        const { payload, dayIndex: ddi, dayLabel: ddl, dayDate } = draft;
+        const { payload, dateISO: ddate, dayLabel: ddl, dayDate } = draft;
         // Lieux déjà utilisés, du plus récent au plus ancien.
         const recentLocations = (() => {
           const all = [];
@@ -908,9 +921,14 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             defaultLocation={payload.location || ""}
             estimatedTime={payload.estimatedTime ?? null}
             recentLocations={recentLocations}
-            onBack={() => { setDraft(null); setSessionBuilderDay({ dayIndex: ddi, initial: payload }); }}
-            onConfirm={(sched) => { commitNewSession(payload, ddi, sched); setDraft(null); }}
-            onSkip={() => { commitNewSession(payload, ddi, null); setDraft(null); }}
+            onBack={() => {
+              setDraft(null);
+              const back = new Date(ddate + "T12:00:00");
+              const dow = back.getDay();
+              setSessionBuilderDay({ dayIndex: dow === 0 ? 6 : dow - 1, initial: payload });
+            }}
+            onConfirm={(sched) => { commitNewSession(payload, ddate, sched); setDraft(null); }}
+            onSkip={() => { commitNewSession(payload, ddate, null); setDraft(null); }}
           />
         );
       })()}

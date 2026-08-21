@@ -5,7 +5,7 @@ import { colors, DATA } from "../../theme/palette.js";
 import { RADIUS, Z } from "../../theme/makeStyles.js";
 import { PrimaryButton, RoundIconButton, Chip, RoundCheck, SANS, MONO } from "../ui/Ascent.jsx";
 import { disciplineList, getDiscipline } from "../../lib/disciplines.js";
-import { getChargeColor, normalizeCharge10 } from "../../lib/charge.js";
+import { getChargeColor, normalizeCharge10, chargeLabel } from "../../lib/charge.js";
 import { generateId } from "../../lib/storage.js";
 import { calcEndTime } from "../../lib/helpers.js";
 import {
@@ -15,6 +15,7 @@ import {
 } from "../../lib/pace.js";
 import { SessionLibraryModal } from "./SessionLibraryModal.jsx";
 import { ChargeCalculatorModal } from "./ChargeCalculatorModal.jsx";
+import { ConfirmModal } from "../ConfirmModal.jsx";
 
 // ─── FORMULAIRE DE SÉANCE ─────────────────────────────────────────────────────
 // Première étape de l'ajout : quoi. La seconde (quand & où) est
@@ -49,7 +50,10 @@ export function SessionFormModal({
   // parent tranche : revenir de la seconde étape repasse par ici avec les
   // valeurs déjà saisies, sans que ce soit pour autant une modification.
   submitLabel = "Enregistrer",
+  // Une échéance n'a pas de seconde étape : le bouton ne dit pas « Suivant ».
+  eventSubmitLabel,
   onSave,
+  onDelete,
   onClose,
 }) {
   const { isDark } = useThemeCtx();
@@ -106,6 +110,7 @@ export function SessionFormModal({
   // ── Fenêtres empilées ──
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => nameRef.current?.focus(), 60);
@@ -201,8 +206,16 @@ export function SessionFormModal({
     };
 
     if (isEvent) {
+      // Une échéance ne porte ni heure, ni durée, ni mesures : des dates, une
+      // couleur, une charge et une note.
       onSave({
-        ...common,
+        id: common.id,
+        schemaVersion: 3,
+        discipline,
+        name: common.name,
+        title: common.title,
+        notes: common.notes,
+        saveAsTemplate: common.saveAsTemplate,
         mode: "event",
         type: "Évènement",
         startDate,
@@ -211,8 +224,11 @@ export function SessionFormModal({
         color,
         content: notes.trim() || undefined,
         isQuick: true,
-        chargePlanned: 0,
-        charge: 0,
+        chargePlanned: charge,
+        charge,
+        estimatedTime: null,
+        startTime: null,
+        endTime: null,
       });
       return;
     }
@@ -289,6 +305,14 @@ export function SessionFormModal({
               <path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
             </svg>
           </RoundIconButton>
+          {onDelete && (
+            <RoundIconButton isDark={isDark} size={34} label="Supprimer" onClick={() => setConfirmDelete(true)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c.danger}
+                   strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
+              </svg>
+            </RoundIconButton>
+          )}
           <RoundIconButton isDark={isDark} size={34} label="Fermer" onClick={onClose}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -322,79 +346,55 @@ export function SessionFormModal({
 
           {discipline && (
             <>
-              {/* ── Mesures ── */}
-              <div style={{ marginTop: 20 }}>
-                {kind ? (
-                  <>
-                    {label("Temps · distance · " + (kind === "pace" ? "allure" : "vitesse"))}
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {cell("duration", "Temps", "", "45:00")}
-                      {cell("distance", "Distance", "km", "8.5")}
-                      {kind === "pace"
-                        ? cell("rate", "Allure", "/km", "5:30")
-                        : cell("rate", "Vitesse", "km/h", "26")}
-                    </div>
-                    <div style={{ fontSize: 11, color: c.textDim, marginTop: 6, textAlign: "center" }}>
-                      Renseignes-en deux, le troisième se calcule.
-                    </div>
+              {/* ── Mesures (séance) ─────────────────────────────────────
+                   Une échéance n'en a pas : lui donner une heure de départ et
+                   une durée n'a pas de sens quand elle s'étale sur deux jours.
+                   Elle porte ses dates, sa couleur, sa charge et sa note. */}
+              {!isEvent && (
+                <div style={{ marginTop: 20 }}>
+                  {kind ? (
+                    <>
+                      {label("Temps · distance · " + (kind === "pace" ? "allure" : "vitesse"))}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {cell("duration", "Temps", "", "45:00")}
+                        {cell("distance", "Distance", "km", "8.5")}
+                        {kind === "pace"
+                          ? cell("rate", "Allure", "/km", "5:30")
+                          : cell("rate", "Vitesse", "km/h", "26")}
+                      </div>
+                      <div style={{ fontSize: 11, color: c.textDim, marginTop: 6, textAlign: "center" }}>
+                        Renseignes-en deux, le troisième se calcule.
+                      </div>
 
-                    <div style={{ marginTop: 16 }}>
-                      {label("Dénivelé positif")}
+                      <div style={{ marginTop: 16 }}>
+                        {label("Dénivelé positif")}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <input
+                            inputMode="numeric"
+                            value={elevation}
+                            onChange={e => setElevation(e.target.value.replace(/[^\d]/g, ""))}
+                            placeholder="350"
+                            style={{ ...fieldStyle(false), textAlign: "left", flex: 1 }}
+                          />
+                          <span style={{ fontSize: 13, color: c.textMuted, flexShrink: 0 }}>m · facultatif</span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {label("Temps de séance")}
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <input
                           inputMode="numeric"
-                          value={elevation}
-                          onChange={e => setElevation(e.target.value.replace(/[^\d]/g, ""))}
-                          placeholder="350"
+                          value={duration}
+                          onChange={e => setDuration(sanitizeClockInput(e.target.value))}
+                          placeholder="90"
                           style={{ ...fieldStyle(false), textAlign: "left", flex: 1 }}
                         />
-                        <span style={{ fontSize: 13, color: c.textMuted, flexShrink: 0 }}>m · facultatif</span>
+                        <span style={{ fontSize: 13, color: c.textMuted, flexShrink: 0 }}>minutes</span>
                       </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {label("Temps de séance")}
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <input
-                        inputMode="numeric"
-                        value={duration}
-                        onChange={e => setDuration(sanitizeClockInput(e.target.value))}
-                        placeholder="90"
-                        style={{ ...fieldStyle(false), textAlign: "left", flex: 1 }}
-                      />
-                      <span style={{ fontSize: 13, color: c.textMuted, flexShrink: 0 }}>minutes</span>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* ── Charge (sauf événement : un événement ne porte pas de charge) ── */}
-              {!isEvent && (
-                <div style={{ marginTop: 20 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                    <div style={{ flex: 1 }}>{label("Charge")}</div>
-                    <span style={{ font: `800 20px ${MONO}`, color: getChargeColor(charge, isDark), lineHeight: 1 }}>
-                      {charge}<span style={{ fontSize: 12, opacity: 0.5 }}>/10</span>
-                    </span>
-                    {isClimbing && (
-                      <RoundIconButton isDark={isDark} size={30} label="Calculateur de charge"
-                                       onClick={() => setCalcOpen(true)}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="4" y="2" width="16" height="20" rx="2" />
-                          <path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15v4M8 19h4" />
-                        </svg>
-                      </RoundIconButton>
-                    )}
-                  </div>
-                  <input
-                    type="range" min="0" max="10" step="1"
-                    value={charge}
-                    onChange={e => setCharge(Number(e.target.value))}
-                    aria-label="Charge"
-                    style={{ width: "100%", accentColor: getChargeColor(charge, isDark), cursor: "pointer" }}
-                  />
+                    </>
+                  )}
                 </div>
               )}
 
@@ -422,7 +422,10 @@ export function SessionFormModal({
                   <div style={{ marginTop: 16 }}>
                     {label("Couleur")}
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {EVENT_COLORS.map(col => (
+                      {/* Une échéance importée ou plus ancienne peut porter une
+                          couleur hors palette : on l'ajoute plutôt que de la
+                          laisser sans pastille sélectionnée. */}
+                      {(EVENT_COLORS.includes(color) ? EVENT_COLORS : [color, ...EVENT_COLORS]).map(col => (
                         <button
                           key={col}
                           onClick={() => setColor(col)}
@@ -438,6 +441,37 @@ export function SessionFormModal({
                   </div>
                 </div>
               )}
+
+              {/* ── Charge ── */}
+              <div style={{ marginTop: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <div style={{ flex: 1 }}>{label("Charge")}</div>
+                  <span style={{ font: `800 20px ${MONO}`, color: getChargeColor(charge, isDark), lineHeight: 1 }}>
+                    {charge}<span style={{ fontSize: 12, opacity: 0.5 }}>/10</span>
+                  </span>
+                  {isClimbing && !isEvent && (
+                    <RoundIconButton isDark={isDark} size={30} label="Calculateur de charge"
+                                     onClick={() => setCalcOpen(true)}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="4" y="2" width="16" height="20" rx="2" />
+                        <path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15v4M8 19h4" />
+                      </svg>
+                    </RoundIconButton>
+                  )}
+                </div>
+                {/* Ce que le chiffre veut dire, en toutes lettres (échelle CR-10). */}
+                <div style={{ fontSize: 13, color: getChargeColor(charge, isDark), marginBottom: 8, fontWeight: 600 }}>
+                  {chargeLabel(charge)}
+                </div>
+                <input
+                  type="range" min="0" max="10" step="1"
+                  value={charge}
+                  onChange={e => setCharge(Number(e.target.value))}
+                  aria-label="Charge"
+                  style={{ width: "100%", accentColor: getChargeColor(charge, isDark), cursor: "pointer" }}
+                />
+              </div>
 
               {/* ── Notes ── */}
               <div style={{ marginTop: 20 }}>
@@ -475,7 +509,7 @@ export function SessionFormModal({
             onClick={handleSave}
             style={{ width: "auto", padding: "0 24px", opacity: canSave ? 1 : 0.45 }}
           >
-            {submitLabel}
+            {isEvent ? (eventSubmitLabel || submitLabel) : submitLabel}
           </PrimaryButton>
         </div>
       </Modal>
@@ -485,6 +519,18 @@ export function SessionFormModal({
           sessions={library}
           onPick={loadFromLibrary}
           onClose={() => setLibraryOpen(false)}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Supprimer ?"
+          sub={`« ${name.trim() || "Sans nom"} » sera retirée du calendrier.`}
+          confirmLabel="Supprimer"
+          cancelLabel="Annuler"
+          danger
+          onConfirm={() => onDelete()}
+          onClose={() => setConfirmDelete(false)}
         />
       )}
 

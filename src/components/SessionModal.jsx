@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { DAYS, getMesoColor } from "../lib/constants.js";
-import { getChargeColor, normalizeCharge10, RPE_LABELS } from "../lib/charge.js";
+import { getChargeColor, normalizeCharge10, chargeLabel } from "../lib/charge.js";
 import { getMondayOf, addDays, weekKey } from "../lib/helpers.js";
 import { RichText } from "./RichText.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
@@ -419,10 +419,12 @@ export function SessionModal({
                       style={{ width: "100%", accentColor: feltColor, cursor: "pointer" }}
                     />
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: textLight, marginTop: 2 }}>
-                      <span>1 · facile</span><span>5 · difficile</span><span>10 · max</span>
+                      <span>1 · rien</span><span>5 · assez difficile</span><span>10 · maximal</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, gap: 8 }}>
-                      <span style={{ fontSize: 11, color: textLight, fontStyle: "italic" }}>{rpe ? RPE_LABELS[rpe] : ""}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: feltColor }}>
+                        {chargeLabel(rpe ?? plannedCharge ?? 5)}
+                      </span>
                       {deltaText && (
                         <span style={{ fontSize: 11, fontWeight: 600, color: deltaColor, flexShrink: 0 }}>{deltaText}</span>
                       )}

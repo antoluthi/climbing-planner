@@ -84,18 +84,26 @@ export function getZoneColor(index, isDark = true) {
 }
 
 // Libellés Borg CR-10 — partagés entre le feedback athlète et les aides.
+// Échelle RPE Borg CR-10, telle qu'elle est lue par l'utilisateur au moment de
+// régler la charge. Volontairement courte : elle s'affiche à côté du chiffre.
 export const RPE_LABELS = {
-  1: "Très facile — récupération.",
-  2: "Facile — échauffement.",
-  3: "Modéré — confortable.",
-  4: "Un peu difficile.",
-  5: "Difficile.",
-  6: "Difficile, soutenu.",
-  7: "Difficile mais soutenable.",
-  8: "Très difficile.",
-  9: "Maximal — limite.",
-  10: "Maximum absolu.",
+  0:  "Repos",
+  1:  "Rien",
+  2:  "Très facile",
+  3:  "Facile",
+  4:  "Confortable",
+  5:  "Assez difficile",
+  6:  "Difficile",
+  7:  "Dur",
+  8:  "Très dur",
+  9:  "Extrêmement dur",
+  10: "Maximal — épuisement",
 };
+
+export function chargeLabel(charge) {
+  const n = Math.max(0, Math.min(10, Math.round(charge || 0)));
+  return RPE_LABELS[n];
+}
 
 // Couleurs calibrées pour l'échelle 0-10 (séance) et les totaux journaliers
 // (somme de séances, typiquement 0-20) : 0 repos · ≤3 léger · ≤6 modéré ·
