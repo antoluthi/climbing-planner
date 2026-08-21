@@ -41,6 +41,7 @@ import { AccueilView } from "../components/AccueilView.jsx";
 import { DayListView } from "../components/DayListView.jsx";
 import { QuickSessionModal } from "../components/QuickSessionModal.jsx";
 import { ToastContainer } from "../components/ToastContainer.jsx";
+import { UpdateBanner } from "../components/UpdateBanner.jsx";
 import { Caillou } from "../components/Caillou.jsx";
 import { BottomNav } from "../components/BottomNav.jsx";
 import { toast } from "../lib/toast.js";
@@ -1326,6 +1327,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
       )}
 
       <ToastContainer isMobile={isMobile} />
+      <UpdateBanner isMobile={isMobile} />
     </div>
     </ThemeContext.Provider>
   );

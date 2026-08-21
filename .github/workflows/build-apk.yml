@@ -13,7 +13,10 @@ on:
   push:
     branches:
       - master
-      - claude/apk-application-audit-4klr69
+      - 'claude/**' # toute branche de travail produit son APK de test
+    paths-ignore:
+      - '**.md' # un commit de doc seul ne justifie pas un build Android
+  workflow_dispatch: # build à la demande depuis l'onglet Actions
 
 permissions:
   contents: write # nécessaire pour publier la release
@@ -48,6 +51,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # versionCode = numéro de run, strictement croissant : Android sait
+      # distinguer deux APK et refuse un retour en arrière. Le versionName
+      # sert aussi de version affichée dans l'app (pied du profil).
+      - name: Calculer la version
+        run: |
+          echo "APK_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "APK_VERSION_NAME=1.0.${{ github.run_number }}" >> "$GITHUB_ENV"
+
       # Build web en mode capacitor (service worker PWA désactivé — il est
       # inutile dans la WebView et risque de servir des assets périmés après
       # une mise à jour de l'app) + sync du projet android/.
@@ -57,19 +68,68 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
+      # Signature release : sans le keystore en secret, on construit un APK
+      # debug — dont la clé est régénérée à chaque run, donc une mise à jour ne
+      # s'installe pas par-dessus la précédente. Voir ACTIONS-A-FAIRE.md.
+      - name: Préparer le keystore de signature
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "APK signé avec la clé de release."
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Aucun secret ANDROID_KEYSTORE_BASE64 — APK debug, signature non stable entre builds."
+          fi
+
       - name: Build APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          if [ "${{ steps.keystore.outputs.signed }}" = "true" ]; then
+            ./gradlew assembleRelease
+            BUILT=app/build/outputs/apk/release/app-release.apk
+          else
+            ./gradlew assembleDebug
+            BUILT=app/build/outputs/apk/debug/app-debug.apk
+          fi
+          # Nom d'asset stable : le lien de téléchargement reste valable d'une
+          # version à l'autre (l'asset est écrasé), et il ne s'en accumule pas
+          # un par build. La version, elle, vit dans le titre de la release —
+          # c'est ce que l'app interroge (src/lib/update-check.js).
+          cp "$BUILT" "$RUNNER_TEMP/climbing-planner.apk"
+          echo "APK_PATH=$RUNNER_TEMP/climbing-planner.apk" >> "$GITHUB_ENV"
 
+      # Tout build (y compris branche de travail) est téléchargeable depuis la
+      # page du run — sans toucher à l'APK que les utilisateurs installent.
+      - name: Publier l'APK en artefact de run
+        uses: actions/upload-artifact@v4
+        with:
+          name: climbing-planner-${{ env.APK_VERSION_NAME }}
+          path: ${{ env.APK_PATH }}
+          if-no-files-found: error
+
+      # La release `latest-apk` est le lien d'installation permanent : seul
+      # master l'écrase, sinon une branche en cours remplacerait l'app
+      # installée par les utilisateurs.
       - name: Upload APK to release
+        if: github.ref == 'refs/heads/master'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-apk
-          name: "Climbing Planner — dernière version"
-          body: "APK (debug) généré automatiquement depuis le dernier commit."
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          # Le titre porte la version : c'est la source de vérité lue par
+          # l'app pour détecter qu'une mise à jour existe. Format imposé.
+          name: "Climbing Planner ${{ env.APK_VERSION_NAME }}"
+          body: "Version ${{ env.APK_VERSION_NAME }} — générée automatiquement depuis le dernier commit de master."
+          files: ${{ env.APK_PATH }}
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

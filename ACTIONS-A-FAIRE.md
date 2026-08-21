@@ -1,166 +1,176 @@
-# ✅ Actions à faire de ton côté
+# Actions à faire de ton côté
 
-État au 15 juillet 2026. Tout le code des deux dernières semaines vit sur la
-branche **`claude/apk-application-audit-4klr69`** (correctifs APK, charge
-unifiée 0-10, rôles robustes, invitations coach-athlète + cloche de
-notifications). Rien n'est encore mergé sur `master`, et **aucune migration
-Supabase récente n'est appliquée**. Voici tout ce qui t'attend, dans l'ordre.
+**État au 20 août 2026** — vérifié en direct contre Supabase, Vercel et GitHub
+Actions, pas déduit du code.
 
----
-
-## 1 · Migrations Supabase (~10 min) — À FAIRE EN PREMIER
-
-Dans **Supabase Dashboard → SQL Editor**, colle et exécute chaque fichier de
-`supabase/migrations/` **dans cet ordre**. Tous les scripts sont idempotents :
-les relancer ne casse rien, même si une partie était déjà passée.
-
-| Ordre | Fichier | Ce que ça active | Sans elle |
-|---|---|---|---|
-| 1 | `20260331_realtime_climbing_plans.sql` | Sync temps réel entre appareils/onglets | Risque d'écrasements de données entre ton téléphone et ton PC |
-| 2 | `20260512_avatars_bucket.sql` | Bucket Storage `avatars` (photos de profil) | Upload d'avatar échoue silencieusement |
-| 3 | `20260513_shared_sessions_catalog.sql` | Bibliothèque de séances commune | Chacun ne voit que ses propres séances de catalogue |
-| 4 | `20260517_public_profiles.sql` | Colonne `is_public` + plannings publics | Le bouton « Voir un planning public » de l'écran de connexion renvoie une erreur |
-| 5 | `20260715_notifications_coach_invites.sql` | **Cloche 🔔, invitations coach-athlète, RPC get_my_coaches** | Les invitations affichent une erreur ; **plus aucun moyen d'ajouter un athlète** (l'ancien ajout direct a été retiré, et c'était une faille : n'importe qui pouvait s'auto-déclarer coach de n'importe qui) |
-
-**Vérification rapide après coup** (SQL Editor) :
-```sql
-select count(*) from notifications;                          -- doit répondre 0 (pas d'erreur)
-select * from pg_policies where tablename = 'coach_athletes'; -- 3 policies : accepts/read/delete
-select * from get_my_coaches();                               -- doit répondre (vide)
-```
-
-> ⚠️ La migration 5 change les règles `coach_athletes` : les liens
-> coach-athlète **existants sont conservés**, mais tout nouveau lien passe
-> obligatoirement par invitation + acceptation de l'athlète.
+La version précédente de ce fichier (15 juillet) affirmait que rien n'était
+mergé et qu'aucune migration n'était appliquée : c'est faux depuis le 16
+juillet. Tout est passé. Ce qui suit est l'état réel.
 
 ---
 
-## 2 · Supabase Auth — redirect APK (2 min)
+## ✅ Déjà fait — ne rien refaire
 
-**Dashboard → Authentication → URL Configuration → Redirect URLs**, ajouter :
-
-```
-com.climbingplanner.app://auth-callback
-```
-
-Sans ça, le **magic link ne fonctionne pas dans l'APK Android** (le lien
-retomberait sur le site web au lieu d'ouvrir l'app). Le login par mot de passe
-marche dans tous les cas.
-
----
-
-## 3 · Merger la branche sur `master` (déploiement Vercel auto)
-
-La branche `claude/apk-application-audit-4klr69` contient ~6 gros commits :
-
-1. `AUDIT-APK.md` + merge de la branche APK (`apk-app-branch-on2lag`)
-2. Correctifs audit APK (deep link auth, bouton retour Android, service worker,
-   flush de sauvegarde, Hooper partiel, steppers poids, modales, polices
-   auto-hébergées, code-splitting…)
-3. Icônes launcher + splash Android aux couleurs de l'app
-4. **Charge unifiée 0-10** (toutes disciplines, slider de feedback pré-rempli,
-   migration automatique des données v5)
-5. **Rôles robustes + invitations par consentement + cloche de notifications**
-
-À faire : ouvrir une PR `claude/apk-application-audit-4klr69 → master` (ou
-merger directement). **Applique les migrations (étape 1) avant ou juste après
-le merge** — l'app tolère leur absence avec des messages d'erreur propres,
-mais les invitations coach et la cloche ne marcheront pas sans la n°5.
-
-> Note : cette branche inclut le contenu de `claude/apk-app-branch-on2lag`
-> (ta branche APK d'origine) — plus besoin de la merger séparément.
+| Action | Vérification |
+|---|---|
+| **Les 5 migrations Supabase** | Table `notifications` répond `200 []` (une table absente renvoie `PGRST205/404` — contrôle négatif effectué) · colonne `climbing_plans.is_public` présente · RPC `get_my_coaches` présente · bucket Storage `avatars` présent (`NoSuchKey`, pas `NoSuchBucket`) |
+| **Redirect URL de l'APK dans Supabase Auth** | `/auth/v1/verify` avec `redirect_to=com.climbingplanner.app://auth-callback` renvoie un `303` **vers le scheme** ; une URL non autorisée retombe sur le site web. Le magic link fonctionne donc dans l'APK. |
+| **Merge sur `master` + déploiement Vercel** | `master` = `b7eb14e` ; le bundle en production contient bien le dernier commit (anti-fuite de données entre comptes, flux « Créer un compte ») |
+| **`SUPABASE_SERVICE_ROLE_KEY` sur Vercel** | `/api/calendar/<uuid>.ics` renvoie `404 Calendar not found`, pas le `503 Server misconfigured` du chemin « clé absente » → CalDAV/iCal opérationnels |
+| **Secrets GitHub `VITE_SUPABASE_*`** | Le build APK #8 est en succès — le workflow échoue volontairement si les secrets manquent |
+| **Vue publique** | Un profil est bien `is_public = true` et lisible en anonyme |
 
 ---
 
-## 4 · Vercel — variable d'environnement (si pas déjà fait)
+## 1 · Keystore de signature — la vraie action restante (~10 min, une fois)
 
-**Vercel Dashboard → Settings → Environment Variables** :
+**Pourquoi c'est le sujet n°1** : tu partages l'APK à d'autres personnes, et sans
+keystore la CI construit en `assembleDebug`. Le keystore de debug n'est pas
+versionné — Gradle en régénère un sur le runner GitHub, donc **la signature
+change d'un build à l'autre** (vérifié : trois builds, trois certificats
+différents). Android refuse d'installer une mise à jour signée par une autre
+clé : « application non installée », et il faut désinstaller (donc se
+reconnecter) avant de réinstaller.
 
+Le code est déjà câblé côté `android/app/build.gradle` et CI : il ne s'active
+qu'à la présence des secrets ci-dessous. Sans eux, la CI produit exactement
+l'APK debug d'avant — rien n'est bloqué.
+
+> **Ordre à respecter** : crée le keystore **avant** d'installer le prochain APK.
+> Sinon tu désinstalles deux fois (une pour l'APK debug, une pour le signé).
+
+### Sur ton PC (Windows / PowerShell)
+
+Android Studio n'est **pas** nécessaire — seul `keytool` l'est, livré avec
+n'importe quel JDK.
+
+```powershell
+# 1. Java, une fois. FERME ET ROUVRE PowerShell ensuite, sinon keytool
+#    restera « non reconnu » (PowerShell ne relit le PATH qu'au démarrage).
+winget install Microsoft.OpenJDK.21
+
+# 2. retrouver keytool (PATH, sinon chemin direct du JDK)
+$kt = (Get-Command keytool -ErrorAction SilentlyContinue).Source
+if (-not $kt) { $kt = (Get-ChildItem "C:\Program Files\Microsoft\jdk-*\bin\keytool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }
+$kt   # doit afficher un chemin
+
+# 3. générer la clé (une seule ligne)
+& $kt -genkeypair -v -keystore "$HOME\climbing-planner.jks" -alias climbing-planner -keyalg RSA -keysize 2048 -validity 10000
+
+# 4. copier la clé encodée dans le presse-papier
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\climbing-planner.jks")) | Set-Clipboard
 ```
-SUPABASE_SERVICE_ROLE_KEY = <service role key Supabase>
-```
 
-Uniquement nécessaire pour les endpoints calendrier `/api/caldav/*` et
-`/api/calendar/*` (sync CalDAV/iCal). Sans elle ils répondent 503 — le reste
-de l'app n'est pas affecté.
+À l'étape 3, `keytool` demande :
+- un **mot de passe** que tu choisis (6 caractères minimum, redemandé une 2e
+  fois) — **rien ne s'affiche pendant la frappe**, c'est normal ;
+- nom / unité / ville / région / pays → **Entrée** partout pour laisser vide ;
+- confirmation → `yes` ;
+- « mot de passe de la clé » → **Entrée** pour reprendre le même.
+
+⚠️ **Sauvegarde `climbing-planner.jks` hors du PC** (OneDrive, clé USB) et garde
+le mot de passe. Keystore perdu = plus aucune mise à jour installable pour les
+gens qui ont déjà l'app ; il faudrait leur faire désinstaller/réinstaller.
+Ne le commite jamais dans le repo.
+
+### Les 4 secrets GitHub
+
+<https://github.com/antoluthi/climbing-planner/settings/secrets/actions> →
+« New repository secret », quatre fois :
+
+| Name | Secret |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | Ctrl+V (le presse-papier de l'étape 4) |
+| `ANDROID_KEYSTORE_PASSWORD` | le mot de passe choisi |
+| `ANDROID_KEY_ALIAS` | `climbing-planner` |
+| `ANDROID_KEY_PASSWORD` | le même mot de passe (si Entrée à l'étape 3) |
+
+Au build suivant, l'étape « Préparer le keystore de signature » doit afficher
+« APK signé avec la clé de release » au lieu d'un avertissement.
 
 ---
 
-## 5 · Test à deux comptes (10 min, après merge + migrations)
+## 2 · Test coach-athlète à deux comptes (~10 min)
 
-Le flux coach-athlète n'a pas pu être testé de bout en bout (il faut deux
-vrais comptes). Checklist :
+Jamais validé de bout en bout, et le dernier commit a modifié le comportement au
+premier login.
 
-- [ ] **Compte coach** : Profil → « Inviter un athlète » → chercher → **Inviter**
-      → l'état passe à « Invitation en attente… »
-- [ ] **Compte athlète** : la cloche 🔔 affiche un badge → ouvrir → « X souhaite
-      devenir ton coach » → **Accepter**
-- [ ] **Coach** : notification « Y a accepté ton invitation », Y apparaît dans
-      « Mes athlètes » (temps réel, sans recharger)
-- [ ] **Coach** : « Voir » l'athlète → vérifier que tu peux **modifier ses
-      cycles** et ouvrir **ta bibliothèque** pendant la vue athlète (c'était le
-      bug n°1, corrigé)
-- [ ] **Coach** : modifier une séance de l'athlète → « Retour à ma vue » →
-      **l'athlète reçoit** « X a mis à jour ton planning — semaine du … »
-- [ ] **Athlète** : Profil → section « Mon coach » visible, bouton « Quitter »
-- [ ] Se déconnecter/reconnecter sur chaque compte : pas de re-demande de rôle
+- [ ] **Coach** : Profil → Inviter un athlète → chercher → **Inviter** → l'état
+      passe à « Invitation en attente… »
+- [ ] **Athlète** : badge sur la cloche 🔔 → ouvrir → **Accepter**
+- [ ] **Coach** : l'athlète apparaît dans « Mes athlètes » **sans recharger**
+- [ ] **Coach** : « Voir » l'athlète → modifier ses cycles et ouvrir ta
+      bibliothèque **pendant** la vue athlète
+- [ ] **Coach** : modifier une séance → « Retour à ma vue » → l'athlète reçoit
+      « … a mis à jour ton planning »
+- [ ] **Athlète** : Profil → section « Mon coach » + bouton « Quitter »
 
-**À savoir** : les comptes existants qui étaient « athlète solo » (statut NULL
-en base) reverront **une fois** l'écran de choix de rôle — c'est voulu, le
-choix est maintenant stocké explicitement (`'solo'`) pour fiabiliser
-l'onboarding.
+**Le point le plus important** : créer un **nouveau compte par mot de passe**
+depuis un navigateur qui a déjà servi à un autre compte. Il doit démarrer
+**vierge** — sans hériter du nom, de l'avatar ni du planning du compte
+précédent. C'est le bug corrigé par le dernier commit, jamais re-testé depuis.
 
 ---
 
-## 6 · APK Android — CI GitHub Actions + secrets (5 min)
+## 3 · Décisions produit (sans urgence)
 
-Le workflow `.github/workflows/build-apk.yml` (repris de ton autre session,
-**corrigé** : build en mode capacitor sans service worker + injection des
-variables Supabase) publie un APK à chaque push sur `master` ou la branche
-d'audit, téléchargeable en permanence sur la release GitHub `latest-apk`.
+- **Nom de l'app** : « Climbing Planner » côté Android, « Planif » côté PWA.
+  À unifier ?
+- **Orientation** : le manifeste PWA impose `portrait`, l'APK tourne librement
+  (aucun `screenOrientation` sur l'activité). Verrouiller ou assumer ?
+- **Notifications push** : la cloche est purement in-app — rien ne s'affiche
+  quand l'app est fermée. Du vrai push demanderait un projet Firebase +
+  `google-services.json` + `@capacitor/push-notifications`.
 
-**À faire une fois** — GitHub → Settings → Secrets and variables → Actions :
+---
 
-```
-VITE_SUPABASE_URL       = https://zkoiykpiymvwioihnhhp.supabase.co
-VITE_SUPABASE_ANON_KEY  = <clé anon>
-```
+## 4 · Comment mettre à jour l'app
 
-Sans ces secrets, le workflow échoue volontairement (sinon l'APK serait
-compilé sans accès Supabase et démarrerait muet, en mode hors-ligne).
+**Le site web se met à jour tout seul.** Push sur `master` → Vercel redéploie →
+tu recharges la page. Rien à faire.
 
-**En local** (émulateur / téléphone branché) :
+**L'APK, non.** Il embarque ses propres fichiers web : un changement de code ne
+l'atteint qu'en installant un nouvel APK. La CI en construit un à chaque push
+sur `master` et met à jour la release. Sur le téléphone :
+
+1. l'app affiche « Version X disponible » avec un bouton **Télécharger**
+   (elle interroge la release au démarrage) ;
+2. sinon, lien permanent :
+   <https://github.com/antoluthi/climbing-planner/releases/tag/latest-apk>
+3. ouvrir le fichier téléchargé → installer par-dessus.
+
+⚠️ **Tant que le keystore de l'étape 1 n'existe pas**, l'étape 3 échoue
+(« application non installée ») : chaque build CI est signé par une clé
+différente. Il faut désinstaller l'app puis réinstaller, et te reconnecter. Tes
+données sont dans Supabase, rien n'est perdu.
+
+⚠️ **Au passage à la clé de release**, une **dernière** désinstallation sera
+nécessaire — pour toi et pour les personnes ayant déjà l'app. Ensuite les mises
+à jour s'installent par-dessus, normalement.
+
+Les personnes qui installent doivent autoriser les « sources inconnues » sur
+leur téléphone. La version installée est affichée **en bas de l'onglet Profil** —
+demande-la quand quelqu'un te remonte un bug.
+
+Les builds de branches de travail ne remplacent **pas** la release : ils sont
+téléchargeables depuis la page du run GitHub Actions correspondant.
+
+**En local** (téléphone branché ou émulateur) :
 
 ```bash
-# ⚠️ .env.local doit exister AVANT le build (la clé Supabase est intégrée au bundle)
-./run-android.sh    # one-shot : émulateur + build + install + lancement
-# ou à la main :
-npm run cap:sync    # build web (sans service worker) + sync android/
-npm run cap:open    # ouvre Android Studio → Run sur ton téléphone
+./run-android.sh    # one-shot : build + install + lancement
+# ou : npm run cap:sync puis npm run cap:open (Android Studio)
 ```
 
-> ⚠️ La branche `claude/APK-APP` est **remplacée** par
-> `claude/apk-application-audit-4klr69` (qui contient tout son contenu + les
-> correctifs). Ne merge pas `claude/APK-APP` séparément : son workflow et son
-> package-lock sont des versions antérieures et créeraient des conflits.
-
-À vérifier sur l'appareil : icône calendrier verte + splash sombre, bouton
-retour (ferme les modales, ne quitte plus l'app), magic link (après l'étape 2),
-barres système qui suivent le thème.
-
-**Plus tard, pour distribuer** : configurer la signature release dans Android
-Studio (Build → Generate Signed App Bundle/APK) — garde précieusement le
-keystore. `versionCode`/`versionName` dans `android/app/build.gradle`.
+⚠️ `.env.local` doit exister **avant** le build : la clé Supabase est intégrée
+au bundle, sinon l'app démarre muette en mode hors-ligne.
 
 ---
 
-## 7 · Automatique — rien à faire, juste à savoir
+## 5 · Automatique — juste à savoir
 
-- **Migration des données v5 (charge 0-10)** : se fait toute seule au premier
-  chargement sur chaque appareil (anciennes charges escalade ÷ 4,8, feedbacks
-  « charge adaptée » convertis en ressenti). Le catalogue coach en base est
-  normalisé à la volée à l'affichage.
-- **Entrées Hooper partielles** existantes : nettoyées automatiquement
-  (exclues des stats tant que les 4 critères ne sont pas remplis).
-- `CLAUDE.md` documente tout (système de charge, rôles, notifications) — mets
-  à jour les statuts ⏳/✅ de la table des migrations quand tu les as passées.
+- **Migration des données v5 (charge 0-10)** : se fait seule au premier
+  chargement sur chaque appareil.
+- **Entrées Hooper partielles** : nettoyées automatiquement.
+- **versionCode / versionName** : dérivés du numéro de run GitHub (`1.0.<run>`),
+  plus rien à incrémenter à la main.

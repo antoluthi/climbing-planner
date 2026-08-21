@@ -1,12 +1,34 @@
+import process from 'node:process'
+import { execSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+
+// Version affichée dans l'app (pied du profil) : en CI c'est APK_VERSION_NAME
+// (= 1.0.<numéro de run>, identique au versionName de l'APK) ; en local ou sur
+// Vercel on retombe sur le SHA court du commit buildé.
+function appVersion() {
+  if (process.env.APK_VERSION_NAME) return process.env.APK_VERSION_NAME
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim()
+  } catch {
+    return 'dev'
+  }
+}
 
 // Le build APK utilise `vite build --mode capacitor` (script cap:sync) :
 // le service worker PWA y est désactivé — dans la WebView Capacitor il est
 // inutile (assets locaux) et risque de servir des assets périmés après une
 // mise à jour de l'app.
 export default defineConfig(({ mode }) => ({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion()),
+    // 0 hors CI (build local ou web) : aucune comparaison de version possible,
+    // la vérification de mise à jour se désactive d'elle-même.
+    __APP_VERSION_CODE__: JSON.stringify(Number(process.env.APK_VERSION_CODE) || 0),
+  },
   plugins: [
     react(),
     VitePWA({

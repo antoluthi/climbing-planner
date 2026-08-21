@@ -7,6 +7,7 @@ import { CalendarSyncSection } from "./CalendarSyncSection.jsx";
 import { DayNightToggle } from "./DayNightToggle.jsx";
 import supabase from "../lib/supabase.js";
 import { uploadAvatar, deleteAvatar } from "../lib/avatar-storage.js";
+import { isNative } from "../lib/native.js";
 import { toast } from "../lib/toast.js";
 
 // ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
@@ -419,6 +420,13 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
           styles={styles}
         />
       )}
+
+      {/* ── Version installée ──
+          L'APK est distribué hors store : sans ça, impossible de savoir sur
+          quelle build tourne quelqu'un qui remonte un bug. */}
+      <div style={{ textAlign: "center", fontSize: 10, color: mutedColor, opacity: 0.7, marginTop: 24 }}>
+        Version {__APP_VERSION__}{isNative ? " · Android" : ""}
+      </div>
 
       {showCrop && <PhotoCropModal onSave={handleSavePhoto} onClose={() => setShowCrop(false)} />}
     </div>
