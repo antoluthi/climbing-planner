@@ -27,14 +27,14 @@ const DEFAULT_DATA = {
   quickSessions: [], reminders: [], reminderState: {}, schemaVersion: 3,
 };
 
-// ─── Migration schemaVersion 2 → 3 → 4 → 5 ───────────────────────────────────
+// ─── Migration schemaVersion 2 → 3 → 4 → 5 → 6 ───────────────────────────────
 // v2 : discipline / mode / chargePlanned sur sessions et quickSessions.
 // v3 : data.reminders / data.reminderState (+ rapatrie l'ancien data.creatine).
 // v4 : entrées Hooper partielles → total null (sinon stats faussées).
 // v5 : échelle de charge unifiée 0-10 — les charges escalade legacy
 //      (vol×int×compl, 0-216) des séances ET de leurs blocs sont ramenées
 //      sur 0-10 ; les feedbacks "adaptedCharge" legacy deviennent un rpe.
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
@@ -47,11 +47,27 @@ function normalizeCharge(legacyCharge) {
 }
 
 function inferSessionMode(s) {
-  if (s.mode) return s.mode;
   if (s.endDate || s.isObjective || s.isQuick) return "event";
-  if (Array.isArray(s.blocks) && s.blocks.length > 0) return "detailed";
-  if ((s.warmup || s.main || s.cooldown)?.toString().trim()) return "simple";
-  return "detailed";
+  return "simple";
+}
+
+// v6 : les blocs disparaissent. Leur contenu n'est pas jeté pour autant — il
+// est replié dans les notes de la séance, seul endroit qui le montre encore.
+function foldBlocksIntoNotes(out) {
+  if (!Array.isArray(out.blocks) || out.blocks.length === 0) {
+    delete out.blocks;
+    return out;
+  }
+  const lines = out.blocks.map(b => {
+    const head = [b.blockType || b.type, b.name].filter(Boolean).join(" — ");
+    const meta = [b.duration ? `${b.duration} min` : null].filter(Boolean).join(" · ");
+    const desc = b.description?.toString().trim();
+    return [head, meta && `(${meta})`, desc && `\n${desc}`].filter(Boolean).join(" ");
+  });
+  const folded = lines.join("\n");
+  out.notes = [out.notes, folded].filter(t => t && t.toString().trim()).join("\n\n");
+  delete out.blocks;
+  return out;
 }
 
 function migrateSession(s) {
@@ -70,19 +86,14 @@ function migrateSession(s) {
     out.charge = normalizeCharge(out.charge);
     out.chargePlanned = out.charge;
   }
-  if (Array.isArray(out.blocks)) {
-    out.blocks = out.blocks.map(b =>
-      b && Number(b.charge) > 10 ? { ...b, charge: normalizeCharge(b.charge) } : b
-    );
-  }
   if (out.feedback && out.feedback.rpe == null && out.feedback.adaptedCharge != null) {
     out.feedback = { ...out.feedback, rpe: normalizeCharge(out.feedback.adaptedCharge) };
   }
-  // En mode 'simple' historique : concatène warmup/main/cooldown dans notes.
-  if (mode === "simple" && !out.notes && (s.warmup || s.main || s.cooldown)) {
+  // Historique : concatène warmup/main/cooldown dans les notes.
+  if (!out.notes && (s.warmup || s.main || s.cooldown)) {
     out.notes = [s.warmup, s.main, s.cooldown].filter(Boolean).join("\n\n").trim();
   }
-  return out;
+  return foldBlocksIntoNotes(out);
 }
 
 // ── Migration v3 : reminders/reminderState + créatine héritée ──

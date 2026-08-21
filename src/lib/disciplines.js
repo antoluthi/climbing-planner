@@ -1,8 +1,8 @@
 import { DATA } from "../theme/palette.js";
 // ─── DISCIPLINES ──────────────────────────────────────────────────────────────
 // Catalogue des disciplines supportées par le composer unifié.
-// Chaque discipline définit ses types de blocs, son calculateur de charge,
-// ses métriques optionnelles et son mode par défaut.
+// Chaque discipline définit son calculateur de charge, ses métriques et sa
+// couleur — celle qui teinte badges et pastilles dans toute l'app.
 
 export const DISCIPLINES = {
   climbing: {
@@ -10,10 +10,8 @@ export const DISCIPLINES = {
     label: "Escalade",
     color: DATA.sports.climbing,
     iconId: "climbing",
-    blockTypes: ["Échauffement", "Grimpe", "Suspension", "Exercices", "Étirements", "Retour au calme"],
     chargeCalculator: "climbing-volume",
     metrics: [],
-    defaultMode: "detailed",
     hasMinRecovery: true,
   },
   running: {
@@ -21,60 +19,48 @@ export const DISCIPLINES = {
     label: "Course",
     color: DATA.sports.running,
     iconId: "running",
-    blockTypes: ["Échauffement", "Footing", "Fractionné", "Côtes", "Sortie longue", "Récup"],
     chargeCalculator: "rpe-duration",
     metrics: ["distanceKm", "runDuration", "pace", "elevationM"],
-    defaultMode: "simple",
   },
   cycling: {
     id: "cycling",
     label: "Vélo",
     color: DATA.sports.cycling,
     iconId: "cycling",
-    blockTypes: ["Échauffement", "Z2", "Tempo", "Seuil", "VO2", "Récup"],
     chargeCalculator: "rpe-duration",
     metrics: ["distanceKm", "elevationM"],
-    defaultMode: "simple",
   },
   trail: {
     id: "trail",
     label: "Trail",
     color: DATA.sports.trail,
     iconId: "trail",
-    blockTypes: ["Échauffement", "Montée", "Descente", "Sortie longue", "Rando-course", "Récup"],
     chargeCalculator: "rpe-duration",
     metrics: ["distanceKm", "elevationM", "runDuration"],
-    defaultMode: "simple",
   },
   strength: {
     id: "strength",
     label: "Renforcement",
     color: DATA.sports.strength,
     iconId: "strength",
-    blockTypes: ["Échauffement", "Force max", "Hypertrophie", "Power", "Mobilité", "Retour calme"],
     chargeCalculator: "rpe-duration",
     metrics: ["sets", "reps", "weightKg"],
-    defaultMode: "detailed",
   },
   mobility: {
     id: "mobility",
     label: "Mobilité",
     color: DATA.sports.mobility,
     iconId: "mobility",
-    blockTypes: ["Mobilité", "Yoga", "Étirements", "Respiration", "Récup active"],
     chargeCalculator: "rpe-duration",
     metrics: [],
-    defaultMode: "simple",
   },
   custom: {
     id: "custom",
     label: "Autre",
     color: DATA.sports.custom,
     iconId: "custom",
-    blockTypes: ["Effort", "Repos", "Libre"],
     chargeCalculator: "rpe-duration",
     metrics: [],
-    defaultMode: "simple",
   },
 };
 
@@ -85,7 +71,6 @@ export function getDiscipline(id) {
 export function disciplineList() {
   return Object.values(DISCIPLINES);
 }
-
 // Libellés affichés pour les métriques optionnelles
 export const METRIC_LABELS = {
   distanceKm:  { label: "Distance",     suffix: "km",  placeholder: "8.5",  step: 0.1 },

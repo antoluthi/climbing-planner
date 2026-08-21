@@ -188,15 +188,6 @@ export const DATA = {
 
   // Types de blocs — affichés en petit filet coloré. Recopiés dans les séances
   // créées, donc fixes eux aussi.
-  blocks: {
-    "Échauffement":    "#9a5f3a",
-    "Grimpe":          "#8a6a52",
-    "Exercices":       "#4a6b8a",
-    "Suspension":      "#6d5f8a",
-    "Étirements":      "#8a5a86",
-    "Retour au calme": "#6b7280",
-  },
-
   // Rampes de la heatmap d'activité : 5 paliers, du vide à l'intensité max.
   // « charge » et « rpe » montent vers l'accent ; « hooper » et « reminders »
   // sont divergentes (bien → mal).

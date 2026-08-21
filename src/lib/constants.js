@@ -29,31 +29,6 @@ export const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 // defaultCharge sur l'échelle unifiée 0-10 : une séance = somme de ses blocs,
 // plafonnée à 10 (bloc principal ≈ 5, annexes 1-3).
-export const BLOCK_TYPES = {
-  "Échauffement":    { color: DATA.blocks["Échauffement"], defaultCharge: 1, defaultDuration: 15, hasCharge: false },
-  "Grimpe":          { color: DATA.blocks["Grimpe"], defaultCharge: 5, defaultDuration: 90, hasCharge: true  },
-  "Exercices":       { color: DATA.blocks["Exercices"], defaultCharge: 3, defaultDuration: 20, hasCharge: true  },
-  "Suspension":      { color: DATA.blocks["Suspension"], defaultCharge: 0, defaultDuration: 15, hasCharge: true  },
-  "Étirements":      { color: DATA.blocks["Étirements"], defaultCharge: 1, defaultDuration: 10, hasCharge: false },
-  "Retour au calme": { color: DATA.blocks["Retour au calme"], defaultCharge: 1, defaultDuration: 10, hasCharge: true  },
-};
-
-export const GRIP_TYPES = ["Semi-arquée", "Arquée", "Tendu", "Pincée", "Monoigt", "2 doigts", "3 doigts"];
-
-export const DEFAULT_SUSPENSION_CONFIG = {
-  armMode: "two",
-  supportType: "wall",
-  gripSize: 20,
-  gripType: "Semi-arquée",
-  hangTime: 7,
-  restTime: 53,
-  sets: 6,
-  reps: 1,
-  targetWeight: 0,
-  targetWeightLeft: 0,
-  targetWeightRight: 0,
-};
-
 export function isDateInCustomCycle(cycle, date) {
   if (!cycle.startDate) return false;
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());

@@ -7,7 +7,6 @@ import { getMondayOf, weekKey } from "../lib/helpers.js";
 import { generateId, loadData, saveData, migrateData, freshData, getLocalDataOwner, setLocalDataOwner } from "../lib/storage.js";
 import { useCommunitySessionsSync } from "../hooks/useCommunitySessionsSync.js";
 import { useSessionsCatalog } from "../hooks/useSessionsCatalog.js";
-import { useSessionBlocks } from "../hooks/useSessionBlocks.js";
 import { useCoachAthletes } from "../hooks/useCoachAthletes.js";
 import { useNotifications } from "../hooks/useNotifications.js";
 import { DATA } from "../theme/palette.js";
@@ -38,7 +37,6 @@ export function DataProvider({ children }) {
 
   const { communitySessions, pushToCommunity, deleteFromCommunity } = useCommunitySessionsSync(session);
   const { catalog, saveUserSession, deleteUserSession } = useSessionsCatalog(session?.user?.id);
-  const { blocks: dbBlocks, saveBlock, deleteBlock } = useSessionBlocks(session?.user?.id);
   const { athletes, searchAthletes, removeAthlete, myCoaches, leaveCoach, refreshAthletes, refreshMyCoaches } = useCoachAthletes(session?.user?.id);
   const {
     notifications, sentInvites, unreadCount,
@@ -283,7 +281,7 @@ export function DataProvider({ children }) {
   const editQuickSession = qs => setData(d => ({ ...d, quickSessions: (d.quickSessions || []).map(q => q.id === qs.id ? qs : q) }));
   const removeQuickSession = id => setData(d => ({ ...d, quickSessions: (d.quickSessions || []).filter(q => q.id !== id) }));
 
-  // ── Sync planned sessions/blocks ──
+  // ── Répercute une modification de modèle sur les séances planifiées ──
   const syncPlannedSessions = (updatedSession) => {
     if (!updatedSession?.id) return;
     const todayKey = weekKey(getMondayOf(new Date()));
@@ -310,47 +308,6 @@ export function DataProvider({ children }) {
     });
   };
 
-  const syncPlannedBlocks = (updatedBlock) => {
-    if (!updatedBlock?.id) return;
-    const todayKey = weekKey(getMondayOf(new Date()));
-    setData(d => {
-      let changed = false;
-      const newWeeks = Object.fromEntries(
-        Object.entries(d.weeks).map(([key, weekData]) => {
-          if (key < todayKey || !Array.isArray(weekData)) return [key, weekData];
-          const newWeek = weekData.map(dayArr =>
-            Array.isArray(dayArr)
-              ? dayArr.map(s => {
-                  if (s.id === updatedBlock.id && s.isBlock) {
-                    changed = true;
-                    return { ...updatedBlock, isBlock: true, feedback: s.feedback, startTime: s.startTime, endTime: s.endTime, coachNote: s.coachNote, date: s.date };
-                  }
-                  return s;
-                })
-              : dayArr
-          );
-          return [key, newWeek];
-        })
-      );
-      return changed ? { ...d, weeks: newWeeks } : d;
-    });
-  };
-
-  // ── Session block CRUD wrappers ──
-  const addSessionBlock = b => saveBlock(b);
-  const editSessionBlock = async (b) => {
-    await saveBlock(b);
-    const affectedSessions = catalog.filter(s => s.blocks?.some(bl => bl.id === b.id));
-    for (const sess of affectedSessions) {
-      const updatedBlocks = sess.blocks.map(bl => bl.id === b.id ? { ...bl, ...b } : bl);
-      const updatedSession = { ...sess, blocks: updatedBlocks };
-      saveUserSession(updatedSession);
-      syncPlannedSessions(updatedSession);
-    }
-    syncPlannedBlocks(b);
-  };
-  const deleteSessionBlock = id => deleteBlock(id);
-
   const value = {
     data, setData,
     cloudLoaded, roleResolved, viewingAthlete,
@@ -361,7 +318,6 @@ export function DataProvider({ children }) {
     uploadNow,
     writeStatus,
     catalog, saveUserSession, deleteUserSession,
-    dbBlocks, saveBlock, deleteBlock,
     communitySessions, pushToCommunity, deleteFromCommunity,
     athletes, searchAthletes, removeAthlete, myCoaches, leaveCoach, refreshAthletes, refreshMyCoaches,
     notifications, sentInvites, unreadCount,
@@ -370,8 +326,7 @@ export function DataProvider({ children }) {
     addMicrocycle, updateMicrocycle, deleteMicrocycle,
     addCustomCycle, updateCustomCycle, deleteCustomCycle,
     addQuickSession, editQuickSession, removeQuickSession,
-    syncPlannedSessions, syncPlannedBlocks,
-    addSessionBlock, editSessionBlock, deleteSessionBlock,
+    syncPlannedSessions,
   };
 
   return (

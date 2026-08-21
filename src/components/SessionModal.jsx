@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { DAYS, BLOCK_TYPES, DEFAULT_SUSPENSION_CONFIG, getMesoColor } from "../lib/constants.js";
+import { DAYS, getMesoColor } from "../lib/constants.js";
 import { getChargeColor, normalizeCharge10, RPE_LABELS } from "../lib/charge.js";
 import { getMondayOf, addDays, weekKey } from "../lib/helpers.js";
 import { RichText } from "./RichText.jsx";
-import { SuspensionInfoCard } from "./SuspensionInfoCard.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { Z } from "../theme/makeStyles.js";
 import { pushLayer, lockBodyScroll } from "../lib/native.js";
@@ -22,7 +21,7 @@ const STATUS_OPTIONS = [
 ];
 
 export function SessionModal({
-  session, dayLabel, weekMeta, onClose, onEdit, onDelete, onSave, dbBlocks,
+  session, dayLabel, weekMeta, onClose, onEdit, onDelete, onSave,
   role, smWeekKey, smDayIndex,
   onMoveSession, onUpdateStartTime, onSuggestMove, moveSuggestions,
   onAcceptSuggestion, onRejectSuggestion,
@@ -45,17 +44,6 @@ export function SessionModal({
 
   const isAthleteUser = role === "athlete";
 
-  // ── Effective blocks ──
-  const enrichConfig = (bl) => ({
-    ...bl,
-    config: bl.config ?? dbBlocks?.find(b => b.id === bl.id)?.config ?? null,
-  });
-  const effectiveBlocks = (
-    session.isBlock && !session.blocks?.length
-      ? [{ id: session.id, blockType: session.blockType, name: session.name, duration: session.duration, charge: session.charge, description: session.description, config: session.config ?? null }]
-      : (session.blocks ?? [])
-  ).map(enrichConfig);
-  const hasBlocks   = effectiveBlocks.length > 0;
   const hasWarmup   = !!session.warmup?.trim();
   const hasMain     = !!session.main?.trim();
   const hasCooldown = !!session.cooldown?.trim();
@@ -84,7 +72,6 @@ export function SessionModal({
   const [rpe,            setRpe]            = useState(() => session.feedback?.rpe ?? plannedCharge ?? 5);
   const [quality,        setQuality]        = useState(session.feedback?.quality ?? null);
   const [notes,          setNotes]          = useState(session.feedback?.notes ?? "");
-  const [blockFeedbacks, setBlockFeedbacks] = useState(session.feedback?.blockFeedbacks ?? []);
 
   const sessionDone = status === "done" || status === "adapted";
   const sessionMissed = status === "not_done";
@@ -168,7 +155,6 @@ export function SessionModal({
       rpe: sessionDone ? rpe : null,
       quality: sessionDone ? quality : null,
       notes,
-      blockFeedbacks: sessionDone ? blockFeedbacks : [],
     });
   };
   const handleSave = () => {
@@ -295,7 +281,6 @@ export function SessionModal({
           {/* Chips */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
             {session.estimatedTime ? chip(`${session.estimatedTime} min`) : null}
-            {hasBlocks ? chip(`${effectiveBlocks.length} bloc${effectiveBlocks.length > 1 ? "s" : ""}`) : null}
             {/* Charge planifiée vs ressentie */}
             {(() => {
               const planned = plannedCharge;
@@ -506,97 +491,6 @@ export function SessionModal({
                 )}
               </div>
 
-              {/* Block feedbacks (Suspension etc.) */}
-              {sessionDone && hasBlocks && effectiveBlocks.some(bl => bl.blockType === "Suspension") && (
-                <div style={{ background: surfaceCard, border: `1px solid ${border}`, borderRadius: 12, padding: 14 }}>
-                  <div style={{ fontSize: 11, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 10 }}>
-                    Suivi suspension
-                  </div>
-                  {effectiveBlocks.filter(bl => bl.blockType === "Suspension").map((bl, i) => {
-                    const cfg = BLOCK_TYPES[bl.blockType] || {};
-                    const color = cfg.color || DATA.blocks["Suspension"];
-                    const existing = blockFeedbacks.find(bf => bf.blockId === bl.id);
-                    const suspCfgRef = bl.config ?? DEFAULT_SUSPENSION_CONFIG;
-                    const suspData = existing?.suspensionData ?? {};
-                    const patchSuspData = (patch) => {
-                      setBlockFeedbacks(prev => {
-                        const without = prev.filter(bf => bf.blockId !== bl.id);
-                        const prev_sd = prev.find(bf => bf.blockId === bl.id)?.suspensionData ?? {};
-                        return [...without, { blockId: bl.id, blockName: bl.name, blockType: bl.blockType, text: existing?.text || "", suspensionData: { ...prev_sd, ...patch } }];
-                      });
-                    };
-                    return (
-                      <div key={i} style={{ borderLeft: `3px solid ${color}66`, paddingLeft: 10, marginTop: i ? 12 : 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color, marginBottom: 8 }}>{bl.name}</div>
-                        {suspCfgRef.armMode === "two" ? (
-                          <div>
-                            <span style={{ fontSize: 10, color: textLight, letterSpacing: "0.05em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>
-                              Poids réel (cible {suspCfgRef.targetWeight} kg)
-                            </span>
-                            <input
-                              type="number" step="0.5"
-                              value={suspData.actualWeight ?? ""}
-                              onChange={e => patchSuspData({ actualWeight: e.target.value === "" ? null : +e.target.value })}
-                              placeholder={String(suspCfgRef.targetWeight ?? 0)}
-                              style={{
-                                width: 100, background: paperDim, border: `1px solid ${border}`,
-                                borderRadius: 6, padding: "6px 10px",
-                                fontSize: 14, fontWeight: 700, fontFamily: "inherit",
-                                color: text, textAlign: "center", outline: "none",
-                              }}
-                            />
-                          </div>
-                        ) : (
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                            {["actualWeightLeft", "actualWeightRight"].map((k, ki) => (
-                              <div key={k}>
-                                <span style={{ fontSize: 10, color: textLight, display: "block", marginBottom: 4 }}>
-                                  {ki === 0 ? "Gauche" : "Droite"}
-                                </span>
-                                <input
-                                  type="number" step="0.5"
-                                  value={suspData[k] ?? ""}
-                                  onChange={e => patchSuspData({ [k]: e.target.value === "" ? null : +e.target.value })}
-                                  placeholder={String(ki === 0 ? suspCfgRef.targetWeightLeft : suspCfgRef.targetWeightRight)}
-                                  style={{
-                                    width: "100%", boxSizing: "border-box",
-                                    background: paperDim, border: `1px solid ${border}`,
-                                    borderRadius: 6, padding: "6px 10px",
-                                    fontSize: 14, fontWeight: 700, fontFamily: "inherit",
-                                    color: text, textAlign: "center", outline: "none",
-                                  }}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <textarea
-                          value={existing?.text || ""}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setBlockFeedbacks(prev => {
-                              const without = prev.filter(bf => bf.blockId !== bl.id);
-                              const sd = prev.find(bf => bf.blockId === bl.id)?.suspensionData;
-                              if (val.trim() || sd) return [...without, { blockId: bl.id, blockName: bl.name, blockType: bl.blockType, text: val, ...(sd ? { suspensionData: sd } : {}) }];
-                              return without;
-                            });
-                          }}
-                          placeholder="Adaptation, ressenti…"
-                          rows={2}
-                          style={{
-                            width: "100%", boxSizing: "border-box", marginTop: 8,
-                            background: paperDim, border: `1px solid ${border}`,
-                            borderRadius: 6, padding: "6px 8px",
-                            fontSize: 12, fontFamily: "inherit", color: text,
-                            resize: "vertical", outline: "none",
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
               {/* Lien détail de la séance — toujours visible */}
               <div style={{ paddingTop: 4 }}>
                 <button
@@ -615,53 +509,8 @@ export function SessionModal({
               {showDetails && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 8 }}>
 
-                  {/* Mode détaillé : liste des blocs */}
-                  {hasBlocks && effectiveBlocks.map((bl, i) => {
-                    const cfg = BLOCK_TYPES[bl.blockType] || {};
-                    const color = cfg.color || colors(isDark).textMuted;
-                    return (
-                      <div key={i} style={{
-                        borderRadius: 10, border: `1px solid ${border}`,
-                        borderLeft: `3px solid ${color}`, background: surfaceCard, overflow: "hidden",
-                      }}>
-                        <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.07em" }}>{bl.blockType}</span>
-                              <span style={{ fontSize: 13, fontWeight: 600, color: text }}>{bl.name}</span>
-                            </div>
-                            <div style={{ display: "flex", gap: 8, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
-                              {bl.duration && <span style={{ fontSize: 10, color: textLight }}>{bl.duration} min</span>}
-                              {cfg.hasCharge && bl.charge > 0 && (
-                                <span style={{ fontSize: 10, fontWeight: 700, color: getChargeColor(bl.charge), background: getChargeColor(bl.charge) + "22", padding: "1px 6px", borderRadius: 4 }}>
-                                  ⚡ {bl.charge}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div style={{
-                            width: 24, height: 24, borderRadius: "50%",
-                            background: color + "22", border: `2px solid ${color}44`,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 11, color, fontWeight: 700, flexShrink: 0,
-                          }}>{i + 1}</div>
-                        </div>
-                        {bl.blockType === "Suspension" && (
-                          <SuspensionInfoCard config={bl.config} isDark={isDark} />
-                        )}
-                        {bl.description?.trim() && (
-                          <div style={{ padding: "0 14px 12px", borderTop: `1px solid ${border}` }}>
-                            <div style={{ paddingTop: 8 }}>
-                              <RichText text={bl.description} />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {/* Legacy warmup/main/cooldown (séances anciennes sans blocs) */}
-                  {!hasBlocks && hasContent && (
+                  {/* Séances anciennes : échauffement / cœur / retour au calme */}
+                  {hasContent && (
                     <div style={{ padding: "10px 14px", background: surfaceCard, border: `1px solid ${border}`, borderRadius: 10 }}>
                       {hasWarmup && <><div style={{ fontSize: 10, fontWeight: 700, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 4 }}>Échauffement</div><RichText text={session.warmup} /></>}
                       {hasMain && <><div style={{ fontSize: 10, fontWeight: 700, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginTop: 12, marginBottom: 4 }}>Cœur de séance</div><RichText text={session.main} /></>}
@@ -734,7 +583,7 @@ export function SessionModal({
                   )}
 
                   {/* Récap discipline / charge / durée — fallback minimal */}
-                  {!hasBlocks && !hasContent && !hasSessionNotes && !hasDescription && !hasEventContent && !hasMetrics && (() => {
+                  {!hasContent && !hasSessionNotes && !hasDescription && !hasEventContent && !hasMetrics && (() => {
                     const disc = getDiscipline(session.discipline || "climbing");
                     const planned = session.chargePlanned ?? (session.charge != null ? normalizeCharge10(session.charge) : null);
                     return (

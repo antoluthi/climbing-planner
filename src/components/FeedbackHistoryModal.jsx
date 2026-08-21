@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import supabase from "../lib/supabase.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { BLOCK_TYPES } from "../lib/constants.js";
 import { getChargeColor } from "../lib/charge.js";
 import { Modal, ModalHeader } from "./ui/Modal.jsx";
 import { colors, DATA } from "../theme/palette.js";
@@ -194,27 +193,6 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                           <div style={{ fontSize: 12, color: text, lineHeight: 1.5, background: surface, padding: "6px 10px", borderRadius: 5, border: `1px solid ${border}` }}>{fb.notes}</div>
                         </div>
                       )}
-                      {/* Per-block feedbacks (session view) */}
-                      {type === "session" && (fb.block_feedbacks || []).filter(bf => bf.text?.trim() || bf.suspensionData != null).map((bf, bi) => {
-                        const bCfg = BLOCK_TYPES[bf.blockType] || {};
-                        return (
-                          <div key={bi} style={{ borderLeft: `3px solid ${bCfg.color || accent}99`, paddingLeft: 10 }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: bCfg.color || accent, marginBottom: 3 }}>{bf.blockName}</div>
-                            {bf.suspensionData && (
-                              <div style={{ fontSize: 11, color: DATA.hands.left, marginBottom: 2 }}>
-                                {bf.suspensionData.actualWeight != null
-                                  ? `Poids : ${bf.suspensionData.actualWeight >= 0 ? "+" : ""}${bf.suspensionData.actualWeight} kg`
-                                  : [
-                                      bf.suspensionData.actualWeightLeft  != null && `G: ${bf.suspensionData.actualWeightLeft >= 0 ? "+" : ""}${bf.suspensionData.actualWeightLeft}kg`,
-                                      bf.suspensionData.actualWeightRight != null && `D: ${bf.suspensionData.actualWeightRight >= 0 ? "+" : ""}${bf.suspensionData.actualWeightRight}kg`,
-                                    ].filter(Boolean).join(" / ")
-                                }
-                              </div>
-                            )}
-                            {bf.text?.trim() && <div style={{ fontSize: 12, color: text, lineHeight: 1.5 }}>{bf.text}</div>}
-                          </div>
-                        );
-                      })}
                       {/* Block-specific feedback (block view) */}
                       {type === "block" && blockFb && (
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

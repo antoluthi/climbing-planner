@@ -33,10 +33,7 @@ function isRealTraining(sessions) {
   const charge = sessions.reduce((s, sess) => s + getSessionCharge(sess), 0);
   if (charge > 5) return true;
   const names = sessions.map(s => (s.title || s.name || "").toLowerCase()).join(" ");
-  const blocks = sessions.flatMap(s => (s.blocks || []).map(b => b.type));
-  const hasHeavy = /force|maximal|campus|dynami|puissan|endur|volume|compét|compe|suspend|poutre|hangboard/.test(names)
-    || blocks.some(t => t === "Grimpe" || t === "Suspension" || t === "Exercices");
-  return hasHeavy;
+  return /force|maximal|campus|dynami|puissan|endur|volume|compét|compe|suspend|poutre|hangboard/.test(names);
 }
 
 // ─── CONTEXT BUILDER ────────────────────────────────────────────────────────
@@ -64,25 +61,21 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
     : totalCharge <= 9 ? "heavy"
     : "brutal";
 
-  // Session types from names AND blocks
+  // Les types de séance se lisent dans leur nom.
   const names = todaySessions.map(s => (s.title || s.name || "").toLowerCase()).join(" ");
-  const allBlockTypes = todaySessions.flatMap(s => (s.blocks || []).map(b => b.type));
 
   const hasForce     = /force|maximal|bloc|campus|dynami|puissan/.test(names);
   const hasEndur     = /endur|volume|vol\b|capac|ae\b|fond/.test(names);
-  const hasRecup     = /récup|recup|calme|retour|active/.test(names) || allBlockTypes.includes("Retour au calme");
+  const hasRecup     = /récup|recup|calme|retour|active/.test(names);
   const hasTech      = /techni|dalle|travers|dégrav|mouv|précis/.test(names);
-  const hasMobility  = /mobil|étir|yoga|stretch|souplesse/.test(names) || allBlockTypes.includes("Étirements");
+  const hasMobility  = /mobil|étir|yoga|stretch|souplesse/.test(names);
   const hasComp      = /compét|compe|lead|bloc.*final|qualif/.test(names);
-  const hasSuspension = /suspend|poutre|hangboard/.test(names) || allBlockTypes.includes("Suspension");
-  const hasGrimpe    = allBlockTypes.includes("Grimpe");
+  const hasSuspension = /suspend|poutre|hangboard/.test(names);
+  const hasGrimpe    = /grimpe|bloc|voie|falaise|salle/.test(names);
   const isOnlyLight     = !isRestDay && totalCharge <= 2 && (hasMobility || hasRecup) && !hasForce && !hasEndur && !hasComp;
-  // Séance composée UNIQUEMENT de blocs étirements/retour au calme (ou nom seul si pas de blocs)
-  const isStretchingOnly = !isRestDay && (
-    allBlockTypes.length > 0
-      ? allBlockTypes.every(t => t === "Étirements" || t === "Retour au calme")
-      : hasMobility && !hasForce && !hasEndur && !hasGrimpe && !hasSuspension && !hasComp
-  ) && !hasForce && !hasEndur && !hasGrimpe && !hasSuspension && !hasComp;
+  // Journée qui ne contient que de la mobilité ou du retour au calme.
+  const isStretchingOnly = !isRestDay && hasMobility
+    && !hasForce && !hasEndur && !hasGrimpe && !hasSuspension && !hasComp;
 
   // Session timing from startTime field
   const sessionTimes = todaySessions
@@ -233,8 +226,7 @@ function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayInde
   // ── Demain ──
   const tomorrowIsHeavy      = tomorrowCharge >= 9;
   const tomorrowHasSuspension = tomorrowSessions.some(s =>
-    /suspend|poutre|hangboard/.test((s.title || s.name || "").toLowerCase()) ||
-    (s.blocks || []).some(b => b.type === "Suspension"));
+    /suspend|poutre|hangboard/.test((s.title || s.name || "").toLowerCase()));
 
   // ── Charge restante cette semaine (après aujourd'hui) ──
   const weekChargeRemaining = Math.max(0, weekChargeTotal - weekChargeSoFar - totalCharge);
@@ -974,6 +966,7 @@ function AccueilViewBody({
   onOpenAccount,
   onAddNutrition,
   onOpenNotifications,
+  onOpenEvent,
   unreadCount = 0,
 }) {
   const { isDark } = useThemeCtx();
@@ -981,6 +974,16 @@ function AccueilViewBody({
 
   const today = localDateStr(new Date());
   const todayObj = new Date(today + "T12:00:00");
+
+  // ── Prochain événement ──
+  // Un événement est une échéance : compétition, sortie, objectif. Il tient sa
+  // place en haut de l'accueil tant qu'il n'est pas passé, avec son décompte.
+  const nextEvent = (data.quickSessions || [])
+    .filter(e => (e.endDate || e.startDate) >= today)
+    .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""))[0] || null;
+  const eventDays = nextEvent
+    ? Math.round((new Date(nextEvent.startDate + "T12:00:00") - todayObj) / 86400000)
+    : null;
 
   // ── Semaine courante ──
   const monday = getMondayOf(todayObj);
@@ -1046,8 +1049,12 @@ function AccueilViewBody({
   const greeting = getGreeting(new Date().getHours(), firstName);
 
   const firstSession = todaySessions[0];
+  // `estimatedTime` est le champ courant ; `duration` traîne encore sur les
+  // séances d'avant la refonte.
+  const sessionMinutes = firstSession?.estimatedTime ?? firstSession?.duration ?? null;
   const sessionMeta = firstSession
-    ? [firstSession.duration ? firstSession.duration + " min" : null,
+    ? [sessionMinutes ? `${sessionMinutes} min` : null,
+       firstSession.metrics?.distanceKm ? `${firstSession.metrics.distanceKm} km` : null,
        "RPE " + Math.round(getSessionCharge(firstSession))].filter(Boolean).join(" · ")
     : null;
 
@@ -1130,6 +1137,44 @@ function AccueilViewBody({
           ))}
         </div>
       </div>
+
+      {/* ── Prochaine échéance ── */}
+      {nextEvent && (
+        <div style={{ padding: `${pad}px ${pad}px 0` }}>
+          <Card isDark={isDark} onClick={() => onOpenEvent?.(nextEvent)} style={{ padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{
+                width: 54, flexShrink: 0, textAlign: "center",
+                padding: "8px 0", borderRadius: 12,
+                background: (nextEvent.color || c.accent) + "22",
+              }}>
+                <div style={{ font: `800 20px ${MONO}`, color: nextEvent.color || c.accent, lineHeight: 1 }}>
+                  {eventDays <= 0 ? "J" : `J-${eventDays}`}
+                </div>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
+                  color: c.textDim, marginBottom: 3,
+                }}>
+                  {eventDays <= 0 ? "Aujourd'hui" : eventDays === 1 ? "Demain" : "Prochaine échéance"}
+                </div>
+                <div style={{
+                  fontSize: 17, fontWeight: 700, color: c.text,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                  {nextEvent.name || nextEvent.title}
+                </div>
+                <div style={{ fontSize: 12, color: c.textMuted, marginTop: 2 }}>
+                  {new Date(nextEvent.startDate + "T12:00:00").toLocaleDateString("fr-FR",
+                    { weekday: "long", day: "numeric", month: "long" })}
+                  {nextEvent.location ? ` · ${nextEvent.location}` : ""}
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* ── Séance du jour ── */}
       <div style={{ padding: `${pad}px ${pad}px 0` }}>

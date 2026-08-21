@@ -52,8 +52,6 @@ function SessionCard({ session, isDark, compact = false }) {
   const cardBg = colors(isDark).card;
   const description = session.description?.toString().trim();
   const location = session.location?.trim();
-  const blocks = session.blocks || [];
-  const blockCount = blocks.length;
   const charge = session.chargePlanned ?? (
     session.charge != null
       ? normalizeCharge10(session.charge)
@@ -126,12 +124,6 @@ function SessionCard({ session, isDark, compact = false }) {
         </div>
       )}
 
-      {/* Block count */}
-      {!compact && blockCount > 0 && (
-        <div style={{ fontSize: 10, color: textMid }}>
-          {blockCount} exercice{blockCount > 1 ? "s" : ""}
-        </div>
-      )}
     </div>
   );
 }
@@ -146,7 +138,6 @@ function SessionDetailModal({ session, isDark, onClose }) {
   const bg = colors(isDark).card;
   const border = colors(isDark).border;
   const chargeColor = getChargeColor(session.charge || 0);
-  const blocks = session.blocks || [];
   const description = session.description?.toString().trim();
   const location = session.location?.trim();
   const charge = session.chargePlanned ?? (
@@ -237,32 +228,6 @@ function SessionDetailModal({ session, isDark, onClose }) {
         {description && (
           <div style={{ fontSize: 13, color: textMid, lineHeight: 1.55, borderTop: `1px solid ${border}`, paddingTop: 12 }}>
             <RichText text={description} />
-          </div>
-        )}
-
-        {/* Blocks */}
-        {blocks.length > 0 && (
-          <div style={{ borderTop: `1px solid ${border}`, paddingTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: textLight, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              Exercices
-            </div>
-            {blocks.map((bl, i) => (
-              <div key={i} style={{
-                background: colors(isDark).surface,
-                borderRadius: 8, padding: "10px 12px",
-                borderLeft: `3px solid ${getChargeColor(bl.charge || 0)}`,
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: textMain }}>{bl.name}</div>
-                {bl.duration && (
-                  <div style={{ fontSize: 11, color: textLight, marginTop: 2 }}>{bl.duration} min</div>
-                )}
-                {bl.description?.trim() && (
-                  <div style={{ fontSize: 11, color: textMid, marginTop: 4, lineHeight: 1.4 }}>
-                    <RichText text={bl.description} />
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         )}
       </div>
