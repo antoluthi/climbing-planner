@@ -183,6 +183,12 @@ Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autor
   `RoleOnboardingModal` au premier login, puis **`RoleSection` dans Compte**, où
   le rôle se change ensuite librement. Mêmes trois rôles des deux côtés.
   Masquée en vue athlète : le profil affiché n'est pas celui du compte.
+- `RoleSection` se lit en **trois temps** — on change de rôle une fois tous les
+  jamais, donc le compte n'affiche que l'état : rôle courant + « Modifier le
+  rôle » → écran des conséquences (ce que chaque rôle change, l'encart
+  d'avertissement si des athlètes sont rattachés) → sélection. Le cas
+  destructif (quitter coach avec des athlètes) referme le sélecteur et demande
+  une dernière confirmation ; annuler ramène au choix.
 - `chooseRole()` bascule l'affichage tout de suite mais **revient en arrière si
   la base refuse** : un rôle absent de `status` n'existe pas — le prochain
   démarrage, ou l'autre appareil, l'ignorerait. `writeStatus()` remonte donc
@@ -571,6 +577,20 @@ modifiait… et ne s'enregistrait jamais.
 - Graphique Hooper : barres (BarChart) au lieu de lignes, scaffold identique
 - Sélecteur de plage Sem / Mois / An pour tous les graphiques stats
 - **Heatmap d'activité** (`components/ActivityHeatmap.jsx`, GitHub-style) : 53 semaines × 7 jours, sélecteur de métrique (Charge / RPE / Hooper), labels mois et jours, tooltip hover, légende Moins/Plus, adaptatif mobile
+
+### AccueilView — séances du jour
+La carte liste **toutes** les séances de la journée, triées par heure de départ
+(`minutesOfDay`, celles sans heure en fin de liste), l'heure en tête de ligne.
+Chaque ligne ouvre sa séance : l'index passé à `onOpenSession` est celui
+d'origine dans `data.weeks`, conservé avant le tri — sans quoi on ouvrirait la
+voisine.
+
+### Séance faite : elle s'efface
+Une séance dont `feedback.done === true` passe en retrait — nom **barré**,
+opacité 0,45 — comme une tâche cochée : ce qui reste à faire ressort seul.
+Appliqué à l'accueil et au calendrier mobile (`CalendarView`). Dans la grille
+bureau (`DayColumn`), dense et déjà colorée, seul le barré s'applique : le ☑
+existant complète.
 
 ### AccueilView — en-tête (`components/AccueilView.jsx`)
 De haut en bas : date, salutation, phrase contextuelle, puis **où l'on en est

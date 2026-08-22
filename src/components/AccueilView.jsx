@@ -36,6 +36,15 @@ function isRealTraining(sessions) {
   return /force|maximal|campus|dynami|puissan|endur|volume|compét|compe|suspend|poutre|hangboard/.test(names);
 }
 
+// « 18:30 » → 1110. Une séance sans heure part en fin de journée : elle n'a pas
+// de place dans l'ordre de réalisation, mais elle doit rester visible.
+function minutesOfDay(startTime) {
+  if (!startTime) return Number.MAX_SAFE_INTEGER;
+  const [h, m] = String(startTime).split(":").map(Number);
+  if (Number.isNaN(h)) return Number.MAX_SAFE_INTEGER;
+  return h * 60 + (Number.isNaN(m) ? 0 : m);
+}
+
 // ─── CONTEXT BUILDER ────────────────────────────────────────────────────────
 
 function buildPhraseContext(data, todaySessions, todayObj, weekSessions, dayIndex, mesoCtx) {
@@ -1067,15 +1076,13 @@ function AccueilViewBody({
   const dateLabel = todayObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   const greeting = getGreeting(new Date().getHours(), firstName);
 
-  const firstSession = todaySessions[0];
-  // `estimatedTime` est le champ courant ; `duration` traîne encore sur les
-  // séances d'avant la refonte.
-  const sessionMinutes = firstSession?.estimatedTime ?? firstSession?.duration ?? null;
-  const sessionMeta = firstSession
-    ? [sessionMinutes ? `${sessionMinutes} min` : null,
-       firstSession.metrics?.distanceKm ? `${firstSession.metrics.distanceKm} km` : null,
-       "RPE " + Math.round(getSessionCharge(firstSession))].filter(Boolean).join(" · ")
-    : null;
+  // ── Les séances du jour, dans l'ordre où on les fera ──
+  // On garde l'index d'origine : c'est lui qui ouvre la bonne séance dans
+  // `data.weeks`, et il ne survit pas au tri. Une séance sans heure passe en
+  // fin de journée, à sa place dans la liste.
+  const todayOrdered = todaySessions
+    .map((s, index) => ({ s, index }))
+    .sort((a, b) => (minutesOfDay(a.s.startTime) - minutesOfDay(b.s.startTime)) || (a.index - b.index));
 
   const pad = isMobile ? 16 : 20;
 
@@ -1249,27 +1256,67 @@ function AccueilViewBody({
         </div>
       )}
 
-      {/* ── Séance du jour ── */}
+      {/* ── Séances du jour ──
+           Toutes, dans l'ordre de réalisation, l'heure de départ en tête de
+           ligne. Une séance déjà faite s'efface — nom barré, ligne en retrait —
+           pour que ce qui reste à faire ressorte seul. */}
       <div style={{ padding: `${pad}px ${pad}px 0` }}>
         <Card isDark={isDark}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <div style={{ width: 8, height: 8, borderRadius: 4, background: c.accent }} />
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: c.textMuted }}>
-              Séance du jour
+              {todayOrdered.length > 1 ? `Séances du jour · ${todayOrdered.length}` : "Séance du jour"}
             </div>
           </div>
 
-          {firstSession ? (
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                <SportBadge disciplineId={firstSession.discipline || "climbing"} size={28} />
-                <div style={{ fontSize: 19, fontWeight: 700, color: c.text, minWidth: 0 }}>{firstSession.name}</div>
-              </div>
-              <div style={{ fontSize: 13, color: c.textMuted, marginBottom: 16 }}>{sessionMeta}</div>
-              <PrimaryButton isDark={isDark} onClick={() => onOpenSession?.(wKey, dayIndex, 0)}>
-                Voir la séance
-              </PrimaryButton>
-            </>
+          {todayOrdered.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {todayOrdered.map(({ s, index }, row) => {
+                const done = s.feedback?.done === true;
+                const minutes = s.estimatedTime ?? s.duration ?? null;
+                const charge = Math.round(getSessionCharge(s));
+                return (
+                  <button
+                    key={s.id || index}
+                    onClick={() => onOpenSession?.(wKey, dayIndex, index)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12, width: "100%",
+                      background: "none", border: "none", cursor: "pointer", textAlign: "left",
+                      padding: "10px 0", fontFamily: SANS,
+                      borderTop: row === 0 ? "none" : `0.5px solid ${c.border}`,
+                      opacity: done ? 0.45 : 1,
+                    }}
+                  >
+                    <div style={{
+                      font: `700 13px ${MONO}`, color: c.textMuted,
+                      width: 42, flexShrink: 0, textAlign: "left",
+                    }}>
+                      {s.startTime || "—"}
+                    </div>
+                    <SportBadge disciplineId={s.discipline || "climbing"} size={28} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 15, fontWeight: 700, color: c.text,
+                        textDecoration: done ? "line-through" : "none",
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                      }}>
+                        {s.name || s.title}
+                      </div>
+                      <div style={{ fontSize: 12, color: c.textMuted, marginTop: 1 }}>
+                        {[minutes ? `${minutes} min` : null,
+                          s.metrics?.distanceKm ? `${s.metrics.distanceKm} km` : null,
+                          s.location || null].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                    </div>
+                    {charge > 0 && (
+                      <div style={{ font: `700 13px ${MONO}`, color: c.accent, flexShrink: 0 }}>
+                        {charge}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           ) : (
             <>
               <div style={{ fontSize: 15, color: c.textMuted, marginBottom: 16 }}>
