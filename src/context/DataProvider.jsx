@@ -313,14 +313,29 @@ export function DataProvider({ children }) {
     if (acceptedCount > 0) refreshAthletes();
   }, [acceptedCount]); // eslint-disable-line
 
-  // ── Choix du rôle (onboarding) ──
+  // ── Choix du rôle ──
   // Écrit le statut en DB ('solo' pour « athlète solo »), pose le rôle du
-  // compte et la copie d'affichage dans le profil.
-  const chooseRole = (role) => {
+  // compte et la copie d'affichage dans le profil. Appelé à l'inscription
+  // (RoleOnboardingModal) comme depuis le compte (RoleSection).
+  //
+  // L'affichage bascule tout de suite, mais si la base refuse l'écriture on
+  // revient en arrière : un rôle qui n'est pas dans `status` n'existe pas —
+  // le prochain démarrage, ou l'autre appareil, l'ignorerait.
+  const chooseRole = async (role) => {
+    const previousRole = accountRole;
+    const previousNeedsChoice = needsRoleChoice;
     setAccountRole(role);
     setNeedsRoleChoice(false);
     setData(d => ({ ...d, profile: { ...(d.profile || {}), role } }));
-    if (session?.user?.id) writeStatus(session.user.id, role);
+    const userId = session?.user?.id;
+    if (!userId) return {};
+    const { error } = await writeStatus(userId, role);
+    if (error) {
+      setAccountRole(previousRole);
+      setNeedsRoleChoice(previousNeedsChoice);
+      setData(d => ({ ...d, profile: { ...(d.profile || {}), role: previousRole ?? null } }));
+    }
+    return { error };
   };
 
   // ── Coach-athlete switching ──

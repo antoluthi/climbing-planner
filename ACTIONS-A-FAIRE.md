@@ -90,12 +90,13 @@ Au build suivant, l'étape « Préparer le keystore de signature » doit affiche
 
 ---
 
-## 2 · Deux migrations SQL à coller (~1 min)
+## 2 · Trois migrations SQL à coller (~1 min)
 
 Supabase Dashboard → SQL Editor → coller `supabase/MIGRATIONS-A-COLLER.sql`
-(idempotent : les migrations déjà passées ne referont rien). Les deux dernières
-requêtes de vérification doivent répondre `session_id_type = text` et
-`updated_at_trigger = climbing_plans_set_updated_at`.
+(idempotent : les migrations déjà passées ne referont rien). Les dernières
+requêtes de vérification doivent répondre `session_id_type = text`,
+`updated_at_trigger = climbing_plans_set_updated_at`, et un `status_check` qui
+mentionne `'solo'`.
 
 **`session_feedbacks.session_id` en TEXT.** La colonne a été créée en `INT`, du
 temps où les séances venaient d'un catalogue numéroté. Un identifiant est
@@ -107,6 +108,13 @@ vide, d'où l'historique « Retours athlètes » désespérément vide.
 compare la date de la ligne à ce que l'appareil croit savoir : cette date doit
 venir d'une seule horloge, sinon deux téléphones mal réglés suffisent à la
 fausser.
+
+**`climbing_plans.status` accepte `'solo'`.** La contrainte `CHECK` d'origine
+ne connaissait que `coach` / `athlete` / `auto`, alors que « athlète solo » est
+devenu un choix explicite écrit `'solo'` : Postgres refusait l'écriture (23514)
+et le rôle n'était jamais enregistré — d'où l'écran « Quel est votre rôle ? »
+qui revenait à chaque démarrage. **Sans cette migration, choisir « Athlète
+solo » dans Compte > Rôle affichera une erreur** (l'app ne fait plus semblant).
 
 L'app fonctionne sans attendre dans les deux cas (elle réécrit sans
 l'identifiant tant que la colonne est en `INT`, et continue d'envoyer une date

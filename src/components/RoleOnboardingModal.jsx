@@ -6,6 +6,8 @@ import { colors } from "../theme/palette.js";
 
 // Choix du rôle au 1er login. C'est une porte d'entrée : pas de fermeture
 // (ni Esc, ni clic-extérieur), un choix explicite requis avant de continuer.
+// Trois options seulement — « Autonome », variante avancée du coach, se choisit
+// depuis le compte (`RoleSection`), où le rôle se change ensuite librement.
 const ROLES = [
   { value: null,      label: "Athlète solo",   desc: "Vous gérez votre planning vous-même." },
   { value: "coach",   label: "Coach",          desc: "Vous créez et modifiez les cycles de vos athlètes." },
@@ -23,7 +25,7 @@ export function RoleOnboardingModal({ onSelect }) {
       <ModalHeader eyebrow="Bienvenue" title="Quel est votre rôle ?" />
       <ModalBody style={{ gap: 12 }}>
         <p style={{ fontSize: 12, color: T.textLight, lineHeight: 1.5, margin: 0 }}>
-          Ce choix est permanent. Contactez votre administrateur pour le modifier.
+          Vous pourrez en changer à tout moment depuis votre compte.
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {ROLES.map(opt => {

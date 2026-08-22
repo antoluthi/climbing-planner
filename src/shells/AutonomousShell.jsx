@@ -601,6 +601,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             myCoaches={myCoaches}
             onLeaveCoach={leaveCoach}
             accountRole={accountRole}
+            onChangeRole={chooseRole}
             viewingAthlete={viewingAthlete}
             onToggleViewAthlete={a => { if (a) { switchToAthlete(a).then(() => setViewMode("week")); } else { switchBackToCoach(); } }}
           />

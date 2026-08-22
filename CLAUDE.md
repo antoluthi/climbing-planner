@@ -56,6 +56,7 @@ src/
     ├── SyncButtons.jsx            — boutons export/import/sync
     ├── AuthPanel.jsx              — panneau auth (password + magic link)
     ├── RoleOnboardingModal.jsx    — choix du rôle au 1er login
+    ├── RoleSection.jsx            — changement de rôle depuis le compte
     ├── RichText.jsx               — rendu texte riche (markdown-like)
     ├── ConfirmModal.jsx           — dialogue de confirmation suppression
     ├── session/SessionFormModal.jsx     — ajout/modification d'une séance (étape 1)
@@ -161,7 +162,7 @@ Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autor
 | `null` | Athlète solo — accès complet à son propre planning |
 | `"athlete"` | Athlète suivi — cycles en lecture seule (`canEdit = false`) |
 | `"coach"` | Coach — accès à la bibliothèque de séances + vue des athlètes |
-| `"auto"` | Athlète autonome — expérimental, réglable en DB uniquement — même accès que coach |
+| `"auto"` | Autonome — accès coach complet, sur son propre planning |
 
 - **Source de vérité** : colonne `status` de `climbing_plans`. Valeurs : `'coach'` |
   `'athlete'` | `'auto'` | `'solo'` (athlète solo explicite) | `NULL` (= n'a
@@ -173,8 +174,22 @@ Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autor
   dérivent de `accountRole`, **jamais de `data.profile.role`** (qui devient
   celui de l'athlète en vue athlète — le coach garde bibliothèque, picker coach
   et édition des cycles pendant la vue athlète).
-- Choix unique via `RoleOnboardingModal` → `chooseRole()` (écrit `status`,
-  `'solo'` pour null).
+- Deux entrées vers `chooseRole()` (qui écrit `status`, `'solo'` pour null) :
+  `RoleOnboardingModal` au premier login (3 choix — « Autonome » n'y est pas,
+  c'est une variante avancée du coach), puis **`RoleSection` dans Compte**, où
+  le rôle se change ensuite librement (les 4). Masquée en vue athlète : le
+  profil affiché n'est pas celui du compte.
+- `chooseRole()` bascule l'affichage tout de suite mais **revient en arrière si
+  la base refuse** : un rôle absent de `status` n'existe pas — le prochain
+  démarrage, ou l'autre appareil, l'ignorerait. `writeStatus()` remonte donc
+  son erreur au lieu de l'avaler.
+- **Quitter le rôle coach supprime les liens `coach_athletes`** (après
+  confirmation). C'est la ligne de liaison, pas `status`, que lit la RLS pour
+  autoriser un coach à ouvrir le planning d'un athlète : la garder laisserait
+  un accès en écriture à quelqu'un qui n'est plus coach, sans rien dans
+  l'interface pour s'en apercevoir. Être coach **et** suivi reste permis (un
+  coach peut avoir son propre coach) ; seule conséquence, un coach n'apparaît
+  plus dans `search_athletes`.
 
 ## Système coach-athlète
 
@@ -642,10 +657,11 @@ L'état est visible dans **Compte > Données** : « Synchronisé il y a n min »
 | `supabase/migrations/20260715_notifications_coach_invites.sql` | Table `notifications` + realtime, `coach_athletes` en consentement mutuel (INSERT athlète only, SELECT/DELETE des deux côtés), `search_athletes` inclut 'solo', RPC `get_my_coaches` | ✅ appliquée |
 | `supabase/migrations/20260822_session_feedbacks_text_id.sql` | `session_feedbacks.session_id` INT → TEXT (les identifiants de séance sont des chaînes depuis `generateId()` : chaque upsert de ressenti partait en 400 / 22P02) | ⏳ **à coller** |
 | `supabase/migrations/20260823_climbing_plans_updated_at.sql` | Trigger `BEFORE INSERT OR UPDATE` sur `climbing_plans` : `updated_at = now()` côté serveur — la synchronisation compare des dates, elles doivent venir d'une seule horloge | ⏳ **à coller** |
+| `supabase/migrations/20260824_climbing_plans_status_solo.sql` | `CHECK` de `climbing_plans.status` élargi à `'solo'` — la contrainte d'origine ne connaissait que coach/athlete/auto, donc « athlète solo » repartait en 23514 et le rôle n'était jamais enregistré | ⏳ **à coller** |
 
 Statuts vérifiés le 20 août 2026 contre le projet Supabase (existence des
 tables, colonnes, RPC et buckets via l'API REST). `supabase/MIGRATIONS-A-COLLER.sql`
-concatène les 7 dernières dans l'ordre, idempotent et ré-exécutable.
+concatène les 8 dernières dans l'ordre, idempotent et ré-exécutable.
 `supabase/legacy/` conserve les scripts SQL antérieurs aux migrations — dont
 `supabase-community-sessions.sql`, seule définition de `community_sessions`
 (utilisée par `useCommunitySessionsSync.js`), qui n'a pas d'équivalent en migration.

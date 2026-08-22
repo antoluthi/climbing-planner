@@ -384,6 +384,21 @@ CREATE TRIGGER climbing_plans_set_updated_at
   EXECUTE FUNCTION public.climbing_plans_touch_updated_at();
 
 
+-- ╔═══ 20260824_climbing_plans_status_solo.sql ═══╗
+
+-- `status` a été créée avec CHECK (status IN ('coach','athlete','auto')), avant
+-- que « athlète solo » ne devienne un choix explicite. L'app écrit 'solo' :
+-- Postgres refusait l'écriture (23514), silencieusement, et l'onboarding
+-- revenait au démarrage suivant. NULL garde son sens : « n'a jamais choisi ».
+
+ALTER TABLE public.climbing_plans
+  DROP CONSTRAINT IF EXISTS climbing_plans_status_check;
+
+ALTER TABLE public.climbing_plans
+  ADD CONSTRAINT climbing_plans_status_check
+  CHECK (status IS NULL OR status IN ('coach', 'athlete', 'auto', 'solo'));
+
+
 -- ═══ Vérifications (doivent toutes passer sans erreur) ═══
 select count(*) as notifications_ok from notifications;
 select policyname from pg_policies where tablename = 'coach_athletes';
@@ -392,3 +407,5 @@ select data_type as session_id_type from information_schema.columns
   where table_schema = 'public' and table_name = 'session_feedbacks' and column_name = 'session_id';
 select tgname as updated_at_trigger from pg_trigger
   where tgrelid = 'public.climbing_plans'::regclass and not tgisinternal;
+select pg_get_constraintdef(oid) as status_check from pg_constraint
+  where conname = 'climbing_plans_status_check';

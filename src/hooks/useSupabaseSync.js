@@ -152,20 +152,26 @@ export function useSupabaseSync() {
     return { ...migrated, _cloudUpdatedAt: row.updated_at ?? null, _status: status ?? null };
   }, []);
 
-  // Write status to its own column — called only from onboarding.
+  // Écrit le rôle dans sa colonne — à l'inscription et depuis le compte.
   // « Athlète solo » est stocké comme 'solo' (jamais NULL) : NULL est réservé
   // à « n'a jamais choisi », ce qui rend l'affichage de l'onboarding fiable.
   const writeStatus = useCallback(async (userId, role) => {
-    if (!supabase || !userId) return;
-    const { data: saved } = await supabase
+    if (!supabase || !userId) return { error: null };
+    const { data: saved, error } = await supabase
       .from("climbing_plans")
       .upsert({ user_id: userId, status: role ?? "solo" }, { onConflict: "user_id" })
       .select("updated_at")
       .maybeSingle();
+    // L'échec doit remonter : tant que la contrainte CHECK de `status` n'avait
+    // pas été élargie à 'solo', l'écriture repartait en 23514 et personne ne le
+    // voyait — l'utilisateur croyait avoir choisi son rôle, et l'onboarding
+    // revenait au démarrage suivant.
+    if (error) return { error };
     // Cette écriture rajeunit la ligne sans toucher au planning : on avance le
     // marqueur pour ne pas déclencher un rapatriement inutile juste après
     // l'onboarding. `dirtyAt`, lui, n'est pas effacé — rien n'a été envoyé.
     if (saved?.updated_at) writeSyncMeta({ userId, syncedAt: saved.updated_at });
+    return { error: null };
   }, []);
 
   // Écriture réelle de la ligne. On relit l'`updated_at` que Postgres a
