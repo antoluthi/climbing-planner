@@ -502,6 +502,10 @@ export function DayColumn({
                             fontSize: isShort ? Math.max(sz.sessionTitle - 1, 6) : sz.sessionTitle,
                             fontWeight: 600, color: colors(isDark).textCard,
                             display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3,
+                            // Séance faite : barrée, comme partout ailleurs. Ici
+                            // la grille est dense et colorée — on ne l'estompe
+                            // pas en plus, le ☑ ci-contre suffit à compléter.
+                            textDecoration: s.feedback?.done === true ? "line-through" : "none",
                           }}>
                             {s.title || s.name}
                           </span>

@@ -199,6 +199,8 @@ export function CalendarView({
                   // n'y est pas, elle s'ouvre par son objet.
                   const sessionIndex = selectedSessions.slice(0, i).filter(x => !isEventItem(x)).length;
                   const tone = ev ? (s.color || c.accent) : null;
+                  // Séance faite : elle s'efface, comme une tâche cochée.
+                  const done = !ev && s.feedback?.done === true;
                   return (
                     <button
                       key={s.id || i}
@@ -212,11 +214,15 @@ export function CalendarView({
                         padding: ev ? "10px 12px" : 0,
                         borderRadius: ev ? 12 : 0,
                         borderLeft: ev ? `3px solid ${tone}` : "none",
+                        opacity: done ? 0.45 : 1,
                       }}
                     >
                       <SportBadge disciplineId={s.discipline || "custom"} size={32} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>{s.name}</div>
+                        <div style={{
+                          fontSize: 15, fontWeight: 700, color: c.text,
+                          textDecoration: done ? "line-through" : "none",
+                        }}>{s.name}</div>
                         <div style={{ fontSize: 12, color: ev ? tone : c.textMuted, marginTop: 2 }}>
                           {ev
                             ? ["Échéance", eventRangeLabel(s)].filter(Boolean).join(" · ")

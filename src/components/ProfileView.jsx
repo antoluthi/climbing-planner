@@ -245,7 +245,9 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
             <ProfileNumberInput isDark={isDark} value={profile.weightGoal} suffix="kg" step={0.5}
               onCommit={v => onUpdateProfile({ ...profile, weightGoal: v })} />
           </Row>
-          <Row isDark={isDark} label="Date de naissance">
+          {/* Plus de sélecteur d'unités : l'app est métrique de bout en bout
+              (kg, km, min), et rien ne lisait ce réglage. */}
+          <Row isDark={isDark} label="Date de naissance" last>
             <input
               type="date"
               value={profile.birthdate || ""}
@@ -255,15 +257,6 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
                 fontSize: 14, fontWeight: 600, fontFamily: SANS, textAlign: "right",
                 colorScheme: isDark ? "dark" : "light", outline: "none",
               }}
-            />
-          </Row>
-          <Row isDark={isDark} label="Unités" last>
-            <Segmented
-              isDark={isDark}
-              style={{ width: 160 }}
-              value={profile.units || "metric"}
-              onChange={v => onUpdateProfile({ ...profile, units: v })}
-              options={[{ value: "metric", label: "Métrique" }, { value: "imperial", label: "Impérial" }]}
             />
           </Row>
         </RowCard>
