@@ -75,5 +75,5 @@ export function useSessionsCatalog(userId) {
     fetchCatalog();
   }, [fetchCatalog]);
 
-  return { catalog, saveUserSession, deleteUserSession };
+  return { catalog, saveUserSession, deleteUserSession, refreshCatalog: fetchCatalog };
 }

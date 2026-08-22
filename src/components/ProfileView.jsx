@@ -8,6 +8,7 @@ import { DayNightToggle } from "./DayNightToggle.jsx";
 import supabase from "../lib/supabase.js";
 import { uploadAvatar, deleteAvatar } from "../lib/avatar-storage.js";
 import { isNative } from "../lib/native.js";
+import { readSyncMeta } from "../lib/sync-meta.js";
 import { toast } from "../lib/toast.js";
 import { colors, DATA } from "../theme/palette.js";
 import { disciplineList } from "../lib/disciplines.js";
@@ -132,6 +133,20 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
 
   const syncIcon = syncStatus === "saving" ? "⟳" : syncStatus === "saved" ? "✓" : syncStatus === "offline" ? "⚡" : null;
   const syncColor = syncStatus === "saved" ? accent : syncStatus === "offline" ? colors(isDark).warn : mutedColor;
+
+  // État réel de la synchronisation, lu au marqueur local. Relu à chaque
+  // changement de `syncStatus`, c'est-à-dire à chaque échange avec la base.
+  const syncLine = (() => {
+    if (!session) return null;
+    const meta = readSyncMeta();
+    if (meta.dirtyAt) return { text: "Modifications en attente d'envoi", tone: colors(isDark).warn };
+    if (!meta.syncedAt) return { text: "Pas encore synchronisé", tone: mutedColor };
+    const mins = Math.max(0, Math.round((Date.now() - Date.parse(meta.syncedAt)) / 60000));
+    const when = mins < 1 ? "à l'instant"
+      : mins < 60 ? `il y a ${mins} min`
+      : new Date(meta.syncedAt).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return { text: `Synchronisé ${when}`, tone: mutedColor };
+  })();
 
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || null;
 
@@ -468,6 +483,9 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
               >↓ Charger depuis le cloud</button>
             )}
           </div>
+        )}
+        {syncLine && (
+          <div style={{ fontSize: 11, color: syncLine.tone, marginBottom: 12 }}>{syncLine.text}</div>
         )}
         {/* Local import/export */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

@@ -34,6 +34,7 @@ src/
 │   ├── pace.js                   — temps · distance · allure/vitesse liés (parse, format, calcul)
 │   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
 │   ├── session-feedbacks.js      — upsertSessionFeedback (miroir Supabase des ressentis)
+│   ├── sync-meta.js              — marqueur de synchro local + decideSync (pull/push/reset/idle)
 │   └── hooper.js                 — hooperLabel, hooperColor
 │
 ├── theme/
@@ -573,24 +574,60 @@ discipline (celle de l'échéance pour une échéance, trois au plus par jour).
   - Coach voit un point orange sur l'onglet "Déplacer" + liste Accepter/Refuser
   - Badge `↔` sur la `DayColumn` pour les séances avec suggestion en attente
 
-### Auto-save (`climbing-planner-new.jsx`, useEffect sur `data`)
-```js
-useEffect(() => {
-  if (viewingAthlete) {
-    saveToCloud(data, viewingAthlete.userId); // sauvegarde sur la ligne de l'athlète
-  } else {
-    saveData(data);                           // localStorage
-    saveToCloud(data, session?.user?.id);     // Supabase propre
-  }
-}, [data]);
-```
+### Synchronisation (refonte août 2026)
 
-Règles de sync (refonte mars 2026) :
-- **Cloud autoritaire** : pas de comparaison timestamp local/cloud (supprimé, trop fragile)
-- **`_pendingSync` flag** : dirty flag dans `pendingSaveRef` pour flush via `pagehide`
-- **Skip premier render** : pas de save automatique au montage (évite d'écraser le cloud avec données locales stale)
-- **Flush `pagehide`** : `navigator.sendBeacon` avec keepalive pour sauvegarder en quittant la page
-- **Race condition JWT** : ignorée si le token a expiré entre-temps (pas de corruption cloud)
+Une seule règle, une seule fonction : `reconcile()` dans `context/DataProvider.jsx`.
+Elle demande à la base la **date** de la ligne (`fetchCloudHead` — deux colonnes,
+pas le blob), la compare au **marqueur local** (`lib/sync-meta.js`) et agit.
+
+`decideSync()` est pure et sans réseau, c'est là qu'est toute la politique :
+
+| Situation | Geste |
+|---|---|
+| Pas de ligne pour ce compte | `push` (ou `reset` si le local appartient à un autre compte) |
+| Données locales d'un autre compte | `pull` — jamais l'inverse (garde anti-fuite) |
+| `updated_at` cloud > `syncedAt` local | `pull`, sauf si le local a des modifications **plus récentes** → `push` |
+| Cloud = notre dernier envoi | `push` si `dirtyAt`, sinon rien |
+
+Le marqueur (`climbing_planner_sync_v1`) contient `{ userId, syncedAt, dirtyAt }` :
+- `syncedAt` est l'`updated_at` **du serveur**, recopié tel quel après chaque
+  échange réussi (l'upsert relit la colonne). Les deux dates comparées viennent
+  donc de la même horloge — celle de Postgres, imposée par le trigger de la
+  migration `20260823`. Comparaison en **instants** (`Date.parse`), jamais en
+  chaînes : PostgREST rend `…+00:00`, l'app produit `…Z`.
+- `dirtyAt` est l'heure locale de la **première** modification pas encore
+  confirmée. Il survit à la fermeture de l'app : hors ligne, rien ne se perd.
+
+`reconcile()` est appelée à la **connexion**, au **retour au premier plan**
+(`visibilitychange` / `focus` / `online`, anti-rafale 3 s), sur **notification
+temps réel**, et par le bouton « Charger depuis le cloud » (qui, lui, force le
+pull). Le réveil rafraîchit aussi bibliothèque, athlètes et notifications.
+
+Ce que ça répare :
+- `loadFromCloud` sélectionnait la ligne **sans `eq(user_id)`**. RLS autorise un
+  coach à lire les lignes de ses athlètes : la requête en renvoyait plusieurs,
+  `maybeSingle()` partait en `PGRST116`, l'exception était avalée — **un coach
+  avec un athlète ne chargeait jamais ses propres données**.
+- Rien ne relisait la base après le démarrage. Dans l'APK la WebView survit à
+  l'arrière-plan, et le temps réel ne délivre que connecté : deux appareils
+  devaient être ouverts **en même temps** pour se synchroniser.
+- L'auto-save du montage marquait les données « modifiées » alors que rien
+  n'avait bougé — au démarrage suivant, ce faux « plus récent » écrasait le
+  planning saisi ailleurs. D'où la comparaison par identité avec l'objet chargé
+  au montage (et non un « premier passage », que le double montage de React en
+  développement rendait inopérant).
+
+Auto-save (`useEffect` sur `data`) : localStorage **toujours**, cloud seulement
+une fois la première réconciliation faite (`syncReadyRef`) — sinon on pousserait
+à l'aveugle par-dessus une ligne plus fraîche. En vue athlète, l'écriture part
+sur la ligne de l'athlète et ne touche jamais le marqueur du coach.
+
+Conservé de la version précédente : flush `pagehide` / `visibilitychange` par
+`fetch({ keepalive: true })`, et l'abandon silencieux si le jeton a expiré (le
+marqueur reste sale, la prochaine occasion réessaie).
+
+L'état est visible dans **Compte > Données** : « Synchronisé il y a n min » ou
+« Modifications en attente d'envoi ».
 
 ## Migrations SQL
 
@@ -604,10 +641,11 @@ Règles de sync (refonte mars 2026) :
 | `supabase/migrations/20260517_public_profiles.sql` | Colonne `climbing_plans.is_public` + policy `anon` lecture des lignes publiques (remplace la policy Anto) | ✅ appliquée |
 | `supabase/migrations/20260715_notifications_coach_invites.sql` | Table `notifications` + realtime, `coach_athletes` en consentement mutuel (INSERT athlète only, SELECT/DELETE des deux côtés), `search_athletes` inclut 'solo', RPC `get_my_coaches` | ✅ appliquée |
 | `supabase/migrations/20260822_session_feedbacks_text_id.sql` | `session_feedbacks.session_id` INT → TEXT (les identifiants de séance sont des chaînes depuis `generateId()` : chaque upsert de ressenti partait en 400 / 22P02) | ⏳ **à coller** |
+| `supabase/migrations/20260823_climbing_plans_updated_at.sql` | Trigger `BEFORE INSERT OR UPDATE` sur `climbing_plans` : `updated_at = now()` côté serveur — la synchronisation compare des dates, elles doivent venir d'une seule horloge | ⏳ **à coller** |
 
 Statuts vérifiés le 20 août 2026 contre le projet Supabase (existence des
 tables, colonnes, RPC et buckets via l'API REST). `supabase/MIGRATIONS-A-COLLER.sql`
-concatène les 6 dernières dans l'ordre, idempotent et ré-exécutable.
+concatène les 7 dernières dans l'ordre, idempotent et ré-exécutable.
 `supabase/legacy/` conserve les scripts SQL antérieurs aux migrations — dont
 `supabase-community-sessions.sql`, seule définition de `community_sessions`
 (utilisée par `useCommunitySessionsSync.js`), qui n'a pas d'équivalent en migration.

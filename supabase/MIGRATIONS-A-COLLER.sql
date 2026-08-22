@@ -360,9 +360,35 @@ BEGIN
 END $$;
 
 
+-- ╔═══ 20260823_climbing_plans_updated_at.sql ═══╗
+
+-- La synchronisation multi-appareils compare la date de la ligne à ce que
+-- l'appareil croit savoir. Cette date doit donc venir d'une seule horloge :
+-- celle du serveur. Le client en envoie toujours une (l'app doit marcher sans
+-- cette migration), le trigger la remplace.
+
+CREATE OR REPLACE FUNCTION public.climbing_plans_touch_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS climbing_plans_set_updated_at ON public.climbing_plans;
+CREATE TRIGGER climbing_plans_set_updated_at
+  BEFORE INSERT OR UPDATE ON public.climbing_plans
+  FOR EACH ROW
+  EXECUTE FUNCTION public.climbing_plans_touch_updated_at();
+
+
 -- ═══ Vérifications (doivent toutes passer sans erreur) ═══
 select count(*) as notifications_ok from notifications;
 select policyname from pg_policies where tablename = 'coach_athletes';
 select count(*) as coaches_ok from get_my_coaches();
 select data_type as session_id_type from information_schema.columns
   where table_schema = 'public' and table_name = 'session_feedbacks' and column_name = 'session_id';
+select tgname as updated_at_trigger from pg_trigger
+  where tgrelid = 'public.climbing_plans'::regclass and not tgisinternal;

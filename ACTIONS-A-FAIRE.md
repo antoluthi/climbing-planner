@@ -90,21 +90,27 @@ Au build suivant, l'étape « Préparer le keystore de signature » doit affiche
 
 ---
 
-## 2 · Une migration SQL à coller (~1 min)
-
-`session_feedbacks.session_id` a été créée en `INT`, du temps où les séances
-venaient d'un catalogue numéroté. Un identifiant de séance est aujourd'hui une
-chaîne (`c_brmgrpkcmt3hp1ac`) : Postgres refusait donc **chaque** écriture de
-ressenti — c'est le `400 / 22P02` visible dans la console — et la table est
-restée vide, d'où l'historique « Retours athlètes » toujours désespérément
-vide côté bibliothèque.
+## 2 · Deux migrations SQL à coller (~1 min)
 
 Supabase Dashboard → SQL Editor → coller `supabase/MIGRATIONS-A-COLLER.sql`
-(idempotent : les migrations déjà passées ne referont rien). La dernière
-requête de vérification doit répondre `session_id_type = text`.
+(idempotent : les migrations déjà passées ne referont rien). Les deux dernières
+requêtes de vérification doivent répondre `session_id_type = text` et
+`updated_at_trigger = climbing_plans_set_updated_at`.
 
-L'app fonctionne sans attendre : tant que la colonne est en `INT`, elle
-réécrit une fois sans l'identifiant. La migration remet simplement les choses
+**`session_feedbacks.session_id` en TEXT.** La colonne a été créée en `INT`, du
+temps où les séances venaient d'un catalogue numéroté. Un identifiant est
+aujourd'hui une chaîne (`c_brmgrpkcmt3hp1ac`) : Postgres refusait **chaque**
+écriture de ressenti — le `400 / 22P02` de la console — et la table est restée
+vide, d'où l'historique « Retours athlètes » désespérément vide.
+
+**`climbing_plans.updated_at` horodaté par le serveur.** La synchronisation
+compare la date de la ligne à ce que l'appareil croit savoir : cette date doit
+venir d'une seule horloge, sinon deux téléphones mal réglés suffisent à la
+fausser.
+
+L'app fonctionne sans attendre dans les deux cas (elle réécrit sans
+l'identifiant tant que la colonne est en `INT`, et continue d'envoyer une date
+tant que le trigger n'existe pas). Les migrations remettent les choses
 d'aplomb.
 
 ---
