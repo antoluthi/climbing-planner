@@ -33,6 +33,7 @@ src/
 │   ├── storage.js                — generateId, loadData, saveData (localStorage)
 │   ├── pace.js                   — temps · distance · allure/vitesse liés (parse, format, calcul)
 │   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
+│   ├── session-feedbacks.js      — upsertSessionFeedback (miroir Supabase des ressentis)
 │   └── hooper.js                 — hooperLabel, hooperColor
 │
 ├── theme/
@@ -493,6 +494,34 @@ il n'y a plus de bouton « Voir le détail de la séance ». Le repli qui subsis
 dans cette modale est celui des **notes de retour** de l'athlète, qui est autre
 chose.
 
+### Où vit un ressenti (`lib/session-feedbacks.js`)
+Deux destinations, et une seule fait autorité :
+
+1. **Le planning** — `data.weeks[…].feedback`, donc le blob `climbing_plans.data`.
+   C'est lui que lisent la charge, l'écart, la heatmap et l'accueil.
+2. **`session_feedbacks`** — miroir plat, lu par l'historique « Retours
+   athlètes » de la bibliothèque. Un échec ici ne perd jamais un ressenti.
+
+La colonne `session_id` de ce miroir était restée en `INT` alors qu'un
+identifiant de séance est une chaîne (`generateId()`) : chaque écriture
+repartait en **400 / 22P02** et la table restait vide. La migration
+`20260822` la passe en TEXT ; en attendant qu'elle soit appliquée,
+`upsertSessionFeedback()` réécrit une fois sans l'identifiant (la clé
+d'unicité est `user_id, session_name, feedback_date`, qui suffit).
+
+Le slider de ressenti étant **pré-rempli à la charge planifiée**, confirmer
+sans y toucher donne un écart de zéro : le graphe d'écart dessine alors un
+trait sur la ligne du zéro (`DeviationBar`) plutôt que rien du tout.
+
+### Rappels journaliers — câblage
+Trois écrans les touchent : **Cycles** (créer / modifier / supprimer, que les
+cycles soient verrouillés — `CyclesTimeline` — ou non — `CyclesView`),
+**Compte** (activer / désactiver) et **Accueil** (cocher pour la journée).
+Les handlers `addReminder` / `updateReminder` / `deleteReminder` sont nommés
+une fois dans `AutonomousShell` et passés aux deux écrans : c'est l'oubli
+d'`onUpdateReminder` côté Cycles qui faisait qu'un rappel se rouvrait, se
+modifiait… et ne s'enregistrait jamais.
+
 ### DayLogModal (`components/DayLogModal.jsx`)
 - Assistant en **trois étapes** : **Ressenti (Hooper) → Poids → Notes**, avec une
   barre de progression en haut de la modale et une navigation Précédent /
@@ -574,10 +603,11 @@ Règles de sync (refonte mars 2026) :
 | `supabase/migrations/20260513_shared_sessions_catalog.sql` | Bibliothèque commune : `sessions_catalog` + `session_blocks` → tout user authentifié peut SELECT/INSERT/UPDATE/DELETE toutes les rows. `user_id` / `created_by` conservés pour la traçabilité. | ✅ appliquée |
 | `supabase/migrations/20260517_public_profiles.sql` | Colonne `climbing_plans.is_public` + policy `anon` lecture des lignes publiques (remplace la policy Anto) | ✅ appliquée |
 | `supabase/migrations/20260715_notifications_coach_invites.sql` | Table `notifications` + realtime, `coach_athletes` en consentement mutuel (INSERT athlète only, SELECT/DELETE des deux côtés), `search_athletes` inclut 'solo', RPC `get_my_coaches` | ✅ appliquée |
+| `supabase/migrations/20260822_session_feedbacks_text_id.sql` | `session_feedbacks.session_id` INT → TEXT (les identifiants de séance sont des chaînes depuis `generateId()` : chaque upsert de ressenti partait en 400 / 22P02) | ⏳ **à coller** |
 
 Statuts vérifiés le 20 août 2026 contre le projet Supabase (existence des
 tables, colonnes, RPC et buckets via l'API REST). `supabase/MIGRATIONS-A-COLLER.sql`
-concatène les 5 dernières dans l'ordre, idempotent et ré-exécutable.
+concatène les 6 dernières dans l'ordre, idempotent et ré-exécutable.
 `supabase/legacy/` conserve les scripts SQL antérieurs aux migrations — dont
 `supabase-community-sessions.sql`, seule définition de `community_sessions`
 (utilisée par `useCommunitySessionsSync.js`), qui n'a pas d'équivalent en migration.

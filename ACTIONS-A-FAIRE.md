@@ -90,7 +90,26 @@ Au build suivant, l'étape « Préparer le keystore de signature » doit affiche
 
 ---
 
-## 2 · Test coach-athlète à deux comptes (~10 min)
+## 2 · Une migration SQL à coller (~1 min)
+
+`session_feedbacks.session_id` a été créée en `INT`, du temps où les séances
+venaient d'un catalogue numéroté. Un identifiant de séance est aujourd'hui une
+chaîne (`c_brmgrpkcmt3hp1ac`) : Postgres refusait donc **chaque** écriture de
+ressenti — c'est le `400 / 22P02` visible dans la console — et la table est
+restée vide, d'où l'historique « Retours athlètes » toujours désespérément
+vide côté bibliothèque.
+
+Supabase Dashboard → SQL Editor → coller `supabase/MIGRATIONS-A-COLLER.sql`
+(idempotent : les migrations déjà passées ne referont rien). La dernière
+requête de vérification doit répondre `session_id_type = text`.
+
+L'app fonctionne sans attendre : tant que la colonne est en `INT`, elle
+réécrit une fois sans l'identifiant. La migration remet simplement les choses
+d'aplomb.
+
+---
+
+## 3 · Test coach-athlète à deux comptes (~10 min)
 
 Jamais validé de bout en bout, et le dernier commit a modifié le comportement au
 premier login.
@@ -112,7 +131,7 @@ précédent. C'est le bug corrigé par le dernier commit, jamais re-testé depui
 
 ---
 
-## 3 · Décisions produit (sans urgence)
+## 4 · Décisions produit (sans urgence)
 
 - **Nom de l'app** : « Climbing Planner » côté Android, « Planif » côté PWA.
   À unifier ?
@@ -124,7 +143,7 @@ précédent. C'est le bug corrigé par le dernier commit, jamais re-testé depui
 
 ---
 
-## 4 · Comment mettre à jour l'app
+## 5 · Comment mettre à jour l'app
 
 **Le site web se met à jour tout seul.** Push sur `master` → Vercel redéploie →
 tu recharges la page. Rien à faire.
@@ -167,7 +186,7 @@ au bundle, sinon l'app démarre muette en mode hors-ligne.
 
 ---
 
-## 5 · Automatique — juste à savoir
+## 6 · Automatique — juste à savoir
 
 - **Migration des données v5 (charge 0-10)** : se fait seule au premier
   chargement sur chaque appareil.

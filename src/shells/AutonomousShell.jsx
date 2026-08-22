@@ -5,6 +5,7 @@ import supabase from "../lib/supabase.js";
 import { DAYS, getDayLogWarning, getMesoColor, getMesoForDate } from "../lib/constants.js";
 import { getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime, getDayCharge } from "../lib/helpers.js";
 import { generateId } from "../lib/storage.js";
+import { upsertSessionFeedback } from "../lib/session-feedbacks.js";
 
 // ── Theme ──
 import { ThemeContext } from "../theme/ThemeContext.jsx";
@@ -224,26 +225,21 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
 
     if (supabase && session?.user?.id) {
       const smSession = (data.weeks[smKey] || [])[dayIndex]?.[sessionIndex];
-      const mondayDate = new Date(smKey);
-      const fDate = new Date(mondayDate);
-      fDate.setDate(mondayDate.getDate() + dayIndex);
-      const feedbackDate = fDate.toISOString().split("T")[0];
+      const fDate = addDays(new Date(smKey + "T12:00:00"), dayIndex);
       const athleteName = [data.profile?.firstName, data.profile?.lastName].filter(Boolean).join(" ") || null;
-      supabase.from("session_feedbacks").upsert({
+      upsertSessionFeedback({
         user_id: session.user.id,
         athlete_name: athleteName,
         session_id: smSession?.id ?? null,
         session_name: smSession?.name ?? "",
-        feedback_date: feedbackDate,
+        feedback_date: localDateStr(fDate),
         week_key: smKey,
         done: feedback.done,
         rpe: feedback.rpe ?? null,
         quality: feedback.quality ?? null,
         notes: feedback.notes || null,
-        block_feedbacks: feedback.blockFeedbacks?.length ? feedback.blockFeedbacks : null,
         updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id,session_name,feedback_date" })
-        .then(({ error }) => { if (error) console.error("[session_feedbacks] upsert error:", error); });
+      }).then(error => { if (error) console.error("[session_feedbacks] upsert error:", error); });
     }
 
     setSessionModal(null);
@@ -436,6 +432,23 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
     : syncStatus === "offline" ? <span style={{ fontSize: 11, color: colors(isDark).warn }} title="Hors ligne">—</span>
     : null;
 
+  // ── Rappels journaliers ────────────────────────────────────────────────────
+  // Deux écrans les modifient — Cycles (création / édition / suppression) et le
+  // Compte (activation) —, d'où des handlers nommés plutôt que deux copies
+  // inline : c'est l'oubli d'`onUpdateReminder` côté Cycles qui faisait qu'un
+  // rappel existant se rouvrait, se modifiait… et ne s'enregistrait jamais.
+  const addReminder = (r) => setData(d => ({ ...d, reminders: [...(d.reminders || []), r] }));
+  const updateReminder = (r) => setData(d => ({
+    ...d,
+    reminders: (d.reminders || []).map(x => x.id === r.id ? r : x),
+  }));
+  const deleteReminder = (id) => setData(d => {
+    const reminders = (d.reminders || []).filter(r => r.id !== id);
+    const reminderState = { ...(d.reminderState || {}) };
+    delete reminderState[id];
+    return { ...d, reminders, reminderState };
+  });
+
   // ── Rendu d'un onglet ──────────────────────────────────────────────────────
   // Le carrousel a besoin de savoir dessiner *n'importe quel* onglet, pas
   // seulement le courant : pendant un glissement, deux pages sont à l'écran.
@@ -545,14 +558,10 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             objectives={data.quickSessions || []}
             reminders={data.reminders || []}
             reminderState={data.reminderState || {}}
-            onAddReminder={r => setData(d => ({ ...d, reminders: [...(d.reminders || []), r] }))}
+            onAddReminder={addReminder}
+            onUpdateReminder={updateReminder}
+            onDeleteReminder={deleteReminder}
             onBack={() => setViewMode("accueil")}
-            onDeleteReminder={id => setData(d => {
-              const reminders = (d.reminders || []).filter(r => r.id !== id);
-              const reminderState = { ...(d.reminderState || {}) };
-              delete reminderState[id];
-              return { ...d, reminders, reminderState };
-            })}
           />
         );
 
@@ -588,7 +597,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             }}
             sentInvites={sentInvites}
             onRemoveAthlete={removeAthlete}
-            onUpdateReminder={r => setData(d => ({ ...d, reminders: (d.reminders || []).map(x => x.id === r.id ? r : x) }))}
+            onUpdateReminder={updateReminder}
             myCoaches={myCoaches}
             onLeaveCoach={leaveCoach}
             accountRole={accountRole}

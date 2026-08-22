@@ -167,8 +167,10 @@ export function SessionModal({
   const mesoColor = getMesoColor(mesocycles, mesoLabel);
 
   // ── Sub-components ──
+  // `key` : ces pastilles sont parfois rendues en tableau (charge planifiée /
+  // ressentie), et un tableau d'éléments sans clé fait râler React.
   const chip = (label, color, bg) => (
-    <span style={{
+    <span key={label} style={{
       background: bg || surfaceMuted,
       color: color || textMid,
       borderRadius: 14,
