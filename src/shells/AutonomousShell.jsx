@@ -223,6 +223,9 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
       },
     }));
 
+    // `feedback` vaut null quand l'athlète retire le statut : la séance
+    // redevient « pas encore réalisée ». Le miroir Supabase se remet à zéro
+    // lui aussi, sans quoi l'historique garderait un ressenti effacé ailleurs.
     if (supabase && session?.user?.id) {
       const smSession = (data.weeks[smKey] || [])[dayIndex]?.[sessionIndex];
       const fDate = addDays(new Date(smKey + "T12:00:00"), dayIndex);
@@ -234,16 +237,16 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         session_name: smSession?.name ?? "",
         feedback_date: localDateStr(fDate),
         week_key: smKey,
-        done: feedback.done,
-        rpe: feedback.rpe ?? null,
-        quality: feedback.quality ?? null,
-        notes: feedback.notes || null,
+        done: feedback?.done ?? null,
+        rpe: feedback?.rpe ?? null,
+        quality: feedback?.quality ?? null,
+        notes: feedback?.notes || null,
         updated_at: new Date().toISOString(),
       }).then(error => { if (error) console.error("[session_feedbacks] upsert error:", error); });
     }
 
     setSessionModal(null);
-    toast.success("Ressenti enregistré");
+    toast.success(feedback ? "Ressenti enregistré" : "Statut retiré");
   };
 
   const openSessionModal = (wKey, dayIndex, sessionIndex) => {

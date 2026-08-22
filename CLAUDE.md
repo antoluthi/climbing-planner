@@ -521,6 +521,16 @@ il n'y a plus de bouton « Voir le détail de la séance ». Le repli qui subsis
 dans cette modale est celui des **notes de retour** de l'athlète, qui est autre
 chose.
 
+### Retirer un statut de séance
+Recliquer sur l'état déjà sélectionné (Fait / Adaptée / Manquée) le retire :
+la séance redevient « pas encore réalisée ». À l'enregistrement, le ressenti
+repasse alors à **`null`** — surtout pas à `{ done: false }`, qui est la marque
+d'une séance **manquée** (`getSessionCharge` lui donne une charge de 0). Des
+notes déjà écrites survivent seules, dans un ressenti neutre
+(`{ status: null, done: null, notes }`) : les jeter sans prévenir serait une
+perte silencieuse. Le miroir `session_feedbacks` est remis à zéro en même
+temps.
+
 ### Où vit un ressenti (`lib/session-feedbacks.js`)
 Deux destinations, et une seule fait autorité :
 
