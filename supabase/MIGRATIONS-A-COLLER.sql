@@ -1,9 +1,11 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- PLANIF ESCALADE — TOUTES LES MIGRATIONS EN ATTENTE (juillet 2026) — v2
+-- PLANIF ESCALADE — TOUTES LES MIGRATIONS EN ATTENTE (août 2026) — v3
 -- Un seul copier-coller dans Supabase Dashboard → SQL Editor → Run.
 -- Ré-exécutable sans risque (tous les scripts sont idempotents).
 -- v2 : la policy des profils publics est maintenant droppée avant recréation
 --      (l'erreur 42710 « already exists » de la v1 est corrigée).
+-- v3 : session_feedbacks.session_id passe en TEXT — sans quoi aucun ressenti
+--      n'atteint la table (erreur 22P02 sur les identifiants de séance).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -336,7 +338,74 @@ $$;
 GRANT EXECUTE ON FUNCTION get_my_coaches() TO authenticated;
 
 
+-- ╔═══ 20260822_session_feedbacks_text_id.sql ═══╗
+
+-- session_feedbacks.session_id : INT → TEXT.
+-- La colonne datait du catalogue numéroté. Une séance porte aujourd'hui un
+-- identifiant généré côté client (« c_brmgrpkcmt3hp1ac ») : chaque upsert de
+-- ressenti repartait en 400 / 22P02 et la table restait vide.
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name   = 'session_feedbacks'
+      AND column_name  = 'session_id'
+      AND data_type   <> 'text'
+  ) THEN
+    ALTER TABLE public.session_feedbacks
+      ALTER COLUMN session_id TYPE TEXT USING session_id::text;
+  END IF;
+END $$;
+
+
+-- ╔═══ 20260823_climbing_plans_updated_at.sql ═══╗
+
+-- La synchronisation multi-appareils compare la date de la ligne à ce que
+-- l'appareil croit savoir. Cette date doit donc venir d'une seule horloge :
+-- celle du serveur. Le client en envoie toujours une (l'app doit marcher sans
+-- cette migration), le trigger la remplace.
+
+CREATE OR REPLACE FUNCTION public.climbing_plans_touch_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS climbing_plans_set_updated_at ON public.climbing_plans;
+CREATE TRIGGER climbing_plans_set_updated_at
+  BEFORE INSERT OR UPDATE ON public.climbing_plans
+  FOR EACH ROW
+  EXECUTE FUNCTION public.climbing_plans_touch_updated_at();
+
+
+-- ╔═══ 20260824_climbing_plans_status_solo.sql ═══╗
+
+-- `status` a été créée avec CHECK (status IN ('coach','athlete','auto')), avant
+-- que « athlète solo » ne devienne un choix explicite. L'app écrit 'solo' :
+-- Postgres refusait l'écriture (23514), silencieusement, et l'onboarding
+-- revenait au démarrage suivant. NULL garde son sens : « n'a jamais choisi ».
+
+ALTER TABLE public.climbing_plans
+  DROP CONSTRAINT IF EXISTS climbing_plans_status_check;
+
+ALTER TABLE public.climbing_plans
+  ADD CONSTRAINT climbing_plans_status_check
+  CHECK (status IS NULL OR status IN ('coach', 'athlete', 'auto', 'solo'));
+
+
 -- ═══ Vérifications (doivent toutes passer sans erreur) ═══
 select count(*) as notifications_ok from notifications;
 select policyname from pg_policies where tablename = 'coach_athletes';
 select count(*) as coaches_ok from get_my_coaches();
+select data_type as session_id_type from information_schema.columns
+  where table_schema = 'public' and table_name = 'session_feedbacks' and column_name = 'session_id';
+select tgname as updated_at_trigger from pg_trigger
+  where tgrelid = 'public.climbing_plans'::regclass and not tgisinternal;
+select pg_get_constraintdef(oid) as status_check from pg_constraint
+  where conname = 'climbing_plans_status_check';

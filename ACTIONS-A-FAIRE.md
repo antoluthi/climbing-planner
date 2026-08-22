@@ -90,7 +90,40 @@ Au build suivant, l'étape « Préparer le keystore de signature » doit affiche
 
 ---
 
-## 2 · Test coach-athlète à deux comptes (~10 min)
+## 2 · Trois migrations SQL à coller (~1 min)
+
+Supabase Dashboard → SQL Editor → coller `supabase/MIGRATIONS-A-COLLER.sql`
+(idempotent : les migrations déjà passées ne referont rien). Les dernières
+requêtes de vérification doivent répondre `session_id_type = text`,
+`updated_at_trigger = climbing_plans_set_updated_at`, et un `status_check` qui
+mentionne `'solo'`.
+
+**`session_feedbacks.session_id` en TEXT.** La colonne a été créée en `INT`, du
+temps où les séances venaient d'un catalogue numéroté. Un identifiant est
+aujourd'hui une chaîne (`c_brmgrpkcmt3hp1ac`) : Postgres refusait **chaque**
+écriture de ressenti — le `400 / 22P02` de la console — et la table est restée
+vide, d'où l'historique « Retours athlètes » désespérément vide.
+
+**`climbing_plans.updated_at` horodaté par le serveur.** La synchronisation
+compare la date de la ligne à ce que l'appareil croit savoir : cette date doit
+venir d'une seule horloge, sinon deux téléphones mal réglés suffisent à la
+fausser.
+
+**`climbing_plans.status` accepte `'solo'`.** La contrainte `CHECK` d'origine
+ne connaissait que `coach` / `athlete` / `auto`, alors que « athlète solo » est
+devenu un choix explicite écrit `'solo'` : Postgres refusait l'écriture (23514)
+et le rôle n'était jamais enregistré — d'où l'écran « Quel est votre rôle ? »
+qui revenait à chaque démarrage. **Sans cette migration, choisir « Athlète
+solo » dans Compte > Rôle affichera une erreur** (l'app ne fait plus semblant).
+
+L'app fonctionne sans attendre dans les deux cas (elle réécrit sans
+l'identifiant tant que la colonne est en `INT`, et continue d'envoyer une date
+tant que le trigger n'existe pas). Les migrations remettent les choses
+d'aplomb.
+
+---
+
+## 3 · Test coach-athlète à deux comptes (~10 min)
 
 Jamais validé de bout en bout, et le dernier commit a modifié le comportement au
 premier login.
@@ -112,7 +145,7 @@ précédent. C'est le bug corrigé par le dernier commit, jamais re-testé depui
 
 ---
 
-## 3 · Décisions produit (sans urgence)
+## 4 · Décisions produit (sans urgence)
 
 - **Nom de l'app** : « Climbing Planner » côté Android, « Planif » côté PWA.
   À unifier ?
@@ -124,7 +157,7 @@ précédent. C'est le bug corrigé par le dernier commit, jamais re-testé depui
 
 ---
 
-## 4 · Comment mettre à jour l'app
+## 5 · Comment mettre à jour l'app
 
 **Le site web se met à jour tout seul.** Push sur `master` → Vercel redéploie →
 tu recharges la page. Rien à faire.
@@ -167,7 +200,7 @@ au bundle, sinon l'app démarre muette en mode hors-ligne.
 
 ---
 
-## 5 · Automatique — juste à savoir
+## 6 · Automatique — juste à savoir
 
 - **Migration des données v5 (charge 0-10)** : se fait seule au premier
   chargement sur chaque appareil.

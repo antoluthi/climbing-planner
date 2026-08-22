@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import supabase from "../lib/supabase.js";
 import { migrateWeekKeys } from "../lib/helpers.js";
+import { markDirty, markSynced, writeSyncMeta } from "../lib/sync-meta.js";
 
 export function useSupabaseSync() {
   const [session, setSession] = useState(null);
@@ -91,22 +92,44 @@ export function useSupabaseSync() {
     updated_at: new Date().toISOString(),
   }), []);
 
-  const loadFromCloud = useCallback(async () => {
-    if (!supabase) return null;
-    // Try to read extra columns; fall back gracefully if they don't exist yet.
-    let row = null;
-    const { data: full, error: fullErr } = await supabase
+  // ── Coup d'œil sur la ligne, sans le planning ──
+  // Une seule colonne de dates : c'est ce qui permet de demander « y a-t-il du
+  // neuf ? » à chaque retour au premier plan sans retélécharger tout le blob.
+  // `status` voyage avec, parce que le rôle du compte se résout au même moment.
+  const fetchCloudHead = useCallback(async (userId) => {
+    if (!supabase || !userId) return null;
+    const { data: row, error } = await supabase
       .from("climbing_plans")
-      .select("data, first_name, last_name, status, updated_at")
+      .select("updated_at, status")
+      .eq("user_id", userId)
       .maybeSingle();
+    if (error) throw error;
+    return {
+      exists:    !!row,
+      updatedAt: row?.updated_at ?? null,
+      status:    row ? (row.status ?? null) : undefined,
+    };
+  }, []);
+
+  const loadFromCloud = useCallback(async (userId) => {
+    if (!supabase) return null;
+    // `eq(user_id)` n'est PAS une redondance avec RLS : un coach a le droit de
+    // lire les lignes de ses athlètes, donc un SELECT sans filtre en renvoie
+    // plusieurs et `maybeSingle()` part en erreur. Sans ce filtre, un coach
+    // avec au moins un athlète ne chargeait jamais ses propres données.
+    const scoped = (q) => (userId ? q.eq("user_id", userId) : q);
+    let row = null;
+    // Try to read extra columns; fall back gracefully if they don't exist yet.
+    const { data: full, error: fullErr } = await scoped(
+      supabase.from("climbing_plans").select("data, first_name, last_name, status, updated_at")
+    ).maybeSingle();
     if (!fullErr) {
       row = full;
     } else {
       // Columns likely not yet added — fall back to JSONB only
-      const { data: slim, error: slimErr } = await supabase
-        .from("climbing_plans")
-        .select("data")
-        .maybeSingle();
+      const { data: slim, error: slimErr } = await scoped(
+        supabase.from("climbing_plans").select("data")
+      ).maybeSingle();
       // If both queries fail (e.g. JWT expired / not yet refreshed on rapid reload),
       // throw so the caller can skip setCloudLoaded and retry on next session change.
       if (slimErr) throw slimErr;
@@ -129,49 +152,83 @@ export function useSupabaseSync() {
     return { ...migrated, _cloudUpdatedAt: row.updated_at ?? null, _status: status ?? null };
   }, []);
 
-  // Write status to its own column — called only from onboarding.
+  // Écrit le rôle dans sa colonne — à l'inscription et depuis le compte.
   // « Athlète solo » est stocké comme 'solo' (jamais NULL) : NULL est réservé
   // à « n'a jamais choisi », ce qui rend l'affichage de l'onboarding fiable.
   const writeStatus = useCallback(async (userId, role) => {
-    if (!supabase || !userId) return;
-    await supabase
+    if (!supabase || !userId) return { error: null };
+    const { data: saved, error } = await supabase
       .from("climbing_plans")
-      .upsert({ user_id: userId, status: role ?? "solo" }, { onConflict: "user_id" });
+      .upsert({ user_id: userId, status: role ?? "solo" }, { onConflict: "user_id" })
+      .select("updated_at")
+      .maybeSingle();
+    // L'échec doit remonter : tant que la contrainte CHECK de `status` n'avait
+    // pas été élargie à 'solo', l'écriture repartait en 23514 et personne ne le
+    // voyait — l'utilisateur croyait avoir choisi son rôle, et l'onboarding
+    // revenait au démarrage suivant.
+    if (error) return { error };
+    // Cette écriture rajeunit la ligne sans toucher au planning : on avance le
+    // marqueur pour ne pas déclencher un rapatriement inutile juste après
+    // l'onboarding. `dirtyAt`, lui, n'est pas effacé — rien n'a été envoyé.
+    if (saved?.updated_at) writeSyncMeta({ userId, syncedAt: saved.updated_at });
+    return { error: null };
   }, []);
+
+  // Écriture réelle de la ligne. On relit l'`updated_at` que Postgres a
+  // finalement stocké : c'est lui, et pas l'heure de l'appareil, qui devient
+  // notre marqueur de synchronisation. Renvoie cette date, ou null si l'écriture
+  // n'a pas abouti.
+  const writeRow = useCallback(async (planData, userId) => {
+    const { data: saved, error } = await supabase
+      .from("climbing_plans")
+      .upsert(buildRow(planData, userId), { onConflict: "user_id" })
+      .select("updated_at")
+      .maybeSingle();
+    if (error) throw error;
+    return saved?.updated_at ?? null;
+  }, [buildRow]);
+
+  // Le marqueur local ne suit QUE notre propre ligne : quand un coach
+  // enregistre le planning d'un athlète, ça ne dit rien de l'état du sien.
+  const isOwnRow = (userId) => !!userId && userId === sessionRef.current?.user?.id;
 
   const saveToCloud = useCallback((planData, userId) => {
     if (!supabase || !userId) return;
     clearTimeout(saveTimerRef.current);
     setSyncStatus("saving");
+    if (isOwnRow(userId)) markDirty();
     pendingSaveRef.current = { planData, userId }; // pagehide will flush this if debounce is cancelled
     saveTimerRef.current = setTimeout(async () => {
       try {
-        const { error } = await supabase
-          .from("climbing_plans")
-          .upsert(buildRow(planData, userId), { onConflict: "user_id" });
-        if (!error) pendingSaveRef.current = null; // debounce completed — nothing left to flush
-        setSyncStatus(error ? "offline" : "saved");
+        const updatedAt = await writeRow(planData, userId);
+        pendingSaveRef.current = null; // debounce completed — nothing left to flush
+        if (isOwnRow(userId)) markSynced(userId, updatedAt);
+        setSyncStatus("saved");
         setTimeout(() => setSyncStatus("idle"), 2000);
       } catch {
+        // Rien n'est perdu : `dirtyAt` reste posé, la prochaine réconciliation
+        // (retour au premier plan, relance de l'app) renverra les données.
         setSyncStatus("offline");
       }
     }, 500);
-  }, [buildRow]);
+  }, [writeRow]);
 
   // Immediate upload (no debounce) — used for force-sync & first-login push
   const uploadNow = useCallback(async (planData, userId) => {
-    if (!supabase || !userId) return;
+    if (!supabase || !userId) return null;
     setSyncStatus("saving");
     try {
-      const { error } = await supabase
-        .from("climbing_plans")
-        .upsert(buildRow(planData, userId), { onConflict: "user_id" });
-      setSyncStatus(error ? "offline" : "saved");
+      const updatedAt = await writeRow(planData, userId);
+      pendingSaveRef.current = null;
+      if (isOwnRow(userId)) markSynced(userId, updatedAt);
+      setSyncStatus("saved");
       setTimeout(() => setSyncStatus("idle"), 2500);
+      return updatedAt;
     } catch {
       setSyncStatus("offline");
+      return null;
     }
-  }, [buildRow]);
+  }, [writeRow]);
 
   // Subscribe to realtime changes on the user's own row.
   // Calls onChanged() whenever another device (or tab) saves.
@@ -194,5 +251,5 @@ export function useSupabaseSync() {
   // Utilisé par le handler Realtime pour éviter d'écraser des modifications locales.
   const hasPendingSave = useCallback(() => pendingSaveRef.current !== null, []);
 
-  return { session, setSession, authChecked, syncStatus, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges, hasPendingSave };
+  return { session, setSession, authChecked, syncStatus, fetchCloudHead, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges, hasPendingSave };
 }

@@ -2,12 +2,14 @@ import { useState, useRef, useEffect } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { AuthPanel } from "./AuthPanel.jsx";
 import { CoachAthletesSection } from "./CoachAthletesSection.jsx";
+import { RoleSection } from "./RoleSection.jsx";
 import { PhotoCropModal } from "./PhotoCropModal.jsx";
 import { CalendarSyncSection } from "./CalendarSyncSection.jsx";
 import { DayNightToggle } from "./DayNightToggle.jsx";
 import supabase from "../lib/supabase.js";
 import { uploadAvatar, deleteAvatar } from "../lib/avatar-storage.js";
 import { isNative } from "../lib/native.js";
+import { readSyncMeta } from "../lib/sync-meta.js";
 import { toast } from "../lib/toast.js";
 import { colors, DATA } from "../theme/palette.js";
 import { disciplineList } from "../lib/disciplines.js";
@@ -17,7 +19,7 @@ import { RowCard, Row, Segmented, Chip, RoundIconButton, SANS, MONO } from "./ui
 
 export function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus, onUpload, onPull, onImport, toggleTheme, isDark,
   athletes, onSearchAthletes, onInviteAthlete, sentInvites, onRemoveAthlete,
-  myCoaches, onLeaveCoach, accountRole, onBack,
+  myCoaches, onLeaveCoach, accountRole, onChangeRole, onBack,
   viewingAthlete, onToggleViewAthlete }) {
   const { styles } = useThemeCtx();
   const profile = data.profile || {};
@@ -132,6 +134,20 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
 
   const syncIcon = syncStatus === "saving" ? "⟳" : syncStatus === "saved" ? "✓" : syncStatus === "offline" ? "⚡" : null;
   const syncColor = syncStatus === "saved" ? accent : syncStatus === "offline" ? colors(isDark).warn : mutedColor;
+
+  // État réel de la synchronisation, lu au marqueur local. Relu à chaque
+  // changement de `syncStatus`, c'est-à-dire à chaque échange avec la base.
+  const syncLine = (() => {
+    if (!session) return null;
+    const meta = readSyncMeta();
+    if (meta.dirtyAt) return { text: "Modifications en attente d'envoi", tone: colors(isDark).warn };
+    if (!meta.syncedAt) return { text: "Pas encore synchronisé", tone: mutedColor };
+    const mins = Math.max(0, Math.round((Date.now() - Date.parse(meta.syncedAt)) / 60000));
+    const when = mins < 1 ? "à l'instant"
+      : mins < 60 ? `il y a ${mins} min`
+      : new Date(meta.syncedAt).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return { text: `Synchronisé ${when}`, tone: mutedColor };
+  })();
 
   const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || null;
 
@@ -277,44 +293,17 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
         </div>
       </div>
 
-      {/* ── Rôle (lecture seule) ── */}
-      {"role" in profile && (
-        <div style={styles.profileSection}>
-          <div style={styles.profileSectionTitle}>Rôle</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ background: colors(isDark).successBg, border: `1px solid ${accent}88`, color: accent, padding: "7px 16px", borderRadius: 5, fontSize: 11, fontWeight: 600, letterSpacing: "0.04em" }}>
-              {profile.role === "coach" ? "Coach" : profile.role === "athlete" ? "Athlète suivi" : profile.role === "auto" ? "Athlète autonome ✦" : "Athlète solo"}
-            </span>
-            <span style={{ fontSize: 11, color: mutedColor, fontStyle: "italic" }}>
-              {profile.role === "athlete" && "Vos cycles sont en lecture seule. Votre coach les modifie pour vous."}
-              {profile.role === "coach"  && "Vous pouvez créer et modifier les cycles de vos athlètes."}
-              {profile.role === "auto"   && "Mode autonome — accès complet coach + athlète."}
-              {(profile.role == null)    && "Vous gérez votre planning en autonomie."}
-            </span>
-          </div>
-          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 10, color: mutedColor, opacity: 0.7 }}>
-              Pour modifier votre rôle, contactez votre administrateur.
-            </span>
-            {session && supabase && (
-              <button
-                onClick={async () => {
-                  const { data: row } = await supabase
-                    .from("climbing_plans")
-                    .select("status")
-                    .eq("user_id", session.user.id)
-                    .maybeSingle();
-                  if (row && "status" in row) {
-                    onUpdateProfile({ ...profile, role: row.status });
-                  }
-                }}
-                style={{ background: "none", border: `1px solid ${btnBorder}`, borderRadius: 5, color: mutedColor, padding: "3px 10px", cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}
-              >
-                ↺ Re-sync depuis la DB
-              </button>
-            )}
-          </div>
-        </div>
+      {/* ── Rôle ── modifiable, sauf en vue athlète (le profil affiché n'est
+           pas le nôtre). */}
+      {session && !viewingAthlete && onChangeRole && (
+        <RoleSection
+          isDark={isDark}
+          styles={styles}
+          accountRole={accountRole}
+          athletes={athletes || []}
+          onChangeRole={onChangeRole}
+          onRemoveAthlete={onRemoveAthlete}
+        />
       )}
 
       {/* ── Mes athlètes (coach / auto uniquement — rôle du compte) ── */}
@@ -468,6 +457,9 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
               >↓ Charger depuis le cloud</button>
             )}
           </div>
+        )}
+        {syncLine && (
+          <div style={{ fontSize: 11, color: syncLine.tone, marginBottom: 12 }}>{syncLine.text}</div>
         )}
         {/* Local import/export */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

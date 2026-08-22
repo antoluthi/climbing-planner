@@ -35,6 +35,20 @@ function hooperColor(total, isDark) {
   return colors(isDark).danger;
 }
 
+// ─── Barre d'écart ───────────────────────────────────────────────────────────
+// Le slider de ressenti part de la charge prévue : confirmer sans y toucher
+// donne un écart de zéro, donc une barre de hauteur nulle — invisible. Sur ce
+// graphe, « noté et bien estimé » doit se distinguer de « rien à afficher » :
+// un écart trop petit pour se voir devient un trait posé sur la ligne du zéro.
+const ZERO_MARK = 3;
+function DeviationBar({ x, y, width, height, fill, value }) {
+  if (value == null || x == null) return null;
+  if (Math.abs(height) >= ZERO_MARK) {
+    return <rect x={x} y={y} width={width} height={height} rx={3} fill={fill} />;
+  }
+  return <rect x={x} y={y - ZERO_MARK / 2} width={width} height={ZERO_MARK} rx={1.5} fill={fill} />;
+}
+
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
 function sessionCharge(s) { return getSessionCharge(s); } // échelle unifiée 0-10 (ressenti > planifié > legacy)
@@ -375,7 +389,7 @@ function DashboardBody({ data, onUpdateSleep }) {
               }}
             />
             <ReferenceLine yAxisId="dev" y={0} stroke={styles.dashText} strokeOpacity={0.5} />
-            <Bar yAxisId="dev" dataKey="deviation" name="deviation" radius={[3, 3, 0, 0]} maxBarSize={30}>
+            <Bar yAxisId="dev" dataKey="deviation" name="deviation" shape={<DeviationBar />} maxBarSize={30}>
               {deviationChartData.map((entry, i) => (
                 <Cell key={i} fill={entry.deviation == null ? "transparent" : devColor(entry.deviation)} />
               ))}

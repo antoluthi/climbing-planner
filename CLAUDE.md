@@ -33,6 +33,8 @@ src/
 │   ├── storage.js                — generateId, loadData, saveData (localStorage)
 │   ├── pace.js                   — temps · distance · allure/vitesse liés (parse, format, calcul)
 │   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
+│   ├── session-feedbacks.js      — upsertSessionFeedback (miroir Supabase des ressentis)
+│   ├── sync-meta.js              — marqueur de synchro local + decideSync (pull/push/reset/idle)
 │   └── hooper.js                 — hooperLabel, hooperColor
 │
 ├── theme/
@@ -54,6 +56,7 @@ src/
     ├── SyncButtons.jsx            — boutons export/import/sync
     ├── AuthPanel.jsx              — panneau auth (password + magic link)
     ├── RoleOnboardingModal.jsx    — choix du rôle au 1er login
+    ├── RoleSection.jsx            — changement de rôle depuis le compte
     ├── RichText.jsx               — rendu texte riche (markdown-like)
     ├── ConfirmModal.jsx           — dialogue de confirmation suppression
     ├── session/SessionFormModal.jsx     — ajout/modification d'une séance (étape 1)
@@ -159,7 +162,7 @@ Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autor
 | `null` | Athlète solo — accès complet à son propre planning |
 | `"athlete"` | Athlète suivi — cycles en lecture seule (`canEdit = false`) |
 | `"coach"` | Coach — accès à la bibliothèque de séances + vue des athlètes |
-| `"auto"` | Athlète autonome — expérimental, réglable en DB uniquement — même accès que coach |
+| `"auto"` | Autonome — accès coach complet, sur son propre planning |
 
 - **Source de vérité** : colonne `status` de `climbing_plans`. Valeurs : `'coach'` |
   `'athlete'` | `'auto'` | `'solo'` (athlète solo explicite) | `NULL` (= n'a
@@ -171,8 +174,22 @@ Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autor
   dérivent de `accountRole`, **jamais de `data.profile.role`** (qui devient
   celui de l'athlète en vue athlète — le coach garde bibliothèque, picker coach
   et édition des cycles pendant la vue athlète).
-- Choix unique via `RoleOnboardingModal` → `chooseRole()` (écrit `status`,
-  `'solo'` pour null).
+- Deux entrées vers `chooseRole()` (qui écrit `status`, `'solo'` pour null) :
+  `RoleOnboardingModal` au premier login (3 choix — « Autonome » n'y est pas,
+  c'est une variante avancée du coach), puis **`RoleSection` dans Compte**, où
+  le rôle se change ensuite librement (les 4). Masquée en vue athlète : le
+  profil affiché n'est pas celui du compte.
+- `chooseRole()` bascule l'affichage tout de suite mais **revient en arrière si
+  la base refuse** : un rôle absent de `status` n'existe pas — le prochain
+  démarrage, ou l'autre appareil, l'ignorerait. `writeStatus()` remonte donc
+  son erreur au lieu de l'avaler.
+- **Quitter le rôle coach supprime les liens `coach_athletes`** (après
+  confirmation). C'est la ligne de liaison, pas `status`, que lit la RLS pour
+  autoriser un coach à ouvrir le planning d'un athlète : la garder laisserait
+  un accès en écriture à quelqu'un qui n'est plus coach, sans rien dans
+  l'interface pour s'en apercevoir. Être coach **et** suivi reste permis (un
+  coach peut avoir son propre coach) ; seule conséquence, un coach n'apparaît
+  plus dans `search_athletes`.
 
 ## Système coach-athlète
 
@@ -493,6 +510,34 @@ il n'y a plus de bouton « Voir le détail de la séance ». Le repli qui subsis
 dans cette modale est celui des **notes de retour** de l'athlète, qui est autre
 chose.
 
+### Où vit un ressenti (`lib/session-feedbacks.js`)
+Deux destinations, et une seule fait autorité :
+
+1. **Le planning** — `data.weeks[…].feedback`, donc le blob `climbing_plans.data`.
+   C'est lui que lisent la charge, l'écart, la heatmap et l'accueil.
+2. **`session_feedbacks`** — miroir plat, lu par l'historique « Retours
+   athlètes » de la bibliothèque. Un échec ici ne perd jamais un ressenti.
+
+La colonne `session_id` de ce miroir était restée en `INT` alors qu'un
+identifiant de séance est une chaîne (`generateId()`) : chaque écriture
+repartait en **400 / 22P02** et la table restait vide. La migration
+`20260822` la passe en TEXT ; en attendant qu'elle soit appliquée,
+`upsertSessionFeedback()` réécrit une fois sans l'identifiant (la clé
+d'unicité est `user_id, session_name, feedback_date`, qui suffit).
+
+Le slider de ressenti étant **pré-rempli à la charge planifiée**, confirmer
+sans y toucher donne un écart de zéro : le graphe d'écart dessine alors un
+trait sur la ligne du zéro (`DeviationBar`) plutôt que rien du tout.
+
+### Rappels journaliers — câblage
+Trois écrans les touchent : **Cycles** (créer / modifier / supprimer, que les
+cycles soient verrouillés — `CyclesTimeline` — ou non — `CyclesView`),
+**Compte** (activer / désactiver) et **Accueil** (cocher pour la journée).
+Les handlers `addReminder` / `updateReminder` / `deleteReminder` sont nommés
+une fois dans `AutonomousShell` et passés aux deux écrans : c'est l'oubli
+d'`onUpdateReminder` côté Cycles qui faisait qu'un rappel se rouvrait, se
+modifiait… et ne s'enregistrait jamais.
+
 ### DayLogModal (`components/DayLogModal.jsx`)
 - Assistant en **trois étapes** : **Ressenti (Hooper) → Poids → Notes**, avec une
   barre de progression en haut de la modale et une navigation Précédent /
@@ -544,24 +589,60 @@ discipline (celle de l'échéance pour une échéance, trois au plus par jour).
   - Coach voit un point orange sur l'onglet "Déplacer" + liste Accepter/Refuser
   - Badge `↔` sur la `DayColumn` pour les séances avec suggestion en attente
 
-### Auto-save (`climbing-planner-new.jsx`, useEffect sur `data`)
-```js
-useEffect(() => {
-  if (viewingAthlete) {
-    saveToCloud(data, viewingAthlete.userId); // sauvegarde sur la ligne de l'athlète
-  } else {
-    saveData(data);                           // localStorage
-    saveToCloud(data, session?.user?.id);     // Supabase propre
-  }
-}, [data]);
-```
+### Synchronisation (refonte août 2026)
 
-Règles de sync (refonte mars 2026) :
-- **Cloud autoritaire** : pas de comparaison timestamp local/cloud (supprimé, trop fragile)
-- **`_pendingSync` flag** : dirty flag dans `pendingSaveRef` pour flush via `pagehide`
-- **Skip premier render** : pas de save automatique au montage (évite d'écraser le cloud avec données locales stale)
-- **Flush `pagehide`** : `navigator.sendBeacon` avec keepalive pour sauvegarder en quittant la page
-- **Race condition JWT** : ignorée si le token a expiré entre-temps (pas de corruption cloud)
+Une seule règle, une seule fonction : `reconcile()` dans `context/DataProvider.jsx`.
+Elle demande à la base la **date** de la ligne (`fetchCloudHead` — deux colonnes,
+pas le blob), la compare au **marqueur local** (`lib/sync-meta.js`) et agit.
+
+`decideSync()` est pure et sans réseau, c'est là qu'est toute la politique :
+
+| Situation | Geste |
+|---|---|
+| Pas de ligne pour ce compte | `push` (ou `reset` si le local appartient à un autre compte) |
+| Données locales d'un autre compte | `pull` — jamais l'inverse (garde anti-fuite) |
+| `updated_at` cloud > `syncedAt` local | `pull`, sauf si le local a des modifications **plus récentes** → `push` |
+| Cloud = notre dernier envoi | `push` si `dirtyAt`, sinon rien |
+
+Le marqueur (`climbing_planner_sync_v1`) contient `{ userId, syncedAt, dirtyAt }` :
+- `syncedAt` est l'`updated_at` **du serveur**, recopié tel quel après chaque
+  échange réussi (l'upsert relit la colonne). Les deux dates comparées viennent
+  donc de la même horloge — celle de Postgres, imposée par le trigger de la
+  migration `20260823`. Comparaison en **instants** (`Date.parse`), jamais en
+  chaînes : PostgREST rend `…+00:00`, l'app produit `…Z`.
+- `dirtyAt` est l'heure locale de la **première** modification pas encore
+  confirmée. Il survit à la fermeture de l'app : hors ligne, rien ne se perd.
+
+`reconcile()` est appelée à la **connexion**, au **retour au premier plan**
+(`visibilitychange` / `focus` / `online`, anti-rafale 3 s), sur **notification
+temps réel**, et par le bouton « Charger depuis le cloud » (qui, lui, force le
+pull). Le réveil rafraîchit aussi bibliothèque, athlètes et notifications.
+
+Ce que ça répare :
+- `loadFromCloud` sélectionnait la ligne **sans `eq(user_id)`**. RLS autorise un
+  coach à lire les lignes de ses athlètes : la requête en renvoyait plusieurs,
+  `maybeSingle()` partait en `PGRST116`, l'exception était avalée — **un coach
+  avec un athlète ne chargeait jamais ses propres données**.
+- Rien ne relisait la base après le démarrage. Dans l'APK la WebView survit à
+  l'arrière-plan, et le temps réel ne délivre que connecté : deux appareils
+  devaient être ouverts **en même temps** pour se synchroniser.
+- L'auto-save du montage marquait les données « modifiées » alors que rien
+  n'avait bougé — au démarrage suivant, ce faux « plus récent » écrasait le
+  planning saisi ailleurs. D'où la comparaison par identité avec l'objet chargé
+  au montage (et non un « premier passage », que le double montage de React en
+  développement rendait inopérant).
+
+Auto-save (`useEffect` sur `data`) : localStorage **toujours**, cloud seulement
+une fois la première réconciliation faite (`syncReadyRef`) — sinon on pousserait
+à l'aveugle par-dessus une ligne plus fraîche. En vue athlète, l'écriture part
+sur la ligne de l'athlète et ne touche jamais le marqueur du coach.
+
+Conservé de la version précédente : flush `pagehide` / `visibilitychange` par
+`fetch({ keepalive: true })`, et l'abandon silencieux si le jeton a expiré (le
+marqueur reste sale, la prochaine occasion réessaie).
+
+L'état est visible dans **Compte > Données** : « Synchronisé il y a n min » ou
+« Modifications en attente d'envoi ».
 
 ## Migrations SQL
 
@@ -574,10 +655,13 @@ Règles de sync (refonte mars 2026) :
 | `supabase/migrations/20260513_shared_sessions_catalog.sql` | Bibliothèque commune : `sessions_catalog` + `session_blocks` → tout user authentifié peut SELECT/INSERT/UPDATE/DELETE toutes les rows. `user_id` / `created_by` conservés pour la traçabilité. | ✅ appliquée |
 | `supabase/migrations/20260517_public_profiles.sql` | Colonne `climbing_plans.is_public` + policy `anon` lecture des lignes publiques (remplace la policy Anto) | ✅ appliquée |
 | `supabase/migrations/20260715_notifications_coach_invites.sql` | Table `notifications` + realtime, `coach_athletes` en consentement mutuel (INSERT athlète only, SELECT/DELETE des deux côtés), `search_athletes` inclut 'solo', RPC `get_my_coaches` | ✅ appliquée |
+| `supabase/migrations/20260822_session_feedbacks_text_id.sql` | `session_feedbacks.session_id` INT → TEXT (les identifiants de séance sont des chaînes depuis `generateId()` : chaque upsert de ressenti partait en 400 / 22P02) | ⏳ **à coller** |
+| `supabase/migrations/20260823_climbing_plans_updated_at.sql` | Trigger `BEFORE INSERT OR UPDATE` sur `climbing_plans` : `updated_at = now()` côté serveur — la synchronisation compare des dates, elles doivent venir d'une seule horloge | ⏳ **à coller** |
+| `supabase/migrations/20260824_climbing_plans_status_solo.sql` | `CHECK` de `climbing_plans.status` élargi à `'solo'` — la contrainte d'origine ne connaissait que coach/athlete/auto, donc « athlète solo » repartait en 23514 et le rôle n'était jamais enregistré | ⏳ **à coller** |
 
 Statuts vérifiés le 20 août 2026 contre le projet Supabase (existence des
 tables, colonnes, RPC et buckets via l'API REST). `supabase/MIGRATIONS-A-COLLER.sql`
-concatène les 5 dernières dans l'ordre, idempotent et ré-exécutable.
+concatène les 8 dernières dans l'ordre, idempotent et ré-exécutable.
 `supabase/legacy/` conserve les scripts SQL antérieurs aux migrations — dont
 `supabase-community-sessions.sql`, seule définition de `community_sessions`
 (utilisée par `useCommunitySessionsSync.js`), qui n'a pas d'équivalent en migration.
