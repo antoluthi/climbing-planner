@@ -399,6 +399,19 @@ ALTER TABLE public.climbing_plans
   CHECK (status IS NULL OR status IN ('coach', 'athlete', 'auto', 'solo'));
 
 
+-- ╔═══ 20260825_drop_auto_role.sql ═══╗
+
+-- Le rôle « autonome » ('auto') est retiré de l'app : il ne se distinguait du
+-- coach nulle part. Les comptes restés à cette valeur deviennent coach — c'est
+-- ce que l'app en fait déjà à la lecture, donc rien ne change pour eux ; cette
+-- ligne aligne simplement la base.
+--
+-- 'auto' reste autorisé par la contrainte : la resserrer casserait toute mise à
+-- jour d'une ligne qui aurait échappé à l'UPDATE.
+
+UPDATE public.climbing_plans SET status = 'coach' WHERE status = 'auto';
+
+
 -- ═══ Vérifications (doivent toutes passer sans erreur) ═══
 select count(*) as notifications_ok from notifications;
 select policyname from pg_policies where tablename = 'coach_athletes';

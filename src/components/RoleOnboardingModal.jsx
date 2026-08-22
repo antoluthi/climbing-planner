@@ -6,11 +6,11 @@ import { colors } from "../theme/palette.js";
 
 // Choix du rôle au 1er login. C'est une porte d'entrée : pas de fermeture
 // (ni Esc, ni clic-extérieur), un choix explicite requis avant de continuer.
-// Trois options seulement — « Autonome », variante avancée du coach, se choisit
-// depuis le compte (`RoleSection`), où le rôle se change ensuite librement.
+// Les mêmes trois rôles que dans Compte > Rôle (`RoleSection`), où le choix se
+// change ensuite librement.
 const ROLES = [
   { value: null,      label: "Athlète solo",   desc: "Vous gérez votre planning vous-même." },
-  { value: "coach",   label: "Coach",          desc: "Vous créez et modifiez les cycles de vos athlètes." },
+  { value: "coach",   label: "Coach",          desc: "Vous suivez d'autres athlètes, en plus de votre planning." },
   { value: "athlete", label: "Athlète suivi",  desc: "Votre coach gère vos cycles. Ils sont en lecture seule." },
 ];
 

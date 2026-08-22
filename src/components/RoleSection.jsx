@@ -16,15 +16,17 @@ import { toast } from "../lib/toast.js";
 // sans toucher aux liens laisserait donc un accès en écriture à quelqu'un qui
 // n'est plus coach, sans rien dans l'interface pour s'en rendre compte. D'où la
 // confirmation, et la suppression des liens qui va avec.
+//
+// Trois rôles, plus quatre : « Autonome » ('auto') a été retiré, il ne se
+// distinguait de « Coach » nulle part dans l'app. Les comptes encore marqués
+// 'auto' en base sont lus comme coach (`DataProvider`), donc rien ne change
+// pour eux.
 
 const ROLES = [
   { value: null,      label: "Athlète solo",  desc: "Vous gérez votre planning vous-même." },
   { value: "athlete", label: "Athlète suivi", desc: "Votre coach gère vos cycles ; ils sont en lecture seule." },
-  { value: "coach",   label: "Coach",         desc: "Vous créez et modifiez les cycles de vos athlètes." },
-  { value: "auto",    label: "Autonome",      desc: "Accès coach complet, sur votre propre planning." },
+  { value: "coach",   label: "Coach",         desc: "Vous suivez d'autres athlètes, en plus de votre planning." },
 ];
-
-const hasCoachAccess = (role) => role === "coach" || role === "auto";
 
 export function RoleSection({ isDark, styles, accountRole, athletes = [], onChangeRole, onRemoveAthlete }) {
   // `undefined` = pas de confirmation en cours. Le rôle, lui, peut valoir null
@@ -56,9 +58,9 @@ export function RoleSection({ isDark, styles, accountRole, athletes = [], onChan
 
   const select = (role) => {
     if (saving || role === current) return;
-    // Seul cas à confirmer : on renonce à l'accès coach alors que des athlètes
+    // Seul cas à confirmer : on renonce au rôle coach alors que des athlètes
     // sont encore rattachés.
-    if (hasCoachAccess(current) && !hasCoachAccess(role) && linked > 0) {
+    if (current === "coach" && role !== "coach" && linked > 0) {
       setPending({ role });
       return;
     }
@@ -109,7 +111,7 @@ export function RoleSection({ isDark, styles, accountRole, athletes = [], onChan
 
       <div style={{ fontSize: 11, color: c.textDim, marginTop: 8, lineHeight: 1.5 }}>
         Le changement s'applique à tous vos appareils.
-        {hasCoachAccess(current) && linked > 0
+        {current === "coach" && linked > 0
           && ` Vous suivez ${linked} athlète${linked > 1 ? "s" : ""}.`}
       </div>
 

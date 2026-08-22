@@ -306,8 +306,8 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
         />
       )}
 
-      {/* ── Mes athlètes (coach / auto uniquement — rôle du compte) ── */}
-      {(accountRole === "coach" || accountRole === "auto") && onSearchAthletes && (
+      {/* ── Mes athlètes (coach uniquement — rôle du COMPTE) ── */}
+      {accountRole === "coach" && onSearchAthletes && (
         <CoachAthletesSection
           athletes={athletes || []}
           onSearch={onSearchAthletes}

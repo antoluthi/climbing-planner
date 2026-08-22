@@ -116,7 +116,7 @@ src/
   profile: {           // avatar, nom, objectif, thème, rôle, etc.
     avatarUrl: "",     // URL publique Supabase Storage (bucket `avatars`)
     avatarDataUrl: "", // legacy base64 (migré au boot vers avatarUrl)
-    role: null,        // null | "coach" | "athlete" | "auto"
+    role: null,        // null | "coach" | "athlete"
     firstName: "",
     lastName: "",
   },
@@ -162,12 +162,17 @@ Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autor
 | `null` | Athlète solo — accès complet à son propre planning |
 | `"athlete"` | Athlète suivi — cycles en lecture seule (`canEdit = false`) |
 | `"coach"` | Coach — accès à la bibliothèque de séances + vue des athlètes |
-| `"auto"` | Autonome — accès coach complet, sur son propre planning |
 
-- **Source de vérité** : colonne `status` de `climbing_plans`. Valeurs : `'coach'` |
-  `'athlete'` | `'auto'` | `'solo'` (athlète solo explicite) | `NULL` (= n'a
+- **Source de vérité** : colonne `status` de `climbing_plans`. Valeurs :
+  `'coach'` | `'athlete'` | `'solo'` (athlète solo explicite) | `NULL` (= n'a
   **jamais** choisi → `RoleOnboardingModal` s'affiche). `'solo'` se traduit par
   `role: null` dans l'app.
+- `'auto'` (« athlète autonome ») a été **retiré** : aucun chemin de code ne le
+  distinguait de `'coach'`. `roleFromStatus()` (`DataProvider`) le lit comme
+  coach — c'est le seul endroit qui connaît encore cette valeur — et la
+  migration `20260825` aligne les lignes restées à `'auto'`. La contrainte CHECK
+  continue de l'accepter : la resserrer casserait la mise à jour d'une ligne qui
+  aurait échappé à l'UPDATE.
 - Le rôle du **compte** (`accountRole`, résolu dans `DataProvider` depuis la
   même requête que le chargement cloud — plus de course avec le premier upload)
   pilote toutes les permissions : `isCoach`/`isAuto`/`hasCoachFeatures`/`canEdit`
@@ -175,10 +180,9 @@ Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autor
   celui de l'athlète en vue athlète — le coach garde bibliothèque, picker coach
   et édition des cycles pendant la vue athlète).
 - Deux entrées vers `chooseRole()` (qui écrit `status`, `'solo'` pour null) :
-  `RoleOnboardingModal` au premier login (3 choix — « Autonome » n'y est pas,
-  c'est une variante avancée du coach), puis **`RoleSection` dans Compte**, où
-  le rôle se change ensuite librement (les 4). Masquée en vue athlète : le
-  profil affiché n'est pas celui du compte.
+  `RoleOnboardingModal` au premier login, puis **`RoleSection` dans Compte**, où
+  le rôle se change ensuite librement. Mêmes trois rôles des deux côtés.
+  Masquée en vue athlète : le profil affiché n'est pas celui du compte.
 - `chooseRole()` bascule l'affichage tout de suite mais **revient en arrière si
   la base refuse** : un rôle absent de `status` n'existe pas — le prochain
   démarrage, ou l'autre appareil, l'ignorerait. `writeStatus()` remonte donc
@@ -205,7 +209,8 @@ Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autor
   (notification `coach_request`), et c'est **l'athlète qui crée le lien** en
   acceptant depuis la cloche (RLS : INSERT `coach_athletes` réservé à
   `athlete_id = auth.uid()` — personne ne peut s'auto-déclarer coach).
-- Recherche : RPC `search_athletes(term)` (statuts null/'athlete'/'auto'/'solo')
+- Recherche : RPC `search_athletes(term)` (statuts null/'athlete'/'solo', plus
+  'auto' pour les lignes historiques)
 - Retrait : delete par les **deux** côtés (coach retire / athlète quitte via
   section "Mon coach" du profil, RPC `get_my_coaches()` pour les noms)
 - États côté coach dans "Mes athlètes" : Inviter → "Invitation en attente…" →
@@ -581,7 +586,7 @@ discipline (celle de l'échéance pour une échéance, trois au plus par jour).
 - Fonctions helpers `getGreeting()` et `getContextualPhrase()` définies localement dans le fichier
 
 ### Déplacement de séances (`components/SessionModal.jsx` — onglet "Déplacer")
-- **Coach / solo / auto** : sélecteur de date (navigation sem ← →) + heure → déplace directement la séance
+- **Coach / solo** : sélecteur de date (navigation sem ← →) + heure → déplace directement la séance
   - "Enregistrer l'heure" si seul l'horaire change
   - "Déplacer la séance" si une autre journée est choisie
 - **Athlète** : peut modifier l'heure directement ; pour un changement de date → envoie une suggestion au coach (semaine + jour + note optionnelle)
@@ -658,11 +663,12 @@ L'état est visible dans **Compte > Données** : « Synchronisé il y a n min »
 | `supabase/migrations/20260822_session_feedbacks_text_id.sql` | `session_feedbacks.session_id` INT → TEXT (les identifiants de séance sont des chaînes depuis `generateId()` : chaque upsert de ressenti partait en 400 / 22P02) | ✅ appliquée |
 | `supabase/migrations/20260823_climbing_plans_updated_at.sql` | Trigger `BEFORE INSERT OR UPDATE` sur `climbing_plans` : `updated_at = now()` côté serveur — la synchronisation compare des dates, elles doivent venir d'une seule horloge | ✅ appliquée |
 | `supabase/migrations/20260824_climbing_plans_status_solo.sql` | `CHECK` de `climbing_plans.status` élargi à `'solo'` — la contrainte d'origine ne connaissait que coach/athlete/auto, donc « athlète solo » repartait en 23514 et le rôle n'était jamais enregistré | ✅ appliquée |
+| `supabase/migrations/20260825_drop_auto_role.sql` | `status = 'auto'` → `'coach'` — le rôle « autonome » ne se distinguait du coach nulle part et a été retiré de l'app | ⏳ **à coller** (facultatif : l'app lit déjà 'auto' comme coach) |
 
 Statuts vérifiés le 20 août 2026 contre le projet Supabase (existence des
 tables, colonnes, RPC et buckets via l'API REST) ; les trois d'août sur
 confirmation de l'utilisateur, le 22. `supabase/MIGRATIONS-A-COLLER.sql`
-concatène les 8 dernières dans l'ordre, idempotent et ré-exécutable.
+concatène les 9 dernières dans l'ordre, idempotent et ré-exécutable.
 `supabase/legacy/` conserve les scripts SQL antérieurs aux migrations — dont
 `supabase-community-sessions.sql`, seule définition de `community_sessions`
 (utilisée par `useCommunitySessionsSync.js`), qui n'a pas d'équivalent en migration.

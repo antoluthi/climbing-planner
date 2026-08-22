@@ -12,6 +12,14 @@ import { useCoachAthletes } from "../hooks/useCoachAthletes.js";
 import { useNotifications } from "../hooks/useNotifications.js";
 import { DATA } from "../theme/palette.js";
 
+// Traduction de la colonne `status` en rôle applicatif — le seul endroit qui
+// connaisse les valeurs historiques : 'solo' → null, et 'auto' → coach
+// (l'« athlète autonome » ne se distinguait du coach nulle part ; l'option a été
+// retirée, les comptes restés à cette valeur gardent l'accès coach).
+const roleFromStatus = (status) => status === "solo" ? null
+  : status === "auto" ? "coach"
+  : status;
+
 export function DataProvider({ children }) {
   const {
     session, syncStatus, fetchCloudHead, loadFromCloud, saveToCloud,
@@ -22,7 +30,7 @@ export function DataProvider({ children }) {
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const [roleResolved, setRoleResolved] = useState(false);
   // Rôle du COMPTE connecté (colonne status, jamais le blob affiché) :
-  // undefined = pas encore résolu · null = athlète solo · "coach" | "athlete" | "auto".
+  // undefined = pas encore résolu · null = athlète solo · "coach" | "athlete".
   // Toute l'UI de permissions doit dériver de cette valeur — pas de
   // data.profile.role, qui devient celui de l'ATHLÈTE en vue athlète.
   const [accountRole, setAccountRole] = useState(undefined);
@@ -83,17 +91,17 @@ export function DataProvider({ children }) {
   // `status` NULL = n'a jamais choisi son rôle → onboarding. Mais on ne le
   // rejoue qu'au premier passage : un réveil d'app pendant que la modale est
   // ouverte ne doit pas défaire le choix en cours d'enregistrement.
-  const applyRole = (status, initial) => {
+  const applyRole = useCallback((status, initial) => {
     if (status == null) {
       if (!initial) return;
       setAccountRole(null);
       setNeedsRoleChoice(true);
     } else {
-      setAccountRole(status === "solo" ? null : status);
+      setAccountRole(roleFromStatus(status));
       setNeedsRoleChoice(false);
     }
     setRoleResolved(true);
-  };
+  }, []);
 
   const reconcile = useCallback(async (reason = "auto") => {
     const userId = session?.user?.id;
@@ -164,7 +172,7 @@ export function DataProvider({ children }) {
       // L'écran, lui, doit sortir du squelette même hors ligne.
       setCloudLoaded(true);
     }
-  }, [session?.user?.id, fetchCloudHead, loadFromCloud, uploadNow]);
+  }, [session?.user?.id, fetchCloudHead, loadFromCloud, uploadNow, applyRole]);
 
   // Le retry différé doit appeler la version courante, pas celle capturée à la
   // création du timer.

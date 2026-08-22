@@ -138,15 +138,16 @@ export function useSupabaseSync() {
     if (!row) return null;
     const blob = row.data ?? {};
     // La colonne status fait autorité pour le rôle. Valeurs : 'coach' |
-    // 'athlete' | 'auto' | 'solo' (choix explicite « athlète solo ») |
-    // NULL (n'a JAMAIS choisi → l'onboarding rôle doit s'afficher).
-    // Dans l'app, 'solo' se traduit par role: null.
+    // 'athlete' | 'solo' (choix explicite « athlète solo ») | NULL (n'a JAMAIS
+    // choisi → l'onboarding rôle doit s'afficher). 'auto' est une valeur
+    // historique, lue comme coach. Dans l'app, 'solo' se traduit par role: null.
     const status = "status" in (row ?? {}) ? row.status : undefined;
+    const displayRole = status === "solo" ? null : status === "auto" ? "coach" : status;
     const profile = {
       ...(blob.profile ?? {}),
       ...(row.first_name != null ? { firstName: row.first_name } : {}),
       ...(row.last_name  != null ? { lastName:  row.last_name  } : {}),
-      ...(status !== undefined ? { role: status === "solo" ? null : status } : {}),
+      ...(status !== undefined ? { role: displayRole } : {}),
     };
     const migrated = migrateWeekKeys({ ...blob, profile });
     return { ...migrated, _cloudUpdatedAt: row.updated_at ?? null, _status: status ?? null };
