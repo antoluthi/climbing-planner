@@ -523,6 +523,15 @@ il n'y a plus de bouton « Voir le détail de la séance ». Le repli qui subsis
 dans cette modale est celui des **notes de retour** de l'athlète, qui est autre
 chose.
 
+### Combien de séances, d'un coup d'œil (`components/CalendarView.jsx`)
+`DayDots` : **une pastille par séance**, à la couleur de sa discipline — celle
+de l'échéance pour une échéance —, le même langage que l'accueil. Trois au
+plus, puis un « +n » là où la place le permet (semaine et mois). Les cases de
+l'**année** ne sont plus coloriées en entier : elles restent neutres et portent
+les mêmes points, en 3 px — trois tiennent dans une case de ~20 px, au-delà le
+mois prend le relais. Aujourd'hui y garde son encadré accent, seul repère à
+cette taille.
+
 ### Journal et rappels d'un autre jour (`components/DayJournalBlock.jsx`)
 Le journal n'existait qu'au présent : un rappel oublié la veille l'était pour
 de bon. Le bloc se pose en tête du jour sélectionné dans le calendrier —

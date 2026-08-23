@@ -4,7 +4,7 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { colors, DATA } from "../theme/palette.js";
 import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, isEventItem } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
-import { Card, Segmented, RoundIconButton, SportBadge, SportDot, PageTitle, SANS, MONO } from "./ui/Ascent.jsx";
+import { Card, Segmented, RoundIconButton, SportBadge, PageTitle, SANS, MONO } from "./ui/Ascent.jsx";
 import { DayJournalBlock } from "./DayJournalBlock.jsx";
 
 // ─── CALENDRIER (refonte « Ascent ») ──────────────────────────────────────────
@@ -15,13 +15,6 @@ import { DayJournalBlock } from "./DayJournalBlock.jsx";
 const WEEKDAYS = ["L", "M", "M", "J", "V", "S", "D"];
 const MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
                 "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
-
-// Couleur dominante d'une journée = sport de sa première séance.
-function dayColor(sessions) {
-  const first = (sessions || [])[0];
-  if (!first) return null;
-  return DATA.sports[first.discipline] || DATA.sports.custom;
-}
 
 // Une échéance ressort du calendrier par un bandeau à sa couleur, là où une
 // séance n'a qu'un point.
@@ -271,6 +264,40 @@ function dayIndexOf(date) {
   return dow === 0 ? 6 : dow - 1;
 }
 
+// ── Une pastille par séance ──────────────────────────────────────────────────
+// Le même langage que l'accueil : un point par séance, à la couleur de sa
+// discipline — celle de l'échéance pour une échéance. Une seule pastille ne
+// disait pas combien il y en avait ; au-delà de trois, un « +n » prend le
+// relais là où la place le permet (semaine et mois ; les cases de l'année sont
+// trop petites, elles s'arrêtent aux points).
+function DayDots({ items, c, size = 5, max = 3, showOverflow = true, tone = null, minHeight }) {
+  const shown = items.slice(0, max);
+  const extra = items.length - shown.length;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center",
+      gap: Math.max(2, size - 2), minHeight: minHeight ?? size,
+    }}>
+      {shown.map((item, i) => (
+        <span key={i} style={{
+          width: size, height: size, borderRadius: size, flexShrink: 0,
+          background: tone || (isEventItem(item)
+            ? (item.color || c.accent)
+            : (DATA.sports[item.discipline] || DATA.sports.custom)),
+        }} />
+      ))}
+      {extra > 0 && showOverflow && (
+        <span style={{
+          font: `700 ${size + 3}px ${MONO}`, lineHeight: 1,
+          color: tone || c.textDim, marginLeft: 1,
+        }}>
+          +{extra}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ── Grille du mois ───────────────────────────────────────────────────────────
 function MonthGrid({ isDark, data, currentDate, selected, setSelected, today }) {
   const c = colors(isDark);
@@ -302,7 +329,6 @@ function MonthGrid({ isDark, data, currentDate, selected, setSelected, today }) 
             const inMonth = date.getMonth() === month;
             const sessions = getDaySessions(data, date);
             const ev = eventOf(sessions);
-            const dot = dayColor(sessions.filter(x => !isEventItem(x)));
             const isSelected = iso === selected;
             const isToday = iso === today;
             return (
@@ -323,7 +349,10 @@ function MonthGrid({ isDark, data, currentDate, selected, setSelected, today }) 
                 }}>
                   {date.getDate()}
                 </div>
-                <SportDot color={isSelected ? c.textOnAccent : dot || "transparent"} size={5} />
+                <DayDots
+                  items={sessions} c={c} size={5} max={3}
+                  tone={isSelected ? c.textOnAccent : null}
+                />
                 {ev && (
                   <div style={{
                     position: "absolute", left: 0, right: 0, bottom: 0, height: 3,
@@ -352,7 +381,6 @@ function WeekStrip({ isDark, data, currentDate, selected, setSelected, today }) 
           const iso = localDateStr(date);
           const sessions = getDaySessions(data, date);
           const ev = eventOf(sessions);
-          const dot = dayColor(sessions.filter(x => !isEventItem(x)));
           const isSelected = iso === selected;
           const isToday = iso === today;
           return (
@@ -379,7 +407,10 @@ function WeekStrip({ isDark, data, currentDate, selected, setSelected, today }) 
               }}>
                 {date.getDate()}
               </div>
-              <SportDot color={isSelected ? c.textOnAccent : dot || "transparent"} size={5} />
+              <DayDots
+                items={sessions} c={c} size={5} max={3}
+                tone={isSelected ? c.textOnAccent : null}
+              />
             </button>
           );
         })}
@@ -436,18 +467,21 @@ function YearGrid({ isDark, data, year, today, onPickMonth }) {
                   const inMonth = date.getMonth() === m;
                   const isToday = inMonth && localDateStr(date) === today;
                   const dayItems = inMonth ? getDaySessions(data, date) : [];
-                  const ev = eventOf(dayItems);
-                  const dot = ev ? (ev.color || null) : dayColor(dayItems);
                   return (
                     <div key={di} style={{
-                      flex: 1, aspectRatio: "1",
-                      borderRadius: isToday ? 3 : 1,
-                      // Aujourd'hui : encadré à l'accent — et teinté quand la
-                      // journée est vide, sans quoi le repère se perd à cette
-                      // taille de case.
-                      background: dot || (isToday ? c.accent + "55" : inMonth ? c.control : "transparent"),
+                      flex: 1, aspectRatio: "1", borderRadius: 3,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      // La case ne prend plus la couleur du sport : elle reste
+                      // neutre, et ce sont les points qui parlent — même
+                      // langage que la semaine et le mois. Aujourd'hui garde
+                      // son encadré accent, seul repère à cette taille.
+                      background: isToday ? c.accent + "33" : inMonth ? c.control : "transparent",
                       boxShadow: isToday ? `0 0 0 1.5px ${c.accent}` : undefined,
-                    }} />
+                    }}>
+                      {/* Trois points de 3 px tiennent dans une case de ~20 px ;
+                          au-delà, pas la place d'un compte — le mois le dira. */}
+                      <DayDots items={dayItems} c={c} size={3} max={3} showOverflow={false} minHeight={3} />
+                    </div>
                   );
                 })}
               </div>
