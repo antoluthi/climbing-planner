@@ -148,6 +148,17 @@ export function SessionModal({
   // au clic de l'utilisateur.
   const [showThanks, setShowThanks] = useState(false);
   const persistAndClose = () => {
+    // Aucun statut : la séance redevient « pas encore réalisée », donc pas de
+    // ressenti du tout. Attention à ne pas enregistrer `{ done: false }`, qui
+    // est la marque d'une séance MANQUÉE — ce n'est pas la même chose.
+    // Les notes déjà écrites, elles, survivent : les jeter sans prévenir
+    // serait une perte silencieuse.
+    if (!status) {
+      onSave(notes.trim()
+        ? { status: null, done: null, rpe: null, quality: null, notes }
+        : null);
+      return;
+    }
     onSave({
       status,
       done: sessionDone,
@@ -344,7 +355,11 @@ export function SessionModal({
                       key={opt.key}
                       role="radio"
                       aria-checked={active}
-                      onClick={() => setStatus(opt.key)}
+                      // Recliquer sur l'état courant le retire : la séance
+                      // retourne à « pas encore réalisée ». Sans ça, marquer
+                      // une séance faite par erreur était sans retour.
+                      title={active ? "Retirer ce statut" : opt.label}
+                      onClick={() => setStatus(prev => prev === opt.key ? null : opt.key)}
                       style={{
                         flex: 1, padding: "10px 8px", fontSize: 12, fontWeight: 600,
                         textAlign: "center", borderRadius: 9, border: "none",

@@ -6,6 +6,7 @@ import { DEFAULT_MESOCYCLES } from "../lib/constants.js";
 import { getMondayOf, weekKey } from "../lib/helpers.js";
 import { generateId, loadData, saveData, migrateData, freshData, getLocalDataOwner, setLocalDataOwner } from "../lib/storage.js";
 import { readSyncMeta, markDirty, markSynced, decideSync } from "../lib/sync-meta.js";
+import { mergePlans } from "../lib/merge-plan.js";
 import { useCommunitySessionsSync } from "../hooks/useCommunitySessionsSync.js";
 import { useSessionsCatalog } from "../hooks/useSessionsCatalog.js";
 import { useCoachAthletes } from "../hooks/useCoachAthletes.js";
@@ -77,6 +78,16 @@ export function DataProvider({ children }) {
   const lastWakeRef = useRef(0);
   const initialDataRef = useRef(data);
 
+  // L'écriture a rencontré une version plus récente en base et l'a fusionnée
+  // avec la nôtre : c'est ce résultat-là qui est parti au cloud, donc c'est lui
+  // que l'écran doit montrer. Pas de `markSynced` ici — l'appelant s'en charge
+  // avec la date que le serveur vient de rendre.
+  const adoptMerged = (merged) => {
+    isCloudSetRef.current = true;
+    setData(merged);
+    saveData(merged);
+  };
+
   const adoptCloudData = (cloudData, userId, updatedAt) => {
     const { _cloudUpdatedAt: _cua, _status, ...cleanData } = cloudData;
     void _cua; void _status;
@@ -134,19 +145,37 @@ export function DataProvider({ children }) {
         const cloudData = await loadFromCloud(userId);
         if (cloudData) adoptCloudData(cloudData, userId, head.updatedAt);
         applyRole(head.status ?? null, initial);
+      } else if (action === "merge") {
+        // Les deux côtés ont bougé. On réunit, on affiche le résultat, et on
+        // le renvoie — sous garde, donc une troisième écriture arrivée entre
+        // temps sera fusionnée à son tour plutôt qu'écrasée.
+        const cloudData = await loadFromCloud(userId);
+        const { _cloudUpdatedAt: _cua, _status, ...cleanCloud } = cloudData ?? {};
+        void _cua; void _status;
+        const merged = migrateData(mergePlans(dataRef.current, cleanCloud));
+        adoptMerged(merged);
+        const updatedAt = await uploadNow(merged, userId, head.updatedAt, adoptMerged);
+        if (updatedAt) markSynced(userId, updatedAt);
+        setLocalDataOwner(userId);
+        applyRole(head.status ?? null, initial);
       } else if (action === "push") {
-        const updatedAt = await uploadNow(dataRef.current, userId);
+        // On envoie en annonçant la version qu'on croit connaître : si la ligne
+        // a bougé, l'écriture fusionne au lieu d'écraser, et `adoptMerged` pose
+        // le résultat à l'écran.
+        const updatedAt = await uploadNow(
+          dataRef.current, userId, head?.updatedAt ?? null, adoptMerged);
         if (updatedAt) markSynced(userId, updatedAt);
         setLocalDataOwner(userId);
         applyRole(head?.exists ? (head.status ?? null) : null, initial);
       } else if (action === "reset") {
         // Garde anti-fuite : le localStorage est partagé par NAVIGATEUR. Un
         // compte tout neuf ne doit pas hériter du planning du précédent.
+        // Ici on écrase volontairement : rien à préserver, c'est le but.
         const blank = migrateData(freshData());
         isCloudSetRef.current = true;
         setData(blank);
         saveData(blank);
-        const updatedAt = await uploadNow(blank, userId);
+        const updatedAt = await uploadNow(blank, userId, null);
         markSynced(userId, updatedAt);
         setLocalDataOwner(userId);
         applyRole(null, initial);
@@ -301,7 +330,7 @@ export function DataProvider({ children }) {
     if (!userId) return;
     markDirty();                        // à renvoyer, tôt ou tard
     if (!syncReadyRef.current) return;  // réconciliation en cours : on attend
-    saveToCloud(data, userId);
+    saveToCloud(data, userId, adoptMerged);
   }, [data]); // eslint-disable-line
 
   // Bouton « ↓ Charger depuis le cloud » : un ordre explicite, donc pas de

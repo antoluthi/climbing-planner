@@ -223,6 +223,9 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
       },
     }));
 
+    // `feedback` vaut null quand l'athlète retire le statut : la séance
+    // redevient « pas encore réalisée ». Le miroir Supabase se remet à zéro
+    // lui aussi, sans quoi l'historique garderait un ressenti effacé ailleurs.
     if (supabase && session?.user?.id) {
       const smSession = (data.weeks[smKey] || [])[dayIndex]?.[sessionIndex];
       const fDate = addDays(new Date(smKey + "T12:00:00"), dayIndex);
@@ -234,16 +237,16 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
         session_name: smSession?.name ?? "",
         feedback_date: localDateStr(fDate),
         week_key: smKey,
-        done: feedback.done,
-        rpe: feedback.rpe ?? null,
-        quality: feedback.quality ?? null,
-        notes: feedback.notes || null,
+        done: feedback?.done ?? null,
+        rpe: feedback?.rpe ?? null,
+        quality: feedback?.quality ?? null,
+        notes: feedback?.notes || null,
         updated_at: new Date().toISOString(),
       }).then(error => { if (error) console.error("[session_feedbacks] upsert error:", error); });
     }
 
     setSessionModal(null);
-    toast.success("Ressenti enregistré");
+    toast.success(feedback ? "Ressenti enregistré" : "Statut retiré");
   };
 
   const openSessionModal = (wKey, dayIndex, sessionIndex) => {
@@ -442,6 +445,15 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
     ...d,
     reminders: (d.reminders || []).map(x => x.id === r.id ? r : x),
   }));
+  // Cocher / décocher un rappel pour UNE date — aujourd'hui depuis l'accueil,
+  // n'importe quel jour depuis le calendrier (rattrapage d'un oubli).
+  const toggleReminderCheck = (reminderId, dateStr) => setData(d => {
+    const prev = d.reminderState || {};
+    const forR = prev[reminderId] ? { ...prev[reminderId] } : {};
+    if (forR[dateStr]) delete forR[dateStr]; else forR[dateStr] = true;
+    return { ...d, reminderState: { ...prev, [reminderId]: forR } };
+  });
+
   const deleteReminder = (id) => setData(d => {
     const reminders = (d.reminders || []).filter(r => r.id !== id);
     const reminderState = { ...(d.reminderState || {}) };
@@ -472,12 +484,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             onOpenEvent={(ev) => setEventDetail(ev)}
             unreadCount={unreadCount}
             onOpenSession={openSessionModal}
-            onToggleReminder={(reminderId, dateStr) => setData(d => {
-              const prev = d.reminderState || {};
-              const forR = prev[reminderId] ? { ...prev[reminderId] } : {};
-              if (forR[dateStr]) delete forR[dateStr]; else forR[dateStr] = true;
-              return { ...d, reminderState: { ...prev, [reminderId]: forR } };
-            })}
+            onToggleReminder={toggleReminderCheck}
             onSaveWeight={(date, kg) => setData(d => {
               const w = { ...(d.weight || {}) };
               if (kg == null) delete w[date]; else w[date] = kg;
@@ -520,6 +527,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             onOpenSession={openSessionModal}
             onAddSession={(dayIdx) => setSessionBuilderDay(dayIdx)}
             onOpenEvent={(ev) => setEventDetail(ev)}
+            onOpenLog={(dateStr) => setLogDate(dateStr)}
+            onToggleReminder={toggleReminderCheck}
           />
         );
 
