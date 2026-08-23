@@ -445,6 +445,15 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
     ...d,
     reminders: (d.reminders || []).map(x => x.id === r.id ? r : x),
   }));
+  // Cocher / décocher un rappel pour UNE date — aujourd'hui depuis l'accueil,
+  // n'importe quel jour depuis le calendrier (rattrapage d'un oubli).
+  const toggleReminderCheck = (reminderId, dateStr) => setData(d => {
+    const prev = d.reminderState || {};
+    const forR = prev[reminderId] ? { ...prev[reminderId] } : {};
+    if (forR[dateStr]) delete forR[dateStr]; else forR[dateStr] = true;
+    return { ...d, reminderState: { ...prev, [reminderId]: forR } };
+  });
+
   const deleteReminder = (id) => setData(d => {
     const reminders = (d.reminders || []).filter(r => r.id !== id);
     const reminderState = { ...(d.reminderState || {}) };
@@ -475,12 +484,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             onOpenEvent={(ev) => setEventDetail(ev)}
             unreadCount={unreadCount}
             onOpenSession={openSessionModal}
-            onToggleReminder={(reminderId, dateStr) => setData(d => {
-              const prev = d.reminderState || {};
-              const forR = prev[reminderId] ? { ...prev[reminderId] } : {};
-              if (forR[dateStr]) delete forR[dateStr]; else forR[dateStr] = true;
-              return { ...d, reminderState: { ...prev, [reminderId]: forR } };
-            })}
+            onToggleReminder={toggleReminderCheck}
             onSaveWeight={(date, kg) => setData(d => {
               const w = { ...(d.weight || {}) };
               if (kg == null) delete w[date]; else w[date] = kg;
@@ -523,6 +527,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             onOpenSession={openSessionModal}
             onAddSession={(dayIdx) => setSessionBuilderDay(dayIdx)}
             onOpenEvent={(ev) => setEventDetail(ev)}
+            onOpenLog={(dateStr) => setLogDate(dateStr)}
+            onToggleReminder={toggleReminderCheck}
           />
         );
 

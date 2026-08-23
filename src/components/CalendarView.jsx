@@ -5,6 +5,7 @@ import { colors, DATA } from "../theme/palette.js";
 import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, isEventItem } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
 import { Card, Segmented, RoundIconButton, SportBadge, SportDot, PageTitle, SANS, MONO } from "./ui/Ascent.jsx";
+import { DayJournalBlock } from "./DayJournalBlock.jsx";
 
 // ─── CALENDRIER (refonte « Ascent ») ──────────────────────────────────────────
 // Un seul écran, trois vues : Mois, Semaine, Année. Reprend la mise en page du
@@ -39,7 +40,7 @@ function Chevron({ dir = "left", size = 18 }) {
 
 export function CalendarView({
   data, currentDate, setCurrentDate, viewMode, setViewMode,
-  onOpenSession, onAddSession, onOpenEvent,
+  onOpenSession, onAddSession, onOpenEvent, onOpenLog, onToggleReminder,
 }) {
   const { isDark } = useThemeCtx();
   const c = colors(isDark);
@@ -177,6 +178,16 @@ export function CalendarView({
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: c.textMuted, marginBottom: 12 }}>
               {selectedObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
             </div>
+
+            {/* Le journal et les rappels de CE jour-là — c'est ici qu'on
+                rattrape un rappel oublié ou qu'on relit un ressenti. */}
+            <DayJournalBlock
+              isDark={isDark}
+              data={data}
+              dateStr={selected}
+              onOpenLog={onOpenLog}
+              onToggleReminder={onToggleReminder}
+            />
 
             {selectedSessions.length === 0 ? (
               <>

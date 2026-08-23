@@ -65,9 +65,20 @@ export function clearSyncMeta() {
 //
 //   "pull"  — le cloud a du neuf, on l'adopte
 //   "push"  — le local a du neuf, on l'envoie
+//   "merge" — les DEUX ont bougé depuis notre dernier échange
 //   "reset" — les données locales appartiennent à quelqu'un d'autre et le
 //             compte n'a pas encore de ligne : on repart d'un planning vierge
 //   "idle"  — les deux côtés sont d'accord, rien à faire
+//
+// Une note sur « merge ». La version précédente départageait les deux côtés à
+// la date : le plus récent gagnait, l'autre passait à la trappe. C'est une
+// perte garantie dès que chacun a ajouté quelque chose de son côté — et c'est
+// exactement ce qu'on cherche à ne plus faire. On réunit donc les deux
+// versions (`lib/merge-plan.js`) au lieu de choisir.
+//
+// Conséquence heureuse : `dirtyAt` n'est plus jamais comparé à une date
+// serveur. Il ne répond plus qu'à « reste-t-il quelque chose à envoyer ? »,
+// et l'horloge de l'appareil cesse d'avoir son mot à dire.
 const ts = (v) => { const t = v ? Date.parse(v) : NaN; return Number.isNaN(t) ? 0 : t; };
 
 export function decideSync({ hasCloudRow, cloudUpdatedAt, meta, userId }) {
@@ -83,18 +94,12 @@ export function decideSync({ hasCloudRow, cloudUpdatedAt, meta, userId }) {
 
   const known = ts(meta?.syncedAt);
   const cloud = ts(cloudUpdatedAt);
-  const dirty = ts(meta?.dirtyAt);
+  const hasUnsent = !!meta?.dirtyAt;
 
   // On n'a jamais rien synchronisé pour ce compte sur cet appareil, ou la
   // ligne a bougé depuis notre dernier échange : quelqu'un d'autre a écrit.
-  if (!known || cloud > known) {
-    // On ne reprend le dessus que si nos modifications sont plus récentes que
-    // cette écriture-là. Sinon le cloud gagne — c'est le cas courant : on
-    // ouvre l'app sur un appareil resté en arrière-plan pendant qu'on
-    // travaillait sur l'autre.
-    return dirty && dirty > cloud ? "push" : "pull";
-  }
+  if (!known || cloud > known) return hasUnsent ? "merge" : "pull";
 
   // La ligne cloud, c'est notre propre dernier envoi.
-  return dirty ? "push" : "idle";
+  return hasUnsent ? "push" : "idle";
 }

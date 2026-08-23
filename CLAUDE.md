@@ -34,7 +34,8 @@ src/
 │   ├── pace.js                   — temps · distance · allure/vitesse liés (parse, format, calcul)
 │   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
 │   ├── session-feedbacks.js      — upsertSessionFeedback (miroir Supabase des ressentis)
-│   ├── sync-meta.js              — marqueur de synchro local + decideSync (pull/push/reset/idle)
+│   ├── sync-meta.js              — marqueur de synchro local + decideSync (pull/push/merge/reset/idle)
+│   ├── merge-plan.js             — fusion de deux plannings (réunion par id / par date)
 │   └── hooper.js                 — hooperLabel, hooperColor
 │
 ├── theme/
@@ -57,6 +58,7 @@ src/
     ├── AuthPanel.jsx              — panneau auth (password + magic link)
     ├── RoleOnboardingModal.jsx    — choix du rôle au 1er login
     ├── RoleSection.jsx            — changement de rôle depuis le compte
+    ├── DayJournalBlock.jsx        — journal + rappels d'un jour donné (calendrier)
     ├── RichText.jsx               — rendu texte riche (markdown-like)
     ├── ConfirmModal.jsx           — dialogue de confirmation suppression
     ├── session/SessionFormModal.jsx     — ajout/modification d'une séance (étape 1)
@@ -521,6 +523,14 @@ il n'y a plus de bouton « Voir le détail de la séance ». Le repli qui subsis
 dans cette modale est celui des **notes de retour** de l'athlète, qui est autre
 chose.
 
+### Journal et rappels d'un autre jour (`components/DayJournalBlock.jsx`)
+Le journal n'existait qu'au présent : un rappel oublié la veille l'était pour
+de bon. Le bloc se pose en tête du jour sélectionné dans le calendrier —
+résumé de ce qui est noté (bien-être, poids, kcal, note), bouton
+Remplir/Modifier qui ouvre `DayLogModal` **sur cette date**, et les rappels
+**actifs ce jour-là** (récurrence et plage), cochables après coup. Cocher écrit
+`reminderState[id][cetteDate]`, jamais celle du jour.
+
 ### Retirer un statut de séance
 Recliquer sur l'état déjà sélectionné (Fait / Adaptée / Manquée) le retire :
 la séance redevient « pas encore réalisée ». À l'enregistrement, le ressenti
@@ -636,8 +646,28 @@ pas le blob), la compare au **marqueur local** (`lib/sync-meta.js`) et agit.
 |---|---|
 | Pas de ligne pour ce compte | `push` (ou `reset` si le local appartient à un autre compte) |
 | Données locales d'un autre compte | `pull` — jamais l'inverse (garde anti-fuite) |
-| `updated_at` cloud > `syncedAt` local | `pull`, sauf si le local a des modifications **plus récentes** → `push` |
+| `updated_at` cloud > `syncedAt` local | `pull`, ou **`merge`** s'il reste du local non envoyé |
 | Cloud = notre dernier envoi | `push` si `dirtyAt`, sinon rien |
+
+**On ne départage jamais deux versions à la date.** Choisir un gagnant perd ce
+que l'autre a ajouté ; quand les deux côtés ont bougé, on **réunit** les deux
+(`lib/merge-plan.js`) : collections par `id` (séances, cycles, rappels,
+échéances), journaux par date (notes, poids, Hooper, sommeil, coches), et le
+local qui gagne sur une entrée présente des deux côtés. Contrepartie assumée :
+une suppression faite ailleurs pendant la divergence peut être annulée — une
+séance qui revient se resupprime, une séance perdue ne se retrouve pas.
+
+**L'écriture est conditionnelle** (`writeRowGuarded`) : un `UPDATE … WHERE
+updated_at = <ce qu'on croit connaître>`. Zéro ligne touchée = quelqu'un a
+écrit entre-temps → on relit, on fusionne, on réessaie (deux fois au plus).
+C'est le garde-fou qui manquait le jour où un téléphone à la copie périmée a
+poussé sa version par-dessus une séance saisie sur le PC. Le premier envoi
+(aucun marqueur) et le `reset` anti-fuite restent des upserts francs : il n'y a
+rien à préserver.
+
+Conséquence : `dirtyAt` n'est plus jamais comparé à une date serveur. Il ne
+répond qu'à « reste-t-il quelque chose à envoyer ? », et l'horloge de
+l'appareil n'a plus voix au chapitre nulle part.
 
 Le marqueur (`climbing_planner_sync_v1`) contient `{ userId, syncedAt, dirtyAt }` :
 - `syncedAt` est l'`updated_at` **du serveur**, recopié tel quel après chaque
