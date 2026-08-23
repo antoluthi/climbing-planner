@@ -60,7 +60,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
     athletes, searchAthletes, removeAthlete, myCoaches, leaveCoach, refreshMyCoaches,
     notifications, sentInvites, unreadCount,
     markInfosRead, sendCoachRequest, respondCoachRequest,
-    addMesocycle, updateMesocycle, deleteMesocycle,
+    addMesocycle, updateMesocycle, deleteMesocycle, anchorMesocycle, reorderMesocycles,
     addMicrocycle, updateMicrocycle, deleteMicrocycle,
     addCustomCycle, updateCustomCycle, deleteCustomCycle,
     addQuickSession, editQuickSession, removeQuickSession,
@@ -554,6 +554,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
             onAddMeso={addMesocycle}
             onUpdateMeso={updateMesocycle}
             onDeleteMeso={deleteMesocycle}
+            onAnchorMeso={anchorMesocycle}
+            onReorderMeso={reorderMesocycles}
             onAddMicro={addMicrocycle}
             onUpdateMicro={updateMicrocycle}
             onDeleteMicro={deleteMicrocycle}
