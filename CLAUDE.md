@@ -36,6 +36,7 @@ src/
 │   ├── session-feedbacks.js      — upsertSessionFeedback (miroir Supabase des ressentis)
 │   ├── sync-meta.js              — marqueur de synchro local + decideSync (pull/push/merge/reset/idle)
 │   ├── merge-plan.js             — fusion de deux plannings (réunion par id / par date)
+│   ├── cycles.js                 — chaînage des mésocycles : ancre, durées, réarrangement
 │   └── hooper.js                 — hooperLabel, hooperColor
 │
 ├── theme/
@@ -46,6 +47,7 @@ src/
 ├── hooks/
 │   ├── useWindowWidth.js          — largeur fenêtre réactive
 │   ├── useSwipe.js                — balayage horizontal (onglets / périodes)
+│   ├── useDragReorder.js          — réarrangement vertical à la poignée (cartes de cycles)
 │   ├── useSupabaseSync.js         — session auth, loadFromCloud, saveToCloud, uploadNow, writeStatus
 │   ├── useCommunitySessionsSync.js — sync séances communautaires (lecture seule)
 │   ├── useSessionsCatalog.js      — CRUD sessions_catalog (bibliothèque de modèles)
@@ -427,6 +429,53 @@ plus personne ne l'écrit ni ne la lit.
 
 ## Points techniques importants
 
+### Encoder un plan de cycles (`lib/cycles.js` + `CyclesView.jsx`)
+
+Une date, des durées. Saisir la date de départ de chaque mésocycle et les
+recalculer toutes à la main dès qu'un bloc changeait de durée était la partie
+pénible du plan — surtout au pouce. Désormais **une seule date est saisie**,
+celle de l'**ancre** ; les autres en découlent : ceux d'après commencent quand
+le précédent finit, ceux d'avant remontent d'autant de semaines.
+
+- L'ancre n'est pas une nouvelle représentation : `startDate` reste écrite sur
+  **chaque** mésocycle (c'est ce que lisent `getMesoForDate`, la timeline et les
+  vues). Le drapeau `anchor` dit seulement laquelle des dates a été saisie.
+- `resolveAnchorId()` : l'ancre explicite, sinon le **premier daté** — un plan
+  d'avant la refonte marche tel quel. Aucune date nulle part → rien à chaîner.
+- `recomputeMesoDates()` renvoie **la liste d'origine** si rien ne bouge : un
+  plan déjà cohérent ne doit pas se marquer « modifié », la synchro le
+  repousserait pour rien.
+- Le chaînage ne se rejoue **que sur ce qui déplace les dates** : durée, ajout,
+  retrait, réarrangement, ancre (`DataProvider`). Renommer un bloc ou changer sa
+  couleur ne réécrit pas le plan — un intervalle laissé exprès entre deux blocs
+  survit tant qu'on ne touche pas aux durées.
+- Modifier **n'importe quel** champ date déplace l'ancre sur cette carte. Le
+  chip « Ancre » dit laquelle mène.
+
+Côté carte (`MesoCard`), le formulaire du bureau — six champs sur une ligne qui
+s'enroulait — laisse place à : poignée, pastille de couleur, nom, puis date et
+**pas de semaine au ±**, la fin annoncée en toutes lettres, et les microcycles
+**repliés** (sur un téléphone, c'est le plan d'ensemble qu'on veut voir
+d'abord). Largeur bornée à 600 px, bureau compris.
+
+### Réarranger les cycles à la poignée (`hooks/useDragReorder.js`)
+
+Le geste part **uniquement de la poignée** — ailleurs la page défile et le
+carrousel d'onglets garde la main (la poignée porte `data-no-swipe`, que
+`SwipePager` consulte). Deux choix à connaître :
+
+1. Le transform de la carte tirée est **écrit dans le DOM**, pas rendu par
+   React : une image sur deux pendant un glissement, c'est trop de rendus pour
+   une vue pleine de champs. React ne l'efface pas tant que `transform`
+   n'apparaît dans aucun style qu'il pose sur cette carte.
+2. Le trait d'insertion est **toujours rendu** (transparent au repos) : il tient
+   la place entre deux cartes, si bien qu'un glissement ne change aucune
+   hauteur et que les positions mesurées au départ du geste restent valables.
+
+Les bords de l'écran font défiler la liste toute seule (`autoScroll`, récursive
+donc hors du composant), sans quoi on ne peut pas déplacer une carte plus loin
+que ce qui est visible.
+
 ### CyclesTimeline — texte adaptatif (`components/CyclesTimeline.jsx`)
 `ResizeObserver` sur le conteneur mesure la largeur réelle en pixels.
 `fitLabel(label, px)` calcule combien de caractères rentrent (~5.5px/char à font-size 9, padding 12px).
@@ -522,6 +571,15 @@ Le détail d'une séance (récapitulatif, mesures, notes) est affiché d'emblée
 il n'y a plus de bouton « Voir le détail de la séance ». Le repli qui subsiste
 dans cette modale est celui des **notes de retour** de l'athlète, qui est autre
 chose.
+
+### Combien de séances, d'un coup d'œil (`components/CalendarView.jsx`)
+`DayDots` : **une pastille par séance**, à la couleur de sa discipline — celle
+de l'échéance pour une échéance —, le même langage que l'accueil. Trois au
+plus, puis un « +n » là où la place le permet (semaine et mois). Les cases de
+l'**année** ne sont plus coloriées en entier : elles restent neutres et portent
+les mêmes points, en 3 px — trois tiennent dans une case de ~20 px, au-delà le
+mois prend le relais. Aujourd'hui y garde son encadré accent, seul repère à
+cette taille.
 
 ### Journal et rappels d'un autre jour (`components/DayJournalBlock.jsx`)
 Le journal n'existait qu'au présent : un rappel oublié la veille l'était pour

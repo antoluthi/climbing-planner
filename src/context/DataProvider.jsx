@@ -7,6 +7,7 @@ import { getMondayOf, weekKey } from "../lib/helpers.js";
 import { generateId, loadData, saveData, migrateData, freshData, getLocalDataOwner, setLocalDataOwner } from "../lib/storage.js";
 import { readSyncMeta, markDirty, markSynced, decideSync } from "../lib/sync-meta.js";
 import { mergePlans } from "../lib/merge-plan.js";
+import { recomputeMesoDates, setAnchor, moveMeso } from "../lib/cycles.js";
 import { useCommunitySessionsSync } from "../hooks/useCommunitySessionsSync.js";
 import { useSessionsCatalog } from "../hooks/useSessionsCatalog.js";
 import { useCoachAthletes } from "../hooks/useCoachAthletes.js";
@@ -433,9 +434,17 @@ export function DataProvider({ children }) {
 
   // ── Mesocycle CRUD ──
   const updateMesocycles = updater => setData(d => ({ ...d, mesocycles: updater(d.mesocycles || []) }));
-  const addMesocycle = () => updateMesocycles(m => [...m, { id: generateId(), label: "Nouveau mésocycle", color: DATA.picker[0], durationWeeks: 4, startDate: "", description: "", microcycles: [] }]);
-  const updateMesocycle = (id, changes) => updateMesocycles(m => m.map(x => x.id === id ? { ...x, ...changes } : x));
-  const deleteMesocycle = id => updateMesocycles(m => m.filter(x => x.id !== id));
+  // Le chaînage ne se rejoue que sur ce qui déplace les dates : durée, ajout,
+  // retrait, réarrangement, ancre. Renommer un bloc ne réécrit pas le plan.
+  const addMesocycle = () => updateMesocycles(m => recomputeMesoDates([...m, { id: generateId(), label: "Nouveau mésocycle", color: DATA.picker[0], durationWeeks: 4, startDate: "", description: "", microcycles: [] }]));
+  const updateMesocycle = (id, changes) => updateMesocycles(m => {
+    const next = m.map(x => x.id === id ? { ...x, ...changes } : x);
+    return "durationWeeks" in changes ? recomputeMesoDates(next) : next;
+  });
+  const deleteMesocycle = id => updateMesocycles(m => recomputeMesoDates(m.filter(x => x.id !== id)));
+  // Une date saisie sur n'importe quel mésocycle devient l'ancre du plan.
+  const anchorMesocycle = (id, startDate) => updateMesocycles(m => setAnchor(m, id, startDate));
+  const reorderMesocycles = (from, to) => updateMesocycles(m => moveMeso(m, from, to));
   const addMicrocycle = mesoId => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: [...x.microcycles, { id: generateId(), label: "Nouveau microcycle", durationWeeks: 1, description: "" }] } : x));
   const updateMicrocycle = (mesoId, microId, changes) => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: x.microcycles.map(mc => mc.id === microId ? { ...mc, ...changes } : mc) } : x));
   const deleteMicrocycle = (mesoId, microId) => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: x.microcycles.filter(mc => mc.id !== microId) } : x));
@@ -492,7 +501,7 @@ export function DataProvider({ children }) {
     athletes, searchAthletes, removeAthlete, myCoaches, leaveCoach, refreshAthletes, refreshMyCoaches,
     notifications, sentInvites, unreadCount,
     markInfosRead, sendCoachRequest, respondCoachRequest, refreshNotifications,
-    addMesocycle, updateMesocycle, deleteMesocycle,
+    addMesocycle, updateMesocycle, deleteMesocycle, anchorMesocycle, reorderMesocycles,
     addMicrocycle, updateMicrocycle, deleteMicrocycle,
     addCustomCycle, updateCustomCycle, deleteCustomCycle,
     addQuickSession, editQuickSession, removeQuickSession,

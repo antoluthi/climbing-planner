@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { addDays } from "../lib/helpers.js";
+import { mesoLastDay, microStarts, resolveAnchorId, weeksOf } from "../lib/cycles.js";
+import { useDragReorder } from "../hooks/useDragReorder.js";
 import { CyclesTimeline } from "./CyclesTimeline.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { CustomCycleModal } from "./CustomCycleModal.jsx";
@@ -12,9 +13,10 @@ import {
 } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
 import { PageTitle, PrimaryButton } from "./ui/Ascent.jsx";
+import { RADIUS } from "../theme/makeStyles.js";
 
 export function CyclesView({
-  mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso,
+  mesocycles, onAddMeso, onUpdateMeso, onDeleteMeso, onAnchorMeso, onReorderMeso,
   onAddMicro, onUpdateMicro, onDeleteMicro,
   customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle,
   locked, onSetLocked, canEdit, objectives,
@@ -26,6 +28,7 @@ export function CyclesView({
   const [editingReminder, setEditingReminder] = useState(null); // null | {} | reminder
   const [showCustomCycleForm, setShowCustomCycleForm] = useState(false);
   const [editingCustomCycle, setEditingCustomCycle] = useState(null);
+  const { dragIndex, dropIndex, handleProps } = useDragReorder(onReorderMeso);
 
   // ── Timeline mode (locked, or athlete who can't edit) ──
   if (locked || canEdit === false) {
@@ -45,11 +48,19 @@ export function CyclesView({
     );
   }
 
+  const c = colors(isDark);
+  const anchorId = resolveAnchorId(mesocycles);
+  // Où la carte tirée atterrirait : le trait se pose *avant* la carte visée
+  // quand on remonte, *après* quand on descend.
+  const dropBar = dragIndex < 0 || dropIndex === dragIndex
+    ? -1
+    : (dropIndex > dragIndex ? dropIndex + 1 : dropIndex);
+
   return (
-    <div style={styles.cyclesView}>
+    <div style={{ ...styles.cyclesView, maxWidth: 600, width: "100%", margin: "0 auto" }}>
       <PageTitle
         isDark={isDark}
-        style={{ marginBottom: 20 }}
+        style={{ marginBottom: 6 }}
         right={
           <PrimaryButton isDark={isDark} height={36} onClick={onAddMeso}
                          style={{ width: "auto", padding: "0 16px", fontSize: 13 }}>
@@ -60,117 +71,39 @@ export function CyclesView({
         Cycles
       </PageTitle>
 
+      {mesocycles.length > 0 && (
+        <div style={{ fontSize: 12, color: c.textMuted, lineHeight: 1.45, marginBottom: 14 }}>
+          Donnez sa date à <b style={{ color: c.text, fontWeight: 600 }}>un</b> mésocycle : les
+          autres se calent dessus, en avant comme en arrière. Ailleurs, seule la durée compte.
+        </div>
+      )}
+
       {mesocycles.length === 0 && (
-        <div style={{ color: styles.dashText, fontSize: 12, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>
+        <div style={{ color: c.textMuted, fontSize: 12, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>
           Aucun mésocycle défini. Créez-en un pour commencer.
         </div>
       )}
 
-      {mesocycles.map(meso => {
-        const mesoStart = meso.startDate ? new Date(meso.startDate) : null;
-        const mesoEnd = mesoStart ? addDays(mesoStart, meso.durationWeeks * 7) : null;
-
-        // Compute microcycle start dates
-        let microStarts = [];
-        if (mesoStart) {
-          let cursor = new Date(mesoStart);
-          for (const micro of (meso.microcycles || [])) {
-            microStarts.push(new Date(cursor));
-            cursor = addDays(cursor, micro.durationWeeks * 7);
-          }
-        }
-
-        return (
-          <div key={meso.id} style={styles.cycleCard}>
-            {/* Meso row */}
-            <div style={styles.cycleMesoRow}>
-              <input
-                type="color"
-                style={styles.cycleColorInput}
-                value={meso.color}
-                onChange={e => onUpdateMeso(meso.id, { color: e.target.value })}
-                title="Couleur"
-              />
-              <input
-                style={styles.cycleLabelInput}
-                value={meso.label}
-                onChange={e => onUpdateMeso(meso.id, { label: e.target.value })}
-                placeholder="Nom du mésocycle…"
-              />
-              <input
-                style={styles.cycleDateInput}
-                type="date"
-                value={meso.startDate || ""}
-                onChange={e => onUpdateMeso(meso.id, { startDate: e.target.value })}
-                title="Date de début"
-              />
-              {mesoEnd && (
-                <span style={styles.cycleDateEnd}>→ {mesoEnd.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "2-digit" })}</span>
-              )}
-              <input
-                style={styles.cycleDurInput}
-                type="number"
-                min="1"
-                max="24"
-                value={meso.durationWeeks}
-                onChange={e => onUpdateMeso(meso.id, { durationWeeks: +e.target.value })}
-                title="Durée (semaines)"
-              />
-              <span style={styles.cycleDurLabel}>sem.</span>
-              <input
-                style={styles.cycleDescInput}
-                value={meso.description}
-                onChange={e => onUpdateMeso(meso.id, { description: e.target.value })}
-                placeholder="Description / objectif du bloc…"
-              />
-              <button style={styles.cycleDeleteBtn} onClick={() => setPendingDelete({ type: "meso", id: meso.id, label: meso.label })} title="Supprimer">✕</button>
-            </div>
-
-            {/* Microcycles */}
-            <div style={styles.cycleMicroList}>
-              <div style={{ fontSize: 10, color: styles.dashText, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
-                Microcycles ({meso.microcycles.length})
-              </div>
-              {meso.microcycles.map((micro, mi) => (
-                <div key={micro.id} style={styles.cycleMicroRow}>
-                  <div style={{ ...styles.cycleMicroDot, background: meso.color }} />
-                  <input
-                    style={styles.cycleMicroLabelInput}
-                    value={micro.label}
-                    onChange={e => onUpdateMicro(meso.id, micro.id, { label: e.target.value })}
-                    placeholder="Nom du microcycle…"
-                  />
-                  {microStarts[mi] && (
-                    <span style={styles.cycleMicroDate}>
-                      {microStarts[mi].toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-                    </span>
-                  )}
-                  <input
-                    style={styles.cycleMicroDurInput}
-                    type="number"
-                    min="1"
-                    max="8"
-                    value={micro.durationWeeks}
-                    onChange={e => onUpdateMicro(meso.id, micro.id, { durationWeeks: +e.target.value })}
-                    title="Durée (semaines)"
-                  />
-                  <span style={styles.cycleDurLabel}>sem.</span>
-                  <input
-                    style={{ ...styles.cycleDescInput, flex: "1 1 120px" }}
-                    value={micro.description || ""}
-                    onChange={e => onUpdateMicro(meso.id, micro.id, { description: e.target.value })}
-                    placeholder="Contenu…"
-                  />
-                  <button style={styles.cycleDeleteBtn} onClick={() => setPendingDelete({ type: "micro", mesoId: meso.id, microId: micro.id, label: micro.label })} title="Supprimer">✕</button>
-                </div>
-              ))}
-              <button style={styles.cycleAddMicroBtn} onClick={() => onAddMicro(meso.id)}>
-                ＋ Microcycle
-              </button>
-            </div>
-          </div>
-        );
-      })}
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {mesocycles.map((meso, i) => (
+          <Fragment key={meso.id}>
+            <DropBar active={dropBar === i} c={c} />
+            <MesoCard
+              meso={meso}
+              isAnchor={meso.id === anchorId}
+              isDragged={dragIndex === i}
+              handle={handleProps(i)}
+              isDark={isDark}
+              onUpdateMeso={onUpdateMeso}
+              onAnchorMeso={onAnchorMeso}
+              onAddMicro={onAddMicro}
+              onUpdateMicro={onUpdateMicro}
+              onAskDelete={setPendingDelete}
+            />
+          </Fragment>
+        ))}
+        <DropBar active={dropBar === mesocycles.length} c={c} />
+      </div>
 
       {/* ── Cycles personnalisés ── */}
       <div style={styles.customCyclesSection}>
@@ -236,7 +169,6 @@ export function CyclesView({
             reminder={rem}
             completionRate={getReminderCompletionRate(rem, reminderState, new Date())}
             isDark={isDark}
-            styles={styles}
             disabled={!canEdit}
             onClick={() => canEdit && setEditingReminder(rem)}
           />
@@ -296,8 +228,310 @@ export function CyclesView({
   );
 }
 
+// ─── Trait d'insertion ───────────────────────────────────────────────────────
+// Toujours rendu, jamais masqué : il tient la place entre deux cartes, si bien
+// qu'un glissement ne change aucune hauteur — les positions mesurées au départ
+// du geste restent valables jusqu'au bout.
+function DropBar({ active, c }) {
+  return (
+    <div style={{ height: 10, display: "flex", alignItems: "center", flexShrink: 0 }}>
+      <div style={{
+        height: 2, width: "100%", borderRadius: 2,
+        background: active ? c.accent : "transparent",
+      }} />
+    </div>
+  );
+}
+
+// ─── Carte d'un mésocycle ────────────────────────────────────────────────────
+function MesoCard({
+  meso, isAnchor, isDragged, handle, isDark,
+  onUpdateMeso, onAnchorMeso, onAddMicro, onUpdateMicro, onAskDelete,
+}) {
+  const c = colors(isDark);
+  const [open, setOpen] = useState(false);
+  const micros = meso.microcycles || [];
+  const starts = microStarts(meso);
+  const last = mesoLastDay(meso);
+
+  const fieldBase = {
+    background: c.inputBg, border: "none", borderRadius: RADIUS.control,
+    color: c.text, fontFamily: "inherit", padding: "8px 10px", fontSize: 13,
+    minWidth: 0,
+  };
+
+  return (
+    // Pas de `transform` dans ce style : c'est la poignée qui l'écrit dans le
+    // DOM pendant le glissement (cf. hooks/useDragReorder.js).
+    <div data-drag-card style={{
+      background: c.card,
+      border: `1px solid ${isDragged ? c.accentBorder : c.border}`,
+      borderRadius: 16, padding: "10px 12px 12px",
+      position: "relative", zIndex: isDragged ? 5 : 0,
+      boxShadow: isDragged ? `0 14px 30px ${c.overlayBg}` : "none",
+    }}>
+      {/* nom */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          type="button"
+          {...handle}
+          data-no-swipe
+          aria-label={`Déplacer ${meso.label || "ce mésocycle"}`}
+          title="Glisser pour réordonner"
+          style={{
+            ...handle.style, width: 28, height: 34, padding: 0, flexShrink: 0,
+            border: "none", background: "none", color: c.textDim,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <GripIcon />
+        </button>
+
+        <ColorDot color={meso.color} c={c}
+                  onChange={v => onUpdateMeso(meso.id, { color: v })} />
+
+        <input
+          style={{ ...fieldBase, flex: 1, fontWeight: 600, fontSize: 14 }}
+          value={meso.label}
+          onChange={e => onUpdateMeso(meso.id, { label: e.target.value })}
+          placeholder="Nom du mésocycle…"
+        />
+
+        <button
+          type="button"
+          onClick={() => onAskDelete({ type: "meso", id: meso.id, label: meso.label })}
+          aria-label="Supprimer ce mésocycle"
+          style={{
+            width: 30, height: 30, borderRadius: 999, flexShrink: 0,
+            border: "none", background: "none", color: c.textDim,
+            fontSize: 14, cursor: "pointer", fontFamily: "inherit",
+          }}
+        >✕</button>
+      </div>
+
+      {/* date d'ancrage · durée */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8, paddingLeft: 36 }}>
+        <input
+          type="date"
+          value={meso.startDate || ""}
+          onChange={e => {
+            const v = e.target.value;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v >= "2000-01-01") onAnchorMeso(meso.id, v);
+          }}
+          title="Date de début — les autres mésocycles suivent"
+          style={{
+            ...fieldBase, fontSize: 12, colorScheme: isDark ? "dark" : "light",
+            border: `1px solid ${isAnchor ? c.accentBorder : "transparent"}`,
+            padding: "7px 9px",
+          }}
+        />
+        <WeekStepper
+          isDark={isDark}
+          value={meso.durationWeeks}
+          onChange={n => onUpdateMeso(meso.id, { durationWeeks: n })}
+          max={24}
+        />
+      </div>
+
+      {(last || isAnchor) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, paddingLeft: 36 }}>
+          {last && (
+            <span style={{ fontSize: 11, color: c.textMuted }}>
+              jusqu’au {last.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}
+            </span>
+          )}
+          {isAnchor && (
+            <span style={{
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+              color: c.accent, background: c.accentBg, borderRadius: 999, padding: "3px 8px",
+            }}>Ancre</span>
+          )}
+        </div>
+      )}
+
+      <input
+        style={{ ...fieldBase, width: "100%", marginTop: 8, fontSize: 12, color: c.textCard }}
+        value={meso.description || ""}
+        onChange={e => onUpdateMeso(meso.id, { description: e.target.value })}
+        placeholder="Objectif du bloc…"
+      />
+
+      {/* microcycles, repliés : sur un téléphone, c'est le plan d'ensemble
+          qu'on veut voir d'abord */}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6, marginTop: 10,
+          background: "none", border: "none", padding: "2px 0",
+          color: c.textMuted, fontSize: 11, fontFamily: "inherit", cursor: "pointer",
+        }}
+      >
+        <Chevron open={open} />
+        {micros.length === 0 ? "Aucun microcycle"
+          : `${micros.length} microcycle${micros.length > 1 ? "s" : ""}`}
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+          {micros.map((micro, mi) => (
+            <MicroRow
+              key={micro.id}
+              micro={micro}
+              meso={meso}
+              start={starts[mi]}
+              isDark={isDark}
+              fieldBase={fieldBase}
+              onUpdateMicro={onUpdateMicro}
+              onAskDelete={onAskDelete}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => { onAddMicro(meso.id); setOpen(true); }}
+            style={{
+              alignSelf: "flex-start", fontSize: 11, color: c.accent,
+              background: c.accentFaint, border: `1px dashed ${c.accentBorder}`,
+              borderRadius: 999, padding: "6px 14px", cursor: "pointer", fontFamily: "inherit",
+            }}
+          >＋ Microcycle</button>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+function MicroRow({ micro, meso, start, isDark, fieldBase, onUpdateMicro, onAskDelete }) {
+  const c = colors(isDark);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 36 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ width: 6, height: 6, borderRadius: 999, background: meso.color, flexShrink: 0 }} />
+        <input
+          style={{ ...fieldBase, flex: 1, fontSize: 12 }}
+          value={micro.label}
+          onChange={e => onUpdateMicro(meso.id, micro.id, { label: e.target.value })}
+          placeholder="Nom du microcycle…"
+        />
+        <WeekStepper
+          isDark={isDark}
+          value={micro.durationWeeks}
+          onChange={n => onUpdateMicro(meso.id, micro.id, { durationWeeks: n })}
+          max={8}
+          compact
+        />
+        <button
+          type="button"
+          onClick={() => onAskDelete({ type: "micro", mesoId: meso.id, microId: micro.id, label: micro.label })}
+          aria-label="Supprimer ce microcycle"
+          style={{
+            width: 26, height: 26, borderRadius: 999, flexShrink: 0,
+            border: "none", background: "none", color: c.textDim,
+            fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+          }}
+        >✕</button>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 14 }}>
+        {start && (
+          <span style={{ fontSize: 10, color: c.textMuted, flexShrink: 0 }}>
+            {start.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+          </span>
+        )}
+        <input
+          style={{ ...fieldBase, flex: 1, fontSize: 11, padding: "6px 9px", color: c.textCard }}
+          value={micro.description || ""}
+          onChange={e => onUpdateMicro(meso.id, micro.id, { description: e.target.value })}
+          placeholder="Contenu…"
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Petits contrôles ────────────────────────────────────────────────────────
+
+// − 4 sem. + : au pouce, un pas à la fois. Le champ nombre du bureau demandait
+// un clavier et un appui long pour changer une semaine.
+function WeekStepper({ isDark, value, onChange, min = 1, max = 24, compact = false }) {
+  const c = colors(isDark);
+  const n = weeksOf({ durationWeeks: value });
+  const size = compact ? 24 : 28;
+  const step = (label, delta, disabled) => (
+    <button
+      type="button"
+      disabled={disabled}
+      aria-label={delta < 0 ? "Une semaine de moins" : "Une semaine de plus"}
+      onClick={() => onChange(Math.min(max, Math.max(min, n + delta)))}
+      style={{
+        width: size, height: size, borderRadius: 999, flexShrink: 0,
+        border: "none", background: disabled ? "transparent" : c.control,
+        color: disabled ? c.textDim : c.text,
+        fontSize: compact ? 13 : 15, lineHeight: 1, fontFamily: "inherit",
+        cursor: disabled ? "default" : "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >{label}</button>
+  );
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 4, flexShrink: 0,
+      background: c.inputBg, borderRadius: 999, padding: 3,
+    }}>
+      {step("−", -1, n <= min)}
+      <span style={{
+        minWidth: compact ? 40 : 48, textAlign: "center",
+        fontSize: compact ? 11 : 12, fontWeight: 600, color: c.text,
+        fontVariantNumeric: "tabular-nums",
+      }}>{n} sem.</span>
+      {step("+", +1, n >= max)}
+    </div>
+  );
+}
+
+// Pastille ronde : le champ couleur natif est posé par-dessus, invisible.
+function ColorDot({ color, c, onChange }) {
+  return (
+    <label style={{
+      position: "relative", width: 20, height: 20, borderRadius: 999,
+      background: color, flexShrink: 0, cursor: "pointer",
+      boxShadow: `0 0 0 1px ${c.border}`,
+    }} title="Couleur du mésocycle">
+      <input
+        type="color"
+        value={color}
+        onChange={e => onChange(e.target.value)}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", padding: 0, cursor: "pointer" }}
+      />
+    </label>
+  );
+}
+
+function GripIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      {[4, 8, 12].map(y => (
+        <Fragment key={y}>
+          <circle cx="6" cy={y} r="1.4" />
+          <circle cx="10" cy={y} r="1.4" />
+        </Fragment>
+      ))}
+    </svg>
+  );
+}
+
+function Chevron({ open }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"
+         style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
+      <path d="M3 1.5 L7 5 L3 8.5" fill="none" stroke="currentColor" strokeWidth="1.6"
+            strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // ─── ReminderCard ────────────────────────────────────────────────────────────
-function ReminderCard({ reminder, completionRate, isDark, styles, disabled, onClick }) {
+function ReminderCard({ reminder, completionRate, isDark, disabled, onClick }) {
   const text     = colors(isDark).text;
   const textMid  = colors(isDark).textCard;
   const textLight= colors(isDark).textMuted;
