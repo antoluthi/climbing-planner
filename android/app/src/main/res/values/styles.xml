@@ -18,7 +18,7 @@
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <!-- Android 12+ : splash système = icône sur fond sombre de l'app.
-             Avant 12 : @drawable/splash (glyphe centré sur #1a1410). -->
+             Avant 12 : @drawable/splash (la marque centrée sur #0A0A0A). -->
         <item name="windowSplashScreenBackground">#0A0A0A</item>
         <item name="android:background">@drawable/splash</item>
     </style>
