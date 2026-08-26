@@ -946,8 +946,28 @@ Les rappels du jour, cochables, et le résumé du journal.
   L'app draine la file à son réveil (`applyPendingToggles`), et la
   modification repart en synchro comme n'importe quelle autre.
 - **Pas de ListView** : une liste dans un widget impose un
-  `RemoteViewsService`. Quatre lignes sont écrites dans la mise en page, on
+  `RemoteViewsService`. **Huit** lignes sont écrites dans la mise en page, on
   masque celles qui ne servent pas.
+- **Redimensionnable, contenu compris.** `resizeMode` seul ne suffit pas :
+  sans `minResizeWidth`/`minResizeHeight`, Android prend `minWidth`/`minHeight`
+  pour plancher et le widget ne peut que **grandir**. Les quatre couples de
+  `widget_today_info.xml` disent quatre choses différentes — taille à la pose
+  (`minWidth`/`minHeight`, Android 11 et avant), taille à la pose en cellules
+  (`targetCell*`, Android 12+), plancher (`minResize*`), plafond
+  (`maxResize*`).
+  Le contenu suit : `TodayWidget.fit(wDp, hDp)` décide combien de rappels
+  tiennent et si la date et le journal ont encore leur place. **L'ordre des
+  sacrifices suit l'importance** : les rappels d'abord, puis le journal
+  (< 140 dp), puis la date (< 100 dp). Le calcul porte sur
+  `OPTION_APPWIDGET_MIN_HEIGHT` — la hauteur de l'orientation la plus serrée,
+  donc ce qui tient là tient dans les deux sens. Le seul signal d'un
+  redimensionnement est `onAppWidgetOptionsChanged` : sans cette redéfinition,
+  un widget étiré garde la mise en page de sa taille d'avant.
+  Table obtenue (hauteurs d'un lanceur classique, 70×n − 30) : 2 rangées → 2
+  rappels + date · 3 → 3 + journal · 4 → 5 · 5 → 7 · 6 → 8.
+- **Un widget réduit ne cache rien en silence** : le cliché porte `total`, le
+  nombre réel de rappels du jour, et l'en-tête affiche « +n » pour ceux que la
+  hauteur ne permet pas de montrer. Sans ça, on croirait avoir tout fait.
 - **Pas de texte barré** : `setPaintFlags` n'est pas une méthode « remotable »,
   un widget qui l'appelle affiche « problème de chargement ». Une case cochée
   se lit à sa pastille et à son texte éteint.

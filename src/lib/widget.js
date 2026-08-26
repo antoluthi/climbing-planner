@@ -19,7 +19,11 @@ import { withTimeout } from "./promise-timeout.js";
 export const SNAPSHOT_KEY = "widget_today";
 export const PENDING_KEY  = "widget_pending";
 
-const MAX_ROWS = 4;   // ce que la hauteur d'un widget 4×2 laisse tenir
+// Ce que la plus grande taille du widget laisse tenir. Le widget est
+// redimensionnable : c'est lui qui décide combien de ces lignes il affiche
+// vraiment (TodayWidget.fit), en fonction de la hauteur qu'on lui donne. Ici on
+// se contente de ne pas lui en envoyer plus qu'il ne pourra jamais montrer.
+const MAX_ROWS = 8;
 
 // La date est mise en forme ici : le Java n'a pas à connaître le français.
 function dayLabel(date) {
@@ -29,7 +33,8 @@ function dayLabel(date) {
 
 export function buildWidgetSnapshot(data, now = new Date()) {
   const dateStr = localDateStr(now);
-  const reminders = getActiveRemindersForDate(data?.reminders || [], now)
+  const active = getActiveRemindersForDate(data?.reminders || [], now);
+  const reminders = active
     .slice(0, MAX_ROWS)
     .map(r => ({
       id: r.id,
@@ -50,6 +55,9 @@ export function buildWidgetSnapshot(data, now = new Date()) {
     date: dateStr,
     label: dayLabel(now),
     reminders,
+    // Le nombre réel du jour, pas celui de la liste tronquée : un widget réduit
+    // en affiche moins et doit pouvoir dire combien il en cache.
+    total: active.length,
     journal: bits.length ? bits.join(" · ") : "Rien de noté",
     journalDone: bits.length > 0,
   };
