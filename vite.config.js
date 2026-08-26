@@ -57,8 +57,10 @@ export default defineConfig(({ mode }) => ({
         name: 'Climbing Planner',
         short_name: 'Planif',
         description: 'Planificateur d\'entraînement escalade',
-        theme_color: '#ffffff',
-        background_color: '#fafafa',
+        // Mêmes valeurs que l'icône et que le splash natif : l'app s'ouvre
+        // sur du noir, pas sur un blanc hérité de l'ancienne identité.
+        theme_color: '#000000',
+        background_color: '#000000',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
