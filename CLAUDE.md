@@ -37,6 +37,7 @@ src/
 │   ├── sync-meta.js              — marqueur de synchro local + decideSync (pull/push/merge/reset/idle)
 │   ├── merge-plan.js             — fusion de deux plannings (réunion par id / par date)
 │   ├── cycles.js                 — chaînage des mésocycles : ancre, durées, réarrangement
+│   ├── supabase-public.js        — client anon (sans session) + fetchPublicPlans()
 │   └── hooper.js                 — hooperLabel, hooperColor
 │
 ├── theme/
@@ -77,6 +78,7 @@ src/
     ├── CyclesView.jsx             — wrapper locked/unlocked cycles
     ├── CustomCycleModal.jsx       — formulaire cycle personnalisé
     ├── MesoDetailModal.jsx        — objectif d'un mésocycle + ses microcycles
+    ├── PublicPlansSection.jsx     — liste des plannings publics (dans Compte)
     ├── DailyNotesSection.jsx      — notes + checkbox créatine
     ├── DayLogModal.jsx            — assistant journal quotidien (Hooper → poids → notes)
     ├── Dashboard.jsx              — stats + graphiques poids & Hooper
@@ -152,13 +154,40 @@ src/
 |---|---|
 | `search_athletes(search_term)` | Retourne `user_id, first_name, last_name` des non-coaches. `SECURITY DEFINER` pour contourner RLS sur la recherche. |
 
-### Vue publique — Planning d'Anto
+### Plannings publics (`lib/supabase-public.js`, `PublicPlansSection`, `PublicPlanView`)
 
-Migration `supabase/migrations/20260315_public_anto_plan.sql` : policy RLS autorisant `anon` à lire la ligne de l'utilisateur "Anto" dans `climbing_plans`.
+Un planning marqué public (bascule **Compte > Confidentialité**, colonne
+`climbing_plans.is_public`) se lit de deux endroits : l'écran de connexion
+(« Voir un planning public ») et, depuis un compte, **Compte > Plannings
+publics** — voisin immédiat de la bascule, parce que c'est la même idée des
+deux côtés : ce que je partage, ce que je peux regarder.
 
-- Bouton "Planning d'Anto" visible sur l'écran de connexion (non authentifié)
-- `PublicPlanView` : navigation sem/mois/année en lecture seule, affiche uniquement noms et horaires des séances (pas de données personnelles)
-- Aucune authentification requise
+- **Toujours par le client anon** (`lib/supabase-public.js`) : un second client
+  Supabase sans session, dont les requêtes partent avec la clé anon comme jeton
+  et sont donc exécutées au rôle `anon`. Deux raisons, et la seconde compte
+  autant que la première :
+  1. la policy qui existe (`is_public = true`) est écrite `TO anon` — sans ce
+     client, un compte **connecté** ne verrait rien, ses requêtes partant au
+     rôle `authenticated` ;
+  2. ce chemin ne peut lire **que** ce que le public peut lire : les politiques
+     du compte (sa ligne, celles de ses athlètes s'il est coach) ne s'y
+     appliquent pas, donc aucune ligne privée ne peut s'afficher par accident
+     dans un écran présenté comme public.
+- **Un calque, pas un remplacement.** Déconnecté, `PublicPlanView` remplace
+  l'écran de connexion (inchangé). Connecté, elle se pose **par-dessus** l'app
+  (`PublicPlanOverlay`, `Z.modal`, inscrit dans la pile de calques de
+  `native.js` pour le bouton retour d'Android) : la remplacer démonterait
+  `DataProvider` — retour à l'accueil et planning rechargé à chaque aller-retour.
+- **Ce qui s'affiche** : les séances (semaine / mois / année) et les **cycles**
+  — `CyclesTimeline` en lecture seule, `showReminders={false}`, chaque bloc
+  ouvrant son objectif par `MesoDetailModal`. Pas de poids, pas de notes, pas
+  d'indice Hooper, **pas de rappels** (ce sont des habitudes personnelles, pas
+  le plan).
+- ⚠️ **Limite connue** : la policy rend la **ligne entière** lisible, blob
+  `data` compris. L'app n'affiche que les séances et les cycles, mais quiconque
+  possède la clé anon peut lire le reste par l'API. Pour ne réellement exposer
+  que le plan, il faudrait passer par une vue ou une RPC `SECURITY DEFINER` qui
+  renvoie un sous-ensemble — pas fait à ce jour.
 
 ## Système de rôles
 

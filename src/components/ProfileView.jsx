@@ -14,13 +14,14 @@ import { toast } from "../lib/toast.js";
 import { colors, DATA } from "../theme/palette.js";
 import { disciplineList } from "../lib/disciplines.js";
 import { RowCard, Row, Segmented, Chip, RoundIconButton, SANS, MONO } from "./ui/Ascent.jsx";
+import { PublicPlansSection } from "./PublicPlansSection.jsx";
 
 // ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
 
 export function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus, onUpload, onPull, onImport, toggleTheme, isDark,
   athletes, onSearchAthletes, onInviteAthlete, sentInvites, onRemoveAthlete,
   myCoaches, onLeaveCoach, accountRole, onChangeRole, onBack,
-  viewingAthlete, onToggleViewAthlete }) {
+  viewingAthlete, onToggleViewAthlete, onOpenPublicPlan }) {
   const { styles } = useThemeCtx();
   const profile = data.profile || {};
 
@@ -399,7 +400,9 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
             <div>
               <div style={{ fontSize: 12, color: textColor, fontWeight: 500 }}>Planning public</div>
               <div style={{ fontSize: 11, color: mutedColor, marginTop: 3, maxWidth: 240, lineHeight: 1.4 }}>
-                Permet à n'importe qui de voir ton planning depuis l'écran de connexion, sans compte.
+                Ton planning devient visible de tous — séances et cycles, en
+                lecture seule — depuis l'écran de connexion comme depuis un
+                autre compte.
               </div>
             </div>
             {/* Toggle slider */}
@@ -428,6 +431,15 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
             </button>
           </div>
         </div>
+      )}
+
+      {onOpenPublicPlan && (
+        <PublicPlansSection
+          isDark={isDark}
+          styles={styles}
+          currentUserId={session?.user?.id}
+          onOpen={onOpenPublicPlan}
+        />
       )}
 
       {/* ── Données ── */}

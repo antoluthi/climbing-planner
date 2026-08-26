@@ -6,7 +6,8 @@ import { DataProvider } from "./context/DataProvider.jsx";
 import { RoleRouter } from "./shells/RoleRouter.jsx";
 import supabase from "./lib/supabase.js";
 import { AuthPanel } from "./components/AuthPanel.jsx";
-import { PublicPlanView } from "./components/PublicPlanView.jsx";
+import { PublicPlanView, PublicPlanOverlay } from "./components/PublicPlanView.jsx";
+import { fetchPublicPlans } from "./lib/supabase-public.js";
 import { DayNightToggle } from "./components/DayNightToggle.jsx";
 import { syncSystemBars } from "./lib/native.js";
 import { colors } from "./theme/palette.js";
@@ -43,7 +44,7 @@ export default function App() {
     );
   }
 
-  if (publicPlanUser) {
+  if (publicPlanUser && !session) {
     return (
       <PublicPlanView
         onBack={() => setPublicPlanUser(null)}
@@ -70,20 +71,7 @@ export default function App() {
       setShowProfilePicker(p => !p);
       if (publicProfiles !== null) return;
       if (!supabase) return;
-      const { data: rows } = await supabase
-        .from("climbing_plans")
-        .select("user_id, first_name, last_name, data")
-        .eq("is_public", true);
-      if (rows) {
-        setPublicProfiles(rows.map(r => ({
-          userId: r.user_id,
-          firstName: r.first_name || r.data?.profile?.firstName || "",
-          lastName: r.last_name || r.data?.profile?.lastName || "",
-          avatarUrl: r.data?.profile?.avatarUrl || null,
-        })));
-      } else {
-        setPublicProfiles([]);
-      }
+      setPublicProfiles(await fetchPublicPlans());
     };
 
     return (
@@ -205,7 +193,23 @@ export default function App() {
 
   return (
     <DataProvider>
-      <RoleRouter isDark={isDark} toggleTheme={toggleTheme} styles={styles} />
+      <RoleRouter
+        isDark={isDark} toggleTheme={toggleTheme} styles={styles}
+        onOpenPublicPlan={setPublicPlanUser}
+      />
+      {/* Par-dessus l'app, jamais à la place : on remonte dans l'écran qu'on
+          venait de quitter, et le planning déjà chargé n'est pas rejeté. */}
+      {publicPlanUser && (
+        <PublicPlanOverlay onClose={() => setPublicPlanUser(null)}>
+          <PublicPlanView
+            onBack={() => setPublicPlanUser(null)}
+            userId={publicPlanUser.userId}
+            firstName={publicPlanUser.firstName}
+            lastName={publicPlanUser.lastName}
+            avatarUrl={publicPlanUser.avatarUrl}
+          />
+        </PublicPlanOverlay>
+      )}
     </DataProvider>
   );
 }

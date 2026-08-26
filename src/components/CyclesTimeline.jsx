@@ -18,6 +18,9 @@ export function CyclesTimeline({
   reminders = [], reminderState = {},
   onAddReminder, onUpdateReminder, onDeleteReminder,
   canEditReminders = true,
+  // Les rappels sont des habitudes personnelles, pas le plan : la vue publique
+  // affiche les cycles sans eux.
+  showReminders = true,
 }) {
   const { styles, isDark } = useThemeCtx();
   // Le détail d'un bloc s'ouvre en modale : une bulle ne tenait ni l'objectif
@@ -297,31 +300,33 @@ export function CyclesTimeline({
       )}
 
 
-      {/* ── Rappels journaliers (lecture + édition rapide) ── */}
-      <div style={styles.timelineSectionSep}>Rappels journaliers</div>
-      {reminders.length === 0 && (
-        <div style={{ color: colors(isDark).textMuted, fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 8 }}>
-          {canEditReminders
-            ? "Aucun rappel. Tape « + Nouveau rappel » pour en créer un."
-            : "Aucun rappel."}
-        </div>
-      )}
-      {reminders.map(rem => (
-        <TimelineReminderRow
-          key={rem.id}
-          reminder={rem}
-          completionRate={getReminderCompletionRate(rem, reminderState, new Date())}
-          isDark={isDark}
-          disabled={!canEditReminders}
-          onClick={() => canEditReminders && setEditingReminder(rem)}
-        />
-      ))}
-      {canEditReminders && (
-        <button
-          style={{ ...styles.cycleAddMesoBtn, marginTop: 8 }}
-          onClick={() => setEditingReminder({})}
-        >＋ Nouveau rappel</button>
-      )}
+      {showReminders && (<>
+        {/* ── Rappels journaliers (lecture + édition rapide) ── */}
+        <div style={styles.timelineSectionSep}>Rappels journaliers</div>
+        {reminders.length === 0 && (
+          <div style={{ color: colors(isDark).textMuted, fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 8 }}>
+            {canEditReminders
+              ? "Aucun rappel. Tape « + Nouveau rappel » pour en créer un."
+              : "Aucun rappel."}
+          </div>
+        )}
+        {reminders.map(rem => (
+          <TimelineReminderRow
+            key={rem.id}
+            reminder={rem}
+            completionRate={getReminderCompletionRate(rem, reminderState, new Date())}
+            isDark={isDark}
+            disabled={!canEditReminders}
+            onClick={() => canEditReminders && setEditingReminder(rem)}
+          />
+        ))}
+        {canEditReminders && (
+          <button
+            style={{ ...styles.cycleAddMesoBtn, marginTop: 8 }}
+            onClick={() => setEditingReminder({})}
+          >＋ Nouveau rappel</button>
+        )}
+      </>)}
 
       {editingReminder && (
         <ReminderModal
