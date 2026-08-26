@@ -68,14 +68,17 @@ async function prefs() {
   }
 }
 
+// Renvoie ce qui s'est passé plutôt qu'un simple booléen : sur un téléphone,
+// « ça n'a pas marché » sans le message ne mène nulle part.
 export async function writeWidgetSnapshot(data, now = new Date()) {
   const P = await prefs();
-  if (!P) return false;
+  if (!P) return { ok: false, reason: "web" };
   try {
-    await P.set({ key: SNAPSHOT_KEY, value: JSON.stringify(buildWidgetSnapshot(data, now)) });
-    return true;
-  } catch {
-    return false;
+    const snap = buildWidgetSnapshot(data, now);
+    await P.set({ key: SNAPSHOT_KEY, value: JSON.stringify(snap) });
+    return { ok: true, reminders: snap.reminders.length };
+  } catch (e) {
+    return { ok: false, reason: (e?.message || String(e)).slice(0, 120) };
   }
 }
 

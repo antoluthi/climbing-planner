@@ -396,6 +396,7 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
       <NotificationsSection
         isDark={isDark}
         styles={styles}
+        data={data}
         enabled={profile.notifySessions}
         onChange={v => onUpdateProfile({ ...profile, notifySessions: v })}
       />
