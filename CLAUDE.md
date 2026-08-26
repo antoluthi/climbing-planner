@@ -76,6 +76,7 @@ src/
     ├── CyclesTimeline.jsx         — timeline visuelle des mésocycles
     ├── CyclesView.jsx             — wrapper locked/unlocked cycles
     ├── CustomCycleModal.jsx       — formulaire cycle personnalisé
+    ├── MesoDetailModal.jsx        — objectif d'un mésocycle + ses microcycles
     ├── DailyNotesSection.jsx      — notes + checkbox créatine
     ├── DayLogModal.jsx            — assistant journal quotidien (Hooper → poids → notes)
     ├── Dashboard.jsx              — stats + graphiques poids & Hooper
@@ -476,6 +477,41 @@ Les bords de l'écran font défiler la liste toute seule (`autoScroll`, récursi
 donc hors du composant), sans quoi on ne peut pas déplacer une carte plus loin
 que ce qui est visible.
 
+### Lire l'objectif d'un bloc (`components/MesoDetailModal.jsx`)
+
+L'objectif d'un mésocycle était la seule chose écrite qui ne se lisait nulle
+part : la timeline n'ouvrait sa bulle que sur les microcycles, et le formulaire
+n'en montrait qu'une ligne de champ. Une modale unique le porte désormais —
+plage de dates, « semaine 3 sur 4 » quand on est dedans, l'objectif du bloc en
+toutes lettres, puis chaque microcycle avec ses dates et le sien.
+
+- Le texte passe par `RichText` : une liste à puces écrite dans le champ se lit
+  comme une liste. Les champs de description (`CyclesView`) sont donc des
+  **zones de texte qui suivent leur contenu**, plus des lignes uniques.
+- Trois entrées, la même modale : une rangée de la **timeline** (le microcycle
+  touché y est mis en avant), une puce de la **légende du calendrier**, et
+  n'importe quel jour d'un cycle par cette légende.
+
+### Voir ses cycles sur le calendrier (`components/CalendarView.jsx`)
+
+Les jours d'un mésocycle prennent une **teinte de sa couleur** dans les trois
+vues — sur l'année, les blocs se lisent comme des bandes. Sous la grille, une
+**légende** nomme les cycles de la période affichée (« en cours » pour celui du
+moment) et ouvre leur objectif d'une touche.
+
+- La teinte est un **calque posé par-dessus** le fond habituel de la case, pas
+  un remplacement : une couleur sombre à 15 % sur fond noir rendait les jours
+  d'un cycle plus ternes que les jours sans cycle — l'inverse de ce qu'on veut
+  lire.
+- L'opacité qui grisait les jours sans séance portait sur toute la case : elle
+  trouait la bande un jour sur deux. Elle porte maintenant sur la **couleur du
+  chiffre**.
+- Les dates viennent de `recomputeMesoDates` — même règle que l'éditeur et la
+  timeline. Un plan partiellement daté se peint donc quand même, **sans rien
+  réécrire** dans les données.
+- Le bureau garde ses vues historiques (`MonthView`, `YearView`, `DayColumn`),
+  qui affichaient déjà la couleur du mésocycle à leur façon.
+
 ### CyclesTimeline — texte adaptatif (`components/CyclesTimeline.jsx`)
 `ResizeObserver` sur le conteneur mesure la largeur réelle en pixels.
 `fitLabel(label, px)` calcule combien de caractères rentrent (~5.5px/char à font-size 9, padding 12px).
@@ -571,6 +607,12 @@ Le détail d'une séance (récapitulatif, mesures, notes) est affiché d'emblée
 il n'y a plus de bouton « Voir le détail de la séance ». Le repli qui subsiste
 dans cette modale est celui des **notes de retour** de l'athlète, qui est autre
 chose.
+
+### Plusieurs séances le même jour (`components/CalendarView.jsx`)
+Le bouton « Ajouter une séance » n'apparaissait que sur une journée **vide** :
+dès la première séance posée, il n'y avait plus d'entrée pour en ajouter une
+seconde. Il est maintenant toujours là, sous la liste — en accent sur une
+journée vide, en bouton discret quand il y a déjà quelque chose.
 
 ### Combien de séances, d'un coup d'œil (`components/CalendarView.jsx`)
 `DayDots` : **une pastille par séance**, à la couleur de sa discipline — celle
