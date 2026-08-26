@@ -1,5 +1,6 @@
 import { localDateStr } from "./helpers.js";
 import { getActiveRemindersForDate, isReminderCheckedOn } from "./reminders.js";
+import { withTimeout } from "./promise-timeout.js";
 
 // ─── WIDGET D'ÉCRAN D'ACCUEIL ────────────────────────────────────────────────
 // Un widget Android ne peut pas lire le localStorage de la WebView. Le pont est
@@ -57,12 +58,24 @@ export function buildWidgetSnapshot(data, now = new Date()) {
 // ── Pont natif ───────────────────────────────────────────────────────────────
 // `native.js` et le plugin ne sont chargés qu'ici : tout ce qui précède reste
 // importable sous Node (banc de test).
+// Comme pour les notifications : rien ne doit pouvoir rester en suspens.
+const CALL_MS = 4000;
+const call = (p, label) => withTimeout(p, CALL_MS, label);
+
+// ⚠ PIÈGE : ne JAMAIS renvoyer un plugin Capacitor depuis une fonction `async`.
+// La valeur de retour d'une fonction async est résolue comme un « thenable » :
+// le moteur lit `.then` dessus. Or un plugin Capacitor est un proxy qui répond
+// à *n'importe quel* accès de propriété par un appel au pont natif — il part
+// donc chercher une méthode native « then », qui n'existe pas. Sur le web elle
+// rejette (« not implemented ») ; **dans l'APK elle ne répond jamais**, et la
+// promesse ne se termine pas : bascule figée, widget jamais écrit, diagnostic
+// bloqué sur « … ». On enveloppe donc le plugin dans un objet ordinaire.
 async function prefs() {
   try {
     const { isNative } = await import("./native.js");
     if (!isNative) return null;
-    const m = await import("@capacitor/preferences");
-    return m.Preferences;
+    const m = await call(import("@capacitor/preferences"), "import préférences");
+    return { P: m.Preferences };
   } catch {
     return null;
   }
@@ -71,11 +84,12 @@ async function prefs() {
 // Renvoie ce qui s'est passé plutôt qu'un simple booléen : sur un téléphone,
 // « ça n'a pas marché » sans le message ne mène nulle part.
 export async function writeWidgetSnapshot(data, now = new Date()) {
-  const P = await prefs();
-  if (!P) return { ok: false, reason: "web" };
+  const p = await prefs();
+  if (!p) return { ok: false, reason: "web" };
+  const P = p.P;
   try {
     const snap = buildWidgetSnapshot(data, now);
-    await P.set({ key: SNAPSHOT_KEY, value: JSON.stringify(snap) });
+    await call(P.set({ key: SNAPSHOT_KEY, value: JSON.stringify(snap) }), "écriture widget");
     return { ok: true, reminders: snap.reminders.length };
   } catch (e) {
     return { ok: false, reason: (e?.message || String(e)).slice(0, 120) };
@@ -102,12 +116,13 @@ export function applyPendingToggles(data, pending) {
 }
 
 export async function drainWidgetToggles() {
-  const P = await prefs();
-  if (!P) return [];
+  const p = await prefs();
+  if (!p) return [];
+  const P = p.P;
   try {
-    const { value } = await P.get({ key: PENDING_KEY });
+    const { value } = await call(P.get({ key: PENDING_KEY }), "lecture file");
     if (!value) return [];
-    await P.remove({ key: PENDING_KEY });
+    await call(P.remove({ key: PENDING_KEY }), "vidage file");
     const parsed = JSON.parse(value);
     return Array.isArray(parsed) ? parsed : [];
   } catch {

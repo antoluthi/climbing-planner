@@ -44,13 +44,24 @@ export function NotificationsSection({ isDark, styles, data, enabled, onChange }
     }
   };
 
+  // Affichage au fil de l'eau : chaque étape qui répond s'écrit tout de suite.
+  // Si l'une reste muette malgré son délai, on voit quand même tout ce qui
+  // précède — c'est exactement ce qui manquait quand le bouton restait sur « … ».
   const runDiag = async () => {
     setDiagBusy(true);
-    const d = await nativeDiagnostics();
-    const w = await writeWidgetSnapshot(data);
-    setDiag(formatDiagnostics(d) + "\n" +
-      `écriture     ${w.ok ? `ok · ${w.reminders} rappel(s)` : "ÉCHEC · " + w.reason}`);
-    setDiagBusy(false);
+    setDiag("Diagnostic en cours…");
+    try {
+      const d = await nativeDiagnostics(partial => setDiag(formatDiagnostics(partial)));
+      let text = formatDiagnostics(d);
+      setDiag(text + "\nécriture     …");
+      const w = await writeWidgetSnapshot(data);
+      text += `\nécriture     ${w.ok ? `ok · ${w.reminders} rappel(s)` : "ÉCHEC · " + w.reason}`;
+      setDiag(text);
+    } catch (e) {
+      setDiag(prev => (prev || "") + "\n⚠ diagnostic : " + (e?.message || String(e)));
+    } finally {
+      setDiagBusy(false);
+    }
   };
 
   const smallBtn = {

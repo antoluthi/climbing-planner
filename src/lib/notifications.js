@@ -1,4 +1,5 @@
 import { getMondayOf, addDays, localDateStr, weekKey, getDaySessions, isEventItem } from "./helpers.js";
+import { withTimeout } from "./promise-timeout.js";
 
 // ─── NOTIFICATIONS DE SÉANCE ─────────────────────────────────────────────────
 // Une séance planifiée donne **une seule notification, qui change de nature en
@@ -93,12 +94,25 @@ export function locateSession(data, { sessionId, dateISO }) {
 // ── Côté plugin (APK uniquement) ─────────────────────────────────────────────
 // `native.js` n'est chargé qu'ici, à l'appel : tout ce qui précède reste
 // importable hors navigateur (le banc de test tourne sous Node).
+// Chaque traversée du pont est bornée : une promesse qui ne se termine jamais
+// figeait l'écran sans un mot (cf. lib/promise-timeout.js).
+const CALL_MS = 4000;
+const call = (p, label) => withTimeout(p, CALL_MS, label);
+
+// ⚠ PIÈGE : ne JAMAIS renvoyer un plugin Capacitor depuis une fonction `async`.
+// La valeur de retour d'une fonction async est résolue comme un « thenable » :
+// le moteur lit `.then` dessus. Or un plugin Capacitor est un proxy qui répond
+// à *n'importe quel* accès de propriété par un appel au pont natif — il part
+// donc chercher une méthode native « then », qui n'existe pas. Sur le web elle
+// rejette (« not implemented ») ; **dans l'APK elle ne répond jamais**, et la
+// promesse ne se termine pas : bascule figée, widget jamais écrit, diagnostic
+// bloqué sur « … ». On enveloppe donc le plugin dans un objet ordinaire.
 async function plugin() {
   try {
     const { isNative } = await import("./native.js");
     if (!isNative) return null;
-    const m = await import("@capacitor/local-notifications");
-    return m.LocalNotifications;
+    const m = await call(import("@capacitor/local-notifications"), "import notifications");
+    return { LN: m.LocalNotifications };
   } catch {
     return null;
   }
@@ -108,20 +122,22 @@ async function plugin() {
 // renvoyait une promesse rejetée jusque dans le gestionnaire de clic, qui
 // mourait en silence — bascule figée, et rien à l'écran pour le dire.
 export async function notificationsPermission() {
-  const LN = await plugin();
-  if (!LN) return "unsupported";
+  const p = await plugin();
+  if (!p) return "unsupported";
+  const LN = p.LN;
   try {
-    return (await LN.checkPermissions())?.display ?? "unknown";
-  } catch {
-    return "error";
+    return (await call(LN.checkPermissions(), "checkPermissions"))?.display ?? "unknown";
+  } catch (e) {
+    return "error:" + (e?.message || "inconnue").slice(0, 80);
   }
 }
 
 export async function requestNotificationsPermission() {
-  const LN = await plugin();
-  if (!LN) return "unsupported";
+  const p = await plugin();
+  if (!p) return "unsupported";
+  const LN = p.LN;
   try {
-    return (await LN.requestPermissions())?.display ?? "unknown";
+    return (await call(LN.requestPermissions(), "requestPermissions"))?.display ?? "unknown";
   } catch (e) {
     return "error:" + (e?.message || "inconnue").slice(0, 80);
   }
@@ -129,8 +145,9 @@ export async function requestNotificationsPermission() {
 
 // Toucher une notification ouvre la séance qu'elle concerne.
 export async function onNotificationTap(handler) {
-  const LN = await plugin();
-  if (!LN) return null;
+  const p = await plugin();
+  if (!p) return null;
+  const LN = p.LN;
   return LN.addListener("localNotificationActionPerformed", (event) => {
     const extra = event?.notification?.extra;
     if (extra) handler(extra);
@@ -141,17 +158,18 @@ export async function onNotificationTap(handler) {
 // C'est le geste le plus simple qui reste juste quand une séance est déplacée,
 // supprimée ou notée entre deux réveils.
 export async function syncSessionNotifications(data, enabled) {
-  const LN = await plugin();
-  if (!LN) return { skipped: "web" };
+  const p = await plugin();
+  if (!p) return { skipped: "web" };
+  const LN = p.LN;
   try {
-    const pending = await LN.getPending();
-    if (pending?.notifications?.length) await LN.cancel(pending);
+    const pending = await call(LN.getPending(), "getPending");
+    if (pending?.notifications?.length) await call(LN.cancel(pending), "cancel");
     if (!enabled) return { scheduled: 0, cancelled: pending?.notifications?.length || 0 };
-    if ((await LN.checkPermissions()).display !== "granted") return { skipped: "permission" };
+    if ((await call(LN.checkPermissions(), "checkPermissions")).display !== "granted") return { skipped: "permission" };
 
     const plan = planSessionNotifications(data, new Date());
     if (plan.length) {
-      await LN.schedule({
+      await call(LN.schedule({
         notifications: plan.map(n => ({
           id: n.id,
           title: n.title,
@@ -160,7 +178,7 @@ export async function syncSessionNotifications(data, enabled) {
           smallIcon: "ic_stat_charge",
           schedule: { at: n.at, allowWhileIdle: true },
         })),
-      });
+      }), "schedule");
     }
     return { scheduled: plan.length };
   } catch (e) {
