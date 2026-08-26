@@ -1,26 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Widget « aujourd'hui ». Quatre lignes de rappels en dur plutôt qu'une
-     liste : une ListView dans un widget impose un RemoteViewsService, beaucoup
-     de code pour quatre lignes. TodayWidget masque celles qui ne servent pas. -->
+<!-- Widget « aujourd'hui ». Huit lignes de rappels en dur plutôt qu'une liste :
+     une ListView dans un widget impose un RemoteViewsService, beaucoup de code
+     pour ce qu'on affiche ici. TodayWidget masque celles qui ne servent pas —
+     et il en masque d'autant plus que le widget a été réduit.
+
+     Rien de ce qui suit ne porte de dimension figée en hauteur : c'est le Java
+     qui rend visible ou non chaque bloc, en fonction de la taille réelle. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_background"
-    android:padding="14dp">
+    android:padding="12dp">
 
-    <TextView
-        android:id="@+id/widget_date"
+    <!-- La date, et à droite le nombre de rappels que la hauteur ne permet pas
+         d'afficher — sans ça, un widget réduit cacherait du travail en silence. -->
+    <LinearLayout
+        android:id="@+id/widget_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#8A8A8A"
-        android:textSize="10sp"
-        android:textStyle="bold"
-        android:letterSpacing="0.08"
-        android:maxLines="1"
-        android:ellipsize="end"
-        android:text="" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="2dp">
+        <TextView
+            android:id="@+id/widget_date"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:textColor="#8A8A8A"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="" />
+        <TextView
+            android:id="@+id/widget_more"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:textColor="#FF4500"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:visibility="gone"
+            android:text="" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/widget_empty"
@@ -126,6 +152,110 @@
             android:src="@drawable/ic_widget_check_off" />
         <TextView
             android:id="@+id/widget_name_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_row_4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp">
+        <ImageView
+            android:id="@+id/widget_box_4"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_check_off" />
+        <TextView
+            android:id="@+id/widget_name_4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_row_5"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp">
+        <ImageView
+            android:id="@+id/widget_box_5"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_check_off" />
+        <TextView
+            android:id="@+id/widget_name_5"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_row_6"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp">
+        <ImageView
+            android:id="@+id/widget_box_6"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_check_off" />
+        <TextView
+            android:id="@+id/widget_name_6"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_row_7"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp">
+        <ImageView
+            android:id="@+id/widget_box_7"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_check_off" />
+        <TextView
+            android:id="@+id/widget_name_7"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="10dp"

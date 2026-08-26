@@ -55,7 +55,7 @@ export function NotificationsSection({ isDark, styles, data, enabled, onChange }
       let text = formatDiagnostics(d);
       setDiag(text + "\nécriture     …");
       const w = await writeWidgetSnapshot(data);
-      text += `\nécriture     ${w.ok ? `ok · ${w.reminders} rappel(s)` : "ÉCHEC · " + w.reason}`;
+      text += `\nécriture     ${w.ok ? `ok · ${w.reminders} rappel(s) · ${w.days} j d’avance` : "ÉCHEC · " + w.reason}`;
       setDiag(text);
     } catch (e) {
       setDiag(prev => (prev || "") + "\n⚠ diagnostic : " + (e?.message || String(e)));
