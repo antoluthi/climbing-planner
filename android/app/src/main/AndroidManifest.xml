@@ -45,6 +45,13 @@
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.climbingplanner.app.WIDGET_TOGGLE" />
+                <!-- L'alarme de minuit, qui fait passer le widget au jour
+                     suivant sans qu'on ait à ouvrir l'app. -->
+                <action android:name="com.climbingplanner.app.WIDGET_ROLLOVER" />
+                <!-- L'heure ou le fuseau qu'on change sous ses pieds : le
+                     prochain minuit n'est plus là où l'alarme l'attendait. -->
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

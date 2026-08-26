@@ -1,5 +1,6 @@
 package com.climbingplanner.app;
 
+import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
@@ -13,6 +14,10 @@ import android.widget.RemoteViews;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Locale;
 
 /**
  * Widget « aujourd'hui » : les rappels du jour, cochables, et le journal.
@@ -31,12 +36,24 @@ import org.json.JSONObject;
  * beaucoup de code pour ce qu'on affiche. Les lignes sont dans la mise en page
  * et on masque celles qui ne servent pas.
  *
+ * <h2>Changer de jour sans l'app</h2>
+ * Le cliché couvre une semaine, un jour par clé : à minuit le widget prend
+ * l'entrée du lendemain, sans rien avoir à recalculer et sans qu'on ait à
+ * ouvrir l'app. Un cliché d'un seul jour l'aurait laissé, au réveil, sur les
+ * rappels de la veille — cases déjà cochées, et cocher aurait écrit dans la
+ * journée d'hier.
+ *
+ * Le passage de minuit est déclenché par une alarme quotidienne
+ * ({@link #scheduleRollover}), rearmée à chaque fois qu'elle sonne ;
+ * {@code updatePeriodMillis} (30 min) reste le filet en dessous, notamment
+ * après un redémarrage, où les alarmes sont perdues.
+ *
  * <h2>Redimensionnement</h2>
- * Un widget ne se met pas à l'échelle tout seul : agrandi, il garde ses quatre
- * lignes et laisse du vide ; réduit, il rogne le bas. C'est {@link #fit} qui
- * répond, à partir de la taille que le lanceur nous donne, à « combien de
- * rappels tiennent, et la date et le journal ont-ils encore leur place ». La
- * taille arrive par {@code getAppWidgetOptions} et change par
+ * Un widget ne se met pas à l'échelle tout seul : agrandi, il garde ses lignes
+ * et laisse du vide ; réduit, il rogne le bas. C'est {@link #fit} qui répond, à
+ * partir de la taille que le lanceur nous donne, à « combien de rappels
+ * tiennent, et la date et le journal ont-ils encore leur place ». La taille
+ * arrive par {@code getAppWidgetOptions} et change par
  * {@link #onAppWidgetOptionsChanged}, seul signal qu'on ait d'un
  * redimensionnement.
  */
@@ -47,6 +64,7 @@ public class TodayWidget extends AppWidgetProvider {
     private static final String KEY_PENDING = "widget_pending";
 
     public static final String ACTION_TOGGLE = "com.climbingplanner.app.WIDGET_TOGGLE";
+    public static final String ACTION_ROLLOVER = "com.climbingplanner.app.WIDGET_ROLLOVER";
     private static final String EXTRA_ID = "reminderId";
 
     private static final int[] ROW_IDS = {
@@ -107,6 +125,35 @@ public class TodayWidget extends AppWidgetProvider {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
+    /** La date du jour, dans la même écriture que `localDateStr` côté JS. */
+    static String todayISO() {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
+    }
+
+    private static JSONObject parse(String raw) {
+        if (raw == null) return null;
+        try {
+            return new JSONObject(raw);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * L'entrée d'une journée dans le cliché, ou {@code null} si le cliché ne la
+     * couvre pas (app pas ouverte depuis plus d'une semaine).
+     *
+     * Sait encore lire la forme d'avant — un seul jour, à plat — parce qu'une
+     * mise à jour de l'app ne réécrit pas les SharedPreferences : le cliché de
+     * la version précédente est là jusqu'à la première ouverture.
+     */
+    static JSONObject dayOf(JSONObject snapshot, String iso) {
+        if (snapshot == null) return null;
+        JSONObject days = snapshot.optJSONObject("days");
+        if (days != null) return days.optJSONObject(iso);
+        return iso.equals(snapshot.optString("date", "")) ? snapshot : null;
+    }
+
     /** Redessine tous les exemplaires posés. Appelé aussi depuis MainActivity. */
     public static void refresh(Context context) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
@@ -122,6 +169,21 @@ public class TodayWidget extends AppWidgetProvider {
         for (int id : appWidgetIds) {
             render(context, manager, id);
         }
+        // Rearmée ici aussi : une alarme ne survit pas à un redémarrage, et
+        // c'est `updatePeriodMillis` qui nous ramène après celui-ci.
+        scheduleRollover(context);
+    }
+
+    @Override
+    public void onEnabled(Context context) {
+        super.onEnabled(context);
+        scheduleRollover(context);
+    }
+
+    @Override
+    public void onDisabled(Context context) {
+        super.onDisabled(context);
+        cancelRollover(context);
     }
 
     /**
@@ -139,18 +201,75 @@ public class TodayWidget extends AppWidgetProvider {
     @Override
     public void onReceive(Context context, Intent intent) {
         super.onReceive(context, intent);
-        if (intent != null && ACTION_TOGGLE.equals(intent.getAction())) {
+        String action = intent == null ? null : intent.getAction();
+        if (action == null) return;
+
+        if (ACTION_TOGGLE.equals(action)) {
             String reminderId = intent.getStringExtra(EXTRA_ID);
             if (reminderId != null) {
                 toggle(context, reminderId);
             }
             refresh(context);
+        } else if (ACTION_ROLLOVER.equals(action)
+                || Intent.ACTION_TIME_CHANGED.equals(action)
+                || Intent.ACTION_TIMEZONE_CHANGED.equals(action)) {
+            // Minuit, ou l'heure qu'on a changée sous nos pieds : on redessine
+            // et on repose l'alarme sur le minuit suivant, qui n'est plus le
+            // même nombre d'heures devant nous.
+            refresh(context);
+            scheduleRollover(context);
         }
     }
 
+    // ── Passage de minuit ────────────────────────────────────────────────────
+
+    /**
+     * Une alarme au prochain minuit. Volontairement **inexacte** : depuis
+     * Android 12 une alarme exacte demande une permission dédiée, et dix
+     * minutes de retard sur un widget ne se voient pas.
+     * {@code setAndAllowWhileIdle} la laisse quand même passer en veille
+     * profonde, où une alarme ordinaire attendrait la prochaine fenêtre de
+     * maintenance — qui peut être longue au milieu de la nuit.
+     */
+    static void scheduleRollover(Context context) {
+        try {
+            AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (am == null) return;
+            Calendar c = Calendar.getInstance();
+            c.add(Calendar.DAY_OF_MONTH, 1);
+            c.set(Calendar.HOUR_OF_DAY, 0);
+            c.set(Calendar.MINUTE, 0);
+            c.set(Calendar.SECOND, 10);   // le temps que la date ait bien tourné
+            c.set(Calendar.MILLISECOND, 0);
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, c.getTimeInMillis(),
+                                    rolloverIntent(context));
+        } catch (Exception ignored) {
+            // Sans alarme, `updatePeriodMillis` reste : le widget passera au
+            // jour suivant dans la demi-heure. Mieux vaut ça qu'un plantage.
+        }
+    }
+
+    private static void cancelRollover(Context context) {
+        try {
+            AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (am != null) am.cancel(rolloverIntent(context));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static PendingIntent rolloverIntent(Context context) {
+        Intent intent = new Intent(context, TodayWidget.class);
+        intent.setAction(ACTION_ROLLOVER);
+        return PendingIntent.getBroadcast(context, 1, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    // ── Cocher ───────────────────────────────────────────────────────────────
+
     /**
      * Bascule une case : on retourne l'état dans la copie affichée, et on
-     * empile l'intention pour l'app.
+     * empile l'intention pour l'app. La date est celle d'aujourd'hui, pas celle
+     * qu'avait le cliché quand il a été écrit.
      */
     private void toggle(Context context, String reminderId) {
         SharedPreferences sp = prefs(context);
@@ -158,9 +277,11 @@ public class TodayWidget extends AppWidgetProvider {
         if (raw == null) return;
         try {
             JSONObject snapshot = new JSONObject(raw);
-            String date = snapshot.optString("date", "");
-            JSONArray reminders = snapshot.optJSONArray("reminders");
-            if (reminders == null || date.isEmpty()) return;
+            String date = todayISO();
+            JSONObject day = dayOf(snapshot, date);
+            if (day == null) return;
+            JSONArray reminders = day.optJSONArray("reminders");
+            if (reminders == null) return;
 
             boolean next = false;
             boolean found = false;
@@ -193,6 +314,8 @@ public class TodayWidget extends AppWidgetProvider {
         }
     }
 
+    // ── Dessin ───────────────────────────────────────────────────────────────
+
     private static void render(Context context, AppWidgetManager manager, int widgetId) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_today);
         Fit fit = fitFor(manager, widgetId);
@@ -200,45 +323,43 @@ public class TodayWidget extends AppWidgetProvider {
         views.setViewPadding(R.id.widget_root, padPx, padPx, padPx, padPx);
 
         String raw = prefs(context).getString(KEY_SNAPSHOT, null);
-        JSONObject snapshot = null;
-        if (raw != null) {
-            try {
-                snapshot = new JSONObject(raw);
-            } catch (Exception ignored) {
-                snapshot = null;
-            }
-        }
+        JSONObject day = dayOf(parse(raw), todayISO());
 
-        if (snapshot == null) {
-            // Rien à afficher : la date et le journal restent, ce sont les deux
-            // seules choses à dire — quelle que soit la taille.
+        if (day == null) {
+            // Rien n'a jamais été écrit, ou le cliché ne va pas jusqu'à
+            // aujourd'hui. Dans les deux cas on ne montre **pas** les rappels
+            // d'un autre jour : ils seraient cochés à tort, et les cocher
+            // écrirait dans la mauvaise journée.
             views.setViewVisibility(R.id.widget_header, View.VISIBLE);
             views.setViewVisibility(R.id.widget_journal_row, View.VISIBLE);
             views.setViewVisibility(R.id.widget_more, View.GONE);
             views.setTextViewText(R.id.widget_date, "CHARGE");
-            views.setTextViewText(R.id.widget_journal, "Ouvre l’app pour commencer");
+            views.setTextViewText(R.id.widget_journal,
+                raw == null ? "Ouvre l’app pour commencer" : "Ouvre l’app pour actualiser");
             for (int rowId : ROW_IDS) {
                 views.setViewVisibility(rowId, View.GONE);
             }
             views.setViewVisibility(R.id.widget_empty, View.VISIBLE);
+            views.setTextViewText(R.id.widget_empty,
+                raw == null ? "Aucun rappel aujourd’hui" : "Rappels à rafraîchir");
             views.setOnClickPendingIntent(R.id.widget_root, openAppIntent(context));
             manager.updateAppWidget(widgetId, views);
             return;
         }
 
-        JSONArray reminders = snapshot.optJSONArray("reminders");
+        JSONArray reminders = day.optJSONArray("reminders");
         int count = reminders == null ? 0 : reminders.length();
-        int total = snapshot.optInt("total", count);
+        int total = day.optInt("total", count);
         int shown = Math.min(count, fit.rows);
 
         // Sans rappel, la date reprend sa place : c'est tout ce qu'il reste.
         boolean header = fit.header || count == 0;
         views.setViewVisibility(R.id.widget_header, header ? View.VISIBLE : View.GONE);
         views.setViewVisibility(R.id.widget_journal_row, fit.journal ? View.VISIBLE : View.GONE);
-        views.setTextViewText(R.id.widget_date, snapshot.optString("label", ""));
-        views.setTextViewText(R.id.widget_journal, snapshot.optString("journal", ""));
+        views.setTextViewText(R.id.widget_date, day.optString("label", ""));
+        views.setTextViewText(R.id.widget_journal, day.optString("journal", ""));
         views.setImageViewResource(R.id.widget_journal_icon,
-            snapshot.optBoolean("journalDone", false) ? R.drawable.ic_widget_check_on : R.drawable.ic_widget_check_off);
+            day.optBoolean("journalDone", false) ? R.drawable.ic_widget_check_on : R.drawable.ic_widget_check_off);
 
         // Réduit, le widget cache des rappels : il doit le dire, sinon on croit
         // avoir tout fait. Le compte est celui du jour, pas celui de la copie.
@@ -267,6 +388,7 @@ public class TodayWidget extends AppWidgetProvider {
 
         views.setViewVisibility(R.id.widget_empty,
             count == 0 ? View.VISIBLE : View.GONE);
+        views.setTextViewText(R.id.widget_empty, "Aucun rappel aujourd’hui");
 
         // Le journal et l'en-tête ouvrent l'app.
         views.setOnClickPendingIntent(R.id.widget_journal_row, openAppIntent(context));
@@ -308,6 +430,7 @@ public class TodayWidget extends AppWidgetProvider {
     /**
      * Un code de requête distinct par ligne : sans ça, Android réutiliserait le
      * même PendingIntent et toutes les lignes cocheraient le même rappel.
+     * (0 est pris par l'ouverture de l'app, 1 par l'alarme de minuit.)
      */
     private static PendingIntent toggleIntent(Context context, String reminderId, int row) {
         Intent intent = new Intent(context, TodayWidget.class);

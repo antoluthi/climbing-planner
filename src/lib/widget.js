@@ -1,4 +1,4 @@
-import { localDateStr } from "./helpers.js";
+import { addDays, localDateStr } from "./helpers.js";
 import { getActiveRemindersForDate, isReminderCheckedOn } from "./reminders.js";
 import { withTimeout } from "./promise-timeout.js";
 
@@ -25,15 +25,28 @@ export const PENDING_KEY  = "widget_pending";
 // se contente de ne pas lui en envoyer plus qu'il ne pourra jamais montrer.
 const MAX_ROWS = 8;
 
+// ── Passer minuit sans l'app ─────────────────────────────────────────────────
+// Le widget ne sait pas lire le planning : il ne sait que relire ce que l'app a
+// déposé. Un cliché d'un seul jour l'obligeait donc à attendre une ouverture de
+// l'app pour changer de date — au réveil il montrait les rappels de la veille,
+// cases déjà cochées, et les cocher aurait écrit dans la journée d'hier.
+//
+// On dépose donc **une semaine d'avance**, un jour par clé. À minuit le widget
+// n'a plus qu'à prendre l'entrée du jour : pas de calcul de récurrence côté
+// natif, pas d'app à ouvrir. Au-delà de l'horizon il le dit, plutôt que
+// d'afficher du périmé.
+export const HORIZON_DAYS = 7;
+
 // La date est mise en forme ici : le Java n'a pas à connaître le français.
 function dayLabel(date) {
   return date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
     .toUpperCase();
 }
 
-export function buildWidgetSnapshot(data, now = new Date()) {
-  const dateStr = localDateStr(now);
-  const active = getActiveRemindersForDate(data?.reminders || [], now);
+// Ce qu'il y a à afficher pour une journée donnée.
+export function buildDaySnapshot(data, date) {
+  const dateStr = localDateStr(date);
+  const active = getActiveRemindersForDate(data?.reminders || [], date);
   const reminders = active
     .slice(0, MAX_ROWS)
     .map(r => ({
@@ -52,8 +65,7 @@ export function buildWidgetSnapshot(data, now = new Date()) {
   ].filter(Boolean);
 
   return {
-    date: dateStr,
-    label: dayLabel(now),
+    label: dayLabel(date),
     reminders,
     // Le nombre réel du jour, pas celui de la liste tronquée : un widget réduit
     // en affiche moins et doit pouvoir dire combien il en cache.
@@ -61,6 +73,20 @@ export function buildWidgetSnapshot(data, now = new Date()) {
     journal: bits.length ? bits.join(" · ") : "Rien de noté",
     journalDone: bits.length > 0,
   };
+}
+
+export function buildWidgetSnapshot(data, now = new Date()) {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const days = {};
+  for (let i = 0; i < HORIZON_DAYS; i++) {
+    const d = addDays(start, i);
+    days[localDateStr(d)] = buildDaySnapshot(data, d);
+  }
+  // `v` dit au Java quelle forme il lit : un widget mis à jour trouve encore le
+  // cliché d'un seul jour laissé par la version d'avant, tant que l'app n'a pas
+  // réécrit par-dessus.
+  return { v: 2, from: localDateStr(start), days };
 }
 
 // ── Pont natif ───────────────────────────────────────────────────────────────
@@ -98,7 +124,8 @@ export async function writeWidgetSnapshot(data, now = new Date()) {
   try {
     const snap = buildWidgetSnapshot(data, now);
     await call(P.set({ key: SNAPSHOT_KEY, value: JSON.stringify(snap) }), "écriture widget");
-    return { ok: true, reminders: snap.reminders.length };
+    const today = snap.days[snap.from];
+    return { ok: true, reminders: today?.reminders.length ?? 0, days: HORIZON_DAYS };
   } catch (e) {
     return { ok: false, reason: (e?.message || String(e)).slice(0, 120) };
   }

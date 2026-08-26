@@ -945,6 +945,24 @@ Les rappels du jour, cochables, et le résumé du journal.
   retourne sa propre copie affichée pour que la case bouge tout de suite.
   L'app draine la file à son réveil (`applyPendingToggles`), et la
   modification repart en synchro comme n'importe quelle autre.
+- **Il passe minuit sans l'app.** Le cliché ne porte pas un jour mais **une
+  semaine** (`HORIZON_DAYS`, `{ v: 2, from, days: { "2026-08-26": {…} } }`) :
+  à minuit le widget prend l'entrée suivante, sans calcul de récurrence côté
+  natif. Un cliché d'un seul jour le laissait, au réveil, sur les rappels de la
+  veille — cases déjà cochées, et les cocher écrivait dans la journée d'hier.
+  `TodayWidget.todayISO()` fait foi sur la date, jamais celle du cliché.
+  Au-delà de l'horizon il affiche « Ouvre l'app pour actualiser » plutôt que du
+  périmé, et `dayOf()` sait encore lire la forme d'un seul jour (une mise à
+  jour de l'app ne réécrit pas les SharedPreferences).
+- **Trois choses réveillent le widget**, dans cet ordre d'importance : une
+  **alarme quotidienne** (`scheduleRollover`, `setAndAllowWhileIdle` sur
+  `RTC_WAKEUP` — inexacte à dessein, une alarme exacte demande une permission
+  depuis Android 12), rearmée à chaque sonnerie, à chaque `onUpdate` et sur
+  `TIME_SET` / `TIMEZONE_CHANGED` ; `updatePeriodMillis` (30 min) en filet,
+  notamment après un redémarrage où les alarmes sont perdues ; et
+  `MainActivity.onPause()`, **deux fois** (immédiatement puis à 900 ms), parce
+  que l'écriture côté JS est débouncée de 400 ms et que le premier passage
+  relit sinon le cliché d'avant.
 - **Pas de ListView** : une liste dans un widget impose un
   `RemoteViewsService`. **Huit** lignes sont écrites dans la mise en page, on
   masque celles qui ne servent pas.
