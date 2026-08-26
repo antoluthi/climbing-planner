@@ -129,16 +129,20 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
   // La fenêtre glissante de sept jours ne vaut que si on la repose : on
   // replanifie à chaque changement du planning, donc aussi à chaque réveil de
   // l'app (la réconciliation modifie `data`). Hors APK, c'est un no-op.
-  // Le widget d'écran d'accueil se sert à la même source : ce que l'app pose
-  // pour l'extérieur part d'ici, en une seule fois.
   const notifyEnabled = !!data.profile?.notifySessions;
   useEffect(() => {
-    const t = setTimeout(() => {
-      syncSessionNotifications(data, notifyEnabled);
-      writeWidgetSnapshot(data);
-    }, 1500);
+    const t = setTimeout(() => { syncSessionNotifications(data, notifyEnabled); }, 1500);
     return () => clearTimeout(t);
   }, [data, notifyEnabled]);
+
+  // Le widget se sert de la même source, mais avec une attente bien plus
+  // courte : l'écriture est bon marché, et une rafale de modifications au
+  // démarrage (chargement, réconciliation) repoussait sans cesse une attente
+  // longue — le widget serait resté vide tant que l'app ne se calmait pas.
+  useEffect(() => {
+    const t = setTimeout(() => { writeWidgetSnapshot(data); }, 400);
+    return () => clearTimeout(t);
+  }, [data]);
 
   // Les cases cochées depuis le widget rentrent au réveil de l'app : le widget
   // n'a fait qu'empiler des intentions, c'est ici qu'elles deviennent du

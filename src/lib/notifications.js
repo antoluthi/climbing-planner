@@ -104,18 +104,27 @@ async function plugin() {
   }
 }
 
+// Ces deux fonctions ne rejettent JAMAIS : un appel de plugin qui échoue
+// renvoyait une promesse rejetée jusque dans le gestionnaire de clic, qui
+// mourait en silence — bascule figée, et rien à l'écran pour le dire.
 export async function notificationsPermission() {
   const LN = await plugin();
   if (!LN) return "unsupported";
-  const { display } = await LN.checkPermissions();
-  return display;
+  try {
+    return (await LN.checkPermissions())?.display ?? "unknown";
+  } catch {
+    return "error";
+  }
 }
 
 export async function requestNotificationsPermission() {
   const LN = await plugin();
   if (!LN) return "unsupported";
-  const { display } = await LN.requestPermissions();
-  return display;
+  try {
+    return (await LN.requestPermissions())?.display ?? "unknown";
+  } catch (e) {
+    return "error:" + (e?.message || "inconnue").slice(0, 80);
+  }
 }
 
 // Toucher une notification ouvre la séance qu'elle concerne.
