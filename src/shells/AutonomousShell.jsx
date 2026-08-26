@@ -42,7 +42,7 @@ import { UpdateBanner } from "../components/UpdateBanner.jsx";
 import { BottomNav } from "../components/BottomNav.jsx";
 import { CalendarView } from "../components/CalendarView.jsx";
 import { toast } from "../lib/toast.js";
-import { setRootBackHandler } from "../lib/native.js";
+import { setRootBackHandler, setDayLogHandler } from "../lib/native.js";
 import { syncSessionNotifications, onNotificationTap, locateSession } from "../lib/notifications.js";
 import { writeWidgetSnapshot, drainWidgetToggles, applyPendingToggles } from "../lib/widget.js";
 import { NotificationBell } from "../components/NotificationBell.jsx";
@@ -124,6 +124,11 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
     }
     return false;
   }), []);
+
+  // Le bouton « journal » du widget ouvre directement l'assistant du jour. La
+  // date est calculée ici, pas envoyée par le widget : c'est l'app qui sait
+  // quel jour on est au moment où on la regarde.
+  useEffect(() => setDayLogHandler(() => setLogDate(localDateStr(new Date()))), []);
 
   // ── Rappels de séance (APK) ──
   // La fenêtre glissante de sept jours ne vaut que si on la repose : on

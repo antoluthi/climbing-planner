@@ -70,7 +70,9 @@ export function buildDaySnapshot(data, date) {
     // Le nombre réel du jour, pas celui de la liste tronquée : un widget réduit
     // en affiche moins et doit pouvoir dire combien il en cache.
     total: active.length,
-    journal: bits.length ? bits.join(" · ") : "Rien de noté",
+    // Rien de noté : la ligne devient l'invitation à le faire — c'est un bouton
+    // sur le widget, pas un constat.
+    journal: bits.length ? bits.join(" · ") : "Remplir le journal",
     journalDone: bits.length > 0,
   };
 }

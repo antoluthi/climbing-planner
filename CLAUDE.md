@@ -983,6 +983,17 @@ Les rappels du jour, cochables, et le résumé du journal.
   un widget étiré garde la mise en page de sa taille d'avant.
   Table obtenue (hauteurs d'un lanceur classique, 70×n − 30) : 2 rangées → 2
   rappels + date · 3 → 3 + journal · 4 → 5 · 5 → 7 · 6 → 8.
+- **La ligne journal est un bouton** : elle ouvre l'app **sur l'assistant du
+  jour** (`DayLogModal`), pas sur l'accueil — c'est là qu'on va le matin. Un
+  `ACTION_VIEW` sur `com.climbingplanner.app://day-log`, visant explicitement
+  `MainActivity` : le schéma est déjà déclaré (celui du deep link d'auth), donc
+  rien à ajouter au manifeste, et `handleDeepLink()` (`lib/native.js`) route les
+  deux. **Aucune date dans l'URI**, à dessein : un `PendingIntent` porte son URI
+  dans son identité, si bien qu'une date écrite au moment du dessin survivrait
+  au passage de minuit — c'est l'app qui décide quel jour on est
+  (`setDayLogHandler`, `AutonomousShell`). Un démarrage à froid arrive avant le
+  montage du shell : le lien est mis de côté (`pendingDayLog`) et `getLaunchUrl`
+  couvre le cas où `appUrlOpen` ne se déclenche pas.
 - **Un widget réduit ne cache rien en silence** : le cliché porte `total`, le
   nombre réel de rappels du jour, et l'en-tête affiche « +n » pour ceux que la
   hauteur ne permet pas de montrer. Sans ça, on croirait avoir tout fait.

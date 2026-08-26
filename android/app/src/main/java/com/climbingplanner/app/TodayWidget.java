@@ -8,6 +8,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.RemoteViews;
@@ -357,9 +358,13 @@ public class TodayWidget extends AppWidgetProvider {
         views.setViewVisibility(R.id.widget_header, header ? View.VISIBLE : View.GONE);
         views.setViewVisibility(R.id.widget_journal_row, fit.journal ? View.VISIBLE : View.GONE);
         views.setTextViewText(R.id.widget_date, day.optString("label", ""));
+        // Journal vide : la ligne est une invitation, donc allumée. Rempli :
+        // c'est un résumé, il s'efface comme un rappel coché.
+        boolean journalDone = day.optBoolean("journalDone", false);
         views.setTextViewText(R.id.widget_journal, day.optString("journal", ""));
+        views.setTextColor(R.id.widget_journal, journalDone ? 0xFF8A8A8A : 0xFFFFFFFF);
         views.setImageViewResource(R.id.widget_journal_icon,
-            day.optBoolean("journalDone", false) ? R.drawable.ic_widget_check_on : R.drawable.ic_widget_check_off);
+            journalDone ? R.drawable.ic_widget_check_on : R.drawable.ic_widget_check_off);
 
         // Réduit, le widget cache des rappels : il doit le dire, sinon on croit
         // avoir tout fait. Le compte est celui du jour, pas celui de la copie.
@@ -390,8 +395,8 @@ public class TodayWidget extends AppWidgetProvider {
             count == 0 ? View.VISIBLE : View.GONE);
         views.setTextViewText(R.id.widget_empty, "Aucun rappel aujourd’hui");
 
-        // Le journal et l'en-tête ouvrent l'app.
-        views.setOnClickPendingIntent(R.id.widget_journal_row, openAppIntent(context));
+        // Le journal ouvre l'assistant du jour, l'en-tête ouvre l'app.
+        views.setOnClickPendingIntent(R.id.widget_journal_row, dayLogIntent(context));
         views.setOnClickPendingIntent(R.id.widget_date, openAppIntent(context));
 
         manager.updateAppWidget(widgetId, views);
@@ -424,6 +429,28 @@ public class TodayWidget extends AppWidgetProvider {
         Intent intent = new Intent(context, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         return PendingIntent.getActivity(context, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    /**
+     * Ouvre l'app **sur l'assistant du journal** plutôt que sur l'accueil : le
+     * matin, c'est là qu'on va, et trois touches de moins comptent.
+     *
+     * Un ACTION_VIEW avec le schéma de l'app, mais visant explicitement
+     * MainActivity — le lien ne sort donc jamais du téléphone et aucun sélecteur
+     * ne s'interpose. Côté JS, `appUrlOpen` le reçoit comme n'importe quel deep
+     * link (src/lib/native.js).
+     *
+     * **Pas de date dans l'URI**, à dessein : un PendingIntent porte son URI
+     * dans son identité, si bien qu'une date écrite au moment du dessin
+     * survivrait au passage de minuit. C'est l'app qui décide quel jour on est.
+     */
+    private static PendingIntent dayLogIntent(Context context) {
+        Intent intent = new Intent(Intent.ACTION_VIEW,
+            Uri.parse("com.climbingplanner.app://day-log"));
+        intent.setClass(context, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        return PendingIntent.getActivity(context, 2, intent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 

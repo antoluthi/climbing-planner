@@ -284,7 +284,8 @@
             android:src="@drawable/ic_widget_check_off" />
         <TextView
             android:id="@+id/widget_journal"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
+            android:layout_weight="1"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:textColor="#8A8A8A"
@@ -292,6 +293,17 @@
             android:maxLines="1"
             android:ellipsize="end"
             android:text="" />
+        <!-- Le chevron dit que la ligne mène quelque part : sans lui, le
+             résumé du journal se lit comme un simple libellé. -->
+        <TextView
+            android:id="@+id/widget_journal_go"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textColor="#8A8A8A"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:text="›" />
     </LinearLayout>
 
 </LinearLayout>
