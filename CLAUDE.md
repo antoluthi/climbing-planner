@@ -55,7 +55,7 @@ src/
 │
 └── components/
     ├── ui/SwipePager.jsx          — carrousel de pages (balayage au doigt entre onglets)
-    ├── Logo.jsx                   — ClimbingPlannerLogo (SVG hexagone)
+    ├── Logo.jsx                   — ClimbingPlannerLogo (la marque « Charge », en-tête bureau)
     ├── SyncButtons.jsx            — boutons export/import/sync
     ├── AuthPanel.jsx              — panneau auth (password + magic link)
     ├── RoleOnboardingModal.jsx    — choix du rôle au 1er login
@@ -873,7 +873,10 @@ concatène les 9 dernières dans l'ordre, idempotent et ré-exécutable.
   un rayon de 312 px sur 1024 — la marque y est à 310), et les `splash.png`
   doivent **garder leurs dimensions exactes**, le thème les choisissant par
   densité et orientation. Le fond adaptatif (`values/ic_launcher_background.xml`)
-  est noir, le splash `#0A0A0A` comme `capacitor.config`.
+  est noir, le splash `#0A0A0A` comme `capacitor.config`. `components/Logo.jsx`
+  reprend la même géométrie pour l'en-tête bureau, boîte rognée sur les barres
+  et couleurs prises dans la palette (encre du thème + accent) : une seule
+  marque, du lanceur à l'en-tête.
 - **Signature** : `signingConfig` release conditionnel — `android/app/build.gradle`
   ne le déclare que si `ANDROID_KEYSTORE_PATH` pointe vers un fichier existant
   (la CI y décode le secret `ANDROID_KEYSTORE_BASE64`). Sans keystore, la CI
