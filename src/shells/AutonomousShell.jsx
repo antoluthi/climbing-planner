@@ -48,7 +48,7 @@ import { NotificationsPanel } from "../components/NotificationsPanel.jsx";
 import { getSessionCharge } from "../lib/charge.js";
 import { colors } from "../theme/palette.js";
 
-export function AutonomousShell({ isDark, toggleTheme, styles }) {
+export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan }) {
   const { session, setSession, syncStatus } = useAuth();
   const {
     data, setData, cloudLoaded, roleResolved, viewingAthlete,
@@ -589,6 +589,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles }) {
       case "profil":
         return (
           <ProfileView
+            onOpenPublicPlan={onOpenPublicPlan}
             data={data}
             onUpdateProfile={profile => setData(d => ({ ...d, profile }))}
             session={session}

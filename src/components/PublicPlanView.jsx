@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ThemeContext, useThemeCtx } from "../theme/ThemeContext.jsx";
 import { makeStyles } from "../theme/makeStyles.js";
-import supabase from "../lib/supabase.js";
+import publicSupabase from "../lib/supabase-public.js";
 import { getMondayOf, addDays, formatDate, weekKey, getDaySessions } from "../lib/helpers.js";
 import { normalizeCharge10, getChargeColor } from "../lib/charge.js";
 import { useWindowWidth } from "../hooks/useWindowWidth.js";
@@ -9,9 +9,35 @@ import { MonthView } from "./MonthView.jsx";
 import { YearView } from "./YearView.jsx";
 import { DayNightToggle } from "./DayNightToggle.jsx";
 import { RichText } from "./RichText.jsx";
+import { CyclesTimeline } from "./CyclesTimeline.jsx";
 import { colors } from "../theme/palette.js";
+import { Z } from "../theme/makeStyles.js";
+import { pushLayer } from "../lib/native.js";
 
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+// ── Le calque qui pose la vue publique par-dessus l'app ──────────────────────
+// Depuis un compte, on ne remplace pas l'app : la remplacer démonterait
+// DataProvider — retour à l'accueil, planning rechargé — alors qu'on veut
+// juste refermer et retrouver l'écran qu'on quittait. S'inscrit dans la pile
+// de calques : le bouton retour d'Android le referme, et le carrousel
+// d'onglets ne guette plus de geste derrière.
+export function PublicPlanOverlay({ onClose, children }) {
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+  useEffect(() => {
+    const layer = pushLayer(() => onCloseRef.current?.());
+    return () => layer.remove();
+  }, []);
+  return (
+    <div data-layer="public-plan" style={{
+      position: "fixed", inset: 0, zIndex: Z.modal,
+      overflowY: "auto", overscrollBehavior: "contain",
+    }}>
+      {children}
+    </div>
+  );
+}
 
 // ── Avatar circle ──────────────────────────────────────────────────────────────
 function AvatarCircle({ url, firstName, lastName, size = 36, accent }) {
@@ -375,8 +401,10 @@ export function PublicPlanView({ onBack, userId, firstName, lastName, avatarUrl 
   const displayName = [firstName, lastName].filter(Boolean).join(" ") || "Planning";
 
   useEffect(() => {
-    if (!supabase || !userId) { setLoading(false); return; }
-    supabase
+    if (!publicSupabase || !userId) { setLoading(false); return; }
+    // Toujours le client public, même connecté : cet écran ne doit pouvoir
+    // lire que ce qu'un visiteur sans compte peut lire.
+    publicSupabase
       .from("climbing_plans")
       .select("data")
       .eq("user_id", userId)
@@ -468,16 +496,19 @@ export function PublicPlanView({ onBack, userId, firstName, lastName, avatarUrl 
           borderBottom: `1px solid ${colors(isDark).border}`,
           flexWrap: "wrap",
         }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            {["week", "month", "year"].map((m, i) =>
-              tabBtn(m, ["Semaine", "Mois", "Année"][i])
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {["week", "month", "year", "cycles"].map((m, i) =>
+              tabBtn(m, ["Semaine", "Mois", "Année", "Cycles"][i])
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
-            <button style={styles.navBtn} onClick={handlePrev}>←</button>
-            <span style={{ ...styles.weekRange, minWidth: 160, textAlign: "center" }}>{periodLabel}</span>
-            <button style={styles.navBtn} onClick={handleNext}>→</button>
-          </div>
+          {/* Les cycles ne se naviguent pas par période : le plan est entier. */}
+          {viewMode !== "cycles" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
+              <button style={styles.navBtn} onClick={handlePrev}>←</button>
+              <span style={{ ...styles.weekRange, minWidth: 160, textAlign: "center" }}>{periodLabel}</span>
+              <button style={styles.navBtn} onClick={handleNext}>→</button>
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -487,6 +518,16 @@ export function PublicPlanView({ onBack, userId, firstName, lastName, avatarUrl 
           <div style={{ padding: 40, textAlign: "center", color: colors(isDark).borderStrong }}>
             Planning non disponible.
           </div>
+        ) : viewMode === "cycles" ? (
+          // Lecture seule, et sans les rappels : ce sont des habitudes
+          // personnelles, pas le plan.
+          <CyclesTimeline
+            mesocycles={mesocycles}
+            customCycles={[]}
+            objectives={planData.quickSessions || []}
+            onEdit={null}
+            showReminders={false}
+          />
         ) : viewMode === "week" ? (
           <PublicWeekView data={planData} currentDate={currentDate} />
         ) : viewMode === "month" ? (
