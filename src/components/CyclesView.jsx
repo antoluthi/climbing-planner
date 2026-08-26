@@ -349,10 +349,10 @@ function MesoCard({
         </div>
       )}
 
-      <input
+      <AutoTextarea
         style={{ ...fieldBase, width: "100%", marginTop: 8, fontSize: 12, color: c.textCard }}
         value={meso.description || ""}
-        onChange={e => onUpdateMeso(meso.id, { description: e.target.value })}
+        onChange={v => onUpdateMeso(meso.id, { description: v })}
         placeholder="Objectif du bloc…"
       />
 
@@ -438,10 +438,10 @@ function MicroRow({ micro, meso, start, isDark, fieldBase, onUpdateMicro, onAskD
             {start.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
           </span>
         )}
-        <input
+        <AutoTextarea
           style={{ ...fieldBase, flex: 1, fontSize: 11, padding: "6px 9px", color: c.textCard }}
           value={micro.description || ""}
-          onChange={e => onUpdateMicro(meso.id, micro.id, { description: e.target.value })}
+          onChange={v => onUpdateMicro(meso.id, micro.id, { description: v })}
           placeholder="Contenu…"
         />
       </div>
@@ -486,6 +486,27 @@ function WeekStepper({ isDark, value, onChange, min = 1, max = 24, compact = fal
       }}>{n} sem.</span>
       {step("+", +1, n >= max)}
     </div>
+  );
+}
+
+// Un objectif de bloc tient rarement sur une ligne : le champ suit le texte,
+// et une liste à puces s'y écrit comme dans une note (rendue par RichText dans
+// le détail du mésocycle).
+function AutoTextarea({ value, onChange, placeholder, style, rows = 2 }) {
+  const fit = (el) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  };
+  return (
+    <textarea
+      ref={fit}
+      rows={rows}
+      value={value}
+      placeholder={placeholder}
+      onChange={e => { fit(e.target); onChange(e.target.value); }}
+      style={{ ...style, resize: "none", overflow: "hidden", lineHeight: 1.45 }}
+    />
   );
 }
 

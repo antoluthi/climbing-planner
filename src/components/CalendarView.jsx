@@ -1,9 +1,12 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useSwipe } from "../hooks/useSwipe.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { colors, DATA } from "../theme/palette.js";
 import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, isEventItem } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
+import { getMesoForDate } from "../lib/constants.js";
+import { mesosInRange, recomputeMesoDates, weeksOf } from "../lib/cycles.js";
+import { MesoDetailModal } from "./MesoDetailModal.jsx";
 import { Card, Segmented, RoundIconButton, SportBadge, PageTitle, SANS, MONO } from "./ui/Ascent.jsx";
 import { DayJournalBlock } from "./DayJournalBlock.jsx";
 
@@ -15,6 +18,20 @@ import { DayJournalBlock } from "./DayJournalBlock.jsx";
 const WEEKDAYS = ["L", "M", "M", "J", "V", "S", "D"];
 const MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
                 "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+
+// Un jour porté par un mésocycle prend une teinte de sa couleur — assez pour
+// lire les blocs d'un coup d'œil sur un mois ou une année, assez discrète pour
+// passer sous les points de séance et les chiffres.
+//
+// La teinte est **posée par-dessus** le fond habituel de la case (un calque de
+// dégradé plat), et ne le remplace pas : en la remplaçant, une couleur sombre à
+// 15 % sur fond noir rendait les jours d'un cycle plus ternes que les jours
+// sans cycle — exactement l'inverse de ce qu'on veut lire.
+const cycleBg = (meso, isDark, base) => {
+  if (!meso) return base;
+  const t = (meso.color || "") + (isDark ? "40" : "2b");
+  return `linear-gradient(${t}, ${t}), ${base}`;
+};
 
 // Une échéance ressort du calendrier par un bandeau à sa couleur, là où une
 // séance n'a qu'un point.
@@ -40,10 +57,17 @@ export function CalendarView({
   const today = localDateStr(new Date());
 
   const [selected, setSelected] = useState(() => localDateStr(new Date()));
+  const [mesoDetail, setMesoDetail] = useState(null);
   const selectedObj = new Date(selected + "T12:00:00");
   const selectedSessions = getDaySessions(data, selectedObj);
 
   const mode = viewMode === "month" ? "month" : viewMode === "year" ? "year" : "week";
+
+  // Les cycles colorent le fond des jours. Dates chaînées comme dans la
+  // timeline : un plan partiellement daté se peint quand même, sans que rien
+  // ne soit réécrit dans les données.
+  const mesos = useMemo(() => recomputeMesoDates(data.mesocycles || []), [data.mesocycles]);
+  const mesoAt = (date) => getMesoForDate(mesos, date)?.meso || null;
 
   // ── Navigation ──
   const step = (dir) => {
@@ -146,6 +170,7 @@ export function CalendarView({
         <MonthGrid
           isDark={isDark} data={data} currentDate={currentDate}
           selected={selected} setSelected={setSelected} today={today}
+          mesoAt={mesoAt}
         />
       )}
 
@@ -153,16 +178,24 @@ export function CalendarView({
         <WeekStrip
           isDark={isDark} data={data} currentDate={currentDate}
           selected={selected} setSelected={setSelected} today={today}
+          mesoAt={mesoAt}
         />
       )}
 
       {mode === "year" && (
         <YearGrid
           isDark={isDark} data={data} year={currentDate.getFullYear()} today={today}
+          mesoAt={mesoAt}
           onPickMonth={(m) => { setCurrentDate(new Date(currentDate.getFullYear(), m, 1)); setViewMode("month"); }}
         />
       )}
       </div>
+
+      {/* ── Légende des cycles visibles ── */}
+      <CycleLegend
+        isDark={isDark} mesos={mesos} mode={mode} currentDate={currentDate}
+        onOpen={(meso) => setMesoDetail(meso)}
+      />
 
       {/* ── Détail du jour sélectionné (mois et semaine) ── */}
       {mode !== "year" && (
@@ -182,20 +215,11 @@ export function CalendarView({
               onToggleReminder={onToggleReminder}
             />
 
-            {selectedSessions.length === 0 ? (
-              <>
-                <div style={{ fontSize: 14, color: c.textMuted, marginBottom: 14 }}>Aucune séance ce jour-là.</div>
-                <button
-                  onClick={() => onAddSession?.(dayIndexOf(selectedObj))}
-                  style={{
-                    width: "100%", height: 44, borderRadius: 12, border: "none", cursor: "pointer",
-                    background: c.accent, color: c.textOnAccent, fontSize: 14, fontWeight: 700, fontFamily: SANS,
-                  }}
-                >
-                  Ajouter une séance
-                </button>
-              </>
-            ) : (
+            {selectedSessions.length === 0 && (
+              <div style={{ fontSize: 14, color: c.textMuted, marginBottom: 14 }}>Aucune séance ce jour-là.</div>
+            )}
+
+            {selectedSessions.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {selectedSessions.map((s, i) => {
                   const ev = isEventItem(s);
@@ -244,8 +268,26 @@ export function CalendarView({
                 })}
               </div>
             )}
+
+            {/* Une journée porte souvent plusieurs séances : le bouton reste,
+                qu'il y en ait déjà ou non. */}
+            <button
+              onClick={() => onAddSession?.(dayIndexOf(selectedObj))}
+              style={{
+                width: "100%", height: 44, borderRadius: 12, border: "none", cursor: "pointer",
+                marginTop: selectedSessions.length ? 14 : 0,
+                background: selectedSessions.length ? c.control : c.accent,
+                color: selectedSessions.length ? c.accent : c.textOnAccent,
+                fontSize: 14, fontWeight: 700, fontFamily: SANS,
+              }}
+            >
+              {selectedSessions.length ? "＋ Ajouter une séance" : "Ajouter une séance"}
+            </button>
           </Card>
         </div>
+      )}
+      {mesoDetail && (
+        <MesoDetailModal meso={mesoDetail} onClose={() => setMesoDetail(null)} />
       )}
     </div>
   );
@@ -262,6 +304,65 @@ function eventRangeLabel(ev) {
 function dayIndexOf(date) {
   const dow = date.getDay();
   return dow === 0 ? 6 : dow - 1;
+}
+
+// ── Légende des cycles de la période ─────────────────────────────────────────
+// La teinte des cases dit où sont les blocs ; la légende dit lesquels, et
+// donne l'entrée vers leur objectif — un mésocycle ne se lisait nulle part
+// depuis le calendrier.
+function periodBounds(mode, d) {
+  const at = (y, m, day) => new Date(y, m, day, 0, 0, 0, 0);
+  if (mode === "week") {
+    const mon = getMondayOf(d);
+    return [at(mon.getFullYear(), mon.getMonth(), mon.getDate()),
+            addDays(at(mon.getFullYear(), mon.getMonth(), mon.getDate()), 6)];
+  }
+  if (mode === "month") {
+    return [at(d.getFullYear(), d.getMonth(), 1), at(d.getFullYear(), d.getMonth() + 1, 0)];
+  }
+  return [at(d.getFullYear(), 0, 1), at(d.getFullYear(), 11, 31)];
+}
+
+function CycleLegend({ isDark, mesos, mode, currentDate, onOpen }) {
+  const c = colors(isDark);
+  const [from, to] = periodBounds(mode, currentDate);
+  const list = mesosInRange(mesos, from, to);
+  if (list.length === 0) return null;
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  return (
+    <div style={{ padding: "12px 20px 0", display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {list.map(meso => {
+        const tone = meso.color || c.accent;
+        const start = new Date(meso.startDate + "T00:00:00");
+        const current = today >= start && today < addDays(start, weeksOf(meso) * 7);
+        return (
+          <button
+            key={meso.id}
+            onClick={() => onOpen(meso)}
+            title={`${meso.label} — voir l’objectif`}
+            style={{
+              display: "flex", alignItems: "center", gap: 7,
+              background: tone + (current ? "2e" : "16"),
+              border: `1px solid ${tone}${current ? "88" : "33"}`,
+              borderRadius: 999, padding: "5px 11px 5px 9px",
+              cursor: "pointer", fontFamily: SANS,
+            }}
+          >
+            <span style={{ width: 7, height: 7, borderRadius: 7, background: tone, flexShrink: 0 }} />
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: c.text }}>{meso.label}</span>
+            {current && (
+              <span style={{
+                fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                textTransform: "uppercase", color: tone,
+              }}>en cours</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 // ── Une pastille par séance ──────────────────────────────────────────────────
@@ -299,7 +400,7 @@ function DayDots({ items, c, size = 5, max = 3, showOverflow = true, tone = null
 }
 
 // ── Grille du mois ───────────────────────────────────────────────────────────
-function MonthGrid({ isDark, data, currentDate, selected, setSelected, today }) {
+function MonthGrid({ isDark, data, currentDate, selected, setSelected, today, mesoAt }) {
   const c = colors(isDark);
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -331,6 +432,7 @@ function MonthGrid({ isDark, data, currentDate, selected, setSelected, today }) 
             const ev = eventOf(sessions);
             const isSelected = iso === selected;
             const isToday = iso === today;
+            const meso = inMonth ? mesoAt(date) : null;
             return (
               <button
                 key={di}
@@ -338,14 +440,21 @@ function MonthGrid({ isDark, data, currentDate, selected, setSelected, today }) 
                 style={{
                   flex: 1, aspectRatio: "1", margin: 2, borderRadius: 10, border: "none", cursor: "pointer",
                   display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
-                  background: isSelected ? c.accent : ev ? (ev.color || c.accent) + "26" : "transparent",
-                  opacity: inMonth ? (sessions.length ? 1 : 0.55) : 0.25,
+                  background: isSelected ? c.accent
+                    : ev ? (ev.color || c.accent) + "26"
+                    : cycleBg(meso, isDark, "transparent"),
+                  // L'opacité ne porte plus sur toute la case : elle trouait la
+                  // bande du cycle un jour sur deux. Un jour vide se lit
+                  // maintenant à la couleur de son chiffre.
+                  opacity: inMonth ? 1 : 0.3,
                   position: "relative", overflow: "hidden",
                 }}
               >
                 <div style={{
                   fontSize: 13, fontWeight: 700,
-                  color: isSelected ? c.textOnAccent : isToday ? c.accent : c.text,
+                  color: isSelected ? c.textOnAccent
+                    : isToday ? c.accent
+                    : sessions.length ? c.text : c.textDim,
                 }}>
                   {date.getDate()}
                 </div>
@@ -369,7 +478,7 @@ function MonthGrid({ isDark, data, currentDate, selected, setSelected, today }) 
 }
 
 // ── Bandeau de la semaine ────────────────────────────────────────────────────
-function WeekStrip({ isDark, data, currentDate, selected, setSelected, today }) {
+function WeekStrip({ isDark, data, currentDate, selected, setSelected, today, mesoAt }) {
   const c = colors(isDark);
   const monday = getMondayOf(currentDate);
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
@@ -383,6 +492,7 @@ function WeekStrip({ isDark, data, currentDate, selected, setSelected, today }) 
           const ev = eventOf(sessions);
           const isSelected = iso === selected;
           const isToday = iso === today;
+          const meso = mesoAt(date);
           return (
             <button
               key={i}
@@ -391,7 +501,9 @@ function WeekStrip({ isDark, data, currentDate, selected, setSelected, today }) 
                 flex: 1, borderRadius: 12, border: "none", cursor: "pointer",
                 padding: "10px 0", display: "flex", flexDirection: "column",
                 alignItems: "center", gap: 5,
-                background: isSelected ? c.accent : ev ? (ev.color || c.accent) + "26" : c.control,
+                background: isSelected ? c.accent
+                  : ev ? (ev.color || c.accent) + "26"
+                  : cycleBg(meso, isDark, c.control),
                 boxShadow: ev && !isSelected ? `inset 0 -3px 0 ${ev.color || c.accent}` : undefined,
               }}
             >
@@ -423,7 +535,7 @@ function WeekStrip({ isDark, data, currentDate, selected, setSelected, today }) 
 // Le mois courant se signale par sa bordure accent et se place au milieu de
 // l'écran à l'ouverture : arriver en janvier quand on est en décembre oblige à
 // faire défiler toute l'année pour retrouver aujourd'hui.
-function YearGrid({ isDark, data, year, today, onPickMonth }) {
+function YearGrid({ isDark, data, year, today, mesoAt, onPickMonth }) {
   const c = colors(isDark);
   const todayObj = new Date(today + "T12:00:00");
   const currentMonth = todayObj.getFullYear() === year ? todayObj.getMonth() : null;
@@ -467,15 +579,17 @@ function YearGrid({ isDark, data, year, today, onPickMonth }) {
                   const inMonth = date.getMonth() === m;
                   const isToday = inMonth && localDateStr(date) === today;
                   const dayItems = inMonth ? getDaySessions(data, date) : [];
+                  const meso = inMonth ? mesoAt(date) : null;
                   return (
                     <div key={di} style={{
                       flex: 1, aspectRatio: "1", borderRadius: 3,
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      // La case ne prend plus la couleur du sport : elle reste
-                      // neutre, et ce sont les points qui parlent — même
-                      // langage que la semaine et le mois. Aujourd'hui garde
-                      // son encadré accent, seul repère à cette taille.
-                      background: isToday ? c.accent + "33" : inMonth ? c.control : "transparent",
+                      // La case ne prend pas la couleur du sport — ce sont les
+                      // points qui parlent — mais celle de son mésocycle : sur
+                      // une année entière, les blocs se lisent comme des
+                      // bandes. Aujourd'hui garde son encadré accent.
+                      background: isToday ? c.accent + "33"
+                        : cycleBg(meso, isDark, inMonth ? c.control : "transparent"),
                       boxShadow: isToday ? `0 0 0 1.5px ${c.accent}` : undefined,
                     }}>
                       {/* Trois points de 3 px tiennent dans une case de ~20 px ;

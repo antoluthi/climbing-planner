@@ -102,6 +102,17 @@ export function microStarts(meso) {
   });
 }
 
+// Les mésocycles qui touchent une période — de quoi légender un calendrier
+// sans parcourir ses 365 cases. Bornes incluses.
+export function mesosInRange(mesocycles, from, to) {
+  return (mesocycles || []).filter(m => {
+    if (!m.startDate) return false;
+    const start = parseDay(m.startDate);
+    const end = mesoEndDate(m);          // exclusive
+    return start <= to && end > from;
+  });
+}
+
 // Dernier jour du bloc — celui qu'on lit sur un calendrier, pas le premier du
 // suivant.
 export function mesoLastDay(meso) {

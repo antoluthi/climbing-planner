@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { addDays } from "../lib/helpers.js";
+import { mesoEndDate, recomputeMesoDates } from "../lib/cycles.js";
 import { ReminderModal } from "./ReminderModal.jsx";
 import {
   getReminderCompletionRate,
@@ -9,6 +9,7 @@ import {
 } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
 import { PageTitle, SecondaryButton } from "./ui/Ascent.jsx";
+import { MesoDetailModal } from "./MesoDetailModal.jsx";
 
 // ─── CYCLES TIMELINE ─────────────────────────────────────────────────────────
 
@@ -19,7 +20,9 @@ export function CyclesTimeline({
   canEditReminders = true,
 }) {
   const { styles, isDark } = useThemeCtx();
-  const [popover, setPopover] = useState(null); // { meso, micro, x, y }
+  // Le détail d'un bloc s'ouvre en modale : une bulle ne tenait ni l'objectif
+  // du mésocycle ni ceux de ses microcycles.
+  const [detail, setDetail] = useState(null); // { meso, microId }
   const [editingReminder, setEditingReminder] = useState(null); // null | {} | reminder
 
   // Measure actual container width to compute pixel-accurate text truncation
@@ -45,16 +48,14 @@ export function CyclesTimeline({
     return label.slice(0, maxChars - 1) + "…";
   };
 
-  // Chain start dates: if a meso has no startDate, pick up from previous end
-  const chainedMesos = useMemo(() => {
-    let runningDate = null;
-    return mesocycles.map(meso => {
-      const start = meso.startDate ? new Date(meso.startDate + "T00:00:00") : runningDate;
-      const end = start ? addDays(start, meso.durationWeeks * 7) : null;
-      runningDate = end;
-      return { ...meso, computedStart: start, computedEnd: end };
-    });
-  }, [mesocycles]);
+  // Les dates viennent de la même règle que l'éditeur : l'ancre, puis les
+  // durées. Un plan partiellement daté s'affiche donc chaîné — sans que rien
+  // ne soit réécrit dans les données.
+  const chainedMesos = useMemo(() => recomputeMesoDates(mesocycles).map(meso => ({
+    ...meso,
+    computedStart: meso.startDate ? new Date(meso.startDate + "T00:00:00") : null,
+    computedEnd: mesoEndDate(meso),
+  })), [mesocycles]);
 
   const maxMesoWeeks = Math.max(...mesocycles.map(m => m.durationWeeks), 1);
 
@@ -72,16 +73,14 @@ export function CyclesTimeline({
   });
 
   const fmtDate = d => d ? d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : null;
-  const accent = colors(isDark).accent;
 
-  const handleMicroClick = (e, meso, micro) => {
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    setPopover({ meso, micro, x: rect.left, y: rect.bottom + 6 });
+  const openDetail = (e, meso, micro) => {
+    e?.stopPropagation();
+    setDetail({ meso, microId: micro?.id ?? null });
   };
 
   return (
-    <div ref={containerRef} style={styles.timelineWrap} onClick={() => setPopover(null)}>
+    <div ref={containerRef} style={styles.timelineWrap}>
       {/* Titre de page — même facture que l'accueil et le calendrier */}
       <PageTitle
         isDark={isDark}
@@ -96,6 +95,12 @@ export function CyclesTimeline({
         Cycles
       </PageTitle>
 
+      {mesocycles.length > 0 && (
+        <div style={{ fontSize: 12, color: colors(isDark).textMuted, marginTop: -14, marginBottom: 18 }}>
+          Touchez un bloc pour lire son objectif et le détail de ses microcycles.
+        </div>
+      )}
+
       {/* Empty state */}
       {mesocycles.length === 0 && (
         <div style={{ color: colors(isDark).textMuted, fontSize: 13, fontStyle: "italic", textAlign: "center", marginTop: 40 }}>
@@ -104,7 +109,7 @@ export function CyclesTimeline({
       )}
 
       {/* Mésocycles */}
-      {chainedMesos.map((meso, idx) => {
+      {chainedMesos.map(meso => {
         const barPct = (meso.durationWeeks / maxMesoWeeks) * 100;
         const totalMicroWeeks = meso.microcycles.reduce((a, m) => a + m.durationWeeks, 0);
         const hasMicros = meso.microcycles.length > 0;
@@ -112,7 +117,6 @@ export function CyclesTimeline({
         const barAreaPx = Math.max(0, containerWidth - 148);
         const barPx = barAreaPx * (barPct / 100);
         const startLabel = fmtDate(meso.computedStart);
-        const endLabel = fmtDate(meso.computedEnd);
 
         // Today indicator — position within this meso's bar
         let todayPct = null;
@@ -136,7 +140,12 @@ export function CyclesTimeline({
         });
 
         return (
-          <div key={meso.id} style={{ ...styles.timelineRow, marginBottom: hasObjectives ? 18 : undefined }}>
+          <div
+            key={meso.id}
+            onClick={e => openDetail(e, meso, null)}
+            title={`${meso.label} — voir le détail`}
+            style={{ ...styles.timelineRow, marginBottom: hasObjectives ? 18 : undefined, cursor: "pointer" }}
+          >
             {/* Label */}
             <div style={styles.timelineLabelCol}>
               <div style={styles.timelineLabelName}>
@@ -203,7 +212,7 @@ export function CyclesTimeline({
                   // No microcycles — single undivided block
                   <div
                     style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden" }}
-                    onClick={e => handleMicroClick(e, meso, null)}
+                    onClick={e => openDetail(e, meso, null)}
                   >
                     <span style={{ fontSize: 10, color: meso.color, opacity: 0.75, fontWeight: 500 }}>
                       {fitLabel(meso.description || `${meso.durationWeeks}s`, barPx) || `${meso.durationWeeks}s`}
@@ -227,7 +236,7 @@ export function CyclesTimeline({
                           width: `${microPct}%`,
                           borderRightColor: isLast ? "transparent" : meso.color + "44",
                         }}
-                        onClick={e => handleMicroClick(e, meso, micro)}
+                        onClick={e => openDetail(e, meso, micro)}
                       >
                         {isNarrow ? (
                           <div style={{ width: 3, height: 12, borderRadius: 2, background: meso.color, opacity: 0.5 }} />
@@ -327,34 +336,14 @@ export function CyclesTimeline({
         />
       )}
 
-      {/* Popover */}
-      {popover && (
-        <div style={styles.timelinePopoverWrap} onClick={() => setPopover(null)}>
-          <div
-            style={{ ...styles.timelinePopover, left: Math.min(popover.x, window.innerWidth - 260), top: popover.y }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: popover.meso.color }} />
-              <span style={styles.timelinePopoverTitle}>{popover.meso.label}</span>
-            </div>
-            {popover.micro ? (
-              <>
-                <div style={{ fontSize: 12, fontWeight: 600, color: colors(isDark).textMuted, marginBottom: 4 }}>
-                  {popover.micro.label}
-                </div>
-                <div style={styles.timelinePopoverMeta}>{popover.micro.durationWeeks} semaine{popover.micro.durationWeeks > 1 ? "s" : ""}</div>
-                {popover.micro.description && <div style={{ ...styles.timelinePopoverMeta, marginTop: 4, fontStyle: "italic" }}>{popover.micro.description}</div>}
-              </>
-            ) : (
-              <>
-                <div style={styles.timelinePopoverMeta}>{popover.meso.durationWeeks} semaines</div>
-                {popover.meso.description && <div style={{ ...styles.timelinePopoverMeta, marginTop: 4, fontStyle: "italic" }}>{popover.meso.description}</div>}
-              </>
-            )}
-          </div>
-        </div>
+      {detail && (
+        <MesoDetailModal
+          meso={detail.meso}
+          focusMicroId={detail.microId}
+          onClose={() => setDetail(null)}
+        />
       )}
+
     </div>
   );
 }
