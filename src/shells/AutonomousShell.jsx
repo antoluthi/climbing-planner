@@ -43,6 +43,8 @@ import { BottomNav } from "../components/BottomNav.jsx";
 import { CalendarView } from "../components/CalendarView.jsx";
 import { toast } from "../lib/toast.js";
 import { setRootBackHandler } from "../lib/native.js";
+import { syncSessionNotifications, onNotificationTap, locateSession } from "../lib/notifications.js";
+import { writeWidgetSnapshot, drainWidgetToggles, applyPendingToggles } from "../lib/widget.js";
 import { NotificationBell } from "../components/NotificationBell.jsx";
 import { NotificationsPanel } from "../components/NotificationsPanel.jsx";
 import { getSessionCharge } from "../lib/charge.js";
@@ -122,6 +124,51 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
     }
     return false;
   }), []);
+
+  // ── Rappels de séance (APK) ──
+  // La fenêtre glissante de sept jours ne vaut que si on la repose : on
+  // replanifie à chaque changement du planning, donc aussi à chaque réveil de
+  // l'app (la réconciliation modifie `data`). Hors APK, c'est un no-op.
+  // Le widget d'écran d'accueil se sert à la même source : ce que l'app pose
+  // pour l'extérieur part d'ici, en une seule fois.
+  const notifyEnabled = !!data.profile?.notifySessions;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      syncSessionNotifications(data, notifyEnabled);
+      writeWidgetSnapshot(data);
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [data, notifyEnabled]);
+
+  // Les cases cochées depuis le widget rentrent au réveil de l'app : le widget
+  // n'a fait qu'empiler des intentions, c'est ici qu'elles deviennent du
+  // planning (et repartent en synchro comme n'importe quelle modification).
+  useEffect(() => {
+    const drain = async () => {
+      const pending = await drainWidgetToggles();
+      if (pending.length) setData(d => applyPendingToggles(d, pending));
+    };
+    drain();
+    const onVisible = () => { if (document.visibilityState === "visible") drain(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [setData]);
+
+  // Toucher la notification ouvre la séance — celle du rappel comme celle qui
+  // demande le ressenti. La séance est retrouvée par son identifiant : entre
+  // la programmation et le geste, elle a pu être déplacée.
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; });
+  useEffect(() => {
+    let handle = null;
+    onNotificationTap(({ sessionId, dateISO }) => {
+      const at = locateSession(dataRef.current, { sessionId, dateISO });
+      if (!at) return;
+      setCurrentDate(new Date(dateISO + "T12:00:00"));
+      setSessionModal(at);
+    }).then(h => { handle = h; });
+    return () => handle?.remove?.();
+  }, []);
 
   // ── Navigation ──
   const handleDateGoToCurrent = () => setCurrentDate(new Date());

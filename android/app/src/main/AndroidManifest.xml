@@ -36,6 +36,21 @@
 
         </activity>
 
+        <!-- Widget « aujourd'hui » : rappels du jour et journal. Il lit ce que
+             l'app dépose dans les SharedPreferences de Capacitor (voir
+             src/lib/widget.js et TodayWidget.java). -->
+        <receiver
+            android:name=".TodayWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.climbingplanner.app.WIDGET_TOGGLE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_today_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

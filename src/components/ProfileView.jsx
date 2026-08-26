@@ -15,6 +15,7 @@ import { colors, DATA } from "../theme/palette.js";
 import { disciplineList } from "../lib/disciplines.js";
 import { RowCard, Row, Segmented, Chip, RoundIconButton, SANS, MONO } from "./ui/Ascent.jsx";
 import { PublicPlansSection } from "./PublicPlansSection.jsx";
+import { NotificationsSection } from "./NotificationsSection.jsx";
 
 // ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
 
@@ -391,6 +392,13 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
         </div>
       </div>
 
+
+      <NotificationsSection
+        isDark={isDark}
+        styles={styles}
+        enabled={profile.notifySessions}
+        onChange={v => onUpdateProfile({ ...profile, notifySessions: v })}
+      />
 
       {/* ── Confidentialité ── */}
       {session && (

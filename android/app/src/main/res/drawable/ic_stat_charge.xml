@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icône de statut des notifications : la marque « Charge », réduite à sa
+     silhouette. Android exige du blanc sur transparent (il la teinte lui-même) ;
+     sans elle, il retomberait sur l'icône du lanceur, dont le fond noir plein
+     donnerait un carré blanc dans la barre d'état. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M4.78,12.62h2.68v4.54h-2.68z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M8.70,9.94h2.68v7.22h-2.68z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M12.62,6.85h2.68v10.31h-2.68z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M16.54,13.24h2.68v3.92h-2.68z" />
+</vector>

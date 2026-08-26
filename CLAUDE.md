@@ -38,6 +38,8 @@ src/
 │   ├── merge-plan.js             — fusion de deux plannings (réunion par id / par date)
 │   ├── cycles.js                 — chaînage des mésocycles : ancre, durées, réarrangement
 │   ├── supabase-public.js        — client anon (sans session) + fetchPublicPlans()
+│   ├── notifications.js          — rappels de séance (plan pur + plugin Capacitor)
+│   ├── widget.js                 — pont avec le widget Android (SharedPreferences)
 │   └── hooper.js                 — hooperLabel, hooperColor
 │
 ├── theme/
@@ -79,6 +81,7 @@ src/
     ├── CustomCycleModal.jsx       — formulaire cycle personnalisé
     ├── MesoDetailModal.jsx        — objectif d'un mésocycle + ses microcycles
     ├── PublicPlansSection.jsx     — liste des plannings publics (dans Compte)
+    ├── NotificationsSection.jsx   — bascule « Rappels de séance » (dans Compte)
     ├── DailyNotesSection.jsx      — notes + checkbox créatine
     ├── DayLogModal.jsx            — assistant journal quotidien (Hooper → poids → notes)
     ├── Dashboard.jsx              — stats + graphiques poids & Hooper
@@ -906,6 +909,54 @@ concatène les 9 dernières dans l'ordre, idempotent et ré-exécutable.
   reprend la même géométrie pour l'en-tête bureau, boîte rognée sur les barres
   et couleurs prises dans la palette (encre du thème + accent) : une seule
   marque, du lanceur à l'en-tête.
+### Rappels de séance (`lib/notifications.js`, `@capacitor/local-notifications`)
+
+Une séance donne **une seule notification, qui change de nature en route** :
+une heure avant le départ c'est un rappel, la séance passée c'est une
+invitation à noter son ressenti. Les deux portent **le même identifiant**
+(dérivé de celui de la séance) : la seconde remplace la première dans le
+tiroir au lieu de s'empiler à côté.
+
+- Tout le calcul est dans `planSessionNotifications()`, pure et testée sous
+  Node. `native.js` et le plugin ne sont importés qu'à l'appel des fonctions
+  d'effet — sans quoi le module ne serait pas chargeable hors navigateur.
+- **Fenêtre glissante de 7 jours**, replanifiée à chaque changement de `data`
+  (donc à chaque réveil de l'app, puisque la réconciliation la modifie) :
+  annuler tout puis reposer est le geste le plus simple qui reste juste quand
+  une séance est déplacée, supprimée ou notée entre deux ouvertures.
+- Une séance **déjà notée** ne programme plus rien ; un ressenti *neutre*
+  (séance démarquée, notes seules) n'est pas « notée ».
+- **Android 13+ exige la permission à l'exécution** : elle est demandée au
+  moment où l'utilisateur bascule le réglage dans Compte, pas au démarrage.
+- `res/drawable/ic_stat_charge.xml` : la marque en silhouette blanche. Sans
+  icône de statut, Android retomberait sur celle du lanceur — fond noir plein,
+  donc carré blanc dans la barre d'état.
+
+### Widget d'écran d'accueil (`lib/widget.js`, `TodayWidget.java`)
+
+Les rappels du jour, cochables, et le résumé du journal.
+
+- **Le pont, c'est `@capacitor/preferences`** : sur Android il écrit dans les
+  SharedPreferences (fichier `CapacitorStorage`, clés telles quelles), qu'un
+  widget natif sait relire — il n'a aucun accès au localStorage de la WebView.
+  Deux clés, un sens chacune : `widget_today` (l'app dépose ce qu'il faut
+  afficher) et `widget_pending` (le widget empile les coches).
+- **Le widget n'écrit jamais dans le planning** : il dépose une intention et
+  retourne sa propre copie affichée pour que la case bouge tout de suite.
+  L'app draine la file à son réveil (`applyPendingToggles`), et la
+  modification repart en synchro comme n'importe quelle autre.
+- **Pas de ListView** : une liste dans un widget impose un
+  `RemoteViewsService`. Quatre lignes sont écrites dans la mise en page, on
+  masque celles qui ne servent pas.
+- **Pas de texte barré** : `setPaintFlags` n'est pas une méthode « remotable »,
+  un widget qui l'appelle affiche « problème de chargement ». Une case cochée
+  se lit à sa pastille et à son texte éteint.
+- `MainActivity.onPause()` redessine le widget : c'est le moment exact où il
+  redevient visible. Sinon il attendrait son `updatePeriodMillis` (30 min).
+- Le widget vit dans le lanceur : il ne peut pas suivre le thème de l'app et
+  prend le noir de la DA, en dur dans ses XML — seule entorse assumée à la
+  règle « une seule source de couleurs ».
+
 - **Signature** : `signingConfig` release conditionnel — `android/app/build.gradle`
   ne le déclare que si `ANDROID_KEYSTORE_PATH` pointe vers un fichier existant
   (la CI y décode le secret `ANDROID_KEYSTORE_BASE64`). Sans keystore, la CI
