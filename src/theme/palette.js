@@ -80,6 +80,12 @@ const light = {
   // séparable de l'accent et de `info` y compris en vision des couleurs
   // déficiente (validé : ΔE ≥ 21 deutan/protan).
   hooperLine:    "#1c8a5a",
+  // Qualité de séance (les étoiles du retour), superposée au même graphe que
+  // l'écart et la forme. Teinte prune : la seule famille, avec le cyan, qui
+  // reste séparable des trois autres séries dans les DEUX thèmes en vision des
+  // couleurs déficiente (ΔE ≥ 9,8 clair / 8,7 sombre) — le cyan frôlait le
+  // vert-d'eau du Hooper.
+  qualityLine:   "#8e3a6b",
   infoBg:        "rgba(58,99,200,0.10)",
   infoBorder:    "rgba(58,99,200,0.30)",
 };
@@ -141,6 +147,7 @@ const dark = {
   dangerBorder:  "rgba(255,107,95,0.35)",
   info:          "#6c8cff",
   hooperLine:    "#5fe0c0",   // cf. commentaire côté clair
+  qualityLine:   "#e08ab8",   // idem
   infoBg:        "rgba(108,140,255,0.12)",
   infoBorder:    "rgba(108,140,255,0.35)",
 };
@@ -205,6 +212,13 @@ export const DATA = {
                  dark:  ["#1c1c1c", "#24332a", "#8fb89a", "#c9a95e", "#c26b74"] },
     reminders: { light: ["#f0f0f1", "#cfe0d4", "#4d7a5b", "#8a6a35", "#a44a4a"],
                  dark:  ["#1c1c1c", "#24332a", "#8fb89a", "#c9a95e", "#c26b74"] },
+    // Qualité de séance (1-5 étoiles). Rampe **séquentielle** : une seule
+    // teinte, du pâle au soutenu — plus c'est dense, meilleure était la séance.
+    // Luminosité strictement monotone (0.918 → 0.487 en clair, 0.299 → 0.787 en
+    // sombre), et le premier échelon reste distinct de la case vide : une
+    // séance notée 1 ★ ne doit pas se lire « aucune donnée ».
+    quality:   { light: ["#dae8e0", "#b8d9c4", "#88c2a0", "#4f9975", "#256f4f"],
+                 dark:  ["#24312a", "#2c4636", "#3f6b50", "#5f9a74", "#8fc9a8"] },
   },
 
   // Séries de graphiques : phases de sommeil, et main gauche / droite pour les

@@ -132,10 +132,15 @@ function getChartData(data, range, refDate) {
     const deviations = done
       .filter(sx => sx.feedback?.rpe != null && (sx.chargePlanned ?? sx.charge) != null)
       .map(sx => sx.feedback.rpe - normalizeCharge10(sx.chargePlanned ?? sx.charge));
+    // Qualité ressentie : les étoiles du retour (1-5). Une séance faite mais
+    // non étoilée n'entre pas dans la moyenne — elle n'a rien dit là-dessus.
+    const qualities = done.filter(sx => sx.feedback?.quality != null).map(sx => sx.feedback.quality);
     return {
       ...b,
       charge: sessions.reduce((sum, sx) => sum + sessionCharge(sx), 0),
       deviation: round1(avg(deviations)),
+      quality: round1(avg(qualities)),
+      starred: qualities.length,
       rated: deviations.length,
       planned: sessions.length,
       done: done.length,
@@ -152,9 +157,6 @@ function DashboardBody({ data, onUpdateSleep }) {
   const { styles, isDark } = useThemeCtx();
   const [range, setRange] = useState("sem"); // "sem" | "mois" | "an"
   const [statsRefDate, setStatsRefDate] = useState(() => new Date());
-  // Superposition de l'indice Hooper sur le graphe d'écart, pour chercher à
-  // l'œil si les périodes « plus dur que prévu » tombent sur la fatigue.
-  const [showHooperOverlay, setShowHooperOverlay] = useState(false);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -230,10 +232,26 @@ function DashboardBody({ data, onUpdateSleep }) {
 
   // Écart moyen sur la période : le cœur de la lecture « ai-je tendance à
   // sous-estimer mes séances ? ».
-  // Écart et Hooper sur la même grille temporelle, pour la superposition.
-  const deviationChartData = chartData.map((d, i) => ({
-    ...d, hooper: hooperChartData[i]?.total ?? null,
-  }));
+  //
+  // Trois mesures, trois échelles (écart −5..+5, qualité 1-5, Hooper 4-28) : les
+  // empiler telles quelles donnerait trois axes verticaux dont l'alignement
+  // serait arbitraire — un graphe qui invente une corrélation. Les deux
+  // superpositions sont donc **indexées sur une base commune** : « % du mieux
+  // possible », un seul axe à droite, une seule direction (plus haut = mieux).
+  // Le Hooper est retourné pour ça — 4 (frais) devient 100 %, 28 devient 0 % —
+  // et s'appelle « forme » sur ce graphe. L'infobulle rend les valeurs brutes,
+  // rien n'est caché derrière l'indice.
+  const pct = (v, lo, hi) => v == null ? null
+    : Math.max(0, Math.min(100, Math.round(((v - lo) / (hi - lo)) * 100)));
+  const deviationChartData = chartData.map((d, i) => {
+    const hooper = hooperChartData[i]?.total ?? null;
+    return {
+      ...d, hooper,
+      qualityPct: pct(d.quality, 1, 5),
+      formePct: hooper == null ? null : pct(28 - hooper, 0, 24),
+    };
+  });
+  const starredCount = chartData.reduce((sum, d) => sum + (d.starred || 0), 0);
   const ratedCount = chartData.reduce((sum, d) => sum + (d.rated || 0), 0);
   const devVals = chartData.filter(d => d.deviation != null).map(d => d.deviation);
   const globalDeviation = devVals.length ? round1(avg(devVals)) : null;
@@ -248,6 +266,9 @@ function DashboardBody({ data, onUpdateSleep }) {
   // l'année ses 12 mois — tout tient, donc on les affiche toutes.
   const tickInterval = 0;
   const devColor = (v) => v > 0 ? colors(isDark).accent : v < 0 ? colors(isDark).info : colors(isDark).textMuted;
+  // Le texte de la légende porte une encre de texte, jamais la couleur de la
+  // série : c'est la pastille à côté qui porte l'identité.
+  const legendItem = { fontSize: 11, color: colors(isDark).textMuted, display: "flex", alignItems: "center", gap: 5 };
 
   return (
     <div style={styles.dashboard}>
@@ -333,58 +354,74 @@ function DashboardBody({ data, onUpdateSleep }) {
         </ResponsiveContainer>
       </div>
 
-      {/* ── Écart de charge ─────────────────────────────────────────────────
-           Ce que l'athlète a ressenti moins ce qui était prévu. Au-dessus de
-           zéro, la séance a été plus dure qu'annoncé (charge sous-estimée) ;
-           en dessous, plus facile. Deux teintes de part et d'autre du zéro,
-           jamais un dégradé : le signe est ce qui compte.
-           L'indice Hooper peut se superposer — il a son axe à droite, sur son
-           échelle 4-28, bornée en dur pour que la comparaison ne se déforme
-           pas d'une période à l'autre. */}
+      {/* ── Écart de charge, qualité et forme ───────────────────────────────
+           Trois lectures d'une même période, superposées parce qu'elles ne se
+           lisent bien qu'ensemble : ai-je sous-estimé mes séances, les ai-je
+           trouvées bonnes, et dans quel état j'étais.
+
+           · Les BARRES portent l'écart (ressenti − prévu) sur l'axe de gauche.
+             Au-dessus de zéro la séance a été plus dure qu'annoncé, en dessous
+             plus facile. Deux teintes de part et d'autre du zéro, jamais un
+             dégradé : le signe est ce qui compte.
+           · Les DEUX COURBES partagent l'axe de droite, indexé « % du mieux
+             possible ». C'est ce qui permet de les superposer sans mentir :
+             trois échelles brutes (−5..+5, 1-5, 4-28) auraient donné trois axes
+             dont l'alignement serait arbitraire. Ici une seule échelle, une
+             seule direction — plus haut = mieux —, si bien qu'une mauvaise
+             semaine fait plonger les deux courbes ensemble.
+           · Le Hooper y est donc retourné et nommé « forme » (4 → 100 %).
+             L'infobulle rend les valeurs brutes : ★ 4/5, Hooper 12. */}
       <div style={styles.dashSection}>
         <div style={styles.dashSectionTitle}>Écart de charge — {rangeLabel}</div>
 
+        {/* Légende : quatre séries, donc jamais l'identité par la couleur seule. */}
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 10 }}>
-          <span style={{ fontSize: 11, color: colors(isDark).textMuted, display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={legendItem}>
             <span style={{ width: 9, height: 9, borderRadius: 2, background: colors(isDark).accent }} />
             plus dur que prévu
           </span>
-          <span style={{ fontSize: 11, color: colors(isDark).textMuted, display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={legendItem}>
             <span style={{ width: 9, height: 9, borderRadius: 2, background: colors(isDark).info }} />
             plus facile
           </span>
-          <label style={{
-            display: "flex", alignItems: "center", gap: 6, marginLeft: "auto",
-            fontSize: 11, color: showHooperOverlay ? colors(isDark).hooperLine : colors(isDark).textMuted,
-            cursor: "pointer", userSelect: "none",
-          }}>
-            <input
-              type="checkbox"
-              checked={showHooperOverlay}
-              onChange={e => setShowHooperOverlay(e.target.checked)}
-              style={{ accentColor: colors(isDark).hooperLine, cursor: "pointer" }}
-            />
-            Superposer Hooper
-          </label>
+          <span style={legendItem}>
+            <span style={{ width: 12, height: 2, borderRadius: 1, background: colors(isDark).qualityLine }} />
+            qualité ★
+          </span>
+          <span style={legendItem}>
+            <span style={{ width: 12, height: 2, borderRadius: 1, background: colors(isDark).hooperLine }} />
+            forme
+          </span>
         </div>
 
-        <ResponsiveContainer width="100%" height={185}>
-          <ComposedChart data={deviationChartData} margin={{ top: 4, right: showHooperOverlay ? 4 : 8, left: -24, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height={200}>
+          <ComposedChart data={deviationChartData} margin={{ top: 4, right: 2, left: -24, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={styles.dashGrid} vertical={false} />
             <XAxis dataKey="label" tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false}
               interval={tickInterval} />
             <YAxis yAxisId="dev" domain={[-5, 5]} ticks={[-5, -2.5, 0, 2.5, 5]}
               tick={{ fill: styles.dashText, fontSize: 10 }} axisLine={false} tickLine={false} />
-            {showHooperOverlay && (
-              <YAxis yAxisId="hooper" orientation="right" domain={[4, 28]} ticks={[4, 14, 21, 28]}
-                tick={{ fill: colors(isDark).hooperLine, fontSize: 10 }} axisLine={false} tickLine={false} />
-            )}
+            {/* Un seul axe pour les deux courbes, borné en dur : la relation
+                entre elles ne se déforme pas d'une période à l'autre. */}
+            <YAxis yAxisId="pct" orientation="right" domain={[0, 100]} ticks={[0, 50, 100]}
+              width={30} unit="%"
+              tick={{ fill: styles.dashText, fontSize: 9 }} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={tooltipStyle}
               cursor={{ fill: colors(isDark).tint }}
-              formatter={(v, name) => {
+              formatter={(v, name, item) => {
                 if (v == null) return null;
-                if (name === "hooper") return [`${v} — ${hooperLabel(v)}`, "Hooper"];
+                // On affiche la valeur BRUTE, pas l'indice : l'indexation sert à
+                // superposer, elle n'est pas ce qu'on a saisi.
+                const row = item?.payload || {};
+                if (name === "formePct") {
+                  return row.hooper == null ? null : [`${row.hooper} — ${hooperLabel(row.hooper)}`, "Hooper"];
+                }
+                if (name === "qualityPct") {
+                  if (row.quality == null) return null;
+                  const n = Math.round(row.quality);
+                  return [`${"\u2605".repeat(n)}${"\u2606".repeat(5 - n)} ${row.quality} / 5`, "Qualité"];
+                }
                 return [(v > 0 ? "+" : "") + v, "Écart"];
               }}
             />
@@ -394,20 +431,26 @@ function DashboardBody({ data, onUpdateSleep }) {
                 <Cell key={i} fill={entry.deviation == null ? "transparent" : devColor(entry.deviation)} />
               ))}
             </Bar>
-            {showHooperOverlay && (
-              <Line yAxisId="hooper" type="monotone" dataKey="hooper" name="hooper"
-                stroke={colors(isDark).hooperLine} strokeWidth={2}
-                dot={{ r: 3, fill: colors(isDark).hooperLine }} activeDot={{ r: 5 }}
-                connectNulls />
-            )}
+            <Line yAxisId="pct" type="monotone" dataKey="qualityPct" name="qualityPct"
+              stroke={colors(isDark).qualityLine} strokeWidth={2}
+              dot={{ r: 3, fill: colors(isDark).qualityLine }} activeDot={{ r: 5 }}
+              connectNulls />
+            <Line yAxisId="pct" type="monotone" dataKey="formePct" name="formePct"
+              stroke={colors(isDark).hooperLine} strokeWidth={2}
+              dot={{ r: 3, fill: colors(isDark).hooperLine }} activeDot={{ r: 5 }}
+              connectNulls />
           </ComposedChart>
         </ResponsiveContainer>
 
         <div style={{ fontSize: 11, color: colors(isDark).textDim, marginTop: 8, lineHeight: 1.5 }}>
-          {ratedCount === 0
-            ? "Aucune séance notée sur la période — l'écart se calcule à partir de la charge ressentie."
-            : `${ratedCount} séance${ratedCount > 1 ? "s" : ""} notée${ratedCount > 1 ? "s" : ""}.`
-              + (showHooperOverlay ? " Hooper garde son échelle à droite (4-28, plus bas = mieux)." : "")}
+          {ratedCount === 0 && starredCount === 0
+            ? "Aucune séance notée sur la période — l'écart et la qualité viennent du retour de séance."
+            : [
+                ratedCount ? `${ratedCount} séance${ratedCount > 1 ? "s" : ""} notée${ratedCount > 1 ? "s" : ""}` : null,
+                starredCount ? `${starredCount} étoilée${starredCount > 1 ? "s" : ""}` : null,
+              ].filter(Boolean).join(" · ") + "."}
+          {" "}Les deux courbes partagent l'axe de droite, en % du mieux possible :
+          qualité 5 ★ et Hooper 4 valent 100 %. Plus haut, mieux c'est.
         </div>
       </div>
 

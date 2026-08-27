@@ -22,7 +22,7 @@ function hooperLabel(total) {
 
 export function ActivityHeatmap({ data }) {
   const { styles, isDark } = useThemeCtx();
-  const [metric, setMetric] = useState("charge"); // "charge" | "rpe" | "hooper" | "reminders"
+  const [metric, setMetric] = useState("charge"); // "charge" | "rpe" | "quality" | "hooper" | "reminders"
   const [tooltip, setTooltip] = useState(null);
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -49,11 +49,15 @@ export function ActivityHeatmap({ data }) {
       const done = sessions.filter(s => s.feedback?.done === true);
       const rpeVals = done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe);
       const avgRpe = rpeVals.length ? rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length : null;
-      dayData[dateStr] = { charge, avgRpe, sessionCount: sessions.length };
+      // Qualité ressentie (les étoiles du retour) : moyenne du jour. Une séance
+      // faite mais non notée n'entre pas dans la moyenne — elle n'a rien dit.
+      const qualVals = done.filter(s => s.feedback?.quality != null).map(s => s.feedback.quality);
+      const avgQuality = qualVals.length ? qualVals.reduce((a, b) => a + b, 0) / qualVals.length : null;
+      dayData[dateStr] = { charge, avgRpe, avgQuality, rated: qualVals.length, sessionCount: sessions.length };
     });
   });
   (data.hooper || []).forEach(h => {
-    if (!dayData[h.date]) dayData[h.date] = { charge: 0, avgRpe: null, sessionCount: 0 };
+    if (!dayData[h.date]) dayData[h.date] = { charge: 0, avgRpe: null, avgQuality: null, rated: 0, sessionCount: 0 };
     dayData[h.date].hooper = h.total;
   });
 
@@ -69,7 +73,7 @@ export function ActivityHeatmap({ data }) {
     return Array.from({ length: 7 }, (_, d) => {
       const date = addDays(startMonday, w * 7 + d);
       const dateStr = localDateStr(date);
-      const entry = dayData[dateStr] || { charge: 0, avgRpe: null, sessionCount: 0, hooper: null };
+      const entry = dayData[dateStr] || { charge: 0, avgRpe: null, avgQuality: null, rated: 0, sessionCount: 0, hooper: null };
       // Rappels du jour (actifs ce jour-là)
       const active = getActiveRemindersForDate(reminders, date);
       const remindersActive = active.length;
@@ -112,6 +116,19 @@ export function ActivityHeatmap({ data }) {
       if (v <= 8.5) return lvls[3];
       return lvls[4];
     }
+    if (metric === "quality") {
+      const v = day.avgQuality;
+      if (v == null) return empty;
+      // Un échelon par étoile — plus dense, meilleure était la séance. Les
+      // seuils tombent à mi-chemin pour qu'une moyenne (2 séances à 4 et 5)
+      // aille à l'échelon le plus proche plutôt que toujours vers le bas.
+      const lvls = isDark ? DATA.heatmap.quality.dark : DATA.heatmap.quality.light;
+      if (v < 1.5) return lvls[0];
+      if (v < 2.5) return lvls[1];
+      if (v < 3.5) return lvls[2];
+      if (v < 4.5) return lvls[3];
+      return lvls[4];
+    }
     if (metric === "hooper") {
       const v = day.hooper;
       if (v == null) return empty;
@@ -148,6 +165,7 @@ export function ActivityHeatmap({ data }) {
     charge:    isDark ? DATA.heatmap.charge.dark    : DATA.heatmap.charge.light,
     rpe:       isDark ? DATA.heatmap.rpe.dark       : DATA.heatmap.rpe.light,
     hooper:    isDark ? DATA.heatmap.hooper.dark    : DATA.heatmap.hooper.light,
+    quality:   isDark ? DATA.heatmap.quality.dark   : DATA.heatmap.quality.light,
     reminders: isDark ? DATA.heatmap.reminders.dark : DATA.heatmap.reminders.light,
   };
 
@@ -172,7 +190,7 @@ export function ActivityHeatmap({ data }) {
       <div style={styles.dashSectionTitle}>Activité</div>
       {/* Métrique — chips, comme les filtres du reste de l'app */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-        {[["charge", "Charge"], ["rpe", "RPE"], ["hooper", "Hooper"], ["reminders", "Rappels"]].map(([k, l]) => (
+        {[["charge", "Charge"], ["rpe", "RPE"], ["quality", "Qualité"], ["hooper", "Hooper"], ["reminders", "Rappels"]].map(([k, l]) => (
           <Chip key={k} isDark={isDark} size="sm" label={l}
                 active={metric === k} onClick={() => setMetric(k)} />
         ))}
@@ -271,6 +289,11 @@ export function ActivityHeatmap({ data }) {
           )}
           {metric === "rpe" && (
             <div>RPE moyen : {tooltip.day.avgRpe != null ? tooltip.day.avgRpe.toFixed(1) : <span style={{ color: muted }}>aucune donnée</span>}</div>
+          )}
+          {metric === "quality" && (
+            <div>Qualité : {tooltip.day.avgQuality != null
+              ? `${"\u2605".repeat(Math.round(tooltip.day.avgQuality))}${"\u2606".repeat(5 - Math.round(tooltip.day.avgQuality))} ${tooltip.day.avgQuality.toFixed(1)} / 5`
+              : <span style={{ color: muted }}>aucune séance notée</span>}</div>
           )}
           {metric === "hooper" && (
             <div>Hooper : {tooltip.day.hooper != null ? `${tooltip.day.hooper} — ${hooperLabel(tooltip.day.hooper)}` : <span style={{ color: muted }}>aucune donnée</span>}</div>
