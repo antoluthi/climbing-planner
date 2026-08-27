@@ -720,15 +720,30 @@ modifiait… et ne s'enregistrait jamais.
   chargePlanned`, moyenné par période. Au-dessus de zéro la séance a été plus
   dure que prévu (charge sous-estimée), en dessous plus facile — deux teintes de
   part et d'autre d'une ligne de zéro, jamais un dégradé.
-- **Superposition Hooper** (case à cocher) : la courbe Hooper s'ajoute sur un
-  **axe droit à domaine fixe 4-28**, dans `hooperLine` — une troisième teinte
-  choisie pour rester séparable de l'accent et de `info` en vision des couleurs
-  déficiente (ΔE ≥ 21). Domaines bornés en dur des deux côtés : la relation
-  visuelle entre les deux séries ne se déforme pas d'une période à l'autre.
+- **Qualité et forme, toujours superposées** (plus de case à cocher : ces trois
+  lectures ne valent qu'ensemble). Les barres gardent l'axe de gauche ; les deux
+  courbes partagent **un seul** axe à droite.
+  - **Pourquoi un seul.** Trois mesures, trois échelles (écart −5..+5, qualité
+    1-5, Hooper 4-28). Empilées telles quelles, ce serait trois axes verticaux
+    dont l'alignement est arbitraire — le graphe inventerait une corrélation.
+    Les deux superpositions sont donc **indexées sur une base commune** : « % du
+    mieux possible », domaine borné en dur 0-100, une seule direction (plus haut
+    = mieux). Une mauvaise semaine fait plonger les deux courbes ensemble.
+  - Le Hooper y est **retourné** et nommé « forme » (4 → 100 %, 28 → 0 %) : sans
+    ça, les deux courbes voudraient dire l'inverse l'une de l'autre sur le même
+    axe. L'infobulle rend les **valeurs brutes** (★ 4/5, « Hooper 12 —
+    Récupération normale ») : l'indice sert à superposer, pas à lire.
+  - Couleurs : `qualityLine` (prune) et `hooperLine`. La prune est la seule
+    famille, avec le cyan, qui reste séparable des trois autres séries dans les
+    **deux** thèmes en vision des couleurs déficiente (ΔE ≥ 9,8 clair / 8,7
+    sombre) ; le cyan frôlait le vert-d'eau du Hooper. Reste une limite connue,
+    antérieure : en clair, `hooperLine` (#1c8a5a) et l'accent (#ff4500) sont à
+    ΔE 7,6 en protanopie — acceptable parce que l'un est une courbe et l'autre
+    des barres, et que la légende nomme les quatre séries.
 - Graphique poids : scaffold période complète avec données manquantes nulles
 - Graphique Hooper : barres (BarChart) au lieu de lignes, scaffold identique
 - Sélecteur de plage Sem / Mois / An pour tous les graphiques stats
-- **Heatmap d'activité** (`components/ActivityHeatmap.jsx`, GitHub-style) : 53 semaines × 7 jours, sélecteur de métrique (Charge / RPE / Hooper), labels mois et jours, tooltip hover, légende Moins/Plus, adaptatif mobile
+- **Heatmap d'activité** (`components/ActivityHeatmap.jsx`, GitHub-style) : 53 semaines × 7 jours, sélecteur de métrique (Charge / RPE / **Qualité** / Hooper / Rappels), labels mois et jours, tooltip hover, légende Moins/Plus, adaptatif mobile. La métrique **Qualité** moyenne les étoiles du retour (`feedback.quality`, 1-5) sur les séances du jour : rampe séquentielle `DATA.heatmap.quality`, une seule teinte, luminosité monotone, et un premier échelon distinct de la case vide — une séance à 1 ★ ne doit pas se lire « aucune donnée »
 
 ### AccueilView — séances du jour
 La carte liste **toutes** les séances de la journée, triées par heure de départ
