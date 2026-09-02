@@ -64,6 +64,14 @@ const light = {
   accentBorder:  "rgba(255,69,0,0.35)",
   accentFaint:   "rgba(255,69,0,0.06)",
   accentSolid:   "rgba(255,69,0,0.18)",
+  // Second orange, pour le segment « planifié » de la barre d'objectif : moins
+  // que la couleur signature, sans changer de famille. Il n'est PAS plus clair
+  // en thème clair, contrairement à ce que le nom laisse croire — sur une carte
+  // quasi blanche, un orange plus clair ne tient pas le contraste de 3:1
+  // (mesuré). C'est donc la saturation qui recule ici, la luminosité en sombre.
+  // Les trois segments (fait · planifié · piste) restent séparables des deux
+  // côtés : ΔE ≥ 8,7.
+  accentSoft:    "#d96f3f",
 
   // Sémantique
   success:       "#1c8a5a",
@@ -135,6 +143,7 @@ const dark = {
   accentBorder:  "rgba(255,69,0,0.45)",
   accentFaint:   "rgba(255,69,0,0.08)",
   accentSolid:   "rgba(255,69,0,0.22)",
+  accentSoft:    "#a84a22",   // cf. commentaire côté clair
 
   success:       "#5fe0c0",
   successBg:     "rgba(95,224,192,0.12)",

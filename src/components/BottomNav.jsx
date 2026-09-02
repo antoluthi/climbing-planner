@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { Z } from "../theme/makeStyles.js";
 import { colors } from "../theme/palette.js";
@@ -72,8 +73,33 @@ const TABS = [
   { key: "library", label: "Bibliothèque", icon: "library" },
 ];
 
-export function BottomNav({ viewMode, onChange, extraTabs }) {
+export function BottomNav({ viewMode, onChange, onLongPress, extraTabs }) {
   const { isDark } = useThemeCtx();
+
+  // ── Appui long ──
+  // Un onglet peut porter un raccourci (aujourd'hui : le choix des sports sur
+  // « Stats »). Deux précautions :
+  //  · le clic qui suit un appui long est ANNULÉ — sinon on changerait d'onglet
+  //    en même temps qu'on ouvre le menu ;
+  //  · le moindre glissement annule l'appui, pour qu'un balayage entre onglets
+  //    ne finisse jamais par ouvrir un menu.
+  const press = useRef({ timer: null, fired: false, x: 0, y: 0 });
+  const cancel = () => { clearTimeout(press.current.timer); press.current.timer = null; };
+  const start = (key, e) => {
+    if (!onLongPress) return;
+    press.current.fired = false;
+    press.current.x = e.clientX;
+    press.current.y = e.clientY;
+    cancel();
+    press.current.timer = setTimeout(() => {
+      press.current.fired = true;
+      onLongPress(key);
+    }, 500);
+  };
+  const move = (e) => {
+    if (!press.current.timer) return;
+    if (Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 10) cancel();
+  };
 
   const bg          = colors(isDark).bgScrim;   // semi-transparent + flou
   const border      = colors(isDark).border;
@@ -107,7 +133,16 @@ export function BottomNav({ viewMode, onChange, extraTabs }) {
         return (
           <button
             key={t.key}
-            onClick={() => onChange(t.key)}
+            onPointerDown={e => start(t.key, e)}
+            onPointerMove={move}
+            onPointerUp={cancel}
+            onPointerCancel={cancel}
+            onContextMenu={e => { if (onLongPress) e.preventDefault(); }}
+            onClick={() => {
+              // L'appui long a déjà agi : ne pas changer d'onglet par-dessus.
+              if (press.current.fired) { press.current.fired = false; return; }
+              onChange(t.key);
+            }}
             aria-current={active ? "page" : undefined}
             style={{
               flex: 1,

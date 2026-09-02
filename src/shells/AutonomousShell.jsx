@@ -40,6 +40,7 @@ import { AccueilView } from "../components/AccueilView.jsx";
 import { ToastContainer } from "../components/ToastContainer.jsx";
 import { UpdateBanner } from "../components/UpdateBanner.jsx";
 import { BottomNav } from "../components/BottomNav.jsx";
+import { SportFilterSheet } from "../components/SportFilterSheet.jsx";
 import { CalendarView } from "../components/CalendarView.jsx";
 import { toast } from "../lib/toast.js";
 import { setRootBackHandler, setDayLogHandler } from "../lib/native.js";
@@ -65,6 +66,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
     addMesocycle, updateMesocycle, deleteMesocycle, anchorMesocycle, reorderMesocycles,
     addMicrocycle, updateMicrocycle, deleteMicrocycle,
     addCustomCycle, updateCustomCycle, deleteCustomCycle,
+    addRunBlock, updateRunBlock, deleteRunBlock, setRunBlockOverride,
     addQuickSession, editQuickSession, removeQuickSession,
     syncPlannedSessions,
   } = useData();
@@ -85,6 +87,25 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
   // flèche de retour de rouvrir le formulaire sans laisser de séance fantôme.
   const [draft, setDraft] = useState(null);
 
+  // ── Sports affichés dans les stats ──
+  // `null` = tous. C'est une préférence d'affichage, pas une donnée du plan :
+  // elle vit en localStorage et ne part pas dans la synchronisation.
+  const [statsSports, setStatsSports] = useState(() => {
+    try {
+      const raw = localStorage.getItem("climbing_stats_sports");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) && parsed.length ? parsed : null;
+    } catch { return null; }
+  });
+  const [sportSheet, setSportSheet] = useState(false);
+  const chooseStatsSports = (next) => {
+    setStatsSports(next);
+    try {
+      if (next) localStorage.setItem("climbing_stats_sports", JSON.stringify(next));
+      else localStorage.removeItem("climbing_stats_sports");
+    } catch { /* stockage indisponible : le filtre vaut pour cette session */ }
+  };
+
   // ── Navigation par balayage entre onglets ──
   // Même ordre que la barre du bas. Les vues calendrier partagent l'onglet
   // "week" : depuis Mois ou Année, un balayage mène donc à Cycles ou Accueil,
@@ -97,7 +118,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
   // couvre tout ce qui passe par ui/Modal.jsx, SessionModal et DayLogModal ;
   // ces quatre feuilles-ci n'y sont pas inscrites, d'où le complément.
   const overlayOpen = sessionBuilderDay !== null || !!sessionEditCtx ||
-    !!sessionComposerForm || !!sessionModal || !!logDate || notifOpen || !!draft || !!eventDetail;
+    !!sessionComposerForm || !!sessionModal || !!logDate || notifOpen || !!draft || !!eventDetail ||
+    sportSheet;
 
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -594,6 +616,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
             <Dashboard
               data={data}
               isLoading={!!session && !cloudLoaded}
+              sports={statsSports}
+              onEditSports={() => setSportSheet(true)}
               onUpdateSleep={newRows => setData(d => {
                 const map = Object.fromEntries((d.sleep || []).map(r => [r.date, r]));
                 for (const r of newRows) map[r.date] = r;
@@ -628,6 +652,12 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
             onAddReminder={addReminder}
             onUpdateReminder={updateReminder}
             onDeleteReminder={deleteReminder}
+            runBlocks={data.runBlocks || []}
+            kmGoal={!!data.profile?.kmGoal}
+            onAddRunBlock={addRunBlock}
+            onUpdateRunBlock={updateRunBlock}
+            onDeleteRunBlock={deleteRunBlock}
+            onSetRunBlockOverride={setRunBlockOverride}
             onBack={() => setViewMode("accueil")}
           />
         );
@@ -1186,6 +1216,19 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
         <BottomNav
           viewMode={viewMode}
           onChange={(k) => setViewMode(k)}
+          // Un appui long sur « Stats » ouvre le choix des sports, depuis
+          // n'importe quel onglet. La puce sur la page fait la même chose —
+          // c'est elle qui rend le geste trouvable, et le seul chemin sur
+          // ordinateur, où cette barre n'existe pas.
+          onLongPress={(k) => { if (k === "dash") { setViewMode("dash"); setSportSheet(true); } }}
+        />
+      )}
+
+      {sportSheet && (
+        <SportFilterSheet
+          selected={statsSports}
+          onChange={chooseStatsSports}
+          onClose={() => setSportSheet(false)}
         />
       )}
       {/* ── Panneau de notifications (cloche) ── */}

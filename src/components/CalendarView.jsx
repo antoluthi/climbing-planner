@@ -6,8 +6,9 @@ import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, isEventIte
 import { getSessionCharge } from "../lib/charge.js";
 import { getMesoForDate } from "../lib/constants.js";
 import { mesosInRange, recomputeMesoDates, weeksOf } from "../lib/cycles.js";
+import { weekRunSummary, goalBarSegments } from "../lib/run-goals.js";
 import { MesoDetailModal } from "./MesoDetailModal.jsx";
-import { Card, Segmented, RoundIconButton, SportBadge, PageTitle, SANS, MONO } from "./ui/Ascent.jsx";
+import { Card, Segmented, RoundIconButton, SportBadge, PageTitle, SANS, MONO, GoalBar } from "./ui/Ascent.jsx";
 import { DayJournalBlock } from "./DayJournalBlock.jsx";
 
 // ─── CALENDRIER (refonte « Ascent ») ──────────────────────────────────────────
@@ -400,6 +401,42 @@ function DayDots({ items, c, size = 5, max = 3, showOverflow = true, tone = null
 }
 
 // ── Grille du mois ───────────────────────────────────────────────────────────
+// ── Kilomètres d'une semaine ─────────────────────────────────────────────────
+// Le même indicateur pour la vue semaine et la vue mois, à deux tailles. Ne
+// s'affiche que si l'objectif est activé ET que la semaine est couverte par un
+// bloc de course : sinon la grille du mois s'allongerait de six lignes vides.
+function WeekKm({ isDark, data, monday, compact = false }) {
+  if (!data?.profile?.kmGoal) return null;
+  const w = weekRunSummary(data, data.runBlocks || [], monday);
+  if (w.goal == null && w.done + w.planned === 0) return null;
+  const c = colors(isDark);
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8,
+      marginTop: compact ? 3 : 10, marginBottom: compact ? 3 : 0,
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <GoalBar
+          isDark={isDark}
+          height={compact ? 4 : 8}
+          segments={goalBarSegments(w.done, w.planned, w.goal || 0)}
+        />
+      </div>
+      <span style={{
+        fontSize: compact ? 9 : 11, color: c.textMuted, flexShrink: 0,
+        fontVariantNumeric: "tabular-nums",
+      }}>
+        {/* Arrondi dans la vue mois : à 9 px, « 36,3 » est du bruit. La valeur
+            exacte reste lisible dans l'éditeur du bloc et sur la vue semaine. */}
+        <strong style={{ color: c.accent, fontWeight: 700 }}>
+          {compact ? Math.round(w.done) : w.done}
+        </strong>
+        {w.goal != null ? `/${compact ? Math.round(w.goal) : w.goal}` : ""} km
+      </span>
+    </div>
+  );
+}
+
 function MonthGrid({ isDark, data, currentDate, selected, setSelected, today, mesoAt }) {
   const c = colors(isDark);
   const year = currentDate.getFullYear();
@@ -424,7 +461,8 @@ function MonthGrid({ isDark, data, currentDate, selected, setSelected, today, me
       </div>
 
       {weeks.map((week, wi) => (
-        <div key={wi} style={{ display: "flex", marginBottom: 2 }}>
+        <div key={wi}>
+        <div style={{ display: "flex", marginBottom: 2 }}>
           {week.map((date, di) => {
             const iso = localDateStr(date);
             const inMonth = date.getMonth() === month;
@@ -471,6 +509,8 @@ function MonthGrid({ isDark, data, currentDate, selected, setSelected, today, me
               </button>
             );
           })}
+        </div>
+        <WeekKm isDark={isDark} data={data} monday={week[0]} compact />
         </div>
       ))}
     </div>
@@ -527,6 +567,7 @@ function WeekStrip({ isDark, data, currentDate, selected, setSelected, today, me
           );
         })}
       </div>
+      <WeekKm isDark={isDark} data={data} monday={monday} />
     </div>
   );
 }

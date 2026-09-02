@@ -24,7 +24,8 @@ const DEFAULT_DATA = {
   weeks: {}, weekMeta: {}, customSessions: [], mesocycles: DEFAULT_MESOCYCLES,
   sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {},
   profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [],
-  quickSessions: [], reminders: [], reminderState: {}, schemaVersion: 3,
+  quickSessions: [], reminders: [], reminderState: {}, runBlocks: [],
+  schemaVersion: 3,
 };
 
 // ─── Migration schemaVersion 2 → 3 → 4 → 5 → 6 ───────────────────────────────

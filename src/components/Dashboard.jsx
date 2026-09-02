@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { BarChart, Bar, Cell, LineChart, Line, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { getMondayOf, addDays, localDateStr, formatDate } from "../lib/helpers.js";
@@ -7,6 +7,7 @@ import { SleepSection } from "./SleepSection.jsx";
 import { DashboardSkeleton } from "./ui/Skeleton.jsx";
 import { getSessionCharge, normalizeCharge10 } from "../lib/charge.js";
 import { colors } from "../theme/palette.js";
+import { filterDataBySports, sportFilterLabel } from "../lib/disciplines.js";
 import { PageTitle, Segmented, RoundIconButton } from "./ui/Ascent.jsx";
 
 // ─── Spline cubique monotone passant par chaque point ────────────────────────
@@ -153,7 +154,11 @@ export function Dashboard(props) {
   return <DashboardBody {...props} />;
 }
 
-function DashboardBody({ data, onUpdateSleep }) {
+function DashboardBody({ data: rawData, onUpdateSleep, sports, onEditSports }) {
+  // Un seul point de filtrage : on retire les séances écartées de `weeks`, et
+  // tout ce qui en dérive suit — charge, écart, qualité, heatmap. Le poids, le
+  // bien-être et le sommeil voyagent dans le même objet et restent entiers.
+  const data = useMemo(() => filterDataBySports(rawData, sports), [rawData, sports]);
   const { styles, isDark } = useThemeCtx();
   const [range, setRange] = useState("sem"); // "sem" | "mois" | "an"
   const [statsRefDate, setStatsRefDate] = useState(() => new Date());
@@ -272,7 +277,31 @@ function DashboardBody({ data, onUpdateSleep }) {
 
   return (
     <div style={styles.dashboard}>
-      <PageTitle isDark={isDark} style={{ marginBottom: 20 }}>Stats</PageTitle>
+      {/* La puce du filtre est en action principale du titre : c'est ce qui
+          rend le geste (appui long sur l'onglet) trouvable, et le seul chemin
+          sur ordinateur, où il n'y a pas de barre du bas. */}
+      <PageTitle
+        isDark={isDark}
+        style={{ marginBottom: 20 }}
+        right={onEditSports ? (
+          <button
+            type="button"
+            onClick={onEditSports}
+            aria-label="Choisir les sports affichés"
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              background: sports?.length ? colors(isDark).accentBg : colors(isDark).control,
+              border: `1px solid ${sports?.length ? colors(isDark).accentBorder : "transparent"}`,
+              borderRadius: 999, padding: "6px 12px", cursor: "pointer",
+              fontFamily: "inherit", fontSize: 11, fontWeight: 600,
+              color: sports?.length ? colors(isDark).accent : colors(isDark).textCard,
+            }}
+          >
+            {sportFilterLabel(sports)}
+            <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span>
+          </button>
+        ) : undefined}
+      >Stats</PageTitle>
 
       {/* Activity heatmap */}
       <ActivityHeatmap data={data} />
