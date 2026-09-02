@@ -16,6 +16,7 @@ import { disciplineList } from "../lib/disciplines.js";
 import { RowCard, Row, Segmented, Chip, RoundIconButton, SANS, MONO } from "./ui/Ascent.jsx";
 import { PublicPlansSection } from "./PublicPlansSection.jsx";
 import { NotificationsSection } from "./NotificationsSection.jsx";
+import { RunGoalSection } from "./RunGoalSection.jsx";
 
 // ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
 
@@ -287,6 +288,15 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
           })}
         </div>
       </div>
+
+      {/* ── Objectif de course ── voisin immédiat de « Sports » : c'est la même
+           idée, ce que je pratique et ce que je vise. */}
+      <RunGoalSection
+        isDark={isDark}
+        styles={styles}
+        enabled={!!profile.kmGoal}
+        onChange={val => onUpdateProfile({ ...profile, kmGoal: val })}
+      />
 
       {/* ── Rôle ── modifiable, sauf en vue athlète (le profil affiché n'est
            pas le nôtre). */}

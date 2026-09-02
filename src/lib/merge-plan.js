@@ -81,6 +81,7 @@ const STRATEGIES = {
   customSessions: mergeById,
   quickSessions:  mergeById,
   reminders:      mergeById,
+  runBlocks:      mergeById,
   moveSuggestions: mergeById,
 };
 

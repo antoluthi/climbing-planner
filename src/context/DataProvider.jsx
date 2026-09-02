@@ -8,6 +8,7 @@ import { generateId, loadData, saveData, migrateData, freshData, getLocalDataOwn
 import { readSyncMeta, markDirty, markSynced, decideSync } from "../lib/sync-meta.js";
 import { mergePlans } from "../lib/merge-plan.js";
 import { recomputeMesoDates, setAnchor, moveMeso } from "../lib/cycles.js";
+import { DEFAULT_RUN_BLOCK } from "../lib/run-goals.js";
 import { useCommunitySessionsSync } from "../hooks/useCommunitySessionsSync.js";
 import { useSessionsCatalog } from "../hooks/useSessionsCatalog.js";
 import { useCoachAthletes } from "../hooks/useCoachAthletes.js";
@@ -449,6 +450,25 @@ export function DataProvider({ children }) {
   const updateMicrocycle = (mesoId, microId, changes) => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: x.microcycles.map(mc => mc.id === microId ? { ...mc, ...changes } : mc) } : x));
   const deleteMicrocycle = (mesoId, microId) => updateMesocycles(m => m.map(x => x.id === mesoId ? { ...x, microcycles: x.microcycles.filter(mc => mc.id !== microId) } : x));
 
+  // ── Blocs de course (objectif km/semaine) ──
+  // Piste à part des mésocycles : chaque bloc porte SA date de début, sans
+  // chaînage. C'est ce qui permet de laisser exprès des semaines vides entre
+  // deux blocs — le chaînage des mésocycles, lui, colle les blocs bout à bout.
+  const updateRunBlocks = updater => setData(d => ({ ...d, runBlocks: updater(d.runBlocks || []) }));
+  const addRunBlock = () => updateRunBlocks(list => [...list, {
+    id: generateId(), ...DEFAULT_RUN_BLOCK, color: DATA.picker[3], startDate: "", overrides: {},
+  }]);
+  const updateRunBlock = (id, changes) => updateRunBlocks(list => list.map(b => b.id === id ? { ...b, ...changes } : b));
+  const deleteRunBlock = id => updateRunBlocks(list => list.filter(b => b.id !== id));
+  // Une semaine forcée : `null` efface le forçage et rend la semaine à la courbe.
+  const setRunBlockOverride = (id, weekIndex, km) => updateRunBlocks(list => list.map(b => {
+    if (b.id !== id) return b;
+    const overrides = { ...(b.overrides || {}) };
+    if (km == null || km === "") delete overrides[weekIndex];
+    else overrides[weekIndex] = Number(km);
+    return { ...b, overrides };
+  }));
+
   // ── Custom cycle CRUD ──
   const updateCustomCycles = updater => setData(d => ({ ...d, customCycles: updater(d.customCycles || []) }));
   const addCustomCycle = cc => updateCustomCycles(list => [...list, cc]);
@@ -504,6 +524,7 @@ export function DataProvider({ children }) {
     addMesocycle, updateMesocycle, deleteMesocycle, anchorMesocycle, reorderMesocycles,
     addMicrocycle, updateMicrocycle, deleteMicrocycle,
     addCustomCycle, updateCustomCycle, deleteCustomCycle,
+    addRunBlock, updateRunBlock, deleteRunBlock, setRunBlockOverride,
     addQuickSession, editQuickSession, removeQuickSession,
     syncPlannedSessions,
   };

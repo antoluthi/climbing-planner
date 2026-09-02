@@ -306,6 +306,43 @@ export function ProgressBar({ isDark, ratio }) {
   );
 }
 
+// ── Barre d'objectif ─────────────────────────────────────────────────────────
+// Trois segments bout à bout : ce qui est fait, ce qui est encore au planning,
+// ce qu'il reste. Trois teintes qui descendent — signature, orange en retrait,
+// piste neutre — parce que c'est un classement, pas trois catégories.
+//
+// Deux détails qui font la lisibilité :
+//  · un filet de 2 px à la couleur de la carte sépare les segments, sinon deux
+//    oranges voisins se lisent comme un seul bloc ;
+//  · quand le total dépasse l'objectif, la barre se met à l'échelle du total et
+//    un repère marque l'endroit où l'objectif se trouvait. Saturer à 100 %
+//    cacherait de combien on a débordé.
+export function GoalBar({ isDark, segments, height = 8 }) {
+  const c = colors(isDark);
+  const { done = 0, planned = 0, over, goalMark } = segments || {};
+  const seg = (w, background, key) => w <= 0 ? null : (
+    <div key={key} style={{
+      width: `${w}%`, background, height: "100%",
+      borderRight: `2px solid ${c.card}`, boxSizing: "border-box",
+    }} />
+  );
+  return (
+    <div style={{
+      position: "relative", height, borderRadius: height / 2,
+      background: c.borderStrong, overflow: "hidden", display: "flex",
+    }}>
+      {seg(done, c.accent, "done")}
+      {seg(planned, c.accentSoft, "planned")}
+      {over && goalMark != null && (
+        <div style={{
+          position: "absolute", left: `${goalMark}%`, top: 0, bottom: 0,
+          width: 2, background: c.card,
+        }} />
+      )}
+    </div>
+  );
+}
+
 // ── Icône bibliothèque ───────────────────────────────────────────────────────
 // Deux livres droits et un troisième appuyé dessus. Partagée entre la barre du
 // bas et le bouton du formulaire de séance : une seule silhouette pour un seul

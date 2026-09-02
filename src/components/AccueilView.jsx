@@ -3,13 +3,14 @@ import { useState } from "react";
 import { getMesoForDate, getCustomCycleDay } from "../lib/constants.js";
 import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, isEventItem } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
+import { weekRunSummary, goalBarSegments } from "../lib/run-goals.js";
 import { generateId } from "../lib/storage.js";
 import { AccueilSkeleton } from "./ui/Skeleton.jsx";
 import { getActiveRemindersForDate, isReminderCheckedOn } from "../lib/reminders.js";
 import { colors, DATA } from "../theme/palette.js";
 import { BellIcon } from "./NotificationBell.jsx";
 import { Card, SectionLabel, StatValue, SportBadge, PrimaryButton, SecondaryButton,
-         RoundCheck, InitialsAvatar, SANS, MONO } from "./ui/Ascent.jsx";
+         RoundCheck, InitialsAvatar, SANS, MONO, GoalBar } from "./ui/Ascent.jsx";
 
 // ─── GREETING BY TIME OF DAY ──────────────────────────────────────────────────
 
@@ -1071,6 +1072,10 @@ function AccueilViewBody({
   // ── Barres de charge de la semaine ──
   const dayLabels = ["L", "M", "M", "J", "V", "S", "D"];
   const dayCharges = weekSessions.map(ds => (ds || []).reduce((sum, x) => sum + getSessionCharge(x), 0));
+  // Objectif de course : rien tant que l'option est éteinte, et rien non plus
+  // si la semaine ne concerne aucun bloc et qu'aucun kilomètre n'a été couru.
+  const runWeek = data.profile?.kmGoal ? weekRunSummary(data, data.runBlocks || [], todayObj) : null;
+  const showRun = !!runWeek && (runWeek.goal != null || runWeek.done + runWeek.planned > 0);
   const maxCharge = Math.max(1, ...dayCharges);
 
   const dateLabel = todayObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
@@ -1216,6 +1221,48 @@ function AccueilViewBody({
             </div>
           ))}
         </div>
+
+        {/* ── Kilomètres de la semaine ──
+            Trois segments : couru, encore au planning, ce qu'il reste. La
+            légende nomme les deux premiers — la couleur seule ne doit jamais
+            porter le sens, et ces deux oranges sont proches par construction. */}
+        {showRun && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+              <span style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: "1px",
+                textTransform: "uppercase", color: c.textDim,
+              }}>Course</span>
+              <span style={{ fontSize: 12, color: c.textMuted, fontVariantNumeric: "tabular-nums" }}>
+                <strong style={{ color: c.accent, fontWeight: 700 }}>{runWeek.done}</strong>
+                {runWeek.goal != null ? ` / ${runWeek.goal} km` : " km"}
+              </span>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <GoalBar
+                isDark={isDark}
+                segments={goalBarSegments(runWeek.done, runWeek.planned, runWeek.goal || 0)}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 12, marginTop: 5, flexWrap: "wrap" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: c.textDim }}>
+                <span style={{ width: 7, height: 7, borderRadius: 2, background: c.accent }} />
+                {runWeek.done} fait{runWeek.done > 1 ? "s" : ""}
+              </span>
+              {runWeek.planned > 0 && (
+                <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: c.textDim }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 2, background: c.accentSoft }} />
+                  {runWeek.planned} prévu{runWeek.planned > 1 ? "s" : ""}
+                </span>
+              )}
+              {runWeek.goal != null && runWeek.done + runWeek.planned > runWeek.goal && (
+                <span style={{ fontSize: 10, color: c.textDim }}>
+                  objectif dépassé de {Math.round((runWeek.done + runWeek.planned - runWeek.goal) * 10) / 10} km
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Prochaine échéance ── */}

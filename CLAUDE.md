@@ -92,6 +92,9 @@ src/
     ├── PhotoCropModal.jsx         — recadrage/zoom avatar
     ├── CoachAthletesSection.jsx   — section "Mes athlètes" dans ProfileView
     ├── CalendarSyncSection.jsx    — section sync calendrier (CalDAV/iCal)
+    ├── RunBlocksSection.jsx       — blocs de course (objectif km) dans Cycles
+    ├── RunGoalSection.jsx         — bascule « objectif km » dans Compte
+    ├── SportFilterSheet.jsx       — choix des sports affichés dans Stats
     ├── ProfileView.jsx            — avatar, infos, thème, gestion athlètes
     ├── CoachLibraryView.jsx       — bibliothèque de séances modèles
     ├── AccueilView.jsx            — page d'accueil (phrase contextuelle, police Newsreader)
@@ -133,6 +136,8 @@ src/
   customCycles: [],    // cycles personnalisés (ex: créatine, suppléments)
   cyclesLocked: false,
   moveSuggestions: [], // [{ id, sessionId, fromDate, targetDate, targetTime, note, athleteId }]
+  runBlocks: [],       // blocs de course : [{ id, label, color, startDate, durationWeeks,
+                       //                     baseKm, increasePct, overrides: { <index>: km } }]
 }
 ```
 
@@ -855,6 +860,66 @@ marqueur reste sale, la prochaine occasion réessaie).
 
 L'état est visible dans **Compte > Données** : « Synchronisé il y a n min » ou
 « Modifications en attente d'envoi ».
+
+### Objectif de kilomètres par semaine (`lib/run-goals.js`, `RunBlocksSection`)
+
+Un plan de course se raisonne en **volume hebdomadaire qui monte doucement**,
+pas en charge de séance. D'où une piste à part dans Cycles, sous les
+mésocycles, activée par une bascule dans **Compte > Objectif de course**
+(`profile.kmGoal`).
+
+- **Un bloc** = une date de début, une durée en semaines, un volume de départ et
+  une progression en pour-cent. `blockWeekTargets()` en déduit l'objectif de
+  chaque semaine : `base × (1 + p)^i`.
+- **Une semaine écrite à la main ne déplace pas la courbe.** Forcer la 4ᵉ à
+  30 km au lieu des 48 calculés ne change **que** cette semaine — la 5ᵉ repart
+  de 48 × 1,10. C'est ce qui fait qu'une décharge reste une exception au lieu de
+  faire redescendre tout le plan avec elle. Le `↺` de chaque ligne rend la
+  semaine à la courbe ; sans lui, un forçage ne s'annulerait qu'en retapant la
+  valeur calculée.
+- **Pas de chaînage**, contrairement aux mésocycles : chaque bloc porte sa
+  propre date. Le chaînage colle les blocs bout à bout, ce qui rend impossible
+  la semaine de coupure voulue entre deux blocs. `goalForWeek()` parcourt les
+  blocs **par date**, pas dans l'ordre de la liste, et `overlappingBlockIds()`
+  signale un recouvrement dans l'éditeur.
+- **Course et trail comptent, le vélo non** (`RUN_DISCIPLINES`) : additionner
+  des kilomètres à vélo rendrait l'objectif faux. Une séance **manquée** ne
+  compte nulle part — la garder en « prévu » laisserait croire que la semaine
+  peut encore être bouclée.
+- **La barre** (`GoalBar`, `goalBarSegments`) : fait · planifié · restant, en
+  `accent` / `accentSoft` / `borderStrong`. Au-delà de l'objectif elle se met à
+  l'échelle du **total** plutôt que de saturer, et un repère marque où
+  l'objectif se trouvait. Un filet de 2 px à la couleur de la carte sépare les
+  segments — deux oranges voisins se liraient sinon comme un seul bloc.
+  ⚠ `accentSoft` n'est **pas** plus clair en thème clair malgré son nom : sur une
+  carte quasi blanche, un orange plus clair ne tient pas 3:1 de contraste
+  (mesuré). C'est la saturation qui recule en clair, la luminosité en sombre.
+- **Où ça s'affiche** : accueil (barre pleine + légende), et un indicateur
+  compact par semaine dans le calendrier (vues semaine et mois), rendu
+  uniquement sur les semaines couvertes par un bloc — sinon la grille du mois
+  s'allongerait de six lignes vides. Les décimales y sont arrondies : à 9 px,
+  « 36,3 » est du bruit.
+
+### Isoler un sport dans les stats (`SportFilterSheet`, `filterDataBySports`)
+
+Deux chemins vers la même feuille : un **appui long sur l'onglet « Stats »**
+(500 ms) et une **puce sous le titre de la page**. La puce n'est pas une
+redondance — le geste est invisible, et il n'y a pas de barre du bas sur
+ordinateur.
+
+- L'appui long **annule le clic qui le suit** (sinon on change d'onglet en même
+  temps qu'on ouvre le menu) et se laisse annuler par le moindre glissement, un
+  balayage entre onglets ne devant jamais finir en menu.
+- Depuis « Tous », toucher un sport l'**isole**. Le traiter comme un décochage
+  partirait des sept disciplines pour en retirer une — l'inverse de l'intention.
+- **Un seul point de filtrage** : `filterDataBySports()` retire les séances
+  écartées de `weeks`, et tout ce qui en dérive suit (charge, écart, qualité,
+  heatmap). Poids, Hooper et sommeil voyagent dans le même objet et restent
+  entiers — ils ne dépendent d'aucun sport. Sans filtre, la fonction renvoie
+  l'objet **d'origine** : une nouvelle identité à chaque rendu ferait retracer
+  tous les graphes.
+- La sélection est une préférence d'affichage : elle vit en localStorage
+  (`climbing_stats_sports`), pas dans le blob synchronisé.
 
 ## Migrations SQL
 
