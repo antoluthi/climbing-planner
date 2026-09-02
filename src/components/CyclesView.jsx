@@ -24,7 +24,7 @@ export function CyclesView({
   locked, onSetLocked, canEdit, objectives,
   reminders = [], reminderState = {},
   onAddReminder, onUpdateReminder, onDeleteReminder,
-  runBlocks = [], kmGoal = false,
+  runBlocks = [], kmGoal = false, runLocked = true, onSetRunLocked,
   onAddRunBlock, onUpdateRunBlock, onDeleteRunBlock, onSetRunBlockOverride,
 }) {
   const { styles, isDark } = useThemeCtx();
@@ -33,52 +33,100 @@ export function CyclesView({
   const [showCustomCycleForm, setShowCustomCycleForm] = useState(false);
   const [editingCustomCycle, setEditingCustomCycle] = useState(null);
   const { dragIndex, dropIndex, handleProps } = useDragReorder(onReorderMeso);
-  // ── Deux plans, deux écrans ──
+  // ── Deux plans, deux écrans, deux verrous ──
   // L'entraînement (mésocycles, cycles perso, rappels) et la course ne se
   // découpent pas pareil et ne se lisent pas ensemble : ouvrir « modifier les
-  // cycles » ne doit montrer que la grimpe. Le sélecteur ne s'affiche que si
-  // l'objectif km est activé — sinon il n'y aurait qu'un écran à choisir.
-  const [track, setTrack] = useState("training");
-  const showTracks = !!kmGoal;
-  const onRunTrack = showTracks && track === "run";
+  // cycles » ne doit montrer que la grimpe, et le plan de course porte son
+  // propre bouton « Modifier ». Le sélecteur ne s'affiche que si l'objectif km
+  // est activé — sinon il n'y aurait qu'un écran à choisir.
+  //
+  // Tant qu'une des deux pistes est en modification, l'écran affiché est
+  // celui-là et le sélecteur est éteint : on ne quitte pas un plan à moitié
+  // réglé pour aller en toucher un autre, et enregistrer l'un ne dit rien de
+  // l'autre. Éteint, pas masqué — un sélecteur qui disparaît laisserait croire
+  // que l'autre plan n'existe plus, et l'app s'ouvre justement sur l'éditeur
+  // tant qu'on n'a jamais enregistré. La ligne en dessous dit comment sortir.
+  //
+  // La piste courante se *déduit* de l'état d'édition plutôt que d'être
+  // recopiée dedans par un effet : rien à resynchroniser.
+  const [trackChoice, setTrackChoice] = useState("training");
+  const editingTraining = canEdit !== false && !locked;
+  const editingRun      = canEdit !== false && !runLocked;
+  const track = editingTraining ? "training" : editingRun ? "run" : trackChoice;
+  const lockedToTrack = editingTraining || editingRun;
+  const onRunTrack = !!kmGoal && track === "run";
 
-  const tracks = showTracks ? (
-    <div style={{ padding: "0 20px 14px", maxWidth: 600, margin: "0 auto", width: "100%" }}>
+  const tracks = kmGoal ? (
+    <>
       <Segmented
         isDark={isDark}
         value={track}
-        onChange={setTrack}
+        onChange={setTrackChoice}
+        disabled={lockedToTrack}
+        title={lockedToTrack ? "Enregistrez ce plan pour passer à l’autre" : undefined}
         options={[
           { value: "training", label: "Entraînement" },
           { value: "run", label: "Course" },
         ]}
       />
-    </div>
+      {lockedToTrack && (
+        <div style={{ fontSize: 11, color: colors(isDark).textMuted, marginTop: 6, textAlign: "center" }}>
+          Enregistrez ce plan pour passer à l’autre.
+        </div>
+      )}
+    </>
   ) : null;
 
-  // L'écran « Course » est le même en lecture seule et en édition : c'est
-  // `canEdit` qui décide, pas le verrou des mésocycles.
-  const runScreen = (
-    <div style={{ maxWidth: 600, margin: "0 auto", width: "100%", padding: "0 20px 40px" }}>
-      <RunBlocksSection
-        blocks={runBlocks}
-        isDark={isDark}
-        canEdit={canEdit !== false && !locked}
-        onAdd={onAddRunBlock}
-        onUpdate={onUpdateRunBlock}
-        onSetOverride={onSetRunBlockOverride}
-        onAskDelete={setPendingDelete}
-      />
-    </div>
-  );
+  // Une seule confirmation pour tous les écrans : mésocycle, microcycle, cycle
+  // perso ou bloc de course, c'est la même modale.
+  const confirmDelete = pendingDelete ? (
+    <ConfirmModal
+      title={
+        pendingDelete.type === "meso" ? "Supprimer ce mésocycle ?" :
+        pendingDelete.type === "micro" ? "Supprimer ce microcycle ?" :
+        pendingDelete.type === "runBlock" ? "Supprimer ce bloc de course ?" :
+        "Supprimer ce cycle personnalisé ?"
+      }
+      sub={pendingDelete.label}
+      onConfirm={() => {
+        if (pendingDelete.type === "meso") onDeleteMeso(pendingDelete.id);
+        else if (pendingDelete.type === "micro") onDeleteMicro(pendingDelete.mesoId, pendingDelete.microId);
+        else if (pendingDelete.type === "runBlock") onDeleteRunBlock(pendingDelete.id);
+        else onDeleteCustomCycle(pendingDelete.id);
+      }}
+      onClose={() => setPendingDelete(null)}
+    />
+  ) : null;
+
+  // ── Écran « Course » ──
+  // Verrouillé, il se lit ; déverrouillé, il se modifie — sans jamais toucher
+  // au verrou des mésocycles.
+  if (onRunTrack) {
+    return (
+      <div style={{ ...styles.cyclesView, maxWidth: 600, width: "100%", margin: "0 auto" }}>
+        <PageTitle isDark={isDark} style={{ marginBottom: 16 }}>Cycles</PageTitle>
+        {tracks}
+        <RunBlocksSection
+          blocks={runBlocks}
+          isDark={isDark}
+          canEdit={canEdit}
+          locked={runLocked}
+          onSetLocked={onSetRunLocked}
+          onAdd={onAddRunBlock}
+          onUpdate={onUpdateRunBlock}
+          onSetOverride={onSetRunBlockOverride}
+          onAskDelete={setPendingDelete}
+        />
+        {confirmDelete}
+      </div>
+    );
+  }
 
   // ── Timeline mode (locked, or athlete who can't edit) ──
   if (locked || canEdit === false) {
     return (
-      <>
-      {tracks}
-      {onRunTrack ? runScreen : (
       <CyclesTimeline
+        tracks={tracks}
         mesocycles={mesocycles}
         customCycles={customCycles || []}
         objectives={objectives}
@@ -90,8 +138,6 @@ export function CyclesView({
         onDeleteReminder={onDeleteReminder}
         canEditReminders /* rappels = données perso, gérables même en lecture seule */
       />
-      )}
-      </>
     );
   }
 
@@ -108,31 +154,17 @@ export function CyclesView({
       <PageTitle
         isDark={isDark}
         style={{ marginBottom: 6 }}
-        right={onRunTrack ? undefined : (
+        right={
           <PrimaryButton isDark={isDark} height={36} onClick={onAddMeso}
                          style={{ width: "auto", padding: "0 16px", fontSize: 13 }}>
             + Mésocycle
           </PrimaryButton>
-        )}
+        }
       >
         Cycles
       </PageTitle>
 
-      {showTracks && (
-        <div style={{ marginBottom: 16 }}>
-          <Segmented
-            isDark={isDark}
-            value={track}
-            onChange={setTrack}
-            options={[
-              { value: "training", label: "Entraînement" },
-              { value: "run", label: "Course" },
-            ]}
-          />
-        </div>
-      )}
-
-      {onRunTrack ? runScreen : (<>
+      {tracks && <div style={{ marginBottom: 16 }}>{tracks}</div>}
 
       {mesocycles.length > 0 && (
         <div style={{ fontSize: 12, color: c.textMuted, lineHeight: 1.45, marginBottom: 14 }}>
@@ -238,8 +270,6 @@ export function CyclesView({
         ))}
       </div>
 
-      </>)}
-
       {editingReminder && (
         <ReminderModal
           reminder={editingReminder.id ? editingReminder : null}
@@ -253,24 +283,7 @@ export function CyclesView({
         />
       )}
 
-      {pendingDelete && (
-        <ConfirmModal
-          title={
-            pendingDelete.type === "meso" ? "Supprimer ce mésocycle ?" :
-            pendingDelete.type === "micro" ? "Supprimer ce microcycle ?" :
-            pendingDelete.type === "runBlock" ? "Supprimer ce bloc de course ?" :
-            "Supprimer ce cycle personnalisé ?"
-          }
-          sub={pendingDelete.label}
-          onConfirm={() => {
-            if (pendingDelete.type === "meso") onDeleteMeso(pendingDelete.id);
-            else if (pendingDelete.type === "micro") onDeleteMicro(pendingDelete.mesoId, pendingDelete.microId);
-            else if (pendingDelete.type === "runBlock") onDeleteRunBlock(pendingDelete.id);
-            else onDeleteCustomCycle(pendingDelete.id);
-          }}
-          onClose={() => setPendingDelete(null)}
-        />
-      )}
+      {confirmDelete}
 
       {(showCustomCycleForm || editingCustomCycle) && (
         <CustomCycleModal
@@ -285,13 +298,12 @@ export function CyclesView({
         />
       )}
 
-      {/* Verrou des mésocycles — écran Entraînement seulement : il n'y a rien
-          à « planifier » au sens des cycles de grimpe sur la piste course. */}
-      {!onRunTrack && mesocycles.length > 0 && (
-        <button style={styles.timelineSaveBtn} onClick={() => onSetLocked(true)}>
-          ✓ Enregistrer la planification
-        </button>
-      )}
+      {/* Verrou des mésocycles — celui de la course vit dans RunBlocksSection.
+          Toujours affiché, même sans mésocycle : c'est la sortie de l'éditeur,
+          donc aussi le chemin vers la piste course. */}
+      <button style={styles.timelineSaveBtn} onClick={() => onSetLocked(true)}>
+        ✓ Enregistrer la planification
+      </button>
     </div>
   );
 }

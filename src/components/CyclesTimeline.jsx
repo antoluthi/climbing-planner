@@ -21,6 +21,10 @@ export function CyclesTimeline({
   // Les rappels sont des habitudes personnelles, pas le plan : la vue publique
   // affiche les cycles sans eux.
   showReminders = true,
+  // Le sélecteur Entraînement | Course, quand l'objectif km est activé. Il est
+  // rendu ici plutôt qu'au-dessus de la timeline pour qu'il tombe SOUS le titre
+  // de la page, comme partout ailleurs dans l'app.
+  tracks = null,
 }) {
   const { styles, isDark } = useThemeCtx();
   // Le détail d'un bloc s'ouvre en modale : une bulle ne tenait ni l'objectif
@@ -97,6 +101,8 @@ export function CyclesTimeline({
       >
         Cycles
       </PageTitle>
+
+      {tracks && <div style={{ marginTop: -10, marginBottom: 20 }}>{tracks}</div>}
 
       {mesocycles.length > 0 && (
         <div style={{ fontSize: 12, color: colors(isDark).textMuted, marginTop: -14, marginBottom: 18 }}>
