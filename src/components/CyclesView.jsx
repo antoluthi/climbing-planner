@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { mesoLastDay, microStarts, resolveAnchorId } from "../lib/cycles.js";
 import { useDragReorder } from "../hooks/useDragReorder.js";
@@ -12,7 +12,7 @@ import {
   DAY_NAMES_SHORT,
 } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
-import { PageTitle, PrimaryButton } from "./ui/Ascent.jsx";
+import { PageTitle, PrimaryButton, Segmented } from "./ui/Ascent.jsx";
 import { RADIUS } from "../theme/makeStyles.js";
 import { WeekStepper, AutoTextarea, ColorDot, GripIcon, Chevron } from "./ui/CycleFields.jsx";
 import { RunBlocksSection } from "./RunBlocksSection.jsx";
@@ -33,10 +33,51 @@ export function CyclesView({
   const [showCustomCycleForm, setShowCustomCycleForm] = useState(false);
   const [editingCustomCycle, setEditingCustomCycle] = useState(null);
   const { dragIndex, dropIndex, handleProps } = useDragReorder(onReorderMeso);
+  // ── Deux plans, deux écrans ──
+  // L'entraînement (mésocycles, cycles perso, rappels) et la course ne se
+  // découpent pas pareil et ne se lisent pas ensemble : ouvrir « modifier les
+  // cycles » ne doit montrer que la grimpe. Le sélecteur ne s'affiche que si
+  // l'objectif km est activé — sinon il n'y aurait qu'un écran à choisir.
+  const [track, setTrack] = useState("training");
+  const showTracks = !!kmGoal;
+  const onRunTrack = showTracks && track === "run";
+
+  const tracks = showTracks ? (
+    <div style={{ padding: "0 20px 14px", maxWidth: 600, margin: "0 auto", width: "100%" }}>
+      <Segmented
+        isDark={isDark}
+        value={track}
+        onChange={setTrack}
+        options={[
+          { value: "training", label: "Entraînement" },
+          { value: "run", label: "Course" },
+        ]}
+      />
+    </div>
+  ) : null;
+
+  // L'écran « Course » est le même en lecture seule et en édition : c'est
+  // `canEdit` qui décide, pas le verrou des mésocycles.
+  const runScreen = (
+    <div style={{ maxWidth: 600, margin: "0 auto", width: "100%", padding: "0 20px 40px" }}>
+      <RunBlocksSection
+        blocks={runBlocks}
+        isDark={isDark}
+        canEdit={canEdit !== false && !locked}
+        onAdd={onAddRunBlock}
+        onUpdate={onUpdateRunBlock}
+        onSetOverride={onSetRunBlockOverride}
+        onAskDelete={setPendingDelete}
+      />
+    </div>
+  );
 
   // ── Timeline mode (locked, or athlete who can't edit) ──
   if (locked || canEdit === false) {
     return (
+      <>
+      {tracks}
+      {onRunTrack ? runScreen : (
       <CyclesTimeline
         mesocycles={mesocycles}
         customCycles={customCycles || []}
@@ -49,6 +90,8 @@ export function CyclesView({
         onDeleteReminder={onDeleteReminder}
         canEditReminders /* rappels = données perso, gérables même en lecture seule */
       />
+      )}
+      </>
     );
   }
 
@@ -65,15 +108,31 @@ export function CyclesView({
       <PageTitle
         isDark={isDark}
         style={{ marginBottom: 6 }}
-        right={
+        right={onRunTrack ? undefined : (
           <PrimaryButton isDark={isDark} height={36} onClick={onAddMeso}
                          style={{ width: "auto", padding: "0 16px", fontSize: 13 }}>
             + Mésocycle
           </PrimaryButton>
-        }
+        )}
       >
         Cycles
       </PageTitle>
+
+      {showTracks && (
+        <div style={{ marginBottom: 16 }}>
+          <Segmented
+            isDark={isDark}
+            value={track}
+            onChange={setTrack}
+            options={[
+              { value: "training", label: "Entraînement" },
+              { value: "run", label: "Course" },
+            ]}
+          />
+        </div>
+      )}
+
+      {onRunTrack ? runScreen : (<>
 
       {mesocycles.length > 0 && (
         <div style={{ fontSize: 12, color: c.textMuted, lineHeight: 1.45, marginBottom: 14 }}>
@@ -108,21 +167,6 @@ export function CyclesView({
         ))}
         <DropBar active={dropBar === mesocycles.length} c={c} />
       </div>
-
-      {/* ── Blocs de course ── juste sous les mésocycles : c'est l'autre
-           moitié du plan, pas un réglage annexe. Masquée tant que l'objectif
-           km n'est pas activé dans Compte. */}
-      {kmGoal && (
-        <RunBlocksSection
-          blocks={runBlocks}
-          isDark={isDark}
-          canEdit={canEdit !== false}
-          onAdd={onAddRunBlock}
-          onUpdate={onUpdateRunBlock}
-          onSetOverride={onSetRunBlockOverride}
-          onAskDelete={setPendingDelete}
-        />
-      )}
 
       {/* ── Cycles personnalisés ── */}
       <div style={styles.customCyclesSection}>
@@ -194,6 +238,8 @@ export function CyclesView({
         ))}
       </div>
 
+      </>)}
+
       {editingReminder && (
         <ReminderModal
           reminder={editingReminder.id ? editingReminder : null}
@@ -239,8 +285,9 @@ export function CyclesView({
         />
       )}
 
-      {/* Save button */}
-      {mesocycles.length > 0 && (
+      {/* Verrou des mésocycles — écran Entraînement seulement : il n'y a rien
+          à « planifier » au sens des cycles de grimpe sur la piste course. */}
+      {!onRunTrack && mesocycles.length > 0 && (
         <button style={styles.timelineSaveBtn} onClick={() => onSetLocked(true)}>
           ✓ Enregistrer la planification
         </button>
