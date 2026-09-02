@@ -868,6 +868,13 @@ pas en charge de séance. D'où une piste à part dans Cycles, sous les
 mésocycles, activée par une bascule dans **Compte > Objectif de course**
 (`profile.kmGoal`).
 
+- **Deux écrans, pas deux sections.** La page Cycles porte un sélecteur
+  « Entraînement | Course » (`Segmented`, comme le calendrier), affiché
+  seulement quand l'objectif km est activé. Ouvrir « modifier les cycles » ne
+  montre que la grimpe ; le bouton « + Mésocycle » et le verrou de planification
+  disparaissent sur la piste course, où ils n'ont pas de sens. Le sélecteur
+  existe **aussi en mode verrouillé** : le plan de course se consulte sans
+  déverrouiller les mésocycles.
 - **Un bloc** = une date de début, une durée en semaines, un volume de départ et
   une progression en pour-cent. `blockWeekTargets()` en déduit l'objectif de
   chaque semaine : `base × (1 + p)^i`.
@@ -1092,6 +1099,19 @@ Les rappels du jour, cochables, et le résumé du journal.
   retombe sur `assembleDebug` : la clé de debug étant régénérée à chaque runner,
   les mises à jour ne s'installent alors pas par-dessus (« application non
   installée »). Les 4 secrets à créer sont listés dans `ACTIONS-A-FAIRE.md`.
+
+### Un composant JSX non importé passe le lint ET le build
+
+`no-undef` ne crée pas de référence pour un `JSXIdentifier` : un `<Fragment>`
+dont l'import a été retiré franchit `npm run lint` et `npm run build`, puis
+s'écrase à l'ouverture de l'écran. `no-unused-vars` n'aide pas non plus — son
+`varsIgnorePattern: '^[A-Z_]'` ignore tout ce qui commence par une majuscule,
+donc tous les composants. C'est arrivé une fois (l'éditeur de cycles, après
+l'extraction de `ui/CycleFields`).
+
+`react/jsx-no-undef` (via `eslint-plugin-react`, ajouté à `eslint.config.js`)
+ferme le trou. Vérifié à la sonde : la règle attrape `<Inconnu>` là où
+`no-undef` ne voyait que `inconnuJS()`.
 
 ## Commandes
 
