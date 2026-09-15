@@ -157,7 +157,7 @@ function generateICS(planData, displayName) {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Climbing Planner//FR",
+    "PRODID:-//TractoPlanner//FR",
     `X-WR-CALNAME:${escapeICS(calName)}`,
     "X-WR-TIMEZONE:Europe/Paris",
     "CALSCALE:GREGORIAN",

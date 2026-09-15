@@ -127,7 +127,7 @@ jobs:
           tag_name: latest-apk
           # Le titre porte la version : c'est la source de vérité lue par
           # l'app pour détecter qu'une mise à jour existe. Format imposé.
-          name: "Climbing Planner ${{ env.APK_VERSION_NAME }}"
+          name: "TractoPlanner ${{ env.APK_VERSION_NAME }}"
           body: "Version ${{ env.APK_VERSION_NAME }} — générée automatiquement depuis le dernier commit de master."
           files: ${{ env.APK_PATH }}
           make_latest: true

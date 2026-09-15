@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { localDateStr, getLastKnownWeight } from "../lib/helpers.js";
-import { hooperColor, hooperLabel } from "../lib/hooper.js";
+import { hooperColor, hooperLabel, hooperScaleLabel, hooperScaleColor } from "../lib/hooper.js";
 import { Z, RADIUS } from "../theme/makeStyles.js";
 import { pushLayer, lockBodyScroll } from "../lib/native.js";
 import { colors } from "../theme/palette.js";
@@ -17,11 +17,13 @@ import { PrimaryButton, SecondaryButton, RoundIconButton, SANS, MONO } from "./u
 // Les quatre dimensions du score Hooper, chacune notée de 1 à 7.
 // L'échelle et le calcul ne changent pas : total = somme des quatre (4-28),
 // interprété par hooperLabel() / hooperColor().
+// Les extrémités ne sont plus décrites ici : chaque cran a sa phrase
+// (HOOPER_SCALE, lib/hooper.js), affichée sous le curseur.
 const HCRIT = [
-  { key: "sleep",    label: "Sommeil",     low: "excellent",  high: "très mauvais" },
-  { key: "fatigue",  label: "Fatigue",     low: "en forme",   high: "épuisé" },
-  { key: "stress",   label: "Stress",      low: "serein",     high: "sous pression" },
-  { key: "soreness", label: "Courbatures", low: "aucune",     high: "très douloureux" },
+  { key: "sleep",    label: "Sommeil" },
+  { key: "fatigue",  label: "Fatigue" },
+  { key: "stress",   label: "Stress" },
+  { key: "soreness", label: "Courbatures" },
 ];
 
 const STEPS = ["Ressenti", "Poids", "Notes"];
@@ -211,7 +213,6 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onSaveWeig
                 Sensations, contexte, ce que tu veux retenir de la journée.
               </div>
               <textarea
-                autoFocus
                 value={noteText}
                 onChange={e => setNoteText(e.target.value)}
                 placeholder="Note du jour…"
@@ -263,9 +264,18 @@ function HooperSlider({ isDark, crit, value, onChange }) {
         aria-label={crit.label}
         style={{ width: "100%", accentColor: c.accent, cursor: "pointer" }}
       />
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-        <span style={{ fontSize: 11, color: c.textDim }}>1 · {crit.low}</span>
-        <span style={{ fontSize: 11, color: c.textDim }}>7 · {crit.high}</span>
+      {/* La note en toutes lettres. Les bornes 1 et 7 restent aux extrémités :
+          elles disent le sens de l'échelle (1 = le bon côté) sans quoi on
+          règle son sommeil à 6 en pensant avoir bien dormi. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
+        <span style={{ fontSize: 10, color: c.textDim, width: 8, flexShrink: 0 }}>1</span>
+        <span style={{
+          flex: 1, textAlign: "center", fontSize: 12, fontWeight: 600,
+          color: hooperScaleColor(value, isDark),
+        }}>
+          {hooperScaleLabel(crit.key, value)}
+        </span>
+        <span style={{ fontSize: 10, color: c.textDim, width: 8, textAlign: "right", flexShrink: 0 }}>7</span>
       </div>
     </div>
   );

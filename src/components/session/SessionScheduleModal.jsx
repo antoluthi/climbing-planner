@@ -43,13 +43,6 @@ export function SessionScheduleModal({
 
   const [startTime, setStartTime] = useState(defaultStartTime || defaultTimeFor(dayDate || new Date()));
   const [location, setLocation] = useState(defaultLocation || "");
-  const locationRef = useRef(null);
-
-  useEffect(() => {
-    const t = setTimeout(() => locationRef.current?.focus(), 80);
-    return () => clearTimeout(t);
-  }, []);
-
   const canConfirm = startTime.trim().length >= 4;
 
   const handleConfirm = () => {
@@ -133,7 +126,6 @@ export function SessionScheduleModal({
         <div style={{ marginTop: 20 }}>
           {label("Lieu")}
           <input
-            ref={locationRef}
             type="text"
             value={location}
             onChange={e => setLocation(e.target.value)}

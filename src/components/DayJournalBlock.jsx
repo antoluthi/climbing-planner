@@ -2,6 +2,7 @@ import { colors } from "../theme/palette.js";
 import { RADIUS } from "../theme/makeStyles.js";
 import { SANS, MONO, RoundCheck } from "./ui/Ascent.jsx";
 import { getActiveRemindersForDate, isReminderCheckedOn } from "../lib/reminders.js";
+import { hasDayLog } from "../lib/helpers.js";
 
 // ─── JOURNAL D'UNE JOURNÉE ───────────────────────────────────────────────────
 // Le journal et les rappels n'existaient qu'au présent, sur l'accueil : un
@@ -21,7 +22,7 @@ export function DayJournalBlock({ isDark, data, dateStr, onOpenLog, onToggleRemi
   const weight = data.weight?.[dateStr] ?? null;
   const note = data.notes?.[dateStr] || "";
   const meals = data.nutrition?.[dateStr] || [];
-  const filled = hooper != null || weight != null || !!note.trim() || meals.length > 0;
+  const filled = hasDayLog(data, dateStr);
 
   const reminders = getActiveRemindersForDate(data.reminders || [], dateObj);
   const checked = reminders.filter(r => isReminderCheckedOn(data.reminderState, r.id, dateStr)).length;

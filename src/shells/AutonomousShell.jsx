@@ -44,7 +44,7 @@ import { SportFilterSheet } from "../components/SportFilterSheet.jsx";
 import { CalendarView } from "../components/CalendarView.jsx";
 import { toast } from "../lib/toast.js";
 import { setRootBackHandler, setDayLogHandler } from "../lib/native.js";
-import { syncSessionNotifications, onNotificationTap, locateSession } from "../lib/notifications.js";
+import { syncNotifications, onNotificationTap, locateSession, HOOPER_HOUR_DEFAULT } from "../lib/notifications.js";
 import { writeWidgetSnapshot, drainWidgetToggles, applyPendingToggles } from "../lib/widget.js";
 import { NotificationBell } from "../components/NotificationBell.jsx";
 import { NotificationsPanel } from "../components/NotificationsPanel.jsx";
@@ -156,11 +156,17 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
   // La fenêtre glissante de sept jours ne vaut que si on la repose : on
   // replanifie à chaque changement du planning, donc aussi à chaque réveil de
   // l'app (la réconciliation modifie `data`). Hors APK, c'est un no-op.
+  // Le ressenti du jour a sa propre bascule : c'est un rappel d'habitude, pas
+  // un rappel de séance — on peut vouloir l'un sans l'autre.
   const notifyEnabled = !!data.profile?.notifySessions;
+  const hooperEnabled = !!data.profile?.notifyHooper;
+  const hooperHour = data.profile?.notifyHooperHour ?? HOOPER_HOUR_DEFAULT;
   useEffect(() => {
-    const t = setTimeout(() => { syncSessionNotifications(data, notifyEnabled); }, 1500);
+    const t = setTimeout(() => {
+      syncNotifications(data, { sessions: notifyEnabled, hooper: hooperEnabled, hooperHour });
+    }, 1500);
     return () => clearTimeout(t);
-  }, [data, notifyEnabled]);
+  }, [data, notifyEnabled, hooperEnabled, hooperHour]);
 
   // Le widget se sert de la même source, mais avec une attente bien plus
   // courte : l'écriture est bon marché, et une rafale de modifications au
@@ -192,7 +198,11 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
   useEffect(() => { dataRef.current = data; });
   useEffect(() => {
     let handle = null;
-    onNotificationTap(({ sessionId, dateISO }) => {
+    onNotificationTap(({ kind, sessionId, dateISO }) => {
+      // Le rappel de ressenti ouvre l'assistant du jour qu'il concerne — pas
+      // celui d'aujourd'hui : touchée le lendemain, c'est bien la journée
+      // restée en blanc qu'on vient remplir.
+      if (kind === "hooper") { setLogDate(dateISO || localDateStr(new Date())); return; }
       const at = locateSession(dataRef.current, { sessionId, dateISO });
       if (!at) return;
       setCurrentDate(new Date(dateISO + "T12:00:00"));
@@ -745,7 +755,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
           <div style={styles.headerLeft}>
             <ClimbingPlannerLogo isDark={isDark} size={36} />
             <div>
-              <div style={styles.appTitle}>PLANIF ESCALADE</div>
+              <div style={styles.appTitle}>TRACTOPLANNER</div>
               <div style={styles.appSub}>
                 {viewMode === "accueil" ? "Accueil" : viewMode === "week" ? "Calendrier — semaine" : viewMode === "month" ? "Calendrier — mois" : viewMode === "year" ? "Calendrier — année" : viewMode === "dash" ? "Statistiques" : viewMode === "cycles" ? "Cycles" : viewMode === "library" ? "Bibliothèque" : "Profil"} · Bloc
               </div>

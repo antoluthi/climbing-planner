@@ -54,8 +54,8 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       manifest: {
-        name: 'Climbing Planner',
-        short_name: 'Planif',
+        name: 'TractoPlanner',
+        short_name: 'TractoPlanner',
         description: 'Planificateur d\'entraînement escalade',
         // Mêmes valeurs que l'icône et que le splash natif : l'app s'ouvre
         // sur du noir, pas sur un blanc hérité de l'ancienne identité.

@@ -1,14 +1,23 @@
 import { useEffect, useState } from "react";
 import { colors } from "../theme/palette.js";
-import { notificationsPermission, requestNotificationsPermission } from "../lib/notifications.js";
+import { notificationsPermission, requestNotificationsPermission, HOOPER_HOUR_DEFAULT } from "../lib/notifications.js";
 import { nativeDiagnostics, formatDiagnostics } from "../lib/native-diag.js";
 import { writeWidgetSnapshot } from "../lib/widget.js";
 
-// ─── RAPPELS DE SÉANCE ───────────────────────────────────────────────────────
-// Une bascule, et — dessous — de quoi savoir ce qui se passe quand elle ne
-// marche pas. Un APK installé à la main n'a ni console ni rapport de plantage :
-// sans cet encart, un appel de plugin qui échoue est invisible.
-export function NotificationsSection({ isDark, styles, data, enabled, onChange }) {
+// ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
+// Deux rappels indépendants — les séances et le ressenti du jour — et, dessous,
+// de quoi savoir ce qui se passe quand ils ne marchent pas. Un APK installé à
+// la main n'a ni console ni rapport de plantage : sans cet encart, un appel de
+// plugin qui échoue est invisible.
+//
+// Les deux bascules partagent la même permission Android : la première qu'on
+// active la demande, la seconde n'a plus rien à demander.
+export function NotificationsSection({
+  isDark, styles, data,
+  enabled, onChange,
+  hooperEnabled, onHooperChange,
+  hooperHour, onHooperHourChange,
+}) {
   const c = colors(isDark);
   const [perm, setPerm] = useState(null);   // null = en cours
   const [busy, setBusy] = useState(false);
@@ -19,19 +28,20 @@ export function NotificationsSection({ isDark, styles, data, enabled, onChange }
   useEffect(() => { notificationsPermission().then(setPerm); }, []);
 
   const web = perm === "unsupported";
-  const on = !!enabled && !web;
+  const sessionsOn = !!enabled && !web;
+  const hooperOn = !!hooperEnabled && !web;
 
   // La bascule bascule **même si la permission est refusée** : le réglage est à
   // l'utilisateur, la permission est à Android. On dit ce qui manque au lieu de
   // rester inerte.
-  const toggle = async () => {
+  const toggle = async (isOn, apply) => {
     if (web || busy) return;
-    if (on) { onChange(false); setNote(null); return; }
+    if (isOn) { apply(false); setNote(null); return; }
     setBusy(true);
     try {
       const res = await requestNotificationsPermission();
       setPerm(res);
-      onChange(true);
+      apply(true);
       setNote(
         res === "granted" ? null
         : res.startsWith?.("error") ? `Android a répondu : ${res.slice(6)}`
@@ -74,6 +84,7 @@ export function NotificationsSection({ isDark, styles, data, enabled, onChange }
     <div style={styles.profileSection}>
       <div style={styles.profileSectionTitle}>Notifications</div>
 
+      {/* ── Rappels de séance ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div style={{ maxWidth: 250 }}>
           <div style={{ fontSize: 12, color: c.text, fontWeight: 500 }}>Rappels de séance</div>
@@ -81,36 +92,60 @@ export function NotificationsSection({ isDark, styles, data, enabled, onChange }
             Une heure avant le départ, puis — la séance passée — une invitation à
             noter ton ressenti. C’est la même notification qui change.
           </div>
-          {web && (
-            <div style={{ fontSize: 11, color: c.textDim, marginTop: 5, fontStyle: "italic" }}>
-              Disponible dans l’application Android.
-            </div>
-          )}
-          {note && (
-            <div style={{ fontSize: 11, color: c.warn, marginTop: 5, lineHeight: 1.4 }}>{note}</div>
-          )}
         </div>
-
-        <button
-          onClick={toggle}
-          disabled={web || busy}
-          aria-pressed={on}
-          aria-label="Rappels de séance"
-          style={{
-            flexShrink: 0, width: 44, height: 24, borderRadius: 12, border: "none",
-            background: on ? c.accent : c.border,
-            position: "relative", cursor: web ? "default" : "pointer",
-            transition: "background 0.25s", opacity: web ? 0.4 : 1, padding: 0,
-          }}
-        >
-          <div style={{
-            position: "absolute", top: 3, left: on ? 23 : 3,
-            width: 18, height: 18, borderRadius: "50%",
-            background: c.onColor, transition: "left 0.25s",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
-          }} />
-        </button>
+        <Switch isDark={isDark} on={sessionsOn} disabled={web || busy}
+                label="Rappels de séance"
+                onClick={() => toggle(sessionsOn, onChange)} />
       </div>
+
+      {/* ── Ressenti du jour ──
+          Persistante à dessein : un Hooper oublié ne se rattrape pas, et une
+          notification balayable se balaie sans y penser. */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
+        marginTop: 16, borderTop: `1px solid ${c.borderSubtle}`, paddingTop: 14,
+      }}>
+        <div style={{ maxWidth: 250 }}>
+          <div style={{ fontSize: 12, color: c.text, fontWeight: 500 }}>Ressenti du jour</div>
+          <div style={{ fontSize: 11, color: c.textMuted, marginTop: 3, lineHeight: 1.4 }}>
+            Une notification qui <strong>reste dans le tiroir</strong> tant que le
+            Hooper de la journée n’est pas rempli, et disparaît dès qu’il l’est.
+          </div>
+        </div>
+        <Switch isDark={isDark} on={hooperOn} disabled={web || busy}
+                label="Ressenti du jour"
+                onClick={() => toggle(hooperOn, onHooperChange)} />
+      </div>
+
+      {hooperOn && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, color: c.textMuted }}>À partir de</span>
+          <select
+            value={hooperHour ?? HOOPER_HOUR_DEFAULT}
+            onChange={e => onHooperHourChange?.(Number(e.target.value))}
+            style={{
+              background: c.inputBg, border: `1px solid ${c.border}`, color: c.text,
+              padding: "4px 8px", borderRadius: 4, fontSize: 11, fontFamily: "inherit",
+            }}
+          >
+            {Array.from({ length: 24 }, (_, h) => (
+              <option key={h} value={h}>{`${String(h).padStart(2, "0")}h`}</option>
+            ))}
+          </select>
+          <span style={{ fontSize: 10, color: c.textDim, fontStyle: "italic" }}>
+            l’heure passée, le rappel arrive tout de suite
+          </span>
+        </div>
+      )}
+
+      {web && (
+        <div style={{ fontSize: 11, color: c.textDim, marginTop: 10, fontStyle: "italic" }}>
+          Disponible dans l’application Android.
+        </div>
+      )}
+      {note && (
+        <div style={{ fontSize: 11, color: c.warn, marginTop: 8, lineHeight: 1.4 }}>{note}</div>
+      )}
 
       {/* ── Diagnostic ──
           Le seul endroit d'où l'on peut voir, depuis le téléphone, quel appel
@@ -137,5 +172,32 @@ export function NotificationsSection({ isDark, styles, data, enabled, onChange }
         )}
       </div>
     </div>
+  );
+}
+
+// Bascule ronde — la même dans les deux rangées, pour qu'elles se lisent comme
+// un seul réglage à deux lignes.
+function Switch({ isDark, on, disabled, label, onClick }) {
+  const c = colors(isDark);
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={on}
+      aria-label={label}
+      style={{
+        flexShrink: 0, width: 44, height: 24, borderRadius: 12, border: "none",
+        background: on ? c.accent : c.border,
+        position: "relative", cursor: disabled ? "default" : "pointer",
+        transition: "background 0.25s", opacity: disabled ? 0.4 : 1, padding: 0,
+      }}
+    >
+      <div style={{
+        position: "absolute", top: 3, left: on ? 23 : 3,
+        width: 18, height: 18, borderRadius: "50%",
+        background: c.onColor, transition: "left 0.25s",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+      }} />
+    </button>
   );
 }

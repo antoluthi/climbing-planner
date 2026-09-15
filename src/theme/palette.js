@@ -210,8 +210,10 @@ export const DATA = {
   // Types de blocs — affichés en petit filet coloré. Recopiés dans les séances
   // créées, donc fixes eux aussi.
   // Rampes de la heatmap d'activité : 5 paliers, du vide à l'intensité max.
-  // « charge » et « rpe » montent vers l'accent ; « hooper » et « reminders »
-  // sont divergentes (bien → mal).
+  // « charge » et « rpe » montent vers l'accent ; « hooper » est divergente
+  // (bien → mal). « reminders » compte les rappels **manqués** : son premier
+  // palier vaut « aucun manqué » et doit donc être franchement positif — pas le
+  // gris d'une case vide, qui lui veut dire « aucun rappel ce jour-là ».
   heatmap: {
     charge:    { light: ["#f0f0f1", "#e6d8cf", "#d4b09a", "#c07a52", "#b04a24"],
                  dark:  ["#1c1c1c", "#33241d", "#5c3d2c", "#9a6143", "#e8926a"] },
@@ -219,8 +221,8 @@ export const DATA = {
                  dark:  ["#1c1c1c", "#2a2418", "#4d422a", "#8a7442", "#c9a95e"] },
     hooper:    { light: ["#f0f0f1", "#cfe0d4", "#4d7a5b", "#8a6a35", "#a44a4a"],
                  dark:  ["#1c1c1c", "#24332a", "#8fb89a", "#c9a95e", "#c26b74"] },
-    reminders: { light: ["#f0f0f1", "#cfe0d4", "#4d7a5b", "#8a6a35", "#a44a4a"],
-                 dark:  ["#1c1c1c", "#24332a", "#8fb89a", "#c9a95e", "#c26b74"] },
+    reminders: { light: ["#4d7a5b", "#7a8446", "#8a6a35", "#9a5a3c", "#a44a4a"],
+                 dark:  ["#8fb89a", "#b0b87e", "#c9a95e", "#c98c68", "#c26b74"] },
     // Qualité de séance (1-5 étoiles). Rampe **séquentielle** : une seule
     // teinte, du pâle au soutenu — plus c'est dense, meilleure était la séance.
     // Luminosité strictement monotone (0.918 → 0.487 en clair, 0.299 → 0.787 en

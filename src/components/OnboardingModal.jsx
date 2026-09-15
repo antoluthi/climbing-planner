@@ -85,7 +85,7 @@ export function OnboardingModal({ onComplete }) {
   }, [step, isLast]);
 
   return (
-    <Modal onClose={onComplete} maxWidth={460} dismissOnBackdrop={false} ariaLabel="Bienvenue dans Climbing Planner">
+    <Modal onClose={onComplete} maxWidth={460} dismissOnBackdrop={false} ariaLabel="Bienvenue dans TractoPlanner">
       {/* Header : progression + passer */}
       <div style={{
         padding: "16px 22px 12px",

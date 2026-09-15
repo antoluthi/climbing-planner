@@ -5,7 +5,6 @@ import { getSessionCharge } from "../lib/charge.js";
 import {
   getActiveRemindersForDate,
   isReminderCheckedOn,
-  countMissedRemindersOn,
 } from "../lib/reminders.js";
 import { colors, DATA } from "../theme/palette.js";
 import { Chip } from "./ui/Ascent.jsx";
@@ -68,6 +67,10 @@ export function ActivityHeatmap({ data }) {
 
   const reminders = data.reminders || [];
   const reminderState = data.reminderState || {};
+  // Comparaison de chaînes plutôt que d'instants : un fuseau où minuit n'existe
+  // pas (changement d'heure) décalerait `getTime()` d'une heure et « aujourd'hui »
+  // ne serait aujourd'hui nulle part.
+  const todayStr = localDateStr(today);
 
   const weeks = Array.from({ length: WEEKS }, (_, w) => {
     return Array.from({ length: 7 }, (_, d) => {
@@ -85,6 +88,7 @@ export function ActivityHeatmap({ data }) {
       return {
         date, dateStr,
         isFuture: date > today,
+        isToday: dateStr === todayStr,
         remindersActive, remindersMissed, remindersDetail,
         ...entry,
       };
@@ -140,13 +144,18 @@ export function ActivityHeatmap({ data }) {
       return colors(isDark).danger;
     }
     if (metric === "reminders") {
-      // Aucun rappel actif ce jour-là → vide (rien à montrer)
-      if (day.remindersActive === 0) return empty;
-      const m = day.remindersMissed;
-      if (m === 0) return colors(isDark).success;  // tout coché → vert
-      if (m === 1) return colors(isDark).warn;  // 1 manqué → ambre
-      if (m === 2) return colors(isDark).textMuted;  // 2 manqués → orange
-      return colors(isDark).danger;               // 3+ → corail
+      // Une seule grandeur ici : le **nombre de rappels manqués**. Zéro manqué
+      // se lit positivement, et la couleur vire au rouge à mesure qu'il en
+      // reste. Rien d'autre n'entre dans le calcul — ni combien de rappels
+      // existaient, ni un taux : trois rappels sur quatre cochés, c'est un
+      // manqué, comme un seul rappel non coché.
+      if (day.remindersActive === 0) return empty;   // rien à rater ce jour-là
+      // La journée en cours n'a encore rien manqué : ce qui reste à cocher,
+      // c'est du travail en attente, pas un échec. Elle ne vire au vert que
+      // quand tout est fait.
+      if (day.isToday && day.remindersMissed > 0) return empty;
+      const lvls = isDark ? DATA.heatmap.reminders.dark : DATA.heatmap.reminders.light;
+      return lvls[Math.min(day.remindersMissed, lvls.length - 1)];
     }
     return empty;
   };
@@ -171,6 +180,10 @@ export function ActivityHeatmap({ data }) {
 
 
   const muted = colors(isDark).textMuted;
+
+  // Les bornes de la légende disent ce que la rampe mesure. « Moins / Plus » ne
+  // veut rien dire quand l'échelle compte des rappels manqués.
+  const legendEnds = metric === "reminders" ? ["Aucun manqué", "4 et +"] : ["Moins", "Plus"];
 
   const visibleWeeks = weeks.slice(-maxWeeks);
   // Recompute month labels for the visible slice
@@ -254,11 +267,11 @@ export function ActivityHeatmap({ data }) {
 
       {/* Legend */}
       <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 8, justifyContent: "flex-start", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 9, color: muted, marginRight: 2 }}>Moins</span>
+        <span style={{ fontSize: 9, color: muted, marginRight: 2 }}>{legendEnds[0]}</span>
         {legendColors[metric].map((c, i) => (
           <div key={i} style={{ width: CELL, height: CELL, borderRadius: 2, background: c, flexShrink: 0 }} />
         ))}
-        <span style={{ fontSize: 9, color: muted, marginLeft: 2 }}>Plus</span>
+        <span style={{ fontSize: 9, color: muted, marginLeft: 2 }}>{legendEnds[1]}</span>
       </div>
 
       {/* Tooltip (portal-style fixed) */}
@@ -305,8 +318,13 @@ export function ActivityHeatmap({ data }) {
               ) : (
                 <>
                   <div>
-                    {tooltip.day.remindersActive} rappel{tooltip.day.remindersActive > 1 ? "s" : ""} actif{tooltip.day.remindersActive > 1 ? "s" : ""}
-                    {tooltip.day.remindersMissed > 0 && <> · {tooltip.day.remindersMissed} manqué{tooltip.day.remindersMissed > 1 ? "s" : ""}</>}
+                    {tooltip.day.remindersMissed === 0
+                      ? "Aucun rappel manqué"
+                      : `${tooltip.day.remindersMissed} rappel${tooltip.day.remindersMissed > 1 ? "s" : ""} manqué${tooltip.day.remindersMissed > 1 ? "s" : ""}`}
+                    <span style={{ color: muted }}>
+                      {" "}sur {tooltip.day.remindersActive}
+                      {tooltip.day.isToday && tooltip.day.remindersMissed > 0 ? " · journée en cours" : ""}
+                    </span>
                   </div>
                   <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
                     {tooltip.day.remindersDetail.map(r => (

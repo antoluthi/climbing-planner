@@ -409,6 +409,10 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
         data={data}
         enabled={profile.notifySessions}
         onChange={v => onUpdateProfile({ ...profile, notifySessions: v })}
+        hooperEnabled={profile.notifyHooper}
+        onHooperChange={v => onUpdateProfile({ ...profile, notifyHooper: v })}
+        hooperHour={profile.notifyHooperHour}
+        onHooperHourChange={h => onUpdateProfile({ ...profile, notifyHooperHour: h })}
       />
 
       {/* ── Confidentialité ── */}

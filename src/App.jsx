@@ -98,7 +98,7 @@ export default function App() {
             fontFamily: "'Newsreader', Georgia, serif",
             fontSize: 22, fontWeight: 500, fontStyle: "italic",
             color: loginBrown, letterSpacing: "0.08em",
-          }}>Climbing Planner</div>
+          }}>TractoPlanner</div>
 
           <div style={{
             background: colors(isDark).card,
