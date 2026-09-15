@@ -5,7 +5,7 @@ import { getMondayOf, addDays, localDateStr } from "../lib/helpers.js";
 import {
   blockWeekTargets, blockWeekMonday, blockLastDay, overlappingBlockIds,
 } from "../lib/run-goals.js";
-import { WeekStepper, ColorDot, Chevron } from "./ui/CycleFields.jsx";
+import { WeekStepper, ColorDot, Chevron, NumberField } from "./ui/CycleFields.jsx";
 
 // ─── BLOCS DE COURSE ─────────────────────────────────────────────────────────
 // Une piste à part, sous les mésocycles. Un plan de course se raisonne en
@@ -21,12 +21,15 @@ import { WeekStepper, ColorDot, Chevron } from "./ui/CycleFields.jsx";
 const fmt = (d) => d ? d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : "";
 
 export function RunBlocksSection({
-  blocks, isDark, canEdit,
+  blocks, isDark, canEdit, locked, onSetLocked,
   // La suppression passe par `onAskDelete` : c'est CyclesView qui porte la
   // confirmation, pour tous les types de bloc à la fois.
   onAdd, onUpdate, onSetOverride, onAskDelete,
 }) {
   const c = colors(isDark);
+  // Deux plans, deux verrous. Celui-ci ne dit rien de l'état des mésocycles :
+  // on peut avoir figé sa grimpe et retoucher sa course, ou l'inverse.
+  const editing = canEdit !== false && !locked;
   const chevauchent = overlappingBlockIds(blocks);
   // Affichés par date, comme ils seront lus : l'ordre de création n'a pas de
   // sens sur une piste où chaque bloc porte sa propre date.
@@ -57,7 +60,7 @@ export function RunBlocksSection({
             key={b.id}
             block={b}
             isDark={isDark}
-            canEdit={canEdit}
+            canEdit={editing}
             overlaps={chevauchent.has(b.id)}
             onUpdate={onUpdate}
             onSetOverride={onSetOverride}
@@ -66,7 +69,7 @@ export function RunBlocksSection({
         ))}
       </div>
 
-      {canEdit && (
+      {editing && (
         <button
           type="button"
           onClick={onAdd}
@@ -76,6 +79,26 @@ export function RunBlocksSection({
             borderRadius: 999, padding: "9px 16px", cursor: "pointer", fontFamily: "inherit",
           }}
         >＋ Bloc de course</button>
+      )}
+
+      {/* Le verrou de CETTE piste. Tant qu'on est dedans, le sélecteur
+          Entraînement / Course disparaît (cf. CyclesView) : on ne quitte pas un
+          plan en cours de modification pour aller en modifier un autre. */}
+      {canEdit !== false && (
+        <button
+          type="button"
+          onClick={() => onSetLocked(!locked)}
+          style={{
+            display: "block", width: "100%", marginTop: 18, padding: "13px 0",
+            borderRadius: 999, fontFamily: "inherit", fontSize: 13, fontWeight: 600,
+            cursor: "pointer",
+            border: `1px solid ${editing ? c.accentBorder : c.border}`,
+            background: editing ? c.accentFaint : "none",
+            color: editing ? c.accent : c.textCard,
+          }}
+        >
+          {editing ? "✓ Enregistrer le plan de course" : "✎ Modifier le plan de course"}
+        </button>
       )}
     </div>
   );
@@ -88,8 +111,11 @@ function RunBlockCard({ block, isDark, canEdit, overlaps, onUpdate, onSetOverrid
   const last = blockLastDay(block);
   const total = Math.round(targets.reduce((a, t) => a + t.km, 0));
 
+  // Verrouillé, un champ ne doit pas ressembler à un champ : sans ça, on tape
+  // dedans et il ne se passe rien, sans rien pour dire pourquoi.
   const fieldBase = {
-    background: c.inputBg, border: "none", borderRadius: RADIUS.control,
+    background: canEdit ? c.inputBg : "transparent",
+    border: "none", borderRadius: RADIUS.control,
     color: c.text, fontFamily: "inherit", padding: "8px 10px", fontSize: 13,
     minWidth: 0,
   };
@@ -101,8 +127,15 @@ function RunBlockCard({ block, isDark, canEdit, overlaps, onUpdate, onSetOverrid
       borderRadius: 16, padding: "10px 12px 12px",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <ColorDot color={block.color || c.accent} c={c}
-                  onChange={v => onUpdate(block.id, { color: v })} />
+        {canEdit ? (
+          <ColorDot color={block.color || c.accent} c={c}
+                    onChange={v => onUpdate(block.id, { color: v })} />
+        ) : (
+          <div style={{
+            width: 20, height: 20, borderRadius: 999, flexShrink: 0,
+            background: block.color || c.accent, boxShadow: `0 0 0 1px ${c.border}`,
+          }} />
+        )}
         <input
           style={{ ...fieldBase, flex: 1, fontWeight: 600, fontSize: 14 }}
           value={block.label || ""}
@@ -139,30 +172,39 @@ function RunBlockCard({ block, isDark, canEdit, overlaps, onUpdate, onSetOverrid
           title="Première semaine du bloc"
           style={{ ...fieldBase, fontSize: 12, colorScheme: isDark ? "dark" : "light", padding: "7px 9px" }}
         />
-        <WeekStepper
-          isDark={isDark}
-          value={block.durationWeeks}
-          onChange={n => canEdit && onUpdate(block.id, { durationWeeks: n })}
-          max={24}
-        />
+        {canEdit ? (
+          <WeekStepper
+            isDark={isDark}
+            value={block.durationWeeks}
+            onChange={n => onUpdate(block.id, { durationWeeks: n })}
+            max={24}
+          />
+        ) : (
+          // Verrouillé, les − / + n'ont plus rien à faire là : on lit une durée.
+          <span style={{ fontSize: 12, fontWeight: 600, color: c.text }}>
+            {Math.max(1, Math.round(Number(block.durationWeeks) || 1))} sem.
+          </span>
+        )}
       </div>
 
       {/* Volume de départ · progression */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: c.textMuted }}>
           Départ
-          <input
-            type="number" min="0" step="1" style={num} disabled={!canEdit}
-            value={block.baseKm ?? ""}
-            onChange={e => onUpdate(block.id, { baseKm: e.target.value === "" ? 0 : Number(e.target.value) })}
+          <NumberField
+            style={num} disabled={!canEdit}
+            value={block.baseKm}
+            onCommit={v => onUpdate(block.id, { baseKm: v })}
+            aria-label="Volume de départ"
           /> km
         </label>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: c.textMuted }}>
           Progression
-          <input
-            type="number" step="1" style={num} disabled={!canEdit}
-            value={block.increasePct ?? ""}
-            onChange={e => onUpdate(block.id, { increasePct: e.target.value === "" ? 0 : Number(e.target.value) })}
+          <NumberField
+            style={num} disabled={!canEdit}
+            value={block.increasePct}
+            onCommit={v => onUpdate(block.id, { increasePct: v })}
+            aria-label="Progression par semaine"
           /> %/sem.
         </label>
       </div>
@@ -212,15 +254,15 @@ function RunBlockCard({ block, isDark, canEdit, overlaps, onUpdate, onSetOverrid
                 <span style={{ fontSize: 11, color: c.textMuted, flex: 1, minWidth: 0 }}>
                   {monday ? `${fmt(monday)} – ${fmt(addDays(monday, 6))}` : "sans date"}
                 </span>
-                <input
-                  type="number" min="0" step="1" style={{
+                <NumberField
+                  style={{
                     ...num, width: 62, padding: "6px 8px",
                     color: t.overridden ? c.accent : c.text,
                     fontWeight: t.overridden ? 600 : 400,
                   }}
                   disabled={!canEdit}
                   value={t.km}
-                  onChange={e => onSetOverride(block.id, t.week, e.target.value)}
+                  onCommit={v => onSetOverride(block.id, t.week, v)}
                   aria-label={`Objectif de la semaine ${t.week + 1}`}
                 />
                 <span style={{ fontSize: 11, color: c.textMuted }}>km</span>

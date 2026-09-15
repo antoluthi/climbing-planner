@@ -58,6 +58,8 @@ src/
 │
 └── components/
     ├── ui/SwipePager.jsx          — carrousel de pages (balayage au doigt entre onglets)
+    ├── ui/CycleFields.jsx         — champs partagés des deux éditeurs de cycles
+    │                                (WeekStepper, AutoTextarea, ColorDot, NumberField…)
     ├── Logo.jsx                   — ClimbingPlannerLogo (la marque « Charge », en-tête bureau)
     ├── SyncButtons.jsx            — boutons export/import/sync
     ├── AuthPanel.jsx              — panneau auth (password + magic link)
@@ -138,6 +140,7 @@ src/
   moveSuggestions: [], // [{ id, sessionId, fromDate, targetDate, targetTime, note, athleteId }]
   runBlocks: [],       // blocs de course : [{ id, label, color, startDate, durationWeeks,
                        //                     baseKm, increasePct, overrides: { <index>: km } }]
+  runLocked: true,     // verrou de la piste course — indépendant de cyclesLocked
 }
 ```
 
@@ -874,7 +877,28 @@ mésocycles, activée par une bascule dans **Compte > Objectif de course**
   montre que la grimpe ; le bouton « + Mésocycle » et le verrou de planification
   disparaissent sur la piste course, où ils n'ont pas de sens. Le sélecteur
   existe **aussi en mode verrouillé** : le plan de course se consulte sans
-  déverrouiller les mésocycles.
+  déverrouiller les mésocycles. Il est rendu **sous le titre de la page** dans
+  les deux modes — d'où la prop `tracks` de `CyclesTimeline`, qui porte son
+  propre `PageTitle`.
+- **Deux plans, deux verrous** (`cyclesLocked` · `runLocked`, ce dernier fermé
+  par défaut). La course a son propre « ✎ Modifier le plan de course », dans
+  `RunBlocksSection` : figer sa grimpe ne fige pas sa course, et enregistrer
+  l'une ne dit rien de l'autre.
+  - Tant qu'une piste est en modification, **c'est elle qui s'affiche** et le
+    sélecteur est **éteint** — on ne quitte pas un plan à moitié réglé pour
+    aller en toucher un autre. Éteint et non masqué : un sélecteur qui
+    disparaît laisserait croire que l'autre plan n'existe plus, et l'app
+    s'ouvre justement sur l'éditeur tant qu'on n'a jamais enregistré. Une
+    ligne sous le sélecteur dit comment en sortir, et le bouton
+    « ✓ Enregistrer la planification » est **toujours** rendu (même sans
+    mésocycle) : c'est la sortie de l'éditeur, donc le chemin vers l'autre
+    piste.
+  - La piste affichée se **déduit** de l'état des deux verrous
+    (`editingTraining ? … : editingRun ? … : choix`) plutôt que d'être recopiée
+    dans un état par un effet : rien à resynchroniser.
+  - Verrouillée, la carte d'un bloc **cesse de ressembler à un formulaire**
+    (fonds de champ transparents, pastille de couleur inerte, durée en toutes
+    lettres au lieu des − / +) : sinon on tape dedans et il ne se passe rien.
 - **Un bloc** = une date de début, une durée en semaines, un volume de départ et
   une progression en pour-cent. `blockWeekTargets()` en déduit l'objectif de
   chaque semaine : `base × (1 + p)^i`.
@@ -884,6 +908,17 @@ mésocycles, activée par une bascule dans **Compte > Objectif de course**
   faire redescendre tout le plan avec elle. Le `↺` de chaque ligne rend la
   semaine à la courbe ; sans lui, un forçage ne s'annulerait qu'en retapant la
   valeur calculée.
+- **Les champs de kilomètres se vident** (`NumberField`, `ui/CycleFields.jsx`).
+  Un `<input type="number">` contrôlé sur un nombre a deux défauts qu'on sent
+  au pouce : effacer produit `""`, que le parent convertit en 0 — lequel se
+  réaffiche aussitôt et **ne s'efface plus** ; et les frappes intermédiaires
+  (« 4. », « 1, », le « 0 » en route vers « 05 ») sont réécrites sous les
+  doigts. D'où un brouillon en `type="text"` + `inputMode="decimal"` qui ne
+  remonte sa valeur **qu'à la sortie du champ**, virgule décimale comprise.
+  `type="number"` reprendrait le problème par l'autre bout : il rapporte `""`
+  pour toute saisie qu'il juge invalide. Vider veut dire ce que le parent en
+  fait : rendre la semaine à la courbe, ou « pas de valeur » pour un réglage de
+  bloc.
 - **Pas de chaînage**, contrairement aux mésocycles : chaque bloc porte sa
   propre date. Le chaînage colle les blocs bout à bout, ce qui rend impossible
   la semaine de coupure voulue entre deux blocs. `goalForWeek()` parcourt les

@@ -654,6 +654,12 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
             onDeleteReminder={deleteReminder}
             runBlocks={data.runBlocks || []}
             kmGoal={!!data.profile?.kmGoal}
+            // Verrou propre à la course : fermé par défaut, comme les
+            // mésocycles — un plan se consulte plus souvent qu'il ne se
+            // retouche. Un plan d'avant ce réglage n'a pas la clé, d'où
+            // le `!== false`.
+            runLocked={data.runLocked !== false}
+            onSetRunLocked={val => setData(d => ({ ...d, runLocked: val }))}
             onAddRunBlock={addRunBlock}
             onUpdateRunBlock={updateRunBlock}
             onDeleteRunBlock={deleteRunBlock}

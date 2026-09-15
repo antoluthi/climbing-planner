@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { colors } from "../../theme/palette.js";
 import { weeksOf } from "../../lib/cycles.js";
 
@@ -102,5 +102,51 @@ export function Chevron({ open }) {
       <path d="M3 1.5 L7 5 L3 8.5" fill="none" stroke="currentColor" strokeWidth="1.6"
             strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+// ── Champ numérique qui ne se bat pas avec vous ──────────────────────────────
+// Un `<input type="number">` contrôlé sur une valeur numérique a deux défauts
+// qu'on sent tout de suite au pouce :
+//
+//  · **vider le champ est impossible.** L'effacement produit `""`, que le
+//    parent convertit en 0 — lequel se réaffiche aussitôt et ne s'efface plus.
+//  · **les frappes intermédiaires sont réécrites.** « 4. », « 1, » ou « 0 » en
+//    route vers « 05 » sont des états parfaitement normaux d'une saisie, que le
+//    formatage renvoyait à autre chose sous les doigts.
+//
+// D'où : le texte reste tel quel pendant la saisie (le brouillon), et on ne
+// remonte une valeur qu'à la sortie du champ. Vider devient donc permis, et
+// c'est au parent de décider ce que « vide » veut dire — ici, revenir à la
+// progression pour une semaine, ou « pas de valeur » pour un réglage de bloc.
+//
+// `type="text"` plutôt que `number` : un champ numérique rapporte `""` pour
+// toute saisie qu'il juge invalide, ce qui reprendrait le problème par l'autre
+// bout. `inputMode="decimal"` donne quand même le pavé numérique sur mobile.
+export function NumberField({ value, onCommit, style, ...rest }) {
+  const [draft, setDraft] = useState(null);   // null = aucune saisie en cours
+  const shown = draft !== null ? draft : (value == null ? "" : String(value));
+
+  const commit = () => {
+    if (draft === null) return;
+    const t = draft.trim().replace(",", ".");   // la virgule décimale française
+    setDraft(null);
+    if (t === "") return onCommit(null);
+    const n = Number(t);
+    if (Number.isFinite(n)) onCommit(n);
+    // Saisie illisible : on ne remonte rien, l'affichage reprend la valeur.
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={shown}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      style={style}
+      {...rest}
+    />
   );
 }
