@@ -138,20 +138,25 @@ export function SportDot({ disciplineId, size = 5, color }) {
 }
 
 // ── Sélecteur segmenté (pill) ────────────────────────────────────────────────
-export function Segmented({ isDark, options, value, onChange, style }) {
+export function Segmented({ isDark, options, value, onChange, style, disabled = false, title }) {
   const c = colors(isDark);
   return (
-    <div style={{
-      display: "flex", background: c.control, borderRadius: RADIUS.pill, padding: 3, gap: 2, ...style,
+    <div title={title} style={{
+      display: "flex", background: c.control, borderRadius: RADIUS.pill, padding: 3, gap: 2,
+      // Éteint plutôt que masqué : un sélecteur qui disparaît laisse croire que
+      // l'autre écran n'existe plus.
+      opacity: disabled ? 0.55 : 1, ...style,
     }}>
       {options.map(o => {
         const active = o.value === value;
         return (
           <button
             key={o.value}
+            disabled={disabled}
             onClick={() => onChange(o.value)}
             style={{
-              flex: 1, padding: "8px 0", borderRadius: RADIUS.pill, border: "none", cursor: "pointer",
+              flex: 1, padding: "8px 0", borderRadius: RADIUS.pill, border: "none",
+              cursor: disabled ? "default" : "pointer",
               fontSize: 13, fontWeight: 700, fontFamily: SANS,
               background: active ? c.accent : "transparent",
               color: active ? c.textOnAccent : c.textMuted,

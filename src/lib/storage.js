@@ -25,6 +25,8 @@ const DEFAULT_DATA = {
   sleep: [], hooper: [], notes: {}, creatine: {}, weight: {}, nutrition: {},
   profile: {}, customCycles: [], cyclesLocked: false, moveSuggestions: [],
   quickSessions: [], reminders: [], reminderState: {}, runBlocks: [],
+  // Deux plans, deux verrous : figer sa grimpe ne fige pas sa course.
+  runLocked: true,
   schemaVersion: 3,
 };
 
