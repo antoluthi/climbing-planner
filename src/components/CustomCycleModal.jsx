@@ -54,7 +54,7 @@ export function CustomCycleModal({ initial, onSave, onClose }) {
       <ModalHeader title={initial ? "Modifier le cycle" : "Nouveau cycle"} onClose={requestClose} />
       <ModalBody>
         <Field label="Nom du cycle">
-          <TextInput placeholder="Ex : Créatine, Décharge…" value={name} onChange={e => setName(e.target.value)} autoFocus />
+          <TextInput placeholder="Ex : Créatine, Décharge…" value={name} onChange={e => setName(e.target.value)} />
         </Field>
 
         <Field label="Couleur">

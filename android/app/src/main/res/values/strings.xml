@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Climbing Planner</string>
-    <string name="title_activity_main">Climbing Planner</string>
+    <string name="app_name">TractoPlanner</string>
+    <string name="title_activity_main">TractoPlanner</string>
     <string name="package_name">com.climbingplanner.app</string>
     <string name="custom_url_scheme">com.climbingplanner.app</string>
 </resources>

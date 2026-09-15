@@ -222,7 +222,7 @@ function buildSingleICS(uid, session, date, endDate) {
     [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//Climbing Planner//FR",
+      "PRODID:-//TractoPlanner//FR",
       "CALSCALE:GREGORIAN",
       vevent,
       "END:VCALENDAR",
@@ -234,7 +234,7 @@ function buildFullICS(events, displayName) {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Climbing Planner//FR",
+    "PRODID:-//TractoPlanner//FR",
     `X-WR-CALNAME:${escapeICS(displayName)}`,
     "X-WR-TIMEZONE:Europe/Paris",
     "CALSCALE:GREGORIAN",

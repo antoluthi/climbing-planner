@@ -79,7 +79,6 @@ export function SessionLibraryModal({ sessions = [], onPick, onClose }) {
       {/* ── Recherche ── */}
       <div style={{ padding: "0 18px 10px", flexShrink: 0 }}>
         <input
-          autoFocus
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Rechercher une séance…"

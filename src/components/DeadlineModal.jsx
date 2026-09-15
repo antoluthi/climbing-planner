@@ -56,7 +56,7 @@ export function DeadlineModal({ initial, onSave, onClose }) {
       <ModalHeader title={initial ? "Modifier l'échéance" : "Nouvelle échéance"} onClose={requestClose} />
       <ModalBody>
         <Field label="Nom de l'échéance">
-          <TextInput placeholder="Ex : Coupe régionale" value={label} onChange={e => setLabel(e.target.value)} autoFocus />
+          <TextInput placeholder="Ex : Coupe régionale" value={label} onChange={e => setLabel(e.target.value)} />
         </Field>
 
         <div style={{ display: "flex", gap: 10 }}>

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
 import { Modal } from "../ui/Modal.jsx";
 import { colors, DATA } from "../../theme/palette.js";
@@ -62,7 +62,6 @@ export function SessionFormModal({
 }) {
   const { isDark } = useThemeCtx();
   const c = colors(isDark);
-  const nameRef = useRef(null);
 
 
   // ── Identité ──
@@ -115,11 +114,6 @@ export function SessionFormModal({
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => nameRef.current?.focus(), 60);
-    return () => clearTimeout(t);
-  }, []);
 
   const kind = RATE_KIND[discipline] || null;   // "pace" | "speed" | null
   const isClimbing = discipline === "climbing";
@@ -290,7 +284,6 @@ export function SessionFormModal({
           borderBottom: `0.5px solid ${c.border}`, flexShrink: 0, fontFamily: SANS,
         }}>
           <input
-            ref={nameRef}
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="Nom de la séance"

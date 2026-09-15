@@ -77,6 +77,79 @@ export function planSessionNotifications(data, now = new Date(), days = HORIZON_
   return out.sort((a, b) => a.at - b.at).slice(0, MAX);
 }
 
+// ─── RESSENTI DU JOUR ────────────────────────────────────────────────────────
+// Le Hooper est la seule donnée qui se perd pour de bon si on l'oublie : il se
+// note le matin, et se reconstituer trois jours plus tard n'a aucun sens. D'où
+// une notification **persistante** (`ongoing`, non balayable) qui reste dans le
+// tiroir tant que les quatre curseurs ne sont pas réglés, et disparaît dès
+// qu'ils le sont.
+//
+// Trois jours d'avance, pas sept comme les séances. Une notification non
+// balayable ne se retire qu'en ouvrant l'app : si l'app dort une semaine, sept
+// rappels indéboulonnables s'empileraient. Trois borne la casse tout en
+// couvrant un week-end sans ouvrir l'app.
+
+export const HOOPER_HOUR_DEFAULT = 9;
+const HOOPER_DAYS = 3;
+const SOON_MS = 10000;   // « l'heure est déjà passée » : dû maintenant, pas demain
+const SWEEP_BACK_DAYS = 14;  // jusqu'où on va chercher les rappels périmés à retirer
+
+export function hooperNotificationId(dateISO) {
+  return notificationId("hooper:" + dateISO);
+}
+
+// Les quatre curseurs réglés. Une entrée partielle (HooperSection en écrit)
+// n'est pas un ressenti : le rappel reste.
+export function isHooperFilled(data, dateISO) {
+  const h = (data?.hooper || []).find(e => e.date === dateISO);
+  if (!h) return false;
+  return [h.sleep, h.fatigue, h.stress, h.soreness].every(v => v != null);
+}
+
+// Les jours de la fenêtre dont le ressenti manque encore — l'ordre du jour de
+// la notification persistante.
+export function planHooperNotifications(data, now = new Date(), hour = HOOPER_HOUR_DEFAULT, days = HOOPER_DAYS) {
+  const out = [];
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const h = Number.isFinite(Number(hour)) ? Number(hour) : HOOPER_HOUR_DEFAULT;
+
+  for (let i = 0; i < days; i++) {
+    const date = addDays(today, i);
+    const dateISO = localDateStr(date);
+    if (isHooperFilled(data, dateISO)) continue;
+
+    const at = new Date(date);
+    at.setHours(h, 0, 0, 0);
+
+    out.push({
+      id: hooperNotificationId(dateISO),
+      // L'heure du jour peut être passée depuis longtemps : le rappel est alors
+      // dû maintenant. Le repousser à demain reviendrait à sauter la journée.
+      at: at > now ? at : new Date(now.getTime() + SOON_MS),
+      extra: { kind: "hooper", dateISO },
+      title: "Ressenti du jour",
+      body: "Sommeil, fatigue, stress, courbatures — une minute, et la journée est notée.",
+      ongoing: true,     // non balayable : elle part quand le ressenti est noté
+      autoCancel: false, // la toucher sans rien remplir ne la fait pas disparaître
+    });
+  }
+  return out;
+}
+
+// Les identifiants Hooper à balayer du tiroir : tout ce qui traîne dans la
+// fenêtre et ne fait plus partie de ce qu'on veut afficher (journée notée
+// depuis, jour révolu, réglage désactivé).
+export function staleHooperIds(wantedIds, now = new Date(), days = HOOPER_DAYS) {
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const keep = new Set(wantedIds);
+  const out = [];
+  for (let i = -SWEEP_BACK_DAYS; i < days; i++) {
+    const id = hooperNotificationId(localDateStr(addDays(today, i)));
+    if (!keep.has(id)) out.push(id);
+  }
+  return out;
+}
+
 // Retrouve une séance à partir de ce que porte la notification touchée.
 export function locateSession(data, { sessionId, dateISO }) {
   if (!dateISO) return null;
@@ -157,17 +230,47 @@ export async function onNotificationTap(handler) {
 // Replanifie tout : on annule ce qui était posé puis on repose la fenêtre.
 // C'est le geste le plus simple qui reste juste quand une séance est déplacée,
 // supprimée ou notée entre deux réveils.
-export async function syncSessionNotifications(data, enabled) {
+//
+// Deux familles cohabitent, et elles ne se traitent pas pareil :
+//   · les séances — toujours reposées à neuf ;
+//   · le ressenti du jour — **on ne repose jamais ce qui est déjà dans le
+//     tiroir**. Une notification re-programmée sous le même identifiant re-sonne
+//     et re-vibre : la moindre modification du planning ferait buzzer le
+//     téléphone. Ce qui est affiché reste affiché ; on ne touche qu'à ce qui
+//     doit disparaître (journée notée depuis, jour révolu, réglage coupé).
+export async function syncNotifications(data, { sessions = false, hooper = false, hooperHour = HOOPER_HOUR_DEFAULT } = {}) {
   const p = await plugin();
   if (!p) return { skipped: "web" };
   const LN = p.LN;
   try {
+    const now = new Date();
     const pending = await call(LN.getPending(), "getPending");
     if (pending?.notifications?.length) await call(LN.cancel(pending), "cancel");
-    if (!enabled) return { scheduled: 0, cancelled: pending?.notifications?.length || 0 };
-    if ((await call(LN.checkPermissions(), "checkPermissions")).display !== "granted") return { skipped: "permission" };
 
-    const plan = planSessionNotifications(data, new Date());
+    const granted = (await call(LN.checkPermissions(), "checkPermissions"))?.display === "granted";
+
+    // Le plan du ressenti se calcule même sans permission : il sert aussi à
+    // savoir ce qu'il faut retirer du tiroir.
+    const hooperPlan = (hooper && granted) ? planHooperNotifications(data, now, hooperHour) : [];
+
+    let deliveredIds = new Set();
+    try {
+      const delivered = await call(LN.getDeliveredNotifications(), "getDelivered");
+      deliveredIds = new Set((delivered?.notifications || []).map(n => n.id));
+      const stale = staleHooperIds(hooperPlan.map(n => n.id), now).filter(id => deliveredIds.has(id));
+      if (stale.length) await call(LN.removeDeliveredNotificationsById({ ids: stale }), "removeDelivered");
+    } catch {
+      // Tiroir illisible : au pire un rappel périmé reste affiché une journée
+      // de plus. Ce n'est pas une raison de ne rien programmer du tout.
+    }
+
+    if (!granted) return { skipped: "permission", cancelled: pending?.notifications?.length || 0 };
+
+    const plan = [
+      ...(sessions ? planSessionNotifications(data, now) : []),
+      ...hooperPlan.filter(n => !deliveredIds.has(n.id)),
+    ];
+
     if (plan.length) {
       await call(LN.schedule({
         notifications: plan.map(n => ({
@@ -176,6 +279,8 @@ export async function syncSessionNotifications(data, enabled) {
           body: n.body,
           extra: n.extra,
           smallIcon: "ic_stat_charge",
+          ...(n.ongoing ? { ongoing: true } : {}),
+          ...(n.autoCancel === false ? { autoCancel: false } : {}),
           schedule: { at: n.at, allowWhileIdle: true },
         })),
       }), "schedule");

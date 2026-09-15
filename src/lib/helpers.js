@@ -109,3 +109,17 @@ export function getLastKnownWeight(data, todayISO) {
   pool.sort((a, b) => b.localeCompare(a));
   return w[pool[0]] ?? null;
 }
+
+// Y a-t-il quelque chose au journal de ce jour-là ? Bien-être, poids, repas ou
+// note : une seule de ces quatre choses suffit à dire « rempli ». Définie ici
+// parce que deux écrans posent la même question — le bloc journal du calendrier
+// et la pastille de chaque jour de la bande semaine — et qu'ils doivent
+// répondre pareil.
+export function hasDayLog(data, dateStr) {
+  if (!data || !dateStr) return false;
+  const hooper = (data.hooper || []).some(h => h.date === dateStr);
+  const weight = data.weight?.[dateStr] != null;
+  const note = !!(data.notes?.[dateStr] || "").trim();
+  const meals = (data.nutrition?.[dateStr] || []).length > 0;
+  return hooper || weight || note || meals;
+}

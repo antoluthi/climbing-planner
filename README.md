@@ -1,6 +1,6 @@
-# Planif Escalade
+# TractoPlanner
 
-Application web de planification d'entraînement escalade — PWA, multi-appareils.
+Application web de planification d'entraînement — PWA, multi-appareils.
 
 **Production :** https://climbing-planner-theta.vercel.app/
 
@@ -9,7 +9,7 @@ Application web de planification d'entraînement escalade — PWA, multi-apparei
 - **Vue semaine / mois / année** — planning des séances par jour
 - **Cycles (mésocycles / microcycles)** — timeline visuelle, éditeur intégré
 - **Statistiques** — charge d'entraînement, sommeil, indice Hooper, heatmap d'activité GitHub-style
-- **Notes journalières + suivi créatine**
+- **Journal du jour** — indice Hooper (chaque note en toutes lettres), poids, notes, suivi créatine ; accessible pour n'importe quel jour depuis la vue semaine
 - **Profil** — avatar (recadrage/zoom), thème dark/light
 - **Sync multi-appareils** via Supabase (magic link email + password)
 - **PWA** — installable sur mobile et desktop, fonctionne offline

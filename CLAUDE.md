@@ -1,6 +1,17 @@
-# CLAUDE.md — Planif Escalade
+# CLAUDE.md — TractoPlanner
 
 Contexte technique et état du projet pour les sessions Claude Code.
+
+## Le nom
+
+Le produit s'appelle **TractoPlanner**. Le renommage (septembre 2026) n'a touché
+que ce qui se lit : titre de la page, manifeste PWA, `app_name` Android,
+en-tête bureau, écran de connexion, titre des releases. Il s'arrête **avant les
+identifiants** — `appId` `com.climbingplanner.app`, `storageKey` de
+l'authentification, clé `climbing_planner_v1` du localStorage, schéma de deep
+link, nom du dépôt et domaine Vercel. Les renommer installerait l'APK **à côté**
+de l'ancien au lieu de le mettre à jour, et déconnecterait tout le monde au
+prochain lancement.
 
 ## Stack
 
@@ -596,7 +607,7 @@ grep -rn '#[0-9a-f]\{3,8\}' src/ --include=*.jsx --include=*.js | grep -v palett
   **Bibliothèque** et le **journal du jour**.
 - **Chaque page porte son titre** (`PageTitle` : 26 px, 800, `right` pour
   l'action principale) — Accueil excepté, qui a sa salutation. Il n'y a plus
-  d'en-tête de shell sur mobile : ni logo, ni « PLANIF ESCALADE », ni total de
+  d'en-tête de shell sur mobile : ni logo, ni « TRACTOPLANNER », ni total de
   charge, ni avatar au-dessus de Cycles, Stats et Bibliothèque. **La cloche de
   notifications et l'avatar vivent sur l'accueil**, à droite de la salutation —
   seuls points d'entrée vers le compte et les notifications. Le bureau, lui,
@@ -668,6 +679,17 @@ Remplir/Modifier qui ouvre `DayLogModal` **sur cette date**, et les rappels
 **actifs ce jour-là** (récurrence et plage), cochables après coup. Cocher écrit
 `reminderState[id][cetteDate]`, jamais celle du jour.
 
+Ce bloc ne se lit toutefois **que pour le jour sélectionné**, sous la grille :
+noter le ressenti d'hier demandait de le sélectionner d'abord, puis de
+descendre. D'où la **pastille journal sous chaque jour de la bande semaine**
+(`JournalPip`, `CalendarView.jsx`) : une touche ouvre `DayLogModal` sur ce
+jour-là — passé comme à venir. Pleine (accent) quand quelque chose est noté,
+creuse sinon. `hasDayLog()` (`lib/helpers.js`) répond à cette question pour les
+deux écrans à la fois : la pastille et le bloc doivent dire la même chose.
+Chaque jour est **deux boutons empilés**, jamais imbriqués — un `<button>` dans
+un `<button>` n'est pas du HTML valide, et le clic du second remonterait au
+premier.
+
 ### Retirer un statut de séance
 Recliquer sur l'état déjà sélectionné (Fait / Adaptée / Manquée) le retire :
 la séance redevient « pas encore réalisée ». À l'enregistrement, le ressenti
@@ -713,6 +735,14 @@ modifiait… et ne s'enregistrait jamais.
 - Hooper en **curseurs** 1-7 (sommeil, fatigue, stress, courbatures) — l'échelle
   et le calcul ne changent pas : `total` = somme des quatre, lu par
   `hooperLabel()` / `hooperColor()`.
+- **Chaque cran porte sa phrase** (`HOOPER_SCALE` / `hooperScaleLabel()`,
+  `lib/hooper.js`), affichée sous le curseur et teintée par
+  `hooperScaleColor()` : « Sommeil 2 » ne dit rien, « Très bon sommeil » si.
+  L'échelle est **inversée** par rapport à l'intuition — 1 est le bon côté —
+  et c'est exactement là qu'on se trompe : on note son sommeil 6 en pensant
+  avoir bien dormi. Les bornes `1` et `7` restent aux extrémités de la ligne
+  pour dire le sens ; les libellés d'extrémités qui vivaient dans `HCRIT` ont
+  disparu, la table des phrases les contient.
 - Chaque étape **enregistre en la quittant** (`persistStep`) : fermer en route ne
   perd que l'étape courante.
 - Les rappels n'y sont plus : leur place est l'écran Cycles.
@@ -748,7 +778,19 @@ modifiait… et ne s'enregistrait jamais.
 - Graphique poids : scaffold période complète avec données manquantes nulles
 - Graphique Hooper : barres (BarChart) au lieu de lignes, scaffold identique
 - Sélecteur de plage Sem / Mois / An pour tous les graphiques stats
-- **Heatmap d'activité** (`components/ActivityHeatmap.jsx`, GitHub-style) : 53 semaines × 7 jours, sélecteur de métrique (Charge / RPE / **Qualité** / Hooper / Rappels), labels mois et jours, tooltip hover, légende Moins/Plus, adaptatif mobile. La métrique **Qualité** moyenne les étoiles du retour (`feedback.quality`, 1-5) sur les séances du jour : rampe séquentielle `DATA.heatmap.quality`, une seule teinte, luminosité monotone, et un premier échelon distinct de la case vide — une séance à 1 ★ ne doit pas se lire « aucune donnée »
+- **Heatmap d'activité** (`components/ActivityHeatmap.jsx`, GitHub-style) : 53 semaines × 7 jours, sélecteur de métrique (Charge / RPE / **Qualité** / Hooper / Rappels), labels mois et jours, tooltip hover, légende adaptée à la métrique, adaptatif mobile. La métrique **Qualité** moyenne les étoiles du retour (`feedback.quality`, 1-5) sur les séances du jour : rampe séquentielle `DATA.heatmap.quality`, une seule teinte, luminosité monotone, et un premier échelon distinct de la case vide — une séance à 1 ★ ne doit pas se lire « aucune donnée »
+  - La métrique **Rappels** ne mesure qu'une chose : le **nombre de rappels
+    manqués** ce jour-là (actifs et non cochés). Zéro manqué prend le premier
+    échelon de `DATA.heatmap.reminders`, franchement **positif** ; la teinte
+    vire au rouge à mesure qu'il en reste, jusqu'à « 4 et + ». Ni taux ni
+    proportion : trois rappels cochés sur quatre, c'est **un** manqué, comme un
+    seul rappel oublié. Deux cas restent neutres — un jour **sans rappel actif**
+    (rien à rater) et la **journée en cours** tant qu'il reste des cases à
+    cocher (ce qui n'est pas fait n'est pas encore manqué). La rampe ne part
+    donc plus du gris de la case vide : « aucun manqué » et « aucun rappel »
+    sont deux choses différentes et doivent se distinguer à l'œil. La légende
+    dit « Aucun manqué → 4 et + » plutôt que « Moins → Plus », qui ne veut rien
+    dire sur un compte d'échecs.
 
 ### AccueilView — séances du jour
 La carte liste **toutes** les séances de la journée, triées par heure de départ
@@ -972,7 +1014,7 @@ concatène les 9 dernières dans l'ordre, idempotent et ré-exécutable.
   monté dans `AutonomousShell`) : l'APK embarquant ses fichiers web, rien ne
   signalerait une nouvelle version. Au démarrage (natif uniquement), l'app lit le
   **titre de la release** `latest-apk` — format imposé par la CI
-  « Climbing Planner 1.0.\<run\> » — et compare à `__APP_VERSION_CODE__`. L'API
+  « TractoPlanner 1.0.\<run\> » — et compare à `__APP_VERSION_CODE__`. L'API
   GitHub envoie `Access-Control-Allow-Origin: *` (un asset de release, non : sa
   redirection de téléchargement n'a aucun en-tête CORS), donc `fetch` suffit,
   sans plugin HTTP natif. Tout échec (hors-ligne, quota) est silencieux.
@@ -1018,6 +1060,36 @@ tiroir au lieu de s'empiler à côté.
 - `res/drawable/ic_stat_charge.xml` : la marque en silhouette blanche. Sans
   icône de statut, Android retomberait sur celle du lanceur — fond noir plein,
   donc carré blanc dans la barre d'état.
+
+### Rappel du ressenti (`planHooperNotifications`, bascule « Ressenti du jour »)
+
+Le Hooper est la seule donnée qui se perd pour de bon quand on l'oublie : il se
+note le matin, et se reconstituer trois jours plus tard n'a aucun sens. D'où une
+notification **persistante** — `ongoing: true`, donc non balayable — posée à une
+heure réglable (`profile.notifyHooperHour`, 9 h par défaut) et qui **reste dans
+le tiroir tant que les quatre curseurs ne sont pas réglés**.
+
+- `isHooperFilled()` exige les **quatre** critères : une entrée partielle n'est
+  pas un ressenti, le rappel reste.
+- **Trois jours d'avance**, pas sept comme les séances. Une notification non
+  balayable ne se retire qu'en ouvrant l'app : si l'app dort une semaine, sept
+  rappels indéboulonnables s'empileraient.
+- **L'heure du jour déjà passée ⇒ le rappel est dû maintenant** (10 s), pas
+  demain — le repousser reviendrait à sauter la journée.
+- **On ne repose jamais ce qui est déjà affiché.** Reprogrammer sous le même
+  identifiant fait re-sonner et re-vibrer : la moindre modification du planning
+  ferait buzzer le téléphone. `syncNotifications()` lit donc le tiroir
+  (`getDeliveredNotifications`), garde ce qui y est, et ne retire que ce qui n'a
+  plus lieu d'être — journée notée depuis, jour révolu, bascule coupée
+  (`staleHooperIds` + `removeDeliveredNotificationsById`, plugin ≥ 8.3).
+- `autoCancel: false` : la toucher sans rien remplir ne la fait pas disparaître.
+  La toucher ouvre `DayLogModal` **sur la date qu'elle porte** (`extra.kind ===
+  "hooper"`), pas sur aujourd'hui : reçue hier, c'est bien la journée restée en
+  blanc qu'on vient remplir.
+- Bascule séparée de celle des séances (`profile.notifyHooper`) : c'est un
+  rappel d'habitude, pas un rappel de séance — on peut vouloir l'un sans
+  l'autre. Les deux partagent la permission Android ; la première activée la
+  demande.
 
 ### Widget d'écran d'accueil (`lib/widget.js`, `TodayWidget.java`)
 
@@ -1099,6 +1171,22 @@ Les rappels du jour, cochables, et le résumé du journal.
   retombe sur `assembleDebug` : la clé de debug étant régénérée à chaque runner,
   les mises à jour ne s'installent alors pas par-dessus (« application non
   installée »). Les 4 secrets à créer sont listés dans `ACTIONS-A-FAIRE.md`.
+
+### Aucune modale ne prend le focus à l'ouverture
+
+Aucun champ de modale ne porte `autoFocus`, et aucune ne pose de
+`ref.current.focus()` à l'ouverture : sur mobile, le clavier surgit alors à
+chaque popup, mange la moitié de l'écran et recouvre ce qu'on venait lire —
+alors que dans la plupart des cas le premier geste n'est pas d'écrire (choisir
+une discipline, régler un curseur, lire un récapitulatif). Retiré de
+`DayLogModal`, `SessionFormModal`, `SessionScheduleModal`, `SessionLibraryModal`,
+`ChargeCalculatorModal`, `ReminderModal`, `CustomCycleModal` et
+`DeadlineModal`.
+
+Deux exceptions, qui ne sont pas des modales : l'écran de connexion
+(`AuthPanel`, où il n'y a rien d'autre à faire que taper) et le champ de repas
+de l'accueil, déplié par un bouton « + repas » — là, le clavier est le geste
+suivant.
 
 ### Un composant JSX non importé passe le lint ET le build
 

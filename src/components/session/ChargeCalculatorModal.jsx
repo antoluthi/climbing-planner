@@ -90,7 +90,6 @@ export function ChargeCalculatorModal({ initialCharge = 5, onApply, onClose }) {
           Nombre de mouvements
         </div>
         <input
-          autoFocus
           type="number" inputMode="numeric" min="1"
           value={nbMov}
           onChange={e => setNbMov(e.target.value)}

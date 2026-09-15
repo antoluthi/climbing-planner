@@ -43,14 +43,6 @@ export function ReminderModal({ reminder, onSave, onDelete, onClose }) {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const titleRef = useRef(null);
-  useEffect(() => {
-    if (!isEditing) {
-      const t = setTimeout(() => titleRef.current?.focus(), 60);
-      return () => clearTimeout(t);
-    }
-  }, [isEditing]);
-
   const canSave = name.trim().length > 0
     && (recKind === "daily" || (Array.isArray(recDays) && recDays.length > 0));
 
@@ -86,7 +78,6 @@ export function ReminderModal({ reminder, onSave, onDelete, onClose }) {
       <ModalBody>
         <Field label="Nom">
           <TextInput
-            ref={titleRef}
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="Ex : Étirements épaules, Vitamine D…"

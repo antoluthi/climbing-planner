@@ -6,7 +6,7 @@ import { isNative } from "./native.js";
 // met à jour tout seul au rechargement de la page.
 //
 // Source de vérité : le titre de la release `latest-apk`, écrit par la CI au
-// format « Climbing Planner 1.0.<numéro de run> » (.github/workflows/build-apk.yml).
+// format « TractoPlanner 1.0.<numéro de run> » (.github/workflows/build-apk.yml).
 // L'API GitHub renvoie `Access-Control-Allow-Origin: *`, donc un fetch standard
 // passe depuis la WebView (origine https://localhost) — pas besoin de plugin HTTP.
 // Un fichier de version déposé en asset de release serait plus économe en quota,

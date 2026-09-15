@@ -1,6 +1,6 @@
 {
   "appId": "com.climbingplanner.app",
-  "appName": "Climbing Planner",
+  "appName": "TractoPlanner",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

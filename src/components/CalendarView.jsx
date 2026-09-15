@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useSwipe } from "../hooks/useSwipe.js";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { colors, DATA } from "../theme/palette.js";
-import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, isEventItem } from "../lib/helpers.js";
+import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, isEventItem, hasDayLog } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
 import { getMesoForDate } from "../lib/constants.js";
 import { mesosInRange, recomputeMesoDates, weeksOf } from "../lib/cycles.js";
@@ -179,7 +179,7 @@ export function CalendarView({
         <WeekStrip
           isDark={isDark} data={data} currentDate={currentDate}
           selected={selected} setSelected={setSelected} today={today}
-          mesoAt={mesoAt}
+          mesoAt={mesoAt} onOpenLog={onOpenLog}
         />
       )}
 
@@ -518,7 +518,12 @@ function MonthGrid({ isDark, data, currentDate, selected, setSelected, today, me
 }
 
 // ── Bandeau de la semaine ────────────────────────────────────────────────────
-function WeekStrip({ isDark, data, currentDate, selected, setSelected, today, mesoAt }) {
+// Sous chaque jour, une pastille qui ouvre son journal. Le bloc journal ne se
+// lit que sous la grille, pour le jour sélectionné : noter le ressenti d'hier
+// demandait donc de le sélectionner, puis de descendre le chercher. Ici, une
+// touche sur n'importe quel jour de la semaine — passé comme à venir — ouvre
+// directement l'assistant (bien-être, poids, note) sur CE jour-là.
+function WeekStrip({ isDark, data, currentDate, selected, setSelected, today, mesoAt, onOpenLog }) {
   const c = colors(isDark);
   const monday = getMondayOf(currentDate);
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
@@ -533,42 +538,82 @@ function WeekStrip({ isDark, data, currentDate, selected, setSelected, today, me
           const isSelected = iso === selected;
           const isToday = iso === today;
           const meso = mesoAt(date);
+          const dayLabel = date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
           return (
-            <button
-              key={i}
-              onClick={() => setSelected(iso)}
-              style={{
-                flex: 1, borderRadius: 12, border: "none", cursor: "pointer",
-                padding: "10px 0", display: "flex", flexDirection: "column",
-                alignItems: "center", gap: 5,
-                background: isSelected ? c.accent
-                  : ev ? (ev.color || c.accent) + "26"
-                  : cycleBg(meso, isDark, c.control),
-                boxShadow: ev && !isSelected ? `inset 0 -3px 0 ${ev.color || c.accent}` : undefined,
-              }}
-            >
-              <div style={{
-                fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
-                color: isSelected ? c.textOnAccent : c.textDim,
-              }}>
-                {WEEKDAYS[i]}
-              </div>
-              <div style={{
-                font: `700 15px ${MONO}`,
-                color: isSelected ? c.textOnAccent : isToday ? c.accent : c.text,
-              }}>
-                {date.getDate()}
-              </div>
-              <DayDots
-                items={sessions} c={c} size={5} max={3}
-                tone={isSelected ? c.textOnAccent : null}
+            // Deux boutons empilés, jamais imbriqués : un bouton dans un bouton
+            // n'est pas du HTML valide, et le clic du second remonterait au
+            // premier.
+            <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+              <button
+                onClick={() => setSelected(iso)}
+                style={{
+                  width: "100%", borderRadius: 12, border: "none", cursor: "pointer",
+                  padding: "10px 0", display: "flex", flexDirection: "column",
+                  alignItems: "center", gap: 5,
+                  background: isSelected ? c.accent
+                    : ev ? (ev.color || c.accent) + "26"
+                    : cycleBg(meso, isDark, c.control),
+                  boxShadow: ev && !isSelected ? `inset 0 -3px 0 ${ev.color || c.accent}` : undefined,
+                }}
+              >
+                <div style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+                  color: isSelected ? c.textOnAccent : c.textDim,
+                }}>
+                  {WEEKDAYS[i]}
+                </div>
+                <div style={{
+                  font: `700 15px ${MONO}`,
+                  color: isSelected ? c.textOnAccent : isToday ? c.accent : c.text,
+                }}>
+                  {date.getDate()}
+                </div>
+                <DayDots
+                  items={sessions} c={c} size={5} max={3}
+                  tone={isSelected ? c.textOnAccent : null}
+                />
+              </button>
+              <JournalPip
+                isDark={isDark}
+                filled={hasDayLog(data, iso)}
+                onClick={() => onOpenLog?.(iso)}
+                label={`Journal du ${dayLabel}`}
               />
-            </button>
+            </div>
           );
         })}
       </div>
       <WeekKm isDark={isDark} data={data} monday={monday} />
     </div>
+  );
+}
+
+// ── Pastille « journal » d'un jour ───────────────────────────────────────────
+// Pleine quand quelque chose est noté ce jour-là (bien-être, poids, repas ou
+// note), creuse sinon : la semaine se lit d'un coup d'œil, et les trous se
+// comblent sans changer d'écran.
+function JournalPip({ isDark, filled, onClick, label }) {
+  const c = colors(isDark);
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      style={{
+        width: "100%", height: 20, borderRadius: 999, cursor: "pointer", padding: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: filled ? c.accent + "22" : "transparent",
+        border: `1px solid ${filled ? c.accent + "66" : c.border}`,
+        color: filled ? c.accent : c.textDim,
+      }}
+    >
+      {/* Un crayon : à 11 px, c'est la seule silhouette qui se lit encore, et
+          elle dit « à écrire » plutôt que « à lire ». */}
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 20.5h4L20.5 8 16.5 4 4 16.5v4z" />
+      </svg>
+    </button>
   );
 }
 
