@@ -1236,12 +1236,87 @@ l'extraction de `ui/CycleFields`).
 ferme le trou. Vérifié à la sonde : la règle attrape `<Inconnu>` là où
 `no-undef` ne voyait que `inconnuJS()`.
 
+### Le serveur CalDAV (`api/caldav/[...path].js` + `api/_caldav.js`)
+
+Un planning s'ouvre comme un compte CalDAV en lecture seule :
+`/api/caldav/<calendarToken>/`, le jeton dans le chemin (pas d'authentification
+HTTP — c'est un lien secret, révocable depuis **Compte > Synchronisation
+calendrier**). `api/calendar/<token>.ics` reste le flux iCal simple, à côté.
+
+**Le protocole vit dans `api/_caldav.js`**, qui n'importe rien d'autre que
+`_event-fields.js` : pas de réseau, pas de Supabase, donc testable sous Node
+(`npm run test:caldav`, 24 cas). La route ne fait que trois choses — trouver la
+ligne, choisir la méthode, poser les en-têtes.
+
+Méthodes : `OPTIONS` · `GET` / `HEAD` (le `.ics` d'une séance, ou le flux
+complet sur la collection) · `PROPFIND` (Depth 0 et 1) · `REPORT`
+(`calendar-query`, `calendar-multiget`). Tout ce qui écrit repart en **405** :
+le calendrier est en lecture seule, et `Allow` le dit.
+
+Quatre choses qu'un client attend et qui manquaient :
+
+1. **Un `<D:href>` est une URL.** Une séance sans identifiant tirait son UID de
+   son nom : `…/climbing-2026-09-16-pos-2-Sortie longue, allure 5:30/km.ics` —
+   une espace, une virgule, et surtout une **barre oblique** qui invente un
+   sous-dossier. Le client résout alors un href hors de la collection et jette
+   la réponse. Les UID sont désormais réduits à `[A-Za-z0-9._-]` (`safeUidPart`)
+   **et** les href encodés (`hrefFor`) — ceinture et bretelles, parce que les
+   deux protègent contre des choses différentes.
+2. **Un PROPFIND demande des propriétés précises.** Tout repartait dans un
+   unique propstat `200`, y compris ce qu'on ne sait pas. Ce qu'on n'a pas part
+   maintenant en `404 Not Found` dans un second propstat, et `allprop` /
+   `propname` / un corps vide sont distingués. La collection annonce en plus
+   `principal-URL`, `owner`, `current-user-privilege-set` (lecture seule) et
+   `supported-report-set`.
+3. **On n'annonce que ce qu'on sait faire.** `<D:sync-token>` était publié sans
+   que `sync-collection` ne renvoie jamais de token : un client qui suivait
+   l'annonce recevait un multistatus que RFC 6578 lui interdit d'accepter.
+   `supported-report-set` ne liste donc que `calendar-query` et
+   `calendar-multiget` ; le `getctag` suffit à dire « rien n'a changé ». Un
+   `sync-collection` reçu quand même répond avec son token, et tout autre
+   rapport part en `403 supported-report`.
+4. **Un REPORT ne renvoie plus tout le planning quoi qu'on demande.** Le
+   `time-range` d'un `calendar-query` est respecté et un `calendar-multiget` ne
+   renvoie que les href demandés (un href inconnu → `404`, c'est comme ça qu'un
+   client apprend une suppression). C'est ce qui borne la taille de la réponse :
+   une fonction Vercel plafonne à 4,5 Mo, et le planning grossit à chaque
+   semaine saisie — la version d'avant embarquait le `.ics` complet de **chaque**
+   séance jamais planifiée, à chaque synchronisation.
+
+Deux détails qui ne se voient qu'à l'usage :
+
+- **Rien dans `extractEvents` ne doit jeter.** Elle sert *toutes* les méthodes,
+  et elle est appelée avant le dispatch : une clé de semaine illisible ou une
+  séance à moitié écrite produisait un 500 sur `PROPFIND` comme sur `GET`, et un
+  client conclut alors que l'URL n'est pas un service CalDAV. Une entrée mal
+  formée est ignorée, pas propagée. Même raison pour le 404 (et non 400) sur un
+  chemin sans jeton : la découverte de service interroge aussi les chemins
+  parents, et « rien ici » se lit mieux que « ta requête est invalide ».
+- **Le repli de ligne ICS compte des octets, pas des caractères** (RFC 5545) :
+  « é » en vaut deux, et couper au milieu d'une séquence UTF-8 produit un
+  fichier illisible. `foldLine` recule sur les octets de continuation.
+
+Les en-têtes (`DAV: 1, 3, calendar-access`, `Allow`, CORS) partent sur **toutes**
+les réponses, erreurs comprises — c'était l'inverse : ils étaient posés *après*
+la vérification du jeton. `vercel.json` les double par une règle `headers` et
+réécrit `/api/caldav/:slug+/` (barre oblique finale) vers la fonction.
+
+Pour sonder un déploiement avec un vrai jeton :
+
+```bash
+U=https://climbing-planner-theta.vercel.app/api/caldav/<token>/
+curl -i -X OPTIONS "$U"                     # attendu : 200 + DAV: 1, 3, calendar-access
+curl -i -X PROPFIND -H 'Depth: 0' "$U"      # attendu : 207 + resourcetype collection+calendar
+curl -i -X PROPFIND -H 'Depth: 1' "$U"      # attendu : 207 + une réponse par séance
+```
+
 ## Commandes
 
 ```bash
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
+npm run test:caldav  # protocole CalDAV (node --test, sans dépendance)
 npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
 npm run cap:open # ouvre Android Studio
 ./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement

@@ -39,4 +39,21 @@ export default defineConfig([
       'react/jsx-no-undef': 'error',
     },
   },
+  {
+    // `api/` tourne sous Node (fonctions serverless Vercel), pas dans le
+    // navigateur : `process` et `Buffer` y existent, `window` non. Sans ce
+    // bloc, la config globale y appliquait les globales du navigateur et
+    // `no-undef` criait sur `process.env` — du bruit qui masque les vraies
+    // erreurs dans ces fichiers.
+    files: ['api/**/*.{js,mjs}'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.node },
+    },
+    rules: {
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+    },
+  },
 ])
