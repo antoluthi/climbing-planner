@@ -5,15 +5,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { buildEventDescription, getEventLocation } from "../_event-fields.js";
 
-function getMondayOf(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 function addDays(date, n) {
   const d = new Date(date);
   d.setDate(d.getDate() + n);

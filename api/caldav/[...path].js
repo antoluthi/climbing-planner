@@ -1,537 +1,203 @@
-// Vercel serverless function — CalDAV server (read-only)
-// RFC 4791 — minimal CalDAV calendar access
-// Endpoint: /api/caldav/:token/  or  /api/caldav/:token/:uid.ics
-// Auth: token in URL path (no HTTP Basic Auth needed)
+// Vercel serverless function — serveur CalDAV en lecture seule (RFC 4791 / 4918)
+// Endpoint : /api/caldav/:token/  ou  /api/caldav/:token/:uid.ics
+// Auth : le jeton est dans le chemin (pas d'authentification HTTP).
+//
+// Cette route ne fait que trois choses : trouver la ligne, décider de la
+// méthode, poser les en-têtes. Tout le protocole vit dans `../_caldav.js`, qui
+// n'importe rien et se teste sous Node (`npm run test:caldav`).
 
 import { createClient } from "@supabase/supabase-js";
-import { buildEventDescription, getEventLocation } from "../_event-fields.js";
+import {
+  extractEvents, buildSingleICS, buildFullICS, etagFor,
+  parseDavRequest, buildPropfind, buildReport, uidFromHref,
+} from "../_caldav.js";
 
-// ─── Date helpers ──────────────────────────────────────────────────────────────
+// Ce qu'on sait faire. `Allow` et `Access-Control-Allow-Methods` doivent dire
+// la même chose, et les deux doivent partir sur **toutes** les réponses —
+// y compris les erreurs : un client qui découvre le service interroge aussi les
+// chemins parents, et une réponse sans `DAV:` lui fait conclure « pas un
+// serveur CalDAV ».
+const METHODS = "OPTIONS, GET, HEAD, PROPFIND, REPORT";
 
-function addDays(date, n) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + n);
-  return d;
+function setCommonHeaders(res) {
+  res.setHeader("DAV", "1, 3, calendar-access");
+  res.setHeader("Allow", METHODS);
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Depth, Prefer, Accept, If-None-Match");
+  res.setHeader("Access-Control-Allow-Methods", METHODS);
+  res.setHeader("Access-Control-Expose-Headers", "DAV, ETag, Allow");
+  res.setHeader("Cache-Control", "no-store");
 }
 
-function migrateWeekKeys(weeks) {
-  if (!weeks) return weeks;
-  const result = { ...weeks };
-  Object.keys(result).forEach((k) => {
-    const d = new Date(k + "T12:00:00Z");
-    if (d.getUTCDay() === 0) {
-      const corrected = addDays(d, 1);
-      const pad = (n) => String(n).padStart(2, "0");
-      const key2 = `${corrected.getUTCFullYear()}-${pad(corrected.getUTCMonth() + 1)}-${pad(corrected.getUTCDate())}`;
-      if (!result[key2]) result[key2] = result[k];
-      delete result[k];
-    }
-  });
-  return result;
-}
-
-// ─── ICS formatters ───────────────────────────────────────────────────────────
-
-function escapeICS(str) {
-  return (str || "")
-    .replace(/\\/g, "\\\\")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,")
-    .replace(/\n/g, "\\n");
-}
-
-function toICSDateTime(date) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return (
-    date.getUTCFullYear() +
-    pad(date.getUTCMonth() + 1) +
-    pad(date.getUTCDate()) +
-    "T" +
-    pad(date.getUTCHours()) +
-    pad(date.getUTCMinutes()) +
-    "00"
-  );
-}
-
-function toICSDateTimeUTC(date) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return (
-    date.getUTCFullYear() +
-    pad(date.getUTCMonth() + 1) +
-    pad(date.getUTCDate()) +
-    "T" +
-    pad(date.getUTCHours()) +
-    pad(date.getUTCMinutes()) +
-    "00Z"
-  );
-}
-
-function toICSDate(date) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return (
-    date.getUTCFullYear() +
-    pad(date.getUTCMonth() + 1) +
-    pad(date.getUTCDate())
-  );
-}
-
-function foldLine(line) {
-  const MAX = 75;
-  if (line.length <= MAX) return line;
-  let result = "";
-  let pos = 0;
-  while (pos < line.length) {
-    if (pos === 0) {
-      result += line.slice(0, MAX);
-      pos = MAX;
-    } else {
-      result += "\r\n " + line.slice(pos, pos + MAX - 1);
-      pos += MAX - 1;
-    }
+// Le corps d'un PROPFIND / REPORT arrive soit déjà lu par le runtime (`req.body`,
+// chaîne ou Buffer selon le Content-Type), soit à lire sur le flux.
+async function readBody(req) {
+  if (typeof req.body === "string") return req.body;
+  if (Buffer.isBuffer(req.body)) return req.body.toString("utf8");
+  if (req.body && typeof req.body === "object") {
+    // `@vercel/node` parse le JSON ; un corps XML ne passe jamais par là, mais
+    // on ne veut pas renvoyer « [object Object] » au parseur.
+    return "";
   }
-  return result;
-}
-
-// ─── Event extraction ─────────────────────────────────────────────────────────
-
-function isoDateFrom(date) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
-}
-
-function extractEvents(planData) {
-  const events = [];
-  const seen = new Set();
-  const push = (event) => {
-    if (seen.has(event.uid)) return;
-    seen.add(event.uid);
-    events.push(event);
-  };
-
-  const weeks = migrateWeekKeys(planData?.weeks || {});
-
-  // ── Sessions planifiées dans les semaines ─────────────────────────────
-  for (const [mondayISO, days] of Object.entries(weeks)) {
-    if (!Array.isArray(days)) continue;
-    const monday = new Date(mondayISO + "T12:00:00Z");
-
-    days.forEach((daySessions, dayIndex) => {
-      if (!Array.isArray(daySessions)) return;
-      const date = addDays(monday, dayIndex);
-      const dateISO = isoDateFrom(date);
-
-      daySessions.forEach((session) => {
-        if (!session?.name) return;
-        // UID stable sur (date + session.id + startTime) — collapse les vrais doublons
-        // (même template ajouté deux fois au même horaire). Si pas d'id, on retombe
-        // sur le nom + position pour rester déterministe.
-        const baseId = session.id || `pos-${dayIndex}-${session.name}`;
-        const slot = session.startTime ? `t${session.startTime.replace(":", "")}` : "allday";
-        const uid = `climbing-${dateISO}-${baseId}-${slot}@climbing-planner`;
-        push({ uid, session, date });
-      });
-    });
+  try {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    return Buffer.concat(chunks).toString("utf8");
+  } catch {
+    return "";
   }
-
-  // ── Séances personnalisées (quickSessions) ────────────────────────────
-  const quickSessions = Array.isArray(planData?.quickSessions) ? planData.quickSessions : [];
-  quickSessions.forEach((qs) => {
-    if (!qs?.name || !qs.startDate) return;
-    const startDate = new Date(qs.startDate + "T12:00:00Z");
-    if (isNaN(startDate.getTime())) return;
-    const endDate = qs.endDate && qs.endDate !== qs.startDate
-      ? new Date(qs.endDate + "T12:00:00Z")
-      : null;
-    const uid = `climbing-quick-${qs.id || qs.startDate + "-" + qs.name}@climbing-planner`;
-    // Garde TOUS les champs (discipline, chargePlanned, notes, content, etc.)
-    // pour que buildEventDescription puisse les utiliser.
-    const session = {
-      ...qs,
-      startTime: qs.allDay ? null : (qs.startTime || null),
-      endTime:   qs.allDay ? null : (qs.endTime   || null),
-      duration:  qs.allDay ? null : (qs.duration  || null),
-      isQuick: true,
-      isObjective: !!qs.isObjective,
-    };
-    push({ uid, session, date: startDate, endDate: endDate && !isNaN(endDate.getTime()) ? endDate : null });
-  });
-
-  return events;
 }
 
-// ─── ICS generation ───────────────────────────────────────────────────────────
-
-function buildVEVENT(uid, session, date, endDateOverride) {
-  const now = toICSDateTimeUTC(new Date());
-  const description = buildEventDescription(session);
-  const location = getEventLocation(session);
-
-  const lines = [];
-  lines.push("BEGIN:VEVENT");
-  lines.push(`UID:${uid}`);
-  lines.push(`DTSTAMP:${now}`);
-
-  if (session.startTime) {
-    const [h, m] = session.startTime.split(":").map(Number);
-    const startDate = new Date(date);
-    startDate.setUTCHours(h, m, 0, 0);
-    lines.push(`DTSTART:${toICSDateTime(startDate)}`);
-
-    let endDate;
-    if (endDateOverride) {
-      endDate = new Date(endDateOverride);
-      if (session.endTime) {
-        const [eh, em] = session.endTime.split(":").map(Number);
-        endDate.setUTCHours(eh, em, 0, 0);
-      } else {
-        endDate.setUTCHours(h + 1, m, 0, 0);
-      }
-    } else if (session.endTime) {
-      const [eh, em] = session.endTime.split(":").map(Number);
-      endDate = new Date(date);
-      endDate.setUTCHours(eh, em, 0, 0);
-      if (endDate <= startDate) endDate = addDays(endDate, 1);
-    } else if (session.duration) {
-      endDate = new Date(startDate.getTime() + session.duration * 60000);
-    } else {
-      endDate = new Date(startDate.getTime() + 3600000);
-    }
-    lines.push(`DTEND:${toICSDateTime(endDate)}`);
-  } else {
-    lines.push(`DTSTART;VALUE=DATE:${toICSDate(date)}`);
-    // DTEND is exclusive → endDate + 1 day, ou date + 1 day sinon
-    const lastDay = endDateOverride || date;
-    lines.push(`DTEND;VALUE=DATE:${toICSDate(addDays(lastDay, 1))}`);
-  }
-
-  lines.push(`SUMMARY:${escapeICS(session.name || session.title || "Séance")}`);
-  if (location) {
-    lines.push(`LOCATION:${escapeICS(location)}`);
-  }
-  if (description) {
-    lines.push(`DESCRIPTION:${escapeICS(description)}`);
-  }
-  lines.push("END:VEVENT");
-
-  return lines.map(foldLine).join("\r\n");
+function sendXml(res, status, body) {
+  res.setHeader("Content-Type", "application/xml; charset=utf-8");
+  res.status(status).send(body);
 }
-
-function buildSingleICS(uid, session, date, endDate) {
-  const vevent = buildVEVENT(uid, session, date, endDate);
-  return (
-    [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//TractoPlanner//FR",
-      "CALSCALE:GREGORIAN",
-      vevent,
-      "END:VCALENDAR",
-    ].join("\r\n") + "\r\n"
-  );
-}
-
-function buildFullICS(events, displayName) {
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//TractoPlanner//FR",
-    `X-WR-CALNAME:${escapeICS(displayName)}`,
-    "X-WR-TIMEZONE:Europe/Paris",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-  ];
-  for (const { uid, session, date, endDate } of events) {
-    lines.push(buildVEVENT(uid, session, date, endDate));
-  }
-  lines.push("END:VCALENDAR");
-  return lines.join("\r\n") + "\r\n";
-}
-
-// ─── ETag ─────────────────────────────────────────────────────────────────────
-
-function etagFor(uid, session) {
-  const src = uid + (session.name || "") + (session.startTime || "") + (session.duration || "") + (session.address || "");
-  let h = 0;
-  for (let i = 0; i < src.length; i++) {
-    h = Math.imul(31, h) + src.charCodeAt(i);
-    h |= 0;
-  }
-  return `"${(h >>> 0).toString(16)}"`;
-}
-
-// ─── XML helpers ──────────────────────────────────────────────────────────────
-
-function xe(str) {
-  return (str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-// ─── CalDAV XML responses ─────────────────────────────────────────────────────
-
-function xmlPropfindCollection(href, displayName, ctag) {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:CS="http://calendarserver.org/ns/">
-  <D:response>
-    <D:href>${xe(href)}</D:href>
-    <D:propstat>
-      <D:prop>
-        <D:resourcetype>
-          <D:collection/>
-          <C:calendar/>
-        </D:resourcetype>
-        <D:displayname>${xe(displayName)}</D:displayname>
-        <D:current-user-principal>
-          <D:href>${xe(href)}</D:href>
-        </D:current-user-principal>
-        <C:calendar-home-set>
-          <D:href>${xe(href)}</D:href>
-        </C:calendar-home-set>
-        <C:supported-calendar-component-set>
-          <C:comp name="VEVENT"/>
-        </C:supported-calendar-component-set>
-        <CS:getctag>${xe(ctag)}</CS:getctag>
-        <D:sync-token>${xe("urn:climbing-planner:sync:" + ctag)}</D:sync-token>
-      </D:prop>
-      <D:status>HTTP/1.1 200 OK</D:status>
-    </D:propstat>
-  </D:response>
-</D:multistatus>`;
-}
-
-function xmlPropfindCollectionDepth1(baseHref, displayName, ctag, events) {
-  const collectionEntry = `  <D:response>
-    <D:href>${xe(baseHref)}</D:href>
-    <D:propstat>
-      <D:prop>
-        <D:resourcetype><D:collection/><C:calendar/></D:resourcetype>
-        <D:displayname>${xe(displayName)}</D:displayname>
-        <CS:getctag>${xe(ctag)}</CS:getctag>
-      </D:prop>
-      <D:status>HTTP/1.1 200 OK</D:status>
-    </D:propstat>
-  </D:response>`;
-
-  const eventEntries = events
-    .map(({ uid, session }) => {
-      const etag = etagFor(uid, session);
-      return `  <D:response>
-    <D:href>${xe(baseHref + uid + ".ics")}</D:href>
-    <D:propstat>
-      <D:prop>
-        <D:resourcetype/>
-        <D:getcontenttype>text/calendar; charset=utf-8</D:getcontenttype>
-        <D:getetag>${xe(etag)}</D:getetag>
-      </D:prop>
-      <D:status>HTTP/1.1 200 OK</D:status>
-    </D:propstat>
-  </D:response>`;
-    })
-    .join("\n");
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:CS="http://calendarserver.org/ns/">
-${collectionEntry}
-${eventEntries}
-</D:multistatus>`;
-}
-
-function xmlPropfindEvent(href, etag) {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
-  <D:response>
-    <D:href>${xe(href)}</D:href>
-    <D:propstat>
-      <D:prop>
-        <D:resourcetype/>
-        <D:getcontenttype>text/calendar; charset=utf-8</D:getcontenttype>
-        <D:getetag>${xe(etag)}</D:getetag>
-      </D:prop>
-      <D:status>HTTP/1.1 200 OK</D:status>
-    </D:propstat>
-  </D:response>
-</D:multistatus>`;
-}
-
-function xmlReport(baseHref, events) {
-  const entries = events
-    .map(({ uid, session, date, endDate }) => {
-      const etag = etagFor(uid, session);
-      const ics = buildSingleICS(uid, session, date, endDate);
-      return `  <D:response>
-    <D:href>${xe(baseHref + uid + ".ics")}</D:href>
-    <D:propstat>
-      <D:prop>
-        <D:getetag>${xe(etag)}</D:getetag>
-        <C:calendar-data>${xe(ics)}</C:calendar-data>
-      </D:prop>
-      <D:status>HTTP/1.1 200 OK</D:status>
-    </D:propstat>
-  </D:response>`;
-    })
-    .join("\n");
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
-${entries}
-</D:multistatus>`;
-}
-
-// ─── Main handler ─────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
-  const { path: pathParts } = req.query;
-  let parts = (
-    Array.isArray(pathParts) ? pathParts : pathParts ? [pathParts] : []
-  ).filter(Boolean);
+  // Les en-têtes d'abord : même une erreur de jeton doit ressembler à du DAV.
+  setCommonHeaders(res);
 
-  // Fallback: parse path segments from req.url in case the catch-all query
-  // param wasn't populated (e.g. Vercel rewrite edge cases with trailing slash).
+  const { path: pathParts } = req.query || {};
+  let parts = (Array.isArray(pathParts) ? pathParts : pathParts ? [pathParts] : []).filter(Boolean);
+
+  // Repli : le paramètre catch-all n'est pas toujours peuplé (réécriture Vercel
+  // sur une URL terminée par « / »).
   if (parts.length === 0 && req.url) {
     const rawPath = req.url.split("?")[0];
     const prefix = "/api/caldav/";
     if (rawPath.startsWith(prefix)) {
-      parts = rawPath.slice(prefix.length).split("/").filter(Boolean);
+      parts = rawPath.slice(prefix.length).split("/").filter(Boolean).map(decodeSegment);
     }
   }
-
-  const token = parts[0];
-  if (!token || token.length < 8) {
-    res.status(400).send("Missing or invalid token");
-    return;
-  }
-
-  // Common headers for all responses
-  res.setHeader("DAV", "1, 3, calendar-access");
-  res.setHeader("Allow", "OPTIONS, GET, HEAD, PROPFIND, REPORT");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Authorization, Content-Type, Depth, Prefer, Accept"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "OPTIONS, GET, HEAD, PROPFIND, REPORT"
-  );
 
   if (req.method === "OPTIONS") {
     res.status(200).end();
     return;
   }
 
-  // Write methods → 405 read-only
-  if (["PUT", "DELETE", "MKCALENDAR", "PATCH"].includes(req.method)) {
-    res.setHeader("Allow", "OPTIONS, GET, HEAD, PROPFIND, REPORT");
+  // Lecture seule — et on le dit avec `Allow`, que le client lit pour savoir
+  // quoi proposer.
+  if (["PUT", "POST", "DELETE", "PATCH", "MKCALENDAR", "MKCOL", "PROPPATCH", "COPY", "MOVE", "LOCK", "UNLOCK", "ACL"].includes(req.method)) {
     res.status(405).send("This calendar is read-only");
     return;
   }
+  if (!["GET", "HEAD", "PROPFIND", "REPORT"].includes(req.method)) {
+    res.status(405).send("Method not allowed");
+    return;
+  }
 
-  // Connect to Supabase with service role key
+  const token = parts[0];
+  // 404 et non 400 : sur un chemin parent (`/api/caldav/`), la découverte de
+  // service attend « rien ici », pas « ta requête est invalide ».
+  if (!token || token.length < 8) {
+    res.status(404).send("Calendar not found");
+    return;
+  }
+
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
   if (!supabaseUrl || !serviceKey) {
     res.status(503).send("Server misconfigured — missing Supabase credentials");
     return;
   }
 
-  const supabase = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false },
-  });
+  const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-  const { data: rows, error } = await supabase
-    .from("climbing_plans")
-    .select("data, first_name, last_name, updated_at")
-    .filter("data->profile->>calendarToken", "eq", token)
-    .limit(1);
+  let rows, error;
+  try {
+    ({ data: rows, error } = await supabase
+      .from("climbing_plans")
+      .select("data, first_name, last_name, updated_at")
+      .filter("data->profile->>calendarToken", "eq", token)
+      .limit(1));
+  } catch (e) {
+    res.status(502).send("Upstream error: " + (e?.message || "unknown"));
+    return;
+  }
 
   if (error || !rows?.length) {
     res.status(404).send("Calendar not found — invalid or revoked token");
     return;
   }
 
-  const planData = rows[0].data;
-  const firstName =
-    rows[0].first_name || planData?.profile?.firstName || "";
+  const row = rows[0];
+  const planData = row.data;
+  const firstName = row.first_name || planData?.profile?.firstName || "";
   const displayName = `Planning Escalade${firstName ? " — " + firstName : ""}`;
-  const ctag = rows[0].updated_at || new Date().toISOString();
+  const ctag = row.updated_at || new Date().toISOString();
+  const syncToken = "urn:climbing-planner:sync:" + ctag;
 
-  const events = extractEvents(planData);
+  let events;
+  try {
+    events = extractEvents(planData);
+  } catch (e) {
+    // Une donnée mal formée ne doit pas faire passer le endpoint pour mort :
+    // un 500 ici, et le client conclut que l'URL n'est pas un service CalDAV.
+    console.error("[caldav] extractEvents failed", e);
+    events = [];
+  }
 
-  // Base collection href (always ends with /)
-  const baseHref = `/api/caldav/${token}/`;
+  const baseHref = `/api/caldav/${encodeURIComponent(token)}/`;
+  // Second segment : le fichier d'un événement. Il est encodé dans les href
+  // qu'on publie, donc décodé ici avant comparaison.
+  const eventFile = parts[1] ? uidFromHref(parts[1]) : null;
+  const event = eventFile ? events.find((e) => e.uid === eventFile) : null;
 
-  // Second path segment: event file (e.g. "climbing-2026-03-09-d0-s0@climbing-planner.ics")
-  const eventFile = parts[1] || null;
+  if (eventFile && !event) {
+    res.status(404).send("Event not found");
+    return;
+  }
 
-  // ── GET / HEAD ────────────────────────────────────────────────────────────
+  // ── GET / HEAD ──────────────────────────────────────────────────────────────
   if (req.method === "GET" || req.method === "HEAD") {
-    if (eventFile) {
-      const uid = eventFile.replace(/\.ics$/i, "");
-      const event = events.find((e) => e.uid === uid);
-      if (!event) {
-        res.status(404).send("Event not found");
-        return;
-      }
-      const icsContent = buildSingleICS(event.uid, event.session, event.date, event.endDate);
-      const etag = etagFor(event.uid, event.session);
-      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
-      res.setHeader("ETag", etag);
-      res.setHeader("Cache-Control", "no-cache");
-      res.status(200).send(req.method === "HEAD" ? "" : icsContent);
-    } else {
-      // Collection GET → full ICS feed (fallback for iCal clients)
-      const icsContent = buildFullICS(events, displayName);
-      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
-      res.setHeader(
-        "Content-Disposition",
-        `inline; filename="climbing-planner.ics"`
-      );
-      res.setHeader("Cache-Control", "no-cache");
-      res.status(200).send(req.method === "HEAD" ? "" : icsContent);
+    const body = event
+      ? buildSingleICS(event.uid, event.session, event.date, event.endDate)
+      : buildFullICS(events, displayName);
+    const etag = event
+      ? etagFor(event.uid, event.session, event.date, event.endDate)
+      : `"${Buffer.byteLength(body, "utf8").toString(16)}-${ctag}"`;
+
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("ETag", etag);
+    if (!event) {
+      res.setHeader("Content-Disposition", 'inline; filename="climbing-planner.ics"');
     }
+    if (req.headers["if-none-match"] === etag) {
+      res.status(304).end();
+      return;
+    }
+    res.status(200).send(req.method === "HEAD" ? "" : body);
     return;
   }
 
-  // ── PROPFIND ──────────────────────────────────────────────────────────────
+  const request = parseDavRequest(await readBody(req));
+
+  // ── PROPFIND ────────────────────────────────────────────────────────────────
   if (req.method === "PROPFIND") {
-    const depth = (req.headers["depth"] || "0").trim();
-    res.setHeader("Content-Type", "application/xml; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache");
-
-    if (eventFile) {
-      const uid = eventFile.replace(/\.ics$/i, "");
-      const event = events.find((e) => e.uid === uid);
-      if (!event) {
-        res.status(404).send("Not found");
-        return;
-      }
-      const etag = etagFor(event.uid, event.session);
-      const href = `${baseHref}${event.uid}.ics`;
-      res.status(207).send(xmlPropfindEvent(href, etag));
-    } else if (depth === "1") {
-      res
-        .status(207)
-        .send(
-          xmlPropfindCollectionDepth1(baseHref, displayName, ctag, events)
-        );
-    } else {
-      res.status(207).send(xmlPropfindCollection(baseHref, displayName, ctag));
-    }
+    const depth = String(req.headers["depth"] ?? "0").trim().toLowerCase();
+    sendXml(res, 207, buildPropfind({
+      baseHref, displayName, ctag,
+      color: "#FF4500FF", // l'accent de la DA, format Apple (RRGGBBAA)
+      events,
+      depth: event ? "0" : depth,
+      event,
+      request,
+    }));
     return;
   }
 
-  // ── REPORT ────────────────────────────────────────────────────────────────
+  // ── REPORT ──────────────────────────────────────────────────────────────────
   if (req.method === "REPORT") {
-    // We ignore the filter body and return all events
-    // (calendar clients will apply any date-range filtering on their side)
-    res.setHeader("Content-Type", "application/xml; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache");
-    res.status(207).send(xmlReport(baseHref, events));
+    // Un REPORT posé sur un .ics ne porte que sur cette ressource.
+    const scope = event ? [event] : events;
+    const { status, body } = buildReport({ baseHref, events: scope, request, syncToken });
+    sendXml(res, status, body);
     return;
   }
 
   res.status(405).send("Method not allowed");
+}
+
+function decodeSegment(s) {
+  try { return decodeURIComponent(s); } catch { return s; }
 }
