@@ -1346,6 +1346,40 @@ fabriquer le `.ics` complet de chaque séance pour n'en garder qu'un nombre, don
 à rendre tout le planning en pure perte sur un `PROPFIND` Depth:1 sans corps.
 La propriété reste servie à qui la demande nommément.
 
+### ⚠️ Le pare-feu Vercel bloque les clients CalDAV
+
+**Si un client dit « ce n'est pas une URL CalDAV », regarde ça AVANT le
+protocole.** Le mode « Attack Challenge » de Vercel (dashboard → projet →
+**Firewall**) sert une page JavaScript de vérification à la place de la
+réponse. Un navigateur la résout tout seul et ne voit rien ; DAVx⁵, Apple
+Calendar, Thunderbird, `curl` — tout ce qui n'exécute pas de JS — reçoit un
+`403` avec une page HTML là où il attend du XML.
+
+Signature, dans les en-têtes de réponse :
+
+```
+HTTP/2 403
+X-Vercel-Mitigated: challenge
+X-Vercel-Challenge-Token: 2.1790096584.60.NjEz…
+Content-Type: text/html; charset=utf-8
+<title>Vercel Security Checkpoint</title>
+```
+
+Le piège : la mitigation ne tombe pas forcément sur la **première** requête.
+Dans la trace DAVx⁵ du 22 septembre, le `PROPFIND` initial passe (207, XML
+correct, `collection + calendar` bien lu) et c'est le `OPTIONS` qui suit,
+32 ms plus tard, qui se fait cueillir — puis tout le reste, `.well-known` et
+racine compris. On croit donc à un défaut de protocole alors que le serveur a
+répondu parfaitement. Même chose côté sondage : une poignée de `curl` passent,
+puis l'IP bascule en mitigation, ce qui donne des diagnostics contradictoires
+d'une heure à l'autre.
+
+**Le correctif n'est pas dans le code** — le pare-feu Vercel ne se configure
+pas depuis `vercel.json`. Dans le dashboard, Firewall → une règle **Bypass**
+sur `/api/caldav/*`, `/api/dav/*` et `/api/calendar/*` : la protection reste
+sur l'app, les endpoints de calendrier en sortent. Couper l'Attack Challenge
+Mode entièrement marche aussi, mais découvre tout le site.
+
 ### Le diagnostic (`diag.json`)
 
 `GET /api/caldav/<token>/diag.json` rend un JSON de **mesures** — jamais de
