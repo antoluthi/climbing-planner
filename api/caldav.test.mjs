@@ -401,3 +401,16 @@ test("un href publié se relit bien comme deux segments", () => {
     assert.equal(uidFromHref(segs[1]), e.uid);
   }
 });
+
+test("pathSegments survit aux formes de routage possibles", () => {
+  // Route membre `dav/[token]/[file].js`.
+  assert.deepEqual(pathSegments({ query: { token: "tok", file: "x.ics" } }), ["tok", "x.ics"]);
+  // Réécriture qui dépose le membre en paramètre, le jeton restant en segment.
+  assert.deepEqual(pathSegments({ query: { path: ["tok"], file: "x.ics" } }), ["tok", "x.ics"]);
+  assert.deepEqual(pathSegments({ query: { path: "tok", file: "x.ics" } }), ["tok", "x.ics"]);
+  // Les deux déjà en segments : on ne duplique pas le fichier.
+  assert.deepEqual(pathSegments({ query: { path: ["tok", "x.ics"], file: "x.ics" } }), ["tok", "x.ics"]);
+  // URL brute, sous l'un ou l'autre préfixe.
+  assert.deepEqual(pathSegments({ query: {}, url: "/api/dav/tok/x%40y.ics" }), ["tok", "x@y.ics"]);
+  assert.deepEqual(pathSegments({ query: {}, url: "/api/caldav/tok/" }), ["tok"]);
+});

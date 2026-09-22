@@ -772,25 +772,33 @@ export function diagnose({ planData, events, baseHref, displayName, ctag, syncTo
 
 // ─── Routage ──────────────────────────────────────────────────────────────────
 
-// Les segments après `/api/caldav/`, quelle que soit la route qui nous appelle.
+// Les segments après le préfixe, quelle que soit la route qui nous appelle.
 //
 // Trois sources, dans cet ordre, parce qu'aucune n'est fiable seule :
-//   · `[token]/[file].js` peuple `token` et `file` ;
-//   · `[...path].js` peuple `path` (un tableau, ou une chaîne à un segment) ;
-//   · et l'URL brute reste le dernier recours — le paramètre n'est pas toujours
-//     rempli quand une réécriture de `vercel.json` est passée par là.
+//   · `dav/[token]/[file].js` peuple `token` et `file` ;
+//   · `caldav/[...path].js` peuple `path` (un tableau, ou une chaîne à un
+//     segment), et une réécriture peut y ajouter `file` ;
+//   · l'URL brute reste le dernier recours — le paramètre n'est pas toujours
+//     rempli quand une réécriture de `vercel.json` est passée par là, et c'est
+//     précisément comme ça que `?diag=1` s'est perdu en route.
 export function pathSegments(req) {
   const q = req.query || {};
-  if (q.token) return [q.token, ...(q.file ? [q.file] : [])].map(String);
-
   const raw = Array.isArray(q.path) ? q.path : q.path ? [q.path] : [];
-  const parts = raw.filter(Boolean).map(String);
-  if (parts.length) return parts;
 
-  const rawPath = String(req.url || "").split("?")[0];
-  const prefix = "/api/caldav/";
-  if (!rawPath.startsWith(prefix)) return [];
-  return rawPath.slice(prefix.length).split("/").filter(Boolean).map(decodeSegment);
+  let parts = [];
+  if (q.token) parts = [String(q.token)];
+  else if (raw.length) parts = raw.filter(Boolean).map(String);
+  else {
+    const rawPath = String(req.url || "").split("?")[0];
+    const prefix = ["/api/caldav/", "/api/dav/"].find((p) => rawPath.startsWith(p));
+    if (prefix) parts = rawPath.slice(prefix.length).split("/").filter(Boolean).map(decodeSegment);
+  }
+
+  // Le membre peut arriver en paramètre plutôt qu'en segment, selon la route
+  // et la réécriture empruntées.
+  const file = q.file ? String(q.file) : null;
+  if (file && parts[1] !== file) parts = [parts[0], file].filter(Boolean);
+  return parts;
 }
 
 function decodeSegment(s) {

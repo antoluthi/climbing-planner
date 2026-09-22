@@ -3,11 +3,31 @@
     {
       "source": "/api/caldav/(.*)",
       "headers": [
-        { "key": "DAV", "value": "1, 3, calendar-access" }
+        {
+          "key": "DAV",
+          "value": "1, 3, calendar-access"
+        }
+      ]
+    },
+    {
+      "source": "/api/dav/(.*)",
+      "headers": [
+        {
+          "key": "DAV",
+          "value": "1, 3, calendar-access"
+        }
       ]
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/caldav/:token/:file/",
+      "destination": "/api/dav/:token/:file"
+    },
+    {
+      "source": "/api/caldav/:token/:file",
+      "destination": "/api/dav/:token/:file"
+    },
     {
       "source": "/api/caldav/:slug+/",
       "destination": "/api/caldav/:slug+"

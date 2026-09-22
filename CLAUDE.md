@@ -1248,10 +1248,21 @@ calendrier**). `api/calendar/<token>.ics` reste le flux iCal simple, à côté.
 (`npm run test:caldav`, 32 cas). `api/_caldav-handler.js` ne fait que trois
 choses — trouver la ligne, choisir la méthode, poser les en-têtes.
 
-⚠️ **Deux routes, et ce n'est pas un choix esthétique.** Le gestionnaire est
-réexporté par `caldav/[...path].js` (→ `/api/caldav/:token`) **et** par
-`caldav/[token]/[file].js` (→ `/api/caldav/:token/:file`), parce qu'en
-production le catch-all ne matche **qu'un seul segment**. Deux segments
+⚠️ **Deux routes, et un détour de nommage.** Le gestionnaire est réexporté par
+`caldav/[...path].js` (→ `/api/caldav/:token`) **et** par
+`dav/[token]/[file].js`, que `vercel.json` expose à la bonne URL
+(`/api/caldav/:token/:file` → `/api/dav/:token/:file` — WebDAV exige qu'un
+membre vive sous sa collection). Le préfixe `dav/` n'est pas une coquetterie :
+`caldav/[token]/[file].js` fait **échouer le build entier** —
+
+```
+Error: Two or more files have conflicting paths or names.
+The path "api/caldav/[token]/[file].js" has conflicts with "api/caldav/[...path].js".
+```
+
+Vercel exige que les segments de chemin soient uniques une fois l'extension
+retirée. Le conflit est une contrainte de nommage, pas de routage. Il faut deux
+routes parce qu'en production le catch-all ne matche **qu'un seul segment**. Deux segments
 n'atteignaient jamais la fonction : Vercel répondait sa propre page 404
 (`NOT_FOUND`, en HTML), si bien que **le `.ics` de chaque séance était mort**
 pendant que `PROPFIND` Depth:1 les publiait consciencieusement. Un client qui
@@ -1260,7 +1271,9 @@ pouvait le signaler — la fonction n'était pas appelée. Vérifié en producti
 les quatre formes de chemin (1 segment avec et sans barre oblique finale → la
 fonction ; 2 et 3 segments → `NOT_FOUND`). `pathSegments()` (`_caldav.js`, testé)
 reconstitue les segments depuis `req.query.token`/`file`, `req.query.path`, ou
-l'URL brute — aucune des trois sources n'étant fiable seule.
+l'URL brute (sous l'un ou l'autre préfixe) — aucune de ces sources n'étant
+fiable seule, et le membre pouvant arriver en paramètre plutôt qu'en segment
+selon la réécriture empruntée.
 
 La leçon générale : **une route serverless se vérifie en HTTP réel, pas en
 unitaire**. Les deux bugs de ce endpoint (la chaîne de requête perdue dans la
