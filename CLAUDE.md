@@ -1245,7 +1245,7 @@ calendrier**). `api/calendar/<token>.ics` reste le flux iCal simple, à côté.
 
 **Le protocole vit dans `api/_caldav.js`**, qui n'importe rien d'autre que
 `_event-fields.js` : pas de réseau, pas de Supabase, donc testable sous Node
-(`npm run test:caldav`, 32 cas). `api/_caldav-handler.js` ne fait que trois
+(`npm run test:caldav`, 33 cas). `api/_caldav-handler.js` ne fait que trois
 choses — trouver la ligne, choisir la méthode, poser les en-têtes.
 
 ⚠️ **Deux routes, et un détour de nommage.** Le gestionnaire est réexporté par
