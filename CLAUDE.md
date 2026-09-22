@@ -1314,9 +1314,9 @@ fabriquer le `.ics` complet de chaque séance pour n'en garder qu'un nombre, don
 à rendre tout le planning en pure perte sur un `PROPFIND` Depth:1 sans corps.
 La propriété reste servie à qui la demande nommément.
 
-### Le diagnostic (`?diag=1`)
+### Le diagnostic (`diag.json`)
 
-`GET /api/caldav/<token>/?diag=1` rend un JSON de **mesures** — jamais de
+`GET /api/caldav/<token>/diag.json` rend un JSON de **mesures** — jamais de
 contenu. C'est fait pour être ouvert dans un navigateur et recopié tel quel
 quand un client refuse le calendrier sans dire pourquoi, au lieu de se faire
 dicter au téléphone une réponse de 2 Mo.
@@ -1330,7 +1330,19 @@ note contient-elle un caractère interdit par XML.
 Aucun nom de séance, aucune note, aucun lieu — un test le vérifie. Les seuls
 textes renvoyés sont les UID **signalés comme problématiques**, et un UID voyage
 déjà dans chaque href que le calendrier publie. La protection est celle du
-reste : qui a l'URL a déjà tout le calendrier.
+reste : qui a l'URL a déjà tout le calendrier. Le bloc `request` rend en plus ce
+que la fonction a réellement reçu, **jeton masqué** : ce JSON est fait pour être
+recopié à quelqu'un.
+
+⚠️ **Un segment de chemin, pas `?diag=1`.** La première version lisait un
+paramètre de requête, et il n'arrivait jamais : une URL terminée par « / »
+passe par la réécriture `/api/caldav/:slug+/` de `vercel.json`, et la chaîne de
+requête se perd en route. `diag.json` est un **second segment**, comme le `.ics`
+d'une séance — aucune réécriture ne le touche. `?diag=1` reste accepté pour les
+cas où il survit (URL sans barre oblique finale, appel local), mais ce n'est pas
+la forme qu'on donne à lire. C'est aussi pourquoi le test de ce chemin se fait
+en HTTP réel et pas seulement en unitaire : le bug ne vivait pas dans la
+fonction, il vivait entre la réécriture et elle.
 
 Pour sonder un déploiement avec un vrai jeton :
 
@@ -1339,7 +1351,7 @@ U=https://climbing-planner-theta.vercel.app/api/caldav/<token>/
 curl -i -X OPTIONS "$U"                     # attendu : 200 + DAV: 1, 3, calendar-access
 curl -i -X PROPFIND -H 'Depth: 0' "$U"      # attendu : 207 + resourcetype collection+calendar
 curl -i -X PROPFIND -H 'Depth: 1' "$U"      # attendu : 207 + une réponse par séance
-curl -s "$U?diag=1"                         # tailles, temps, href suspects
+curl -s "$U""diag.json"                     # tailles, temps, href suspects
 ```
 
 ## Commandes

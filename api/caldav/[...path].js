@@ -141,26 +141,43 @@ export default async function handler(req, res) {
   }
 
   const baseHref = `/api/caldav/${encodeURIComponent(token)}/`;
-  // Second segment : le fichier d'un événement. Il est encodé dans les href
-  // qu'on publie, donc décodé ici avant comparaison.
-  const eventFile = parts[1] ? uidFromHref(parts[1]) : null;
+  // Second segment : le fichier d'un événement, ou `diag.json`. Il est encodé
+  // dans les href qu'on publie, donc décodé ici avant comparaison.
+  const second = parts[1] || null;
+
+  // ── Diagnostic ──────────────────────────────────────────────────────────────
+  // Des mesures, jamais du contenu. Prévu pour être ouvert dans un navigateur
+  // et recopié tel quel quand un client refuse le calendrier sans dire
+  // pourquoi. Protégé par le même secret que le reste — qui a l'URL a déjà
+  // tout le calendrier.
+  //
+  // Deux orthographes, et la première existe parce que la seconde s'est perdue
+  // en route : `?diag=1` sur une URL terminée par « / » passe par la réécriture
+  // de `vercel.json`, et la chaîne de requête n'arrive pas jusqu'ici. Un
+  // **segment de chemin** ne traverse aucune réécriture — c'est celui qu'on
+  // donne à lire.
+  if (req.method === "GET" && (second === "diag.json" || isTruthy(queryParam(req, "diag")))) {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.status(200).send(JSON.stringify({
+      ...diagnose({ planData, events, baseHref, displayName, ctag, syncToken, color: ACCENT }),
+      // Ce que la fonction a réellement reçu. C'est ce qui dit si la chaîne de
+      // requête survit à la réécriture — le jeton est masqué, ce JSON circule.
+      request: {
+        method: req.method,
+        url: redactToken(req.url, token),
+        queryKeys: Object.keys(req.query || {}),
+        sawDiagParam: queryParam(req, "diag") != null,
+        via: second === "diag.json" ? "path" : "query",
+      },
+    }, null, 2));
+    return;
+  }
+
+  const eventFile = second ? uidFromHref(second) : null;
   const event = eventFile ? events.find((e) => e.uid === eventFile) : null;
 
   if (eventFile && !event) {
     res.status(404).send("Event not found");
-    return;
-  }
-
-  // ── Diagnostic ──────────────────────────────────────────────────────────────
-  // `?diag=1` sur un GET : des mesures, jamais du contenu. Prévu pour être
-  // ouvert dans un navigateur et recopié tel quel quand un client refuse le
-  // calendrier sans dire pourquoi. Protégé par le même secret que le reste —
-  // qui a l'URL a déjà tout le calendrier.
-  if (req.method === "GET" && isTruthy(queryParam(req, "diag"))) {
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.status(200).send(JSON.stringify(
-      diagnose({ planData, events, baseHref, displayName, ctag, syncToken, color: ACCENT }),
-      null, 2));
     return;
   }
 
@@ -229,4 +246,10 @@ function queryParam(req, name) {
 
 function isTruthy(v) {
   return v != null && v !== "" && v !== "0" && String(v).toLowerCase() !== "false";
+}
+
+// Le jeton est un secret : il ne doit pas repartir dans un JSON qu'on demande à
+// quelqu'un de recopier, même si c'est lui qui l'a en main.
+function redactToken(url, token) {
+  return String(url || "").split(token).join("<token>");
 }
