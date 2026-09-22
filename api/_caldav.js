@@ -73,8 +73,31 @@ function str(v) {
   return typeof v === "string" ? v : v == null ? "" : String(v);
 }
 
+// XML 1.0 n'offre **aucun** échappement pour les caractères de contrôle : un
+// \x0B ou un \x1B dans une note (copié-collé d'un PDF, d'un clavier de
+// téléphone, d'une appli de notes) rend le document *mal formé*. Un parseur
+// strict — celui de DAVx⁵ en est un — jette alors la réponse entière au lieu
+// d'ignorer le caractère fautif, et le client conclut « ce n'est pas du
+// CalDAV ». Une moitié de paire de substituts (surrogate) produit le même
+// effet. On les retire à la source plutôt que d'espérer qu'ils n'arrivent
+// jamais : une seule note mal collée suffirait à casser toute la collection.
+const XML_UNSAFE =
+  // eslint-disable-next-line no-control-regex -- viser les contrôles est tout le propos
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+export function stripXmlUnsafe(s) {
+  return str(s).replace(XML_UNSAFE, "");
+}
+
+export function hasXmlUnsafe(s) {
+  XML_UNSAFE.lastIndex = 0;
+  return XML_UNSAFE.test(str(s));
+}
+
 function escapeICS(s) {
-  return str(s)
+  // Les contrôles sont retirés ici aussi : RFC 5545 ne les admet pas davantage
+  // dans une valeur de propriété.
+  return stripXmlUnsafe(s)
     .replace(/\\/g, "\\\\")
     .replace(/;/g, "\\;")
     .replace(/,/g, "\\,")
@@ -317,7 +340,7 @@ export function etagFor(uid, session, date, endDate) {
 // ─── XML ──────────────────────────────────────────────────────────────────────
 
 export function xe(s) {
-  return str(s)
+  return stripXmlUnsafe(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -421,9 +444,12 @@ const COLLECTION_ALLPROP = [
   [NS_CS, "getctag"], [NS_APPLE, "calendar-color"],
 ];
 
+// `getcontentlength` n'est **pas** dans le jeu par défaut : le mesurer oblige à
+// fabriquer le .ics complet de chaque séance, pour n'en garder qu'un nombre.
+// Sur un PROPFIND Depth:1 sans corps — donc allprop — c'est tout le planning
+// rendu en pure perte. La propriété reste servie à qui la demande nommément.
 const EVENT_ALLPROP = [
-  [NS_DAV, "resourcetype"], [NS_DAV, "getcontenttype"],
-  [NS_DAV, "getetag"], [NS_DAV, "getcontentlength"],
+  [NS_DAV, "resourcetype"], [NS_DAV, "getcontenttype"], [NS_DAV, "getetag"],
 ];
 
 const PREFIX = new Map([[NS_DAV, "D"], [NS_CALDAV, "C"], [NS_CS, "CS"], [NS_APPLE, "A"]]);
@@ -655,4 +681,90 @@ export function buildReport({ baseHref, events, request, syncToken }) {
     : "";
 
   return { status: 207, body: multistatus(responses, extra) };
+}
+
+// ─── Diagnostic ───────────────────────────────────────────────────────────────
+
+// `GET …/?diag=1` — de quoi comprendre une panne côté client sans avoir à se
+// faire dicter au téléphone le contenu d'une réponse de 2 Mo.
+//
+// Ce que ça rend : des **mesures**, jamais du contenu. Pas de nom de séance,
+// pas de note, pas de lieu. Les seuls textes renvoyés sont des UID signalés
+// comme problématiques — et un UID voyage déjà dans chaque href que le
+// calendrier publie.
+//
+// Ce que ça répond, dans l'ordre où on se pose les questions :
+//   · la ligne est-elle trouvée, et le blob est-il énorme ?
+//   · combien de séances en sortent ?
+//   · quelle taille fait chaque réponse, et en combien de temps ?
+//     (une fonction Vercel plafonne à 4,5 Mo)
+//   · reste-t-il un href qui ne survit pas à un aller-retour d'URL ?
+//   · une note contient-elle un caractère que XML interdit ?
+export function diagnose({ planData, events, baseHref, displayName, ctag, syncToken, color }) {
+  const timed = (fn) => {
+    const t0 = Date.now();
+    let bytes = null;
+    let error = null;
+    try {
+      bytes = Buffer.byteLength(fn(), "utf8");
+    } catch (e) {
+      error = String(e?.message || e);
+    }
+    return { bytes, ms: Date.now() - t0, ...(error ? { error } : {}) };
+  };
+
+  const ctx = { baseHref, displayName, ctag, color, events };
+  const allProps = { props: [], allprop: true, hrefs: [] };
+  const since = new Date(Date.now() - 90 * 86400000);
+
+  // Un href doit traverser une URL et en revenir identique. C'est le test qui
+  // aurait attrapé « …/Sortie longue, allure 5:30/km.ics » du premier coup.
+  const badHrefs = [];
+  for (const e of events) {
+    const href = hrefFor(baseHref, e.uid);
+    const outside = !href.startsWith(baseHref);
+    const nested = href.slice(baseHref.length).includes("/");
+    const roundTrip = uidFromHref(href) === e.uid;
+    let parses = true;
+    try { new URL(href, "https://example.test"); } catch { parses = false; }
+    if (outside || nested || !roundTrip || !parses) {
+      badHrefs.push({ uid: e.uid, outside, nested, roundTrip, parses });
+    }
+  }
+
+  // Caractères interdits par XML dans ce que les séances apportent. On compte,
+  // on ne recopie pas.
+  let unsafeFields = 0;
+  for (const e of events) {
+    for (const v of Object.values(e.session || {})) {
+      if (typeof v === "string" && hasXmlUnsafe(v)) unsafeFields++;
+    }
+  }
+
+  let blobBytes = null;
+  try { blobBytes = Buffer.byteLength(JSON.stringify(planData ?? null), "utf8"); } catch { /* cyclique */ }
+
+  const weeks = planData?.weeks && typeof planData.weeks === "object" ? Object.keys(planData.weeks).length : 0;
+
+  return {
+    ok: true,
+    row: { found: true, blobBytes, weeks, quickSessions: Array.isArray(planData?.quickSessions) ? planData.quickSessions.length : 0, ctag },
+    events: {
+      count: events.length,
+      withStartTime: events.filter((e) => str(e.session?.startTime)).length,
+      allDay: events.filter((e) => !str(e.session?.startTime)).length,
+      earliest: events.length ? events.map((e) => isoDateFrom(e.date)).sort()[0] : null,
+      latest: events.length ? events.map((e) => isoDateFrom(e.date)).sort().slice(-1)[0] : null,
+    },
+    responses: {
+      icsFeed: timed(() => buildFullICS(events, displayName)),
+      propfind0: timed(() => buildPropfind({ ...ctx, depth: "0", request: allProps })),
+      propfind1: timed(() => buildPropfind({ ...ctx, depth: "1", request: allProps })),
+      reportAll: timed(() => buildReport({ baseHref, events, request: { root: { ns: NS_CALDAV, local: "calendar-query" }, props: [], hrefs: [] }, syncToken }).body),
+      report90d: timed(() => buildReport({ baseHref, events, request: { root: { ns: NS_CALDAV, local: "calendar-query" }, props: [], hrefs: [], timeRange: { start: since, end: null } }, syncToken }).body),
+    },
+    hrefs: { bad: badHrefs.length, sample: badHrefs.slice(0, 5) },
+    xml: { unsafeFields },
+    limits: { vercelPayloadBytes: 4_500_000 },
+  };
 }
