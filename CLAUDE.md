@@ -1301,6 +1301,37 @@ les réponses, erreurs comprises — c'était l'inverse : ils étaient posés *a
 la vérification du jeton. `vercel.json` les double par une règle `headers` et
 réécrit `/api/caldav/:slug+/` (barre oblique finale) vers la fonction.
 
+**Aucun caractère de contrôle ne sort d'ici** (`stripXmlUnsafe`). XML 1.0
+n'offre aucun échappement pour eux : un `\x0B` ou un `\x1B` collé dans une note
+depuis un PDF ou une appli de notes rend le document **mal formé**, et un
+parseur strict jette la réponse entière plutôt que d'ignorer le caractère — le
+client conclut « ce n'est pas du CalDAV » sans rien dire de plus. Une moitié de
+paire de substituts fait la même chose. Même traitement côté ICS, que RFC 5545
+n'admet pas davantage.
+
+`getcontentlength` n'est **pas** dans le jeu `allprop` : le mesurer oblige à
+fabriquer le `.ics` complet de chaque séance pour n'en garder qu'un nombre, donc
+à rendre tout le planning en pure perte sur un `PROPFIND` Depth:1 sans corps.
+La propriété reste servie à qui la demande nommément.
+
+### Le diagnostic (`?diag=1`)
+
+`GET /api/caldav/<token>/?diag=1` rend un JSON de **mesures** — jamais de
+contenu. C'est fait pour être ouvert dans un navigateur et recopié tel quel
+quand un client refuse le calendrier sans dire pourquoi, au lieu de se faire
+dicter au téléphone une réponse de 2 Mo.
+
+Ce qu'il répond, dans l'ordre où les questions se posent : la ligne est-elle
+trouvée et le blob est-il énorme · combien de séances en sortent · quelle taille
+et quel temps pour chaque réponse (le plafond Vercel, 4,5 Mo, est rappelé dans
+la sortie) · reste-t-il un href qui ne survit pas à un aller-retour d'URL · une
+note contient-elle un caractère interdit par XML.
+
+Aucun nom de séance, aucune note, aucun lieu — un test le vérifie. Les seuls
+textes renvoyés sont les UID **signalés comme problématiques**, et un UID voyage
+déjà dans chaque href que le calendrier publie. La protection est celle du
+reste : qui a l'URL a déjà tout le calendrier.
+
 Pour sonder un déploiement avec un vrai jeton :
 
 ```bash
@@ -1308,6 +1339,7 @@ U=https://climbing-planner-theta.vercel.app/api/caldav/<token>/
 curl -i -X OPTIONS "$U"                     # attendu : 200 + DAV: 1, 3, calendar-access
 curl -i -X PROPFIND -H 'Depth: 0' "$U"      # attendu : 207 + resourcetype collection+calendar
 curl -i -X PROPFIND -H 'Depth: 1' "$U"      # attendu : 207 + une réponse par séance
+curl -s "$U?diag=1"                         # tailles, temps, href suspects
 ```
 
 ## Commandes

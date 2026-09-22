@@ -8,7 +8,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import {
-  extractEvents, buildSingleICS, buildFullICS, etagFor,
+  extractEvents, buildSingleICS, buildFullICS, etagFor, diagnose,
   parseDavRequest, buildPropfind, buildReport, uidFromHref,
 } from "../_caldav.js";
 
@@ -18,6 +18,9 @@ import {
 // chemins parents, et une réponse sans `DAV:` lui fait conclure « pas un
 // serveur CalDAV ».
 const METHODS = "OPTIONS, GET, HEAD, PROPFIND, REPORT";
+
+// L'accent de la DA, au format Apple (RRGGBBAA).
+const ACCENT = "#FF4500FF";
 
 function setCommonHeaders(res) {
   res.setHeader("DAV", "1, 3, calendar-access");
@@ -148,6 +151,19 @@ export default async function handler(req, res) {
     return;
   }
 
+  // ── Diagnostic ──────────────────────────────────────────────────────────────
+  // `?diag=1` sur un GET : des mesures, jamais du contenu. Prévu pour être
+  // ouvert dans un navigateur et recopié tel quel quand un client refuse le
+  // calendrier sans dire pourquoi. Protégé par le même secret que le reste —
+  // qui a l'URL a déjà tout le calendrier.
+  if (req.method === "GET" && isTruthy(queryParam(req, "diag"))) {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.status(200).send(JSON.stringify(
+      diagnose({ planData, events, baseHref, displayName, ctag, syncToken, color: ACCENT }),
+      null, 2));
+    return;
+  }
+
   // ── GET / HEAD ──────────────────────────────────────────────────────────────
   if (req.method === "GET" || req.method === "HEAD") {
     const body = event
@@ -177,7 +193,7 @@ export default async function handler(req, res) {
     const depth = String(req.headers["depth"] ?? "0").trim().toLowerCase();
     sendXml(res, 207, buildPropfind({
       baseHref, displayName, ctag,
-      color: "#FF4500FF", // l'accent de la DA, format Apple (RRGGBBAA)
+      color: ACCENT,
       events,
       depth: event ? "0" : depth,
       event,
@@ -200,4 +216,17 @@ export default async function handler(req, res) {
 
 function decodeSegment(s) {
   try { return decodeURIComponent(s); } catch { return s; }
+}
+
+// Un paramètre de requête, que le runtime l'ait déjà analysé ou non.
+function queryParam(req, name) {
+  const v = req.query?.[name];
+  if (v != null) return Array.isArray(v) ? v[0] : v;
+  const qs = (req.url || "").split("?")[1];
+  if (!qs) return null;
+  return new URLSearchParams(qs).get(name);
+}
+
+function isTruthy(v) {
+  return v != null && v !== "" && v !== "0" && String(v).toLowerCase() !== "false";
 }

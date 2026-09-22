@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   extractEvents, buildPropfind, buildReport, parseDavRequest,
   hrefFor, uidFromHref, inTimeRange, eventBounds, buildSingleICS, etagFor,
+  stripXmlUnsafe, hasXmlUnsafe, xe, diagnose,
 } from "./_caldav.js";
 
 // ─── Jeu de données ───────────────────────────────────────────────────────────
@@ -279,4 +280,90 @@ test("l'ETag suit tout ce que le .ics contient", () => {
 test("inTimeRange ignore une plage absente", () => {
   assert.equal(inTimeRange(events[0], null), true);
   assert.equal(inTimeRange(events[0], { start: null, end: null }), true);
+});
+
+// ─── Caractères interdits par XML ─────────────────────────────────────────────
+
+test("un caractère de contrôle ne rend jamais la réponse mal formée", () => {
+  // \x0B et \x1B n'ont aucun échappement en XML 1.0 : les laisser passer, c'est
+  // livrer un document qu'un parseur strict refuse en bloc.
+  const sale = "Bloc\u000B dur\u001B\u0000 !";
+  assert.equal(hasXmlUnsafe(sale), true);
+  assert.equal(stripXmlUnsafe(sale), "Bloc dur !");
+  // eslint-disable-next-line no-control-regex -- on vérifie justement qu'il n'en reste aucun
+  assert.equal(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(xe(sale)), false);
+  // Ce qui est légal reste intact : tabulation, saut de ligne, accents, emoji
+  // (donc une vraie paire de substituts).
+  assert.equal(stripXmlUnsafe("a\tb\nc — é 🧗"), "a\tb\nc — é 🧗");
+  assert.equal(hasXmlUnsafe("a\tb\nc — é 🧗"), false);
+  // Une moitié de paire de substituts casse l'encodage : elle saute.
+  assert.equal(hasXmlUnsafe("x\uD800y"), true);
+  assert.equal(stripXmlUnsafe("x\uD800y"), "xy");
+});
+
+test("un .ics ne transporte pas de caractère de contrôle non plus", () => {
+  const evt = { name: "Sortie\u000B longue", startTime: "07:00", duration: 60, notes: "note\u001Bx" };
+  const ics = buildSingleICS("u@x", evt, new Date(Date.UTC(2026, 8, 14)), null);
+  // eslint-disable-next-line no-control-regex -- on vérifie justement qu'il n'en reste aucun
+  assert.equal(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(ics), false);
+  assert.match(ics, /SUMMARY:Sortie longue/);
+});
+
+test("hasXmlUnsafe est réentrant (le drapeau /g ne doit pas mémoriser)", () => {
+  // Un RegExp global garde `lastIndex` : sans remise à zéro, un appel sur deux
+  // répondrait faux. C'est le genre de bug qui ne se voit qu'en production.
+  assert.equal(hasXmlUnsafe("a\u000Bb"), true);
+  assert.equal(hasXmlUnsafe("a\u000Bb"), true);
+  assert.equal(hasXmlUnsafe("propre"), false);
+  assert.equal(hasXmlUnsafe("propre"), false);
+});
+
+// ─── Diagnostic ───────────────────────────────────────────────────────────────
+
+test("le diagnostic mesure sans recopier le contenu", () => {
+  const d = diagnose({ planData: PLAN, events, ...CTX, syncToken: "urn:tp:sync:1" });
+  assert.equal(d.ok, true);
+  assert.equal(d.events.count, 3);
+  assert.equal(d.row.weeks, 1);
+  assert.equal(d.row.quickSessions, 1);
+  assert.ok(d.row.blobBytes > 0);
+  for (const k of ["icsFeed", "propfind0", "propfind1", "reportAll", "report90d"]) {
+    assert.ok(d.responses[k].bytes > 0, k);
+    assert.equal(d.responses[k].error, undefined, k);
+  }
+  // Les deux tailles sont là pour être comparées sur de vraies données : c'est
+  // ce qui dit si une réponse approche du plafond de 4,5 Mo.
+  assert.ok(d.limits.vercelPayloadBytes > 0);
+  assert.equal(d.hrefs.bad, 0);
+  assert.equal(d.xml.unsafeFields, 0);
+
+  // Aucun nom de séance, aucune note, aucun lieu dans la sortie.
+  const dump = JSON.stringify(d);
+  for (const secret of ["Bloc & résistance", "Sortie longue", "Arkose Nation", "4x4", "Lyon"]) {
+    assert.equal(dump.includes(secret), false, `fuite : ${secret}`);
+  }
+});
+
+test("le diagnostic signale ce qui casserait un client", () => {
+  const d = diagnose({
+    planData: { weeks: { "2026-09-14": [[{ id: "c_x", name: "ok\u000Bsale", startTime: "10:00" }]] } },
+    events: extractEvents({ weeks: { "2026-09-14": [[{ id: "c_x", name: "ok\u000Bsale", startTime: "10:00" }]] } }),
+    ...CTX, syncToken: "urn:tp:sync:1",
+  });
+  assert.equal(d.xml.unsafeFields, 1);
+});
+
+test("un PROPFIND sans corps ne fabrique aucun .ics", () => {
+  // allprop sur Depth:1 ne doit renvoyer que de quoi identifier les ressources.
+  // Y mettre getcontentlength reviendrait à rendre tout le planning pour n'en
+  // publier que des tailles.
+  const xml = buildPropfind({ ...CTX, events, depth: "1", request: parseDavRequest("") });
+  assert.equal(/BEGIN:VCALENDAR/.test(xml), false);
+  assert.equal(/getcontentlength/.test(xml), false);
+  assert.match(xml, /<D:getetag>/);
+
+  // Mais elle reste servie à qui la demande.
+  const asked = buildPropfind({ ...CTX, events, depth: "1",
+    request: parseDavRequest('<propfind xmlns="DAV:"><prop><getcontentlength/></prop></propfind>') });
+  assert.match(asked, /<D:getcontentlength>\d+<\/D:getcontentlength>/);
 });
