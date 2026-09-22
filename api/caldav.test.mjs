@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import {
   extractEvents, buildPropfind, buildReport, parseDavRequest,
   hrefFor, uidFromHref, inTimeRange, eventBounds, buildSingleICS, etagFor,
-  stripXmlUnsafe, hasXmlUnsafe, xe, diagnose,
+  stripXmlUnsafe, hasXmlUnsafe, xe, diagnose, pathSegments,
 } from "./_caldav.js";
 
 // ─── Jeu de données ───────────────────────────────────────────────────────────
@@ -366,4 +366,38 @@ test("un PROPFIND sans corps ne fabrique aucun .ics", () => {
   const asked = buildPropfind({ ...CTX, events, depth: "1",
     request: parseDavRequest('<propfind xmlns="DAV:"><prop><getcontentlength/></prop></propfind>') });
   assert.match(asked, /<D:getcontentlength>\d+<\/D:getcontentlength>/);
+});
+
+// ─── Routage ──────────────────────────────────────────────────────────────────
+
+test("pathSegments lit les deux routes et l'URL brute", () => {
+  // `caldav/[token]/[file].js` — la route qui manquait : en production, le
+  // catch-all ne matchait qu'un seul segment et le .ics d'une séance renvoyait
+  // la page 404 de Vercel, sans jamais atteindre la fonction.
+  assert.deepEqual(pathSegments({ query: { token: "tok", file: "x.ics" } }), ["tok", "x.ics"]);
+  assert.deepEqual(pathSegments({ query: { token: "tok" } }), ["tok"]);
+
+  // `caldav/[...path].js` — tableau, ou chaîne quand il n'y a qu'un segment.
+  assert.deepEqual(pathSegments({ query: { path: ["tok", "x.ics"] } }), ["tok", "x.ics"]);
+  assert.deepEqual(pathSegments({ query: { path: "tok" } }), ["tok"]);
+
+  // Dernier recours : l'URL brute, décodée, sans la chaîne de requête.
+  assert.deepEqual(pathSegments({ query: {}, url: "/api/caldav/tok/x%40y.ics?diag=1" }), ["tok", "x@y.ics"]);
+  assert.deepEqual(pathSegments({ url: "/api/caldav/tok/" }), ["tok"]);
+
+  // Rien d'exploitable : aucun segment, et surtout aucune exception.
+  assert.deepEqual(pathSegments({}), []);
+  assert.deepEqual(pathSegments({ query: {}, url: "/ailleurs" }), []);
+  assert.deepEqual(pathSegments({ query: { path: [] }, url: "" }), []);
+});
+
+test("un href publié se relit bien comme deux segments", () => {
+  // La boucle complète : ce que PROPFIND publie doit revenir en (jeton, fichier)
+  // quand le client va le chercher.
+  for (const e of events) {
+    const href = hrefFor(BASE, e.uid);
+    const segs = pathSegments({ query: {}, url: href });
+    assert.equal(segs.length, 2, href);
+    assert.equal(uidFromHref(segs[1]), e.uid);
+  }
 });

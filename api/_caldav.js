@@ -1,6 +1,7 @@
 // Logique CalDAV pure — aucun accès réseau, aucune dépendance.
-// La route `api/caldav/[...path].js` n'est qu'une coquille : elle lit la ligne
-// Supabase et délègue ici. Tout ce qui est testable l'est depuis ce fichier
+// `api/_caldav-handler.js` lit la ligne Supabase et délègue ici ; les deux
+// routes (`caldav/[...path].js` et `caldav/[token]/[file].js`) ne sont que des
+// réexports. Tout ce qui est testable l'est depuis ce fichier
 // (`npm run test:caldav`).
 //
 // IMPORTANT : le fichier commence par "_" → Vercel ne le traite pas comme une
@@ -767,4 +768,31 @@ export function diagnose({ planData, events, baseHref, displayName, ctag, syncTo
     xml: { unsafeFields },
     limits: { vercelPayloadBytes: 4_500_000 },
   };
+}
+
+// ─── Routage ──────────────────────────────────────────────────────────────────
+
+// Les segments après `/api/caldav/`, quelle que soit la route qui nous appelle.
+//
+// Trois sources, dans cet ordre, parce qu'aucune n'est fiable seule :
+//   · `[token]/[file].js` peuple `token` et `file` ;
+//   · `[...path].js` peuple `path` (un tableau, ou une chaîne à un segment) ;
+//   · et l'URL brute reste le dernier recours — le paramètre n'est pas toujours
+//     rempli quand une réécriture de `vercel.json` est passée par là.
+export function pathSegments(req) {
+  const q = req.query || {};
+  if (q.token) return [q.token, ...(q.file ? [q.file] : [])].map(String);
+
+  const raw = Array.isArray(q.path) ? q.path : q.path ? [q.path] : [];
+  const parts = raw.filter(Boolean).map(String);
+  if (parts.length) return parts;
+
+  const rawPath = String(req.url || "").split("?")[0];
+  const prefix = "/api/caldav/";
+  if (!rawPath.startsWith(prefix)) return [];
+  return rawPath.slice(prefix.length).split("/").filter(Boolean).map(decodeSegment);
+}
+
+function decodeSegment(s) {
+  try { return decodeURIComponent(s); } catch { return s; }
 }

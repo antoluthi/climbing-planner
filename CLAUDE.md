@@ -1236,7 +1236,7 @@ l'extraction de `ui/CycleFields`).
 ferme le trou. Vérifié à la sonde : la règle attrape `<Inconnu>` là où
 `no-undef` ne voyait que `inconnuJS()`.
 
-### Le serveur CalDAV (`api/caldav/[...path].js` + `api/_caldav.js`)
+### Le serveur CalDAV (`api/_caldav-handler.js` + `api/_caldav.js`)
 
 Un planning s'ouvre comme un compte CalDAV en lecture seule :
 `/api/caldav/<calendarToken>/`, le jeton dans le chemin (pas d'authentification
@@ -1245,8 +1245,27 @@ calendrier**). `api/calendar/<token>.ics` reste le flux iCal simple, à côté.
 
 **Le protocole vit dans `api/_caldav.js`**, qui n'importe rien d'autre que
 `_event-fields.js` : pas de réseau, pas de Supabase, donc testable sous Node
-(`npm run test:caldav`, 24 cas). La route ne fait que trois choses — trouver la
-ligne, choisir la méthode, poser les en-têtes.
+(`npm run test:caldav`, 32 cas). `api/_caldav-handler.js` ne fait que trois
+choses — trouver la ligne, choisir la méthode, poser les en-têtes.
+
+⚠️ **Deux routes, et ce n'est pas un choix esthétique.** Le gestionnaire est
+réexporté par `caldav/[...path].js` (→ `/api/caldav/:token`) **et** par
+`caldav/[token]/[file].js` (→ `/api/caldav/:token/:file`), parce qu'en
+production le catch-all ne matche **qu'un seul segment**. Deux segments
+n'atteignaient jamais la fonction : Vercel répondait sa propre page 404
+(`NOT_FOUND`, en HTML), si bien que **le `.ics` de chaque séance était mort**
+pendant que `PROPFIND` Depth:1 les publiait consciencieusement. Un client qui
+suit la liste ne trouvait alors aucune séance, et rien côté application ne
+pouvait le signaler — la fonction n'était pas appelée. Vérifié en production sur
+les quatre formes de chemin (1 segment avec et sans barre oblique finale → la
+fonction ; 2 et 3 segments → `NOT_FOUND`). `pathSegments()` (`_caldav.js`, testé)
+reconstitue les segments depuis `req.query.token`/`file`, `req.query.path`, ou
+l'URL brute — aucune des trois sources n'étant fiable seule.
+
+La leçon générale : **une route serverless se vérifie en HTTP réel, pas en
+unitaire**. Les deux bugs de ce endpoint (la chaîne de requête perdue dans la
+réécriture, le catch-all limité à un segment) vivaient *entre* la plateforme et
+la fonction — aucun test de la fonction ne pouvait les voir.
 
 Méthodes : `OPTIONS` · `GET` / `HEAD` (le `.ics` d'une séance, ou le flux
 complet sur la collection) · `PROPFIND` (Depth 0 et 1) · `REPORT`
