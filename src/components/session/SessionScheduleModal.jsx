@@ -4,12 +4,19 @@ import { Modal } from "../ui/Modal.jsx";
 import { colors } from "../../theme/palette.js";
 import { RADIUS, Z } from "../../theme/makeStyles.js";
 import { PrimaryButton, RoundIconButton, Chip, SANS, MONO } from "../ui/Ascent.jsx";
-import { calcEndTime } from "../../lib/helpers.js";
+import { calcEndTime, getMondayOf, addDays, localDateStr } from "../../lib/helpers.js";
 
 // ─── QUAND & OÙ ───────────────────────────────────────────────────────────────
 // Seconde étape de l'ajout : l'heure de départ et le lieu, ce qui place la
 // séance dans le calendrier. La flèche en haut à gauche revient au formulaire,
 // avec ce qui y avait été saisi.
+//
+// `allowDateChange` y ajoute le **jour**, et c'est ce qui permet à « Modifier
+// la séance » de remplacer « Déplacer la séance » : déplacer n'est qu'un
+// changement de date, donc une modification comme une autre. À la création le
+// jour est déjà choisi (on a touché une case du calendrier), d'où le drapeau.
+
+const WEEKDAYS = ["L", "M", "M", "J", "V", "S", "D"];
 
 function defaultTimeFor(dayDate) {
   const today = new Date();
@@ -34,6 +41,9 @@ export function SessionScheduleModal({
   defaultLocation,
   estimatedTime,
   recentLocations = [],
+  allowDateChange = false,
+  confirmLabel = "Terminer",
+  skipLabel = "Plus tard",
   onConfirm,
   onSkip,
   onBack,
@@ -43,7 +53,13 @@ export function SessionScheduleModal({
 
   const [startTime, setStartTime] = useState(defaultStartTime || defaultTimeFor(dayDate || new Date()));
   const [location, setLocation] = useState(defaultLocation || "");
+  const [dateISO, setDateISO] = useState(() => localDateStr(dayDate || new Date()));
   const canConfirm = startTime.trim().length >= 4;
+
+  const selected = useMemo(() => new Date(dateISO + "T12:00:00"), [dateISO]);
+  const monday = useMemo(() => getMondayOf(selected), [selected]);
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(monday, i)), [monday]);
+  const shiftWeek = (dir) => setDateISO(localDateStr(addDays(selected, 7 * dir)));
 
   const handleConfirm = () => {
     if (!canConfirm) return;
@@ -51,6 +67,7 @@ export function SessionScheduleModal({
       startTime: startTime.trim(),
       endTime: estimatedTime ? calcEndTime(startTime.trim(), estimatedTime) : null,
       location: location.trim(),
+      dateISO,
     });
   };
 
@@ -100,7 +117,9 @@ export function SessionScheduleModal({
               fontSize: 12, color: c.textDim, marginTop: 2, textTransform: "capitalize",
               whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
             }}>
-              {[sessionName, dayLabel].filter(Boolean).join(" · ")}
+              {[sessionName, allowDateChange
+                ? selected.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
+                : dayLabel].filter(Boolean).join(" · ")}
             </div>
           )}
         </div>
@@ -111,6 +130,48 @@ export function SessionScheduleModal({
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px", fontFamily: SANS }}>
+        {allowDateChange && (
+          <div style={{ marginBottom: 20 }}>
+            {label("Jour")}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <RoundIconButton isDark={isDark} size={30} label="Semaine précédente" onClick={() => shiftWeek(-1)}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg>
+              </RoundIconButton>
+              <div style={{ flex: 1, textAlign: "center", fontSize: 12, fontWeight: 600, color: c.textMuted }}>
+                semaine du {monday.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+              </div>
+              <RoundIconButton isDark={isDark} size={30} label="Semaine suivante" onClick={() => shiftWeek(1)}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+              </RoundIconButton>
+            </div>
+            <div style={{ display: "flex", gap: 4 }}>
+              {weekDays.map((d, i) => {
+                const iso = localDateStr(d);
+                const active = iso === dateISO;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setDateISO(iso)}
+                    style={{
+                      flex: 1, minWidth: 0, border: "none", cursor: "pointer",
+                      borderRadius: RADIUS.control, padding: "8px 0",
+                      background: active ? c.accent : c.control,
+                      color: active ? c.textOnAccent : c.textMuted,
+                      fontFamily: SANS, display: "flex", flexDirection: "column",
+                      alignItems: "center", gap: 2,
+                    }}
+                  >
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.05em" }}>{WEEKDAYS[i]}</span>
+                    <span style={{ font: `700 14px ${MONO}` }}>{d.getDate()}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {label("Heure de départ")}
         <input
           type="time"
@@ -157,13 +218,13 @@ export function SessionScheduleModal({
             fontSize: 13, fontFamily: SANS, padding: "8px 4px",
           }}
         >
-          Plus tard
+          {skipLabel}
         </button>
         <PrimaryButton
           isDark={isDark} height={46} onClick={handleConfirm}
           style={{ width: "auto", padding: "0 24px", marginLeft: "auto", opacity: canConfirm ? 1 : 0.45 }}
         >
-          Terminer
+          {confirmLabel}
         </PrimaryButton>
       </div>
     </Modal>

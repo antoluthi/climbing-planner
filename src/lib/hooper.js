@@ -14,6 +14,21 @@ export function hooperColor(total, isDark) {
   return scale[2];
 }
 
+// ─── Un journal est complet quand le Hooper l'est ────────────────────────────
+// Le poids et la note du jour sont facultatifs : on ne pèse pas tous les
+// matins, et il n'y a pas toujours quelque chose à écrire. Le ressenti, lui,
+// ne se rattrape pas — c'est donc lui, et lui seul, qui décide si la journée
+// est notée. Les quatre curseurs sont exigés : une entrée partielle n'est pas
+// un ressenti.
+//
+// Définie ici plutôt que dans chaque écran : le widget, la cloche et le
+// calendrier posent la même question et doivent répondre pareil.
+export function isHooperFilled(data, dateISO) {
+  const h = (data?.hooper || []).find(e => e.date === dateISO);
+  if (!h) return false;
+  return [h.sleep, h.fatigue, h.stress, h.soreness].every(v => v != null);
+}
+
 // ─── Ce que vaut une note, en toutes lettres ─────────────────────────────────
 // Un chiffre de 1 à 7 ne dit rien tout seul, et l'échelle est **inversée** par
 // rapport à l'intuition : 1 est le bon côté, 7 le mauvais. Sans phrase, on note

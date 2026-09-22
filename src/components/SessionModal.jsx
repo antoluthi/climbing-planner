@@ -12,7 +12,15 @@ import { colors, DATA } from "../theme/palette.js";
 
 // ─── SESSION MODAL — refonte sans onglets ─────────────────────────────────────
 // Le ressenti est la vue par défaut (le moment le plus fréquent d'ouverture).
-// Le détail technique devient un accordéon en bas. "Déplacer" est dans un kebab.
+// Le détail technique devient un accordéon en bas.
+//
+// **« Déplacer » n'est plus une action à part** : changer de jour est une
+// modification comme une autre, et « Modifier la séance » rouvre le formulaire
+// puis « quand & où », où le jour se choisit. Le panneau de déplacement ne
+// survit que pour deux cas qui ne sont pas de l'édition :
+//   · l'athlète suivi, qui ne modifie pas le planning mais **suggère** un
+//     déplacement à son coach ;
+//   · le coach, pour **répondre** à ces suggestions.
 
 const STATUS_OPTIONS = [
   { key: "done",     label: "Fait",      icon: "✓" },
@@ -21,7 +29,7 @@ const STATUS_OPTIONS = [
 ];
 
 export function SessionModal({
-  session, dayLabel, weekMeta, onClose, onEdit, onDelete, onSave,
+  session, dayLabel, weekMeta, onClose, onEdit, onReschedule, onDelete, onSave,
   role, smWeekKey, smDayIndex,
   onMoveSession, onUpdateStartTime, onSuggestMove, moveSuggestions,
   onAcceptSuggestion, onRejectSuggestion,
@@ -143,10 +151,10 @@ export function SessionModal({
     return () => window.removeEventListener("keydown", h);
   });
 
-  // Confirmation "Merci pour ton retour." — overlay affiché après enregistrement
-  // d'un ressenti (sessionDone). Le persist s'exécute à la fermeture de l'overlay,
-  // au clic de l'utilisateur.
-  const [showThanks, setShowThanks] = useState(false);
+  // Enregistrer ferme, et c'est tout. Un écran « Merci pour ton retour » suivi
+  // d'un bouton « Fermer » demandait un clic de plus pour ne rien apprendre :
+  // la confirmation passe par le toast que pose le shell (« Ressenti
+  // enregistré »), qui n'arrête pas le geste en cours.
   const persistAndClose = () => {
     // Aucun statut : la séance redevient « pas encore réalisée », donc pas de
     // ressenti du tout. Attention à ne pas enregistrer `{ done: false }`, qui
@@ -167,10 +175,7 @@ export function SessionModal({
       notes,
     });
   };
-  const handleSave = () => {
-    if (sessionDone) setShowThanks(true);
-    else persistAndClose();
-  };
+  const handleSave = () => persistAndClose();
   // Garde la dernière version de handleSave accessible depuis les listeners clavier
   useEffect(() => { handleSaveRef.current = handleSave; });
 
@@ -258,18 +263,26 @@ export function SessionModal({
                   borderRadius: 8, padding: 4, zIndex: 12, minWidth: 180,
                   boxShadow: "0 6px 18px rgba(0,0,0,0.18)",
                 }}>
-                  <button
-                    onClick={() => { setShowMove(true); setKebabOpen(false); }}
-                    style={kebabItemStyle({ color: textMid })}
-                  >
-                    {isAthleteUser ? "Suggérer un déplacement…" : "Déplacer la séance…"}
-                    {pendingSuggestions.length > 0 && <span style={{ marginLeft: 6, width: 7, height: 7, borderRadius: "50%", background: colors(isDark).warn, display: "inline-block" }} />}
-                  </button>
+                  {isAthleteUser && (
+                    <button
+                      onClick={() => { setShowMove(true); setKebabOpen(false); }}
+                      style={kebabItemStyle({ color: textMid })}
+                    >Suggérer un déplacement…</button>
+                  )}
                   {!isAthleteUser && onEdit && (
                     <button
                       onClick={() => { setKebabOpen(false); onEdit(); }}
                       style={kebabItemStyle({ color: textMid })}
                     >Modifier la séance…</button>
+                  )}
+                  {!isAthleteUser && pendingSuggestions.length > 0 && (
+                    <button
+                      onClick={() => { setShowMove(true); setKebabOpen(false); }}
+                      style={kebabItemStyle({ color: textMid })}
+                    >
+                      Suggestions ({pendingSuggestions.length})
+                      <span style={{ marginLeft: 6, width: 7, height: 7, borderRadius: "50%", background: colors(isDark).warn, display: "inline-block" }} />
+                    </button>
                   )}
                   {!isAthleteUser && onDelete && (
                     <button
@@ -342,11 +355,12 @@ export function SessionModal({
               <div
                 role="radiogroup"
                 aria-label="Statut de la séance"
-                style={{
-                  display: "flex", gap: 4,
-                  background: surfaceMuted, borderRadius: 12, padding: 4,
-                }}
+                style={{ display: "flex", gap: 8 }}
               >
+                {/* Trois pastilles, pas un sélecteur gris : le statut d'une
+                    séance porte une couleur (vert, ambre, corail), et c'est
+                    elle qui doit se voir. Au repos, un contour et rien d'autre
+                    — le choix fait ressort seul. */}
                 {STATUS_OPTIONS.map(opt => {
                   const active = status === opt.key;
                   const c = statusColors[opt.key];
@@ -361,16 +375,25 @@ export function SessionModal({
                       title={active ? "Retirer ce statut" : opt.label}
                       onClick={() => setStatus(prev => prev === opt.key ? null : opt.key)}
                       style={{
-                        flex: 1, padding: "10px 8px", fontSize: 12, fontWeight: 600,
-                        textAlign: "center", borderRadius: 9, border: "none",
-                        background: active ? surfaceCard : "transparent",
+                        flex: 1, height: 44, fontSize: 13,
+                        fontWeight: active ? 700 : 600,
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        borderRadius: 999,
+                        background: active ? c.bg : "transparent",
+                        border: `1px solid ${active ? c.fg : borderStrong}`,
                         color: active ? c.fg : textLight,
-                        boxShadow: active ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
                         cursor: "pointer", fontFamily: "inherit",
-                        transition: "color 0.12s, background 0.12s",
+                        transition: "color 0.14s, background 0.14s, border-color 0.14s",
                       }}
                     >
-                      <span style={{ marginRight: 4 }}>{opt.icon}</span>{opt.label}
+                      <span style={{
+                        width: 18, height: 18, borderRadius: 999, flexShrink: 0,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: active ? c.fg : "transparent",
+                        border: active ? "none" : `1px solid ${borderStrong}`,
+                        color: colors(isDark).onColor, fontSize: 11, lineHeight: 1,
+                      }}>{active ? opt.icon : ""}</span>
+                      {opt.label}
                     </button>
                   );
                 })}
@@ -382,7 +405,7 @@ export function SessionModal({
                     Séance non réalisée. Tu veux la reprogrammer ?
                   </div>
                   <button
-                    onClick={() => setShowMove(true)}
+                    onClick={() => (isAthleteUser ? setShowMove(true) : (onReschedule || onEdit)?.())}
                     style={{
                       background: statusColors.not_done.fg, color: colors(isDark).onColor,
                       border: "none", borderRadius: 8, padding: "8px 14px",
@@ -659,55 +682,6 @@ export function SessionModal({
         />
       )}
 
-      {showThanks && (
-        <div
-          style={{
-            position: "fixed", inset: 0,
-            background: "rgba(0,0,0,0.6)",
-            zIndex: Z.nested,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 16,
-          }}
-          onClick={e => { if (e.target === e.currentTarget) persistAndClose(); }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Ressenti enregistré"
-            style={{
-              background: paper,
-              border: `1px solid ${borderStrong}`,
-              borderRadius: 16,
-              padding: "28px 24px 22px",
-              maxWidth: 360, width: "100%",
-              display: "flex", flexDirection: "column",
-              alignItems: "center", textAlign: "center",
-              gap: 12,
-              boxShadow: "0 16px 40px rgba(0,0,0,0.25)",
-            }}
-          >
-            <div style={{
-              fontFamily: "'Newsreader', Georgia, serif",
-              fontSize: 22, fontWeight: 500, color: text,
-              letterSpacing: "-0.01em",
-            }}>
-              Merci pour ton retour.
-            </div>
-            <button
-              onClick={persistAndClose}
-              style={{
-                marginTop: 6,
-                background: inkPrimary,
-                color: isDark ? paper : colors(isDark).onColor,
-                border: "none", borderRadius: 8,
-                padding: "10px 22px",
-                fontSize: 13, fontWeight: 600,
-                cursor: "pointer", fontFamily: "inherit",
-              }}
-            >Fermer</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

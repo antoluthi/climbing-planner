@@ -50,8 +50,9 @@ src/
 │   ├── cycles.js                 — chaînage des mésocycles : ancre, durées, réarrangement
 │   ├── supabase-public.js        — client anon (sans session) + fetchPublicPlans()
 │   ├── notifications.js          — rappels de séance (plan pur + plugin Capacitor)
+│   ├── todo.js                   — ce qui reste à noter (ressenti, retours de séance)
 │   ├── widget.js                 — pont avec le widget Android (SharedPreferences)
-│   └── hooper.js                 — hooperLabel, hooperColor
+│   └── hooper.js                 — hooperLabel, hooperColor, isHooperFilled, HOOPER_SCALE
 │
 ├── theme/
 │   ├── palette.js                — SOURCE UNIQUE des couleurs (PALETTE.light/dark, colors(), DATA)
@@ -750,6 +751,16 @@ modifiait… et ne s'enregistrait jamais.
   perd que l'étape courante.
 - Les rappels n'y sont plus : leur place est l'écran Cycles.
 
+**Un journal est complet quand le Hooper l'est** — `isHooperFilled()`
+(`lib/hooper.js`), une seule définition pour les trois écrans qui posent la
+question : le widget, la cloche et l'avertissement de la grille bureau. Le
+poids et la note sont facultatifs (on ne pèse pas tous les matins, et il n'y a
+pas toujours quelque chose à écrire) ; les exiger laissait le journal
+éternellement « à finir ». La créatine sort de ce calcul pour la même raison :
+c'est une habitude, elle a ses propres rappels. À ne pas confondre avec
+`hasDayLog()` (`lib/helpers.js`), qui répond à « y a-t-il quelque chose de
+noté ce jour-là ? » — c'est ce que remplit la pastille du calendrier.
+
 ### Dashboard — graphiques (`components/Dashboard.jsx`)
 - **Périodes** : Semaine · Mois · Année, mêmes libellés et même `Segmented` que
   le calendrier. Un seul découpage sert toutes les séries (`getBuckets`) : la
@@ -822,14 +833,53 @@ discipline (celle de l'échéance pour une échéance, trois au plus par jour).
 - Phrase contextuelle dynamique : heure courante, complétion des séances du jour, contexte semaine (mésocycle, charge)
 - Fonctions helpers `getGreeting()` et `getContextualPhrase()` définies localement dans le fichier
 
-### Déplacement de séances (`components/SessionModal.jsx` — onglet "Déplacer")
-- **Coach / solo** : sélecteur de date (navigation sem ← →) + heure → déplace directement la séance
-  - "Enregistrer l'heure" si seul l'horaire change
-  - "Déplacer la séance" si une autre journée est choisie
-- **Athlète** : peut modifier l'heure directement ; pour un changement de date → envoie une suggestion au coach (semaine + jour + note optionnelle)
-  - Suggestions en attente dans `data.moveSuggestions`
-  - Coach voit un point orange sur l'onglet "Déplacer" + liste Accepter/Refuser
-  - Badge `↔` sur la `DayColumn` pour les séances avec suggestion en attente
+### Modifier une séance, déplacement compris (`SessionModal` → `SessionFormModal` → `SessionScheduleModal`)
+
+« Déplacer » n'est plus une action à part : **changer de jour est une
+modification comme une autre**. Le kebab de `SessionModal` n'offre donc plus
+qu'un « Modifier la séance… », qui rouvre le formulaire pré-rempli puis
+« quand & où » — et c'est là que le jour se choisit, à côté de l'heure et du
+lieu. Deux entrées pour le même geste obligeaient à savoir d'avance laquelle
+répondait à la question qu'on se posait.
+
+- `SessionScheduleModal` gagne `allowDateChange` : une rangée de sept
+  pastilles et une navigation de semaine, au-dessus de l'heure. À la création
+  le drapeau est absent — le jour vient d'être touché dans le calendrier.
+  `onConfirm` rend donc aussi `dateISO`.
+- **Rien n'est écrit avant « Enregistrer »** : la flèche de retour revient au
+  formulaire tel qu'il était, et « Annuler » abandonne tout. Même règle qu'à la
+  création.
+- L'écriture est un seul `setData` : remplacement en place si le jour n'a pas
+  bougé, retrait puis ajout sinon. **Le ressenti survit** (`feedback` recopié
+  depuis la séance d'avant) : il appartient à la séance vécue, pas au
+  formulaire. Un déplacement propose son annulation dans le toast.
+- « Reprogrammer → », sur une séance manquée, saute le formulaire et ouvre
+  directement « quand & où » (`onReschedule`) : rien n'a changé de ce qu'elle
+  est, seulement de quand elle a lieu.
+
+**L'athlète suivi garde son chemin à lui.** Il ne modifie pas le planning : il
+**suggère** un déplacement, que le coach accepte ou refuse. Son kebab montre
+donc « Suggérer un déplacement… », et le panneau de déplacement survit pour ça
+— ainsi que, côté coach, pour répondre aux suggestions (entrée
+« Suggestions (n) », visible seulement s'il y en a).
+
+- Suggestions en attente dans `data.moveSuggestions`
+- Badge `↔` sur la `DayColumn` pour les séances avec suggestion en attente
+
+### Statut d'une séance : trois pastilles
+
+Fait · Adaptée · Manquée ne sont plus un sélecteur segmenté gris mais **trois
+pastilles** (`RADIUS.pill`), contour seul au repos, teinte du statut une fois
+choisi — vert, ambre, corail, avec le rond de gauche qui se remplit. Le statut
+d'une séance porte une couleur : c'est elle qui doit se voir, pas le cadre.
+Recliquer retire toujours le statut.
+
+### Pas d'écran de remerciement
+
+Enregistrer un ressenti fermait la modale sur un « Merci pour ton retour. »
+suivi d'un bouton « Fermer » : un clic de plus pour n'apprendre rien. La
+confirmation passe par le **toast** que pose déjà le shell (« Ressenti
+enregistré »), qui n'arrête pas le geste en cours.
 
 ### Synchronisation (refonte août 2026)
 
@@ -1038,6 +1088,18 @@ concatène les 9 dernières dans l'ordre, idempotent et ré-exécutable.
   (`com.climbingplanner.app://auth-callback`, en allowlist Supabase), bouton
   retour Android via pile de calques, `syncSystemBars()`.
 - **Service worker** : désactivé pour le build natif (`vite build --mode capacitor`).
+- ⚠️ **Android rejoue l'Intent de lancement** — c'est ce qui ouvrait le journal
+  (ou une séance) tout seul « assez souvent ». Le bouton du widget lance
+  `MainActivity` avec l'URI `…://day-log` ; une notification touchée la lance
+  avec ses extras. Cet Intent **reste attaché à la tâche** : quand le système a
+  tué le processus et qu'on rouvre l'app depuis les Récents, la même Intent
+  revient telle quelle, avec `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY` en plus.
+  `App.getLaunchUrl()` relit alors un lien vieux de plusieurs heures.
+  `MainActivity.onCreate` vide donc l'Intent dans ce cas précis (action, data,
+  extras) : une relance depuis l'historique n'est ni un clic sur le widget ni
+  un clic sur une notification. Un vrai clic arrive sans ce drapeau et passe
+  intact. La garde est **côté natif** parce que c'est le seul endroit qui sait
+  faire la différence.
 - **Sauvegarde Android** : `allowBackup="false"` — la session Supabase vit dans
   le localStorage de la WebView et ne doit pas partir dans les backups Google.
 - **CI** (`.github/workflows/build-apk.yml`) : build sur `master` et `claude/**`,
@@ -1118,13 +1180,46 @@ le tiroir tant que les quatre curseurs ne sont pas réglés**.
   plus lieu d'être — journée notée depuis, jour révolu, bascule coupée
   (`staleHooperIds` + `removeDeliveredNotificationsById`, plugin ≥ 8.3).
 - `autoCancel: false` : la toucher sans rien remplir ne la fait pas disparaître.
-  La toucher ouvre `DayLogModal` **sur la date qu'elle porte** (`extra.kind ===
-  "hooper"`), pas sur aujourd'hui : reçue hier, c'est bien la journée restée en
-  blanc qu'on vient remplir.
+
+**Toucher une notification ouvre l'app, et rien d'autre.** Elle place le
+calendrier sur la journée concernée ; ce qui reste à noter attend dans la
+cloche, où l'on décide soi-même d'y aller. Une modale qui s'ouvre d'autorité au
+démarrage n'est jamais ce qu'on venait faire — et c'était pire que ça : Android
+**rejoue l'Intent de lancement** (voir plus bas), si bien que le journal ou une
+séance surgissait à des ouvertures qui n'avaient rien demandé.
 - Bascule séparée de celle des séances (`profile.notifyHooper`) : c'est un
   rappel d'habitude, pas un rappel de séance — on peut vouloir l'un sans
   l'autre. Les deux partagent la permission Android ; la première activée la
   demande.
+
+### Ce qui reste à noter (`lib/todo.js`, dans la cloche)
+
+Deux oublis se rattrapent — le ressenti du jour, et le retour sur une séance
+passée — et aucun des deux ne se voyait **dans** l'app : le tiroir d'Android le
+disait, la cloche non. Depuis un navigateur, ou l'app rouverte après avoir
+balayé la notification, plus rien ne le rappelait.
+
+`pendingItems(data, now)` en rend la liste, et le panneau de notifications
+l'affiche sous « À faire », au-dessus de l'activité du coaching. Chaque ligne a
+son bouton « Noter » : le ressenti ouvre `DayLogModal` à sa date, un retour de
+séance ouvre `SessionModal` à sa position.
+
+- **Rien n'est stocké.** La liste se déduit du planning à chaque rendu : une
+  notification en base demanderait d'être créée, synchronisée, puis effacée à
+  l'instant exact où la journée est notée — trois occasions de mentir. Ici,
+  noter fait disparaître la ligne par construction, et la pastille de la cloche
+  suit (`unreadCount` + `pending.length`).
+- **Mêmes fenêtres que les notifications Android**, pour que les deux disent la
+  même chose : trois jours pour le ressenti, sept pour les séances.
+- Une séance n'est réclamée qu'une fois **passée** : jour révolu, ou heure de
+  fin dépassée aujourd'hui (départ + durée, 1 h 30 par défaut). Sans heure de
+  départ, on attend le lendemain — réclamer à midi le ressenti d'une séance de
+  19 h n'a aucun sens.
+- Les journées passées portent leur nom (« Ressenti d'hier », « Ressenti de
+  dimanche ») : trois lignes « Ressenti du jour » d'affilée ne se distinguent
+  pas.
+- La cloche **n'est plus réservée aux comptes connectés** : elle ne portait que
+  des invitations de coaching, elle porte maintenant des données locales.
 
 ### Widget d'écran d'accueil (`lib/widget.js`, `TodayWidget.java`)
 
@@ -1176,8 +1271,16 @@ Les rappels du jour, cochables, et le résumé du journal.
   redimensionnement est `onAppWidgetOptionsChanged` : sans cette redéfinition,
   un widget étiré garde la mise en page de sa taille d'avant.
   Table obtenue (hauteurs d'un lanceur classique, 70×n − 30) : 2 rangées → 2
-  rappels + date · 3 → 3 + journal · 4 → 5 · 5 → 7 · 6 → 8.
-- **La ligne journal est un bouton** : elle ouvre l'app **sur l'assistant du
+  rappels + date · 3 → 2 + journal · 4 → 4 · 5 → 6 · 6 → 8. Le bloc journal
+  coûte une ligne de rappel depuis qu'il porte un bouton (34 dp → 60), et le
+  calcul retient sa forme la plus haute : mieux vaut une ligne de moins qu'un
+  bouton rogné.
+- **Le journal a un vrai bouton**, pas une ligne avec un chevron : une ligne de
+  texte se lit comme un libellé, on ne sait pas qu'elle mène quelque part tant
+  qu'on n'a pas essayé. Le bouton reprend `PrimaryButton` de la DA — pastille
+  pleine à l'accent tant que le ressenti manque (« Compléter le journal »),
+  contour discret une fois noté (« Modifier le journal »), le résumé de ce qui
+  est noté s'affichant alors au-dessus. Il ouvre l'app **sur l'assistant du
   jour** (`DayLogModal`), pas sur l'accueil — c'est là qu'on va le matin. Un
   `ACTION_VIEW` sur `com.climbingplanner.app://day-log`, visant explicitement
   `MainActivity` : le schéma est déjà déclaré (celui du deep link d'auth), donc
@@ -1196,9 +1299,17 @@ Les rappels du jour, cochables, et le résumé du journal.
   se lit à sa pastille et à son texte éteint.
 - `MainActivity.onPause()` redessine le widget : c'est le moment exact où il
   redevient visible. Sinon il attendrait son `updatePeriodMillis` (30 min).
+- **Tout le reste du cadre ouvre l'app** (`widget_root`, posé en dernier, qui ne
+  recouvre pas les clics des enfants : une ligne de rappel coche toujours son
+  rappel). Un widget dont seules trois zones réagissent donne l'impression
+  d'être cassé — on tape à côté d'un rappel et il ne se passe rien.
 - Le widget vit dans le lanceur : il ne peut pas suivre le thème de l'app et
-  prend le noir de la DA, en dur dans ses XML — seule entorse assumée à la
-  règle « une seule source de couleurs ».
+  prend celui du sombre, en dur dans ses XML — seule entorse assumée à la règle
+  « une seule source de couleurs ». Les valeurs sont **recopiées de
+  `PALETTE.dark`**, en `#AARRGGBB` : carte `#121212`, filet
+  `rgba(255,255,255,0.08)` → `#14FFFFFF`, texte `#FFFFFF`, atténué
+  `#80FFFFFF`, accent `#FF4500`, rayon 18 dp (`RADIUS.cardLg`). Une carte de
+  l'app posée sur l'écran d'accueil, plutôt qu'un cadre noir à part.
 
 - **Signature** : `signingConfig` release conditionnel — `android/app/build.gradle`
   ne le déclare que si `ANDROID_KEYSTORE_PATH` pointe vers un fichier existant

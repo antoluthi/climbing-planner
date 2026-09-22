@@ -85,7 +85,11 @@ public class TodayWidget extends AppWidgetProvider {
     // exactes au pixel : mieux vaut une ligne de moins qu'une ligne rognée.
     private static final int ROW_DP     = 34;   // case 20dp + 7dp de part et d'autre
     private static final int HEADER_DP  = 18;   // la ligne de date
-    private static final int JOURNAL_DP = 34;   // marge 8 + padding 8 + icône 16 + 2
+    // Marge 8 + résumé 16 + bouton 36 : le journal porte désormais un vrai
+    // bouton, et il coûte une ligne de rappel sur un widget de trois rangées.
+    // Le calcul retient la forme la plus haute (résumé compris) — mieux vaut
+    // une ligne de moins qu'un bouton rogné.
+    private static final int JOURNAL_DP = 60;
     private static final int PAD_DP     = 12;   // padding du cadre, en haut et en bas
     private static final int PAD_TIGHT_DP = 8;  // … resserré quand la place manque
 
@@ -113,7 +117,7 @@ public class TodayWidget extends AppWidgetProvider {
      */
     static Fit fit(int wDp, int hDp) {
         boolean header  = hDp >= 100;
-        boolean journal = hDp >= 140;
+        boolean journal = hDp >= 150;
         int pad = journal ? PAD_DP : PAD_TIGHT_DP;
         int avail = hDp - 2 * pad - (header ? HEADER_DP : 0) - (journal ? JOURNAL_DP : 0);
         int rows = avail / ROW_DP;
@@ -334,9 +338,14 @@ public class TodayWidget extends AppWidgetProvider {
             views.setViewVisibility(R.id.widget_header, View.VISIBLE);
             views.setViewVisibility(R.id.widget_journal_row, View.VISIBLE);
             views.setViewVisibility(R.id.widget_more, View.GONE);
-            views.setTextViewText(R.id.widget_date, "CHARGE");
+            views.setTextViewText(R.id.widget_date, "TRACTOPLANNER");
+            views.setViewVisibility(R.id.widget_journal, View.VISIBLE);
             views.setTextViewText(R.id.widget_journal,
                 raw == null ? "Ouvre l’app pour commencer" : "Ouvre l’app pour actualiser");
+            views.setTextViewText(R.id.widget_journal_cta, "Ouvrir TractoPlanner");
+            views.setInt(R.id.widget_journal_btn, "setBackgroundResource",
+                R.drawable.widget_button_accent);
+            views.setOnClickPendingIntent(R.id.widget_journal_btn, openAppIntent(context));
             for (int rowId : ROW_IDS) {
                 views.setViewVisibility(rowId, View.GONE);
             }
@@ -358,13 +367,17 @@ public class TodayWidget extends AppWidgetProvider {
         views.setViewVisibility(R.id.widget_header, header ? View.VISIBLE : View.GONE);
         views.setViewVisibility(R.id.widget_journal_row, fit.journal ? View.VISIBLE : View.GONE);
         views.setTextViewText(R.id.widget_date, day.optString("label", ""));
-        // Journal vide : la ligne est une invitation, donc allumée. Rempli :
-        // c'est un résumé, il s'efface comme un rappel coché.
+        // Le bouton dit ce qu'il reste à faire ; le résumé, ce qui est déjà
+        // noté. Tant que le ressenti manque, le bouton est plein et le résumé
+        // n'a rien à dire — on ne montre donc que l'appel à l'action.
         boolean journalDone = day.optBoolean("journalDone", false);
+        views.setViewVisibility(R.id.widget_journal, journalDone ? View.VISIBLE : View.GONE);
         views.setTextViewText(R.id.widget_journal, day.optString("journal", ""));
-        views.setTextColor(R.id.widget_journal, journalDone ? 0xFF8A8A8A : 0xFFFFFFFF);
-        views.setImageViewResource(R.id.widget_journal_icon,
-            journalDone ? R.drawable.ic_widget_check_on : R.drawable.ic_widget_check_off);
+        views.setTextViewText(R.id.widget_journal_cta,
+            journalDone ? "Modifier le journal" : "Compléter le journal");
+        views.setTextColor(R.id.widget_journal_cta, journalDone ? 0xB8FFFFFF : 0xFFFFFFFF);
+        views.setInt(R.id.widget_journal_btn, "setBackgroundResource",
+            journalDone ? R.drawable.widget_button_ghost : R.drawable.widget_button_accent);
 
         // Réduit, le widget cache des rappels : il doit le dire, sinon on croit
         // avoir tout fait. Le compte est celui du jour, pas celui de la copie.
@@ -384,7 +397,7 @@ public class TodayWidget extends AppWidgetProvider {
                 // Coché = éteint. Pas de texte barré : `setPaintFlags` n'est pas
                 // une méthode « remotable », un widget qui l'appelle affiche
                 // « problème de chargement » au lieu de se dessiner.
-                views.setTextColor(NAME_IDS[i], done ? 0xFF8A8A8A : 0xFFFFFFFF);
+                views.setTextColor(NAME_IDS[i], done ? 0x80FFFFFF : 0xFFFFFFFF);
                 views.setOnClickPendingIntent(ROW_IDS[i], toggleIntent(context, id, i));
             } else {
                 views.setViewVisibility(ROW_IDS[i], View.GONE);
@@ -395,9 +408,13 @@ public class TodayWidget extends AppWidgetProvider {
             count == 0 ? View.VISIBLE : View.GONE);
         views.setTextViewText(R.id.widget_empty, "Aucun rappel aujourd’hui");
 
-        // Le journal ouvre l'assistant du jour, l'en-tête ouvre l'app.
-        views.setOnClickPendingIntent(R.id.widget_journal_row, dayLogIntent(context));
-        views.setOnClickPendingIntent(R.id.widget_date, openAppIntent(context));
+        // Le bouton ouvre l'assistant du jour ; **tout le reste du widget ouvre
+        // l'app**. Un widget dont seules trois zones réagissent donne
+        // l'impression d'être cassé : on tape à côté d'un rappel et rien ne se
+        // passe. Le clic du cadre est posé en dernier et ne recouvre pas ceux
+        // des enfants — une ligne de rappel coche toujours son rappel.
+        views.setOnClickPendingIntent(R.id.widget_journal_btn, dayLogIntent(context));
+        views.setOnClickPendingIntent(R.id.widget_root, openAppIntent(context));
 
         manager.updateAppWidget(widgetId, views);
     }

@@ -62,7 +62,10 @@ export function getDayLogWarning(data, dateISO, dateObj) {
   );
   const isInCreatineCycle = creatineCycles.some(c => isDateInCustomCycle(c, dateObj));
   const creatineMissing = isInCreatineCycle && !data.creatine?.[dateISO];
-  return { hasWarning: hooperMissing || creatineMissing, hooperMissing, creatineMissing };
+  // Le journal est complet dès que le ressenti l'est : la créatine est une
+  // habitude à part (elle a ses propres rappels), pas une pièce manquante du
+  // journal. Elle reste renvoyée, pour qui veut la signaler autrement.
+  return { hasWarning: hooperMissing, hooperMissing, creatineMissing };
 }
 
 

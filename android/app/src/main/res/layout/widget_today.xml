@@ -28,7 +28,7 @@
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="wrap_content"
-            android:textColor="#8A8A8A"
+            android:textColor="#80FFFFFF"
             android:textSize="10sp"
             android:textStyle="bold"
             android:letterSpacing="0.08"
@@ -53,7 +53,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
-        android:textColor="#8A8A8A"
+        android:textColor="#80FFFFFF"
         android:textSize="12sp"
         android:visibility="gone"
         android:text="Aucun rappel aujourd’hui" />
@@ -267,43 +267,47 @@
     </LinearLayout>
 
     <!-- Le journal du jour : ce qui est noté, et l'entrée vers l'app. -->
+    <!-- Le journal, en bas : un résumé de ce qui est noté, puis un **vrai
+         bouton**. Une ligne de texte avec un chevron se lisait comme un
+         libellé — on ne sait pas qu'elle mène quelque part tant qu'on n'a pas
+         essayé. Le bouton reprend PrimaryButton de la DA : pastille pleine à
+         l'accent tant que le ressenti manque, contour discret une fois noté
+         (il reste ouvrable, mais il n'appelle plus). -->
     <LinearLayout
         android:id="@+id/widget_journal_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="2dp">
-        <ImageView
-            android:id="@+id/widget_journal_icon"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:contentDescription="@null"
-            android:src="@drawable/ic_widget_check_off" />
+        android:orientation="vertical"
+        android:layout_marginTop="8dp">
         <TextView
             android:id="@+id/widget_journal"
-            android:layout_width="0dp"
-            android:layout_weight="1"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:textColor="#8A8A8A"
+            android:textColor="#80FFFFFF"
             android:textSize="11sp"
             android:maxLines="1"
             android:ellipsize="end"
+            android:paddingBottom="5dp"
+            android:visibility="gone"
             android:text="" />
-        <!-- Le chevron dit que la ligne mène quelque part : sans lui, le
-             résumé du journal se lit comme un simple libellé. -->
-        <TextView
-            android:id="@+id/widget_journal_go"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:textColor="#8A8A8A"
-            android:textSize="12sp"
-            android:maxLines="1"
-            android:text="›" />
+        <LinearLayout
+            android:id="@+id/widget_journal_btn"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/widget_button_accent">
+            <TextView
+                android:id="@+id/widget_journal_cta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:text="Compléter le journal" />
+        </LinearLayout>
     </LinearLayout>
 
 </LinearLayout>

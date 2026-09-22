@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 
 // ── Lib ──
 import supabase from "../lib/supabase.js";
@@ -44,7 +44,8 @@ import { SportFilterSheet } from "../components/SportFilterSheet.jsx";
 import { CalendarView } from "../components/CalendarView.jsx";
 import { toast } from "../lib/toast.js";
 import { setRootBackHandler, setDayLogHandler } from "../lib/native.js";
-import { syncNotifications, onNotificationTap, locateSession, HOOPER_HOUR_DEFAULT } from "../lib/notifications.js";
+import { syncNotifications, onNotificationTap, HOOPER_HOUR_DEFAULT } from "../lib/notifications.js";
+import { pendingItems } from "../lib/todo.js";
 import { writeWidgetSnapshot, drainWidgetToggles, applyPendingToggles } from "../lib/widget.js";
 import { NotificationBell } from "../components/NotificationBell.jsx";
 import { NotificationsPanel } from "../components/NotificationsPanel.jsx";
@@ -82,6 +83,32 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
   // Aperçu d'une échéance — l'équivalent de SessionModal pour une séance.
   const [eventDetail, setEventDetail] = useState(null);
   const [notifOpen, setNotifOpen] = useState(false);
+  // Ce qui attend un geste : ressenti du jour, retours de séance en attente.
+  // Déduit du planning (lib/todo.js), donc toujours juste — et compté dans la
+  // pastille de la cloche, sans quoi rien ne signalerait qu'il y a à faire.
+  const pending = useMemo(() => pendingItems(data), [data]);
+
+  // Lieux déjà utilisés, du plus récent au plus ancien — proposés à l'étape
+  // « quand & où », que l'on crée une séance ou qu'on en modifie une.
+  const recentLocations = useMemo(() => {
+    const all = [];
+    Object.entries(data.weeks || {}).forEach(([wk, days]) => {
+      (days || []).forEach(dayArr => {
+        (dayArr || []).forEach(s => {
+          const loc = s?.location || s?.address;
+          if (loc && typeof loc === "string") all.push({ loc: loc.trim(), wk });
+        });
+      });
+    });
+    all.sort((a, b) => b.wk.localeCompare(a.wk));
+    const seen = new Set();
+    const out = [];
+    for (const { loc } of all) {
+      if (!seen.has(loc.toLowerCase())) { seen.add(loc.toLowerCase()); out.push(loc); }
+      if (out.length >= 8) break;
+    }
+    return out;
+  }, [data.weeks]);
   // Ajout en deux temps : le formulaire (quoi), puis « quand & où ». Rien n'est
   // écrit tant que la seconde étape n'est pas passée — c'est ce qui permet à sa
   // flèche de retour de rouvrir le formulaire sans laisser de séance fantôme.
@@ -191,22 +218,20 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [setData]);
 
-  // Toucher la notification ouvre la séance — celle du rappel comme celle qui
-  // demande le ressenti. La séance est retrouvée par son identifiant : entre
-  // la programmation et le geste, elle a pu être déplacée.
+  // Toucher une notification **ouvre l'app, et rien d'autre**. Elle se contente
+  // de placer le calendrier sur la journée concernée ; ce qui reste à faire
+  // attend dans la cloche (lib/todo.js), où l'on choisit soi-même d'y aller.
+  //
+  // Ouvrir la modale d'autorité était le défaut : l'Intent de lancement étant
+  // rejoué par Android (cf. MainActivity), une séance ou l'assistant du jour
+  // surgissait à des ouvertures qui n'avaient rien demandé. Même corrigé, un
+  // formulaire qui s'ouvre seul au démarrage n'est pas ce qu'on veut.
   const dataRef = useRef(data);
   useEffect(() => { dataRef.current = data; });
   useEffect(() => {
     let handle = null;
-    onNotificationTap(({ kind, sessionId, dateISO }) => {
-      // Le rappel de ressenti ouvre l'assistant du jour qu'il concerne — pas
-      // celui d'aujourd'hui : touchée le lendemain, c'est bien la journée
-      // restée en blanc qu'on vient remplir.
-      if (kind === "hooper") { setLogDate(dateISO || localDateStr(new Date())); return; }
-      const at = locateSession(dataRef.current, { sessionId, dateISO });
-      if (!at) return;
-      setCurrentDate(new Date(dateISO + "T12:00:00"));
-      setSessionModal(at);
+    onNotificationTap(({ dateISO }) => {
+      if (dateISO) setCurrentDate(new Date(dateISO + "T12:00:00"));
     }).then(h => { handle = h; });
     return () => handle?.remove?.();
   }, []);
@@ -494,9 +519,14 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
     </div>
   );
 
-  const notifBell = session ? (
+  const bellCount = unreadCount + pending.length;
+
+  // La cloche ne dépendait que du compte, parce qu'elle ne portait que des
+  // invitations de coaching. Elle porte aussi ce qu'il reste à noter, qui est
+  // une donnée locale : sans compte, il y a donc quelque chose à y lire.
+  const notifBell = (session || pending.length > 0) ? (
     <NotificationBell
-      unreadCount={unreadCount}
+      unreadCount={bellCount}
       isDark={isDark}
       active={notifOpen}
       onClick={() => setNotifOpen(true)}
@@ -568,9 +598,9 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
             isMobile={isMobile}
             isLoading={!!session && !cloudLoaded}
             onOpenAccount={() => setViewMode("profil")}
-            onOpenNotifications={session ? () => setNotifOpen(true) : null}
+            onOpenNotifications={(session || pending.length > 0) ? () => setNotifOpen(true) : null}
             onOpenEvent={(ev) => setEventDetail(ev)}
-            unreadCount={unreadCount}
+            unreadCount={bellCount}
             onOpenSession={openSessionModal}
             onToggleReminder={toggleReminderCheck}
             onSaveWeight={(date, kg) => setData(d => {
@@ -1020,26 +1050,6 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
       {/* ── Étape 2 : quand & où ── */}
       {draft && (() => {
         const { payload, dateISO: ddate, dayLabel: ddl, dayDate } = draft;
-        // Lieux déjà utilisés, du plus récent au plus ancien.
-        const recentLocations = (() => {
-          const all = [];
-          Object.entries(data.weeks || {}).forEach(([wk, days]) => {
-            (days || []).forEach(dayArr => {
-              (dayArr || []).forEach(s => {
-                const loc = s?.location || s?.address;
-                if (loc && typeof loc === "string") all.push({ loc: loc.trim(), wk });
-              });
-            });
-          });
-          all.sort((a, b) => b.wk.localeCompare(a.wk));
-          const seen = new Set();
-          const out = [];
-          for (const { loc } of all) {
-            if (!seen.has(loc.toLowerCase())) { seen.add(loc.toLowerCase()); out.push(loc); }
-            if (out.length >= 8) break;
-          }
-          return out;
-        })();
         return (
           <SessionScheduleModal
             sessionName={payload.name}
@@ -1062,8 +1072,13 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
       })()}
 
       {/* ── Modification d'une séance déjà planifiée : remplace en place ── */}
-      {sessionEditCtx && (() => {
-        const { weekKey: ek, dayIndex: edi, sessionIndex: esi, initial } = sessionEditCtx;
+      {/* ── Modifier une séance : quoi, puis quand & où ──────────────────────
+          « Déplacer » n'existe plus à part : changer de jour est une
+          modification comme une autre, et la seconde étape s'en charge. Rien
+          n'est écrit avant « Enregistrer » — revenir en arrière ne laisse donc
+          aucune séance à moitié modifiée. */}
+      {sessionEditCtx && sessionEditCtx.step !== "schedule" && (() => {
+        const { weekKey: ek, dayIndex: edi, initial } = sessionEditCtx;
         const emonday = new Date(ek + "T00:00:00");
         const eday = addDays(emonday, edi);
         return (
@@ -1082,20 +1097,71 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
                 setSessionEditCtx(null);
                 return;
               }
+              setSessionEditCtx(ctx => ({ ...ctx, step: "schedule", payload }));
+            }}
+          />
+        );
+      })()}
+
+      {sessionEditCtx?.step === "schedule" && (() => {
+        const { weekKey: ek, dayIndex: edi, sessionIndex: esi, payload } = sessionEditCtx;
+        const eday = addDays(new Date(ek + "T00:00:00"), edi);
+        const prev = (data.weeks[ek] || [])[edi]?.[esi] || {};
+        return (
+          <SessionScheduleModal
+            sessionName={payload.name}
+            dayDate={eday}
+            allowDateChange
+            confirmLabel="Enregistrer"
+            skipLabel="Annuler"
+            defaultStartTime={payload.startTime || prev.startTime || ""}
+            defaultLocation={payload.location || prev.location || ""}
+            estimatedTime={payload.estimatedTime ?? null}
+            recentLocations={recentLocations}
+            onBack={() => setSessionEditCtx(ctx => ({ ...ctx, step: "form" }))}
+            onSkip={() => setSessionEditCtx(null)}
+            onConfirm={(sched) => {
+              const target = new Date(sched.dateISO + "T12:00:00");
+              const toWeek = weekKey(getMondayOf(target));
+              const toDay = (target.getDay() + 6) % 7;
+              const moved = toWeek !== ek || toDay !== edi;
+              let snapshot = null;
               setData(d => {
-                const ws = (d.weeks[ek] || Array(7).fill(null).map(() => [])).map(day => [...day]);
-                if (!ws[edi]) return d;
-                const prev = ws[edi][esi];
-                ws[edi] = ws[edi].map((sx, j) => j === esi
-                  ? { ...payload, isCustom: true, feedback: prev?.feedback ?? null,
-                      startTime: prev?.startTime ?? payload.startTime ?? null,
-                      endTime: prev?.endTime ?? payload.endTime ?? null,
-                      location: prev?.location ?? payload.location ?? null }
-                  : sx);
-                return { ...d, weeks: { ...d.weeks, [ek]: ws } };
+                snapshot = d.weeks;
+                const emptyWeek = () => Array(7).fill(null).map(() => []);
+                const src = (d.weeks[ek] || emptyWeek()).map(day => [...day]);
+                const before = src[edi]?.[esi];
+                if (!before) return d;
+                // Le ressenti appartient à la séance vécue, pas au formulaire :
+                // il survit à la modification comme au déplacement.
+                const next = {
+                  ...payload, isCustom: true,
+                  feedback: before.feedback ?? null,
+                  startTime: sched.startTime || null,
+                  endTime: sched.endTime ?? null,
+                  location: sched.location || null,
+                };
+                if (!moved) {
+                  src[edi] = src[edi].map((sx, j) => (j === esi ? next : sx));
+                  return { ...d, weeks: { ...d.weeks, [ek]: src } };
+                }
+                src[edi] = src[edi].filter((_, j) => j !== esi);
+                const tgt = toWeek === ek ? src : (d.weeks[toWeek] || emptyWeek()).map(day => [...day]);
+                tgt[toDay] = [...(tgt[toDay] || []), next];
+                const weeks = { ...d.weeks, [ek]: src };
+                if (toWeek !== ek) weeks[toWeek] = tgt;
+                return { ...d, weeks };
               });
               if (payload.saveAsTemplate) { saveUserSession(payload); syncPlannedSessions(payload); }
-              toast.success("Séance modifiée");
+              if (moved) {
+                setCurrentDate(target);
+                toast.success(
+                  `Déplacée au ${target.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`,
+                  { undo: () => snapshot && setData(d => ({ ...d, weeks: snapshot })) }
+                );
+              } else {
+                toast.success("Séance modifiée");
+              }
               setSessionEditCtx(null);
             }}
           />
@@ -1213,13 +1279,26 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
               });
             }}
             onEdit={() => {
-              // Réouvre le formulaire avec la séance pré-chargée.
-              // Le save remplace en place (préserve feedback).
+              // Réouvre le formulaire avec la séance pré-chargée, puis
+              // « quand & où » — c'est là que le jour se change, déplacement
+              // compris. Le ressenti déjà donné est préservé à l'écriture.
               setSessionEditCtx({
                 weekKey: smKey,
                 dayIndex: smDi,
                 sessionIndex: smSi,
                 initial: { ...smSession, isCustom: true },
+              });
+              setSessionModal(null);
+            }}
+            onReschedule={() => {
+              // Reprogrammer une séance manquée : on saute le formulaire, rien
+              // n'a changé de ce qu'elle est — seulement de quand elle a lieu.
+              setSessionEditCtx({
+                weekKey: smKey,
+                dayIndex: smDi,
+                sessionIndex: smSi,
+                step: "schedule",
+                payload: { ...smSession, isCustom: true },
               });
               setSessionModal(null);
             }}
@@ -1251,6 +1330,16 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
       {notifOpen && (
         <NotificationsPanel
           notifications={notifications}
+          pending={pending}
+          onOpenPending={(item) => {
+            setNotifOpen(false);
+            if (item.kind === "hooper") { setLogDate(item.dateISO); return; }
+            // La séance est ouverte à la position que porte la ligne ; le
+            // calendrier se place sur sa journée, pour qu'on y retombe en
+            // fermant la modale.
+            setCurrentDate(new Date(item.dateISO + "T12:00:00"));
+            setSessionModal({ weekKey: item.weekKey, dayIndex: item.dayIndex, sessionIndex: item.sessionIndex });
+          }}
           onClose={() => setNotifOpen(false)}
           onMarkInfosRead={markInfosRead}
           onRespondRequest={async (n, accept) => {

@@ -148,6 +148,13 @@ export async function initNativeApp() {
   // depuis le widget alors qu'elle n'était pas en mémoire. `getLaunchUrl` est
   // le chemin documenté pour ce cas ; si les deux arrivent, ouvrir deux fois la
   // même modale ne se voit pas.
+  //
+  // ⚠ `getLaunchUrl` rend l'URI de l'Intent de la tâche, pas « celle du clic » :
+  // relancée depuis les Récents, l'app reçoit le lien du widget vieux de
+  // plusieurs heures et rouvrait le journal toute seule. La garde est côté
+  // natif — MainActivity.onCreate vide l'Intent quand il porte
+  // FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY — parce que c'est le seul endroit qui
+  // sait distinguer une relance d'un vrai clic.
   const launch = await App.getLaunchUrl().catch(() => null);
   if (launch?.url?.startsWith(DAY_LOG_URL)) handleDeepLink(launch.url);
 
