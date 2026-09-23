@@ -8,6 +8,7 @@ import { PrimaryButton, SecondaryButton, RoundIconButton, SportBadge, SANS, MONO
 import { getDiscipline } from "../../lib/disciplines.js";
 import { getChargeColor, chargeLabel } from "../../lib/charge.js";
 import { localDateStr } from "../../lib/helpers.js";
+import { RichText } from "../RichText.jsx";
 
 // ─── APERÇU D'UNE ÉCHÉANCE ────────────────────────────────────────────────────
 // Ce que la modale de séance est à une séance : on ouvre, on lit, et on décide
@@ -108,11 +109,8 @@ export function EventDetailModal({ event, onEdit, onDelete, onClose }) {
           {notes && (
             <div>
               {label("Note")}
-              <div style={{
-                background: c.control, borderRadius: RADIUS.control, padding: 14,
-                fontSize: 14, color: c.text, lineHeight: 1.55, whiteSpace: "pre-wrap",
-              }}>
-                {notes}
+              <div style={{ background: c.control, borderRadius: RADIUS.control, padding: 14 }}>
+                <RichText text={notes} style={{ padding: 0, fontSize: 14, color: c.text }} />
               </div>
             </div>
           )}

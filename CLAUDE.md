@@ -52,7 +52,9 @@ src/
 │   ├── notifications.js          — rappels de séance (plan pur + plugin Capacitor)
 │   ├── todo.js                   — ce qui reste à noter (ressenti, retours de séance)
 │   ├── widget.js                 — pont avec le widget Android (SharedPreferences)
-│   └── hooper.js                 — hooperLabel, hooperColor, isHooperFilled, HOOPER_SCALE
+│   ├── hooper.js                 — hooperLabel, hooperColor, isHooperFilled, HOOPER_SCALE
+│   └── rich-text.js              — syntaxe des notes côté saisie : parseItem, handleEnter,
+│                                   handleTab, safeHref (pur, testé sous Node)
 │
 ├── theme/
 │   ├── palette.js                — SOURCE UNIQUE des couleurs (PALETTE.light/dark, colors(), DATA)
@@ -71,6 +73,8 @@ src/
 └── components/
     ├── ui/SwipePager.jsx          — carrousel de pages (balayage au doigt entre onglets)
     ├── ui/CycleFields.jsx         — champs partagés des deux éditeurs de cycles
+    ├── ui/RichTextArea.jsx        — zone de texte qui continue les listes (Entrée, Tab)
+    ├── ui/SyntaxHelp.jsx          — le « ? » qui montre la syntaxe disponible
     │                                (WeekStepper, AutoTextarea, ColorDot, NumberField…)
     ├── Logo.jsx                   — ClimbingPlannerLogo (la marque « Charge », en-tête bureau)
     ├── SyncButtons.jsx            — boutons export/import/sync
@@ -78,7 +82,7 @@ src/
     ├── RoleOnboardingModal.jsx    — choix du rôle au 1er login
     ├── RoleSection.jsx            — changement de rôle depuis le compte
     ├── DayJournalBlock.jsx        — journal + rappels d'un jour donné (calendrier)
-    ├── RichText.jsx               — rendu texte riche (markdown-like)
+    ├── RichText.jsx               — rendu du texte riche (syntaxe façon Obsidian)
     ├── ConfirmModal.jsx           — dialogue de confirmation suppression
     ├── session/SessionFormModal.jsx     — ajout/modification d'une séance (étape 1)
     ├── session/SessionScheduleModal.jsx — heure + lieu (étape 2)
@@ -1318,6 +1322,101 @@ Les rappels du jour, cochables, et le résumé du journal.
   les mises à jour ne s'installent alors pas par-dessus (« application non
   installée »). Les 4 secrets à créer sont listés dans `ACTIONS-A-FAIRE.md`.
 
+### Écrire en texte riche (`lib/rich-text.js`, `ui/RichTextArea.jsx`, `RichText.jsx`)
+
+Une note de séance est une note : des titres, des puces, un mot en gras, un lien
+vers un topo. Elle s'écrit donc dans la syntaxe que tout le monde connaît déjà —
+celle d'Obsidian — réduite à ce qui sert dans un carnet d'entraînement.
+
+```
+# ## ###        titres (trois niveaux)
+**gras**   *italique*   ~~barré~~   `code`
+- puce          (deux espaces de plus = sous-puce, jusqu'à trois niveaux)
+1. numérotée    (« 1) » marche aussi)
+[ ] / [x]       case à cocher
+[texte](url)    lien   ·   ![alt](url)   image
+```
+
+**Trois fichiers, et ils se lisent ensemble** — ajouter une syntaxe dans l'un
+sans les autres produit à chaque fois un défaut différent :
+
+| Fichier | Rôle | Ce qui arrive si on l'oublie |
+|---|---|---|
+| `lib/rich-text.js` | ce que font **Entrée** et **Tab** | la liste ne se continue pas toute seule |
+| `components/RichText.jsx` | le **rendu** | la syntaxe s'affiche telle quelle, en clair |
+| `ui/SyntaxHelp.jsx` | l'**aide** derrière le « ? » | la syntaxe existe mais personne ne la découvre |
+
+- **`parseItem()` est partagée** entre la saisie et le rendu : ce qui se continue
+  tout seul à la touche Entrée se rend forcément de la même façon. Deux
+  expressions régulières séparées auraient divergé à la première variante
+  ajoutée (`*` en plus de `-`, `1)` en plus de `1.`).
+- Un tiret ne fait une puce que **suivi d'une espace** : « 20-25 répétitions »
+  reste du texte.
+- **L'ordre des motifs en ligne compte** (`renderInline`) : le gras est cherché
+  **avant** l'italique. Sur `**gras**` les deux mordent au même endroit, et c'est
+  le premier de la liste qui gagne à position égale.
+
+**La saisie.** `ui/RichTextArea.jsx` est un `<textarea>` ordinaire plus deux
+touches qui savent ce qu'on écrit :
+
+- **Entrée** dans une liste continue la liste — même indentation, marqueur
+  suivant (une numérotée s'incrémente en gardant son « . » ou son « ) », une
+  case à cocher repart **vide** : on ne recopie pas une tâche déjà faite). Sur un
+  élément vide et indenté elle remonte d'un niveau, puis sort de la liste. C'est
+  la façon habituelle de terminer une liste : deux Entrée.
+- **Maj+Entrée** reste un saut de ligne franc — la sortie de secours quand on
+  veut écrire sous une puce sans en créer une autre.
+- **Tab / Maj+Tab** imbriquent et désimbriquent, *seulement* sur une ligne de
+  liste. Ailleurs `handleTab` rend `null` et la touche garde son rôle : quitter
+  le champ. La voler en permanence rendrait le formulaire impraticable au
+  clavier.
+- ⚠️ **Le curseur ne se replace pas tout seul.** La valeur appartient au parent :
+  quand on la réécrit, React redessine le champ et le curseur retombe à la fin.
+  On note donc où il doit aller et on l'y remet dans un `useLayoutEffect`, avant
+  que le navigateur ne peigne — sinon il clignote une image à la mauvaise place.
+- Toute la décision est dans `lib/rich-text.js`, **pure** : elle prend le texte
+  et la position du curseur, rend le nouveau texte et la nouvelle position.
+  Aucun DOM, donc `npm run test:text` (16 cas, `node --test`) couvre les cas
+  tordus — curseur au milieu d'un mot, dans le marqueur, sélection sur plusieurs
+  lignes — sans ouvrir un navigateur.
+
+**Les liens sont filtrés** (`safeHref`). `javascript:` et `data:` sont les deux
+façons classiques de faire exécuter du code par un texte écrit par quelqu'un
+d'autre — et le planning d'un athlète est écrit par son coach. Seuls `http(s)://`,
+`mailto:` et `www.` (complété en `https://`) passent. Une adresse refusée n'est
+pas jetée : le rendu l'affiche **en clair**, sans en faire un lien. Les liens
+acceptés partent en `target="_blank" rel="noopener noreferrer"`.
+
+**L'aide (`ui/SyntaxHelp.jsx`).** Une syntaxe qu'on ne voit nulle part n'existe
+pas : personne ne devine que deux astérisques mettent en gras. D'où le « ? »
+posé à côté de chaque zone de texte qui la comprend.
+
+- **Les exemples sont rendus par le vrai moteur**, pas recopiés à la main. Une
+  aide écrite en dur se désaccorde du code à la première syntaxe ajoutée, et
+  c'est pire que pas d'aide du tout — on croit avoir compris et ça ne marche pas.
+  La légende ne répète donc pas le rendu : elle dit ce qui ne se voit pas (la
+  touche qui continue la liste, les variantes du même motif).
+- **Survol et clic ne peuvent pas être le même état.** Sur un ordinateur l'aide
+  est déjà ouverte quand le clic arrive : un simple bascule la refermerait, et
+  elle serait alors impossible à garder ouverte — elle disparaîtrait à l'instant
+  où l'on ramène la souris vers le champ pour taper. Deux états distincts, donc,
+  et un `open` qui s'en déduit : le survol ouvre le temps du survol, le clic
+  **épingle** jusqu'au prochain clic (ou Échap). Le survol n'est câblé que si
+  `(hover: hover) and (pointer: fine)` — au doigt, il n'existe pas.
+- Le panneau est en **`position: fixed`** (`Z.popoverHi`), ancré au bouton par
+  `getBoundingClientRect` : les zones de texte vivent dans des modales à
+  défilement, et un panneau `absolute` s'y ferait couper au bord. Il se place
+  au-dessus du bouton quand il n'y a plus la place en dessous.
+- `place()` est appelée **depuis les gestionnaires**, jamais depuis l'effet :
+  mesurer dans un effet déclencherait un second rendu à chaque ouverture (et
+  `react-hooks/set-state-in-effect` le refuse).
+
+**Où la syntaxe s'applique** : notes de séance (`SessionFormModal`), retour de
+l'athlète (`SessionModal`), objectifs de cycles et de microcycles (`AutoTextarea`
+de `ui/CycleFields.jsx`, qui délègue à `RichTextArea`). Côté lecture, le même
+rendu sert dans `SessionModal`, `FeedbackHistoryModal`, `EventDetailModal` et
+`MesoDetailModal`.
+
 ### Aucune modale ne prend le focus à l'ouverture
 
 Aucun champ de modale ne porte `autoFocus`, et aucune ne pose de
@@ -1537,7 +1636,9 @@ curl -s "$U""diag.json"                     # tailles, temps, href suspects
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
+npm run test     # tous les tests (CalDAV + syntaxe des notes)
 npm run test:caldav  # protocole CalDAV (node --test, sans dépendance)
+npm run test:text    # saisie en liste et filtrage des liens (lib/rich-text.js)
 npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
 npm run cap:open # ouvre Android Studio
 ./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement
@@ -1548,7 +1649,7 @@ npm run cap:open # ouvre Android Studio
 - Lazy-load des vues lourdes (Dashboard/Recharts) avec `React.lazy`
 - Code-splitting via `manualChunks` (Recharts séparé du bundle principal)
 - ~~Migrer le stockage avatar base64 → Supabase Storage (URL)~~ ✅ fait (avatar-storage.js + bucket `avatars`)
-- Tests unitaires (helpers, charge, storage) + CI GitHub Actions
+- Tests unitaires (helpers, charge, storage) + CI GitHub Actions — amorcé avec `lib/rich-text.js` (`npm run test:text`)
 - Sync Garmin Connect pour le sommeil (voir `garmin-sync-notes.md` — bloqué auth)
 - Import CSV sommeil Garmin (bouton déjà présent dans stats)
 - Notifications push PWA

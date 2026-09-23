@@ -436,7 +436,15 @@ export function makeStyles(isDark) {
     richCheckbox: { width: 13, height: 13, borderRadius: 3, border: `1px solid ${t.border2}`, background: "none", flexShrink: 0, marginTop: 3, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
     richCheckboxDone: { background: t.accent, borderColor: t.accent },
     richImg: { maxWidth: "100%", borderRadius: 6, marginTop: 4 },
-    richLink: { color: t.accent, textDecoration: "none" },
+    richLink: { color: t.accent, textDecoration: "underline", textUnderlineOffset: 2 },
+    // Trois niveaux de titre, calés sur le corps (12 px) plutôt que sur les
+    // tailles d'un document : une note de séance tient en quelques lignes, un
+    // « # » y sert à séparer deux moments, pas à ouvrir un chapitre.
+    richH1: { fontSize: 16, fontWeight: 800, color: t.text, lineHeight: 1.35, marginTop: 10, letterSpacing: "-0.01em" },
+    richH2: { fontSize: 14, fontWeight: 700, color: t.text, lineHeight: 1.4, marginTop: 8 },
+    richH3: { fontSize: 12.5, fontWeight: 700, color: t.textMuted, lineHeight: 1.45, marginTop: 6, textTransform: "uppercase", letterSpacing: "0.06em" },
+    // Le rang d'une liste numérotée : chiffres alignés, donc chasse fixe.
+    richOrd: { color: t.accent, flexShrink: 0, marginTop: 3, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700 },
     // ── Detail modal ──
     detailModal: { background: t.modalBg, border: `1px solid ${t.border2}`, borderRadius: 10, width: "min(600px, 96vw)", maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)" },
     detailBody: { overflowY: "auto", padding: "16px 20px", flex: 1 },

@@ -5,6 +5,7 @@ import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getChargeColor } from "../lib/charge.js";
 import { Modal, ModalHeader } from "./ui/Modal.jsx";
 import { colors, DATA } from "../theme/palette.js";
+import { RichText } from "./RichText.jsx";
 
 /// ─── MODAL: HISTORIQUE FEEDBACKS COACH ───────────────────────────────────────
 
@@ -190,7 +191,9 @@ export function FeedbackHistoryModal({ type, id, name, onClose }) {
                       {type === "session" && fb.notes?.trim() && (
                         <div>
                           <div style={{ fontSize: 10, color: muted, marginBottom: 3 }}>Notes générales</div>
-                          <div style={{ fontSize: 12, color: text, lineHeight: 1.5, background: surface, padding: "6px 10px", borderRadius: 5, border: `1px solid ${border}` }}>{fb.notes}</div>
+                          <div style={{ fontSize: 12, color: text, lineHeight: 1.5, background: surface, padding: "6px 10px", borderRadius: 5, border: `1px solid ${border}` }}>
+                            <RichText text={fb.notes} style={{ padding: 0, fontSize: 12 }} />
+                          </div>
                         </div>
                       )}
                       {/* Block-specific feedback (block view) */}

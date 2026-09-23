@@ -1,6 +1,8 @@
 import { useState, useRef } from "react";
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
 import { Modal } from "../ui/Modal.jsx";
+import { RichTextArea } from "../ui/RichTextArea.jsx";
+import { SyntaxHelp } from "../ui/SyntaxHelp.jsx";
 import { colors, DATA } from "../../theme/palette.js";
 import { RADIUS, Z } from "../../theme/makeStyles.js";
 import { PrimaryButton, RoundIconButton, Chip, RoundCheck, LibraryIcon, SANS, MONO } from "../ui/Ascent.jsx";
@@ -465,12 +467,20 @@ export function SessionFormModal({
                 />
               </div>
 
-              {/* ── Notes ── */}
+              {/* ── Notes ──
+                  Le contenu d'une séance s'écrit en liste neuf fois sur dix :
+                  la zone continue donc les puces toute seule, et le « ? » dit
+                  ce que la mise en forme comprend. */}
               <div style={{ marginTop: 20 }}>
-                {label("Notes")}
-                <textarea
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {label("Notes")}
+                  <span style={{ marginBottom: 8 }}><SyntaxHelp /></span>
+                </div>
+                <RichTextArea
                   value={notes}
-                  onChange={e => setNotes(e.target.value)}
+                  onChange={setNotes}
+                  help={false}
+                  ariaLabel="Notes de la séance"
                   placeholder="Contenu de la séance, consignes, sensations attendues…"
                   rows={4}
                   style={{
