@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { mesoLastDay, microStarts, resolveAnchorId } from "../lib/cycles.js";
+import { mesoLastDay, microStarts, resolveAnchorId, microColor } from "../lib/cycles.js";
 import { useDragReorder } from "../hooks/useDragReorder.js";
 import { CyclesTimeline } from "./CyclesTimeline.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
@@ -14,7 +14,7 @@ import {
 import { colors } from "../theme/palette.js";
 import { PageTitle, PrimaryButton, Segmented } from "./ui/Ascent.jsx";
 import { RADIUS } from "../theme/makeStyles.js";
-import { WeekStepper, AutoTextarea, ColorDot, GripIcon, Chevron } from "./ui/CycleFields.jsx";
+import { WeekStepper, AutoTextarea, ColorDot, GripIcon, Chevron, MicroColorDot } from "./ui/CycleFields.jsx";
 import { RunBlocksSection } from "./RunBlocksSection.jsx";
 
 export function CyclesView({
@@ -487,7 +487,13 @@ function MicroRow({ micro, meso, start, isDark, fieldBase, onUpdateMicro, onAskD
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 36 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ width: 6, height: 6, borderRadius: 999, background: meso.color, flexShrink: 0 }} />
+        <MicroColorDot
+          color={microColor(micro, meso)}
+          inherited={!micro.color}
+          c={c}
+          onChange={color => onUpdateMicro(meso.id, micro.id, { color })}
+          onReset={() => onUpdateMicro(meso.id, micro.id, { color: null })}
+        />
         <input
           style={{ ...fieldBase, flex: 1, fontSize: 12 }}
           value={micro.label}

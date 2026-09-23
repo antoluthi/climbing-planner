@@ -19,6 +19,8 @@ prochain lancement.
 - **PWA** via `vite-plugin-pwa` (service worker, icônes, manifest)
 - **Supabase** (`@supabase/supabase-js`) — Auth magic link + sync cloud (tables `climbing_plans`, `coach_athletes`, `sessions_catalog`, `session_feedbacks`)
 - **Recharts** — graphiques stats (LineChart, BarChart)
+- **CodeMirror 6** (`state` · `view` · `commands`) — le champ de notes, **chargé à la
+  demande** : son propre paquet de 273 Ko, jamais dans le bundle principal
 - **Deploy** : Vercel, auto-deploy sur push `master` → https://climbing-planner-theta.vercel.app/
 
 ## Architecture de l'app
@@ -53,8 +55,10 @@ src/
 │   ├── todo.js                   — ce qui reste à noter (ressenti, retours de séance)
 │   ├── widget.js                 — pont avec le widget Android (SharedPreferences)
 │   ├── hooper.js                 — hooperLabel, hooperColor, isHooperFilled, HOOPER_SCALE
-│   └── rich-text.js              — syntaxe des notes côté saisie : parseItem, handleEnter,
-│                                   handleTab, safeHref, hasRichSyntax (pur, testé sous Node)
+│   ├── rich-text.js              — syntaxe des notes côté saisie : parseItem, handleEnter,
+│   │                               handleTab, safeHref, hasRichSyntax (pur, testé sous Node)
+│   ├── rich-text-cm.js           — l'extension CodeMirror qui rend la syntaxe dans le champ
+│   └── color.js                  — hexToHsl, hslToHex, withLightness (pur, testé sous Node)
 │
 ├── theme/
 │   ├── palette.js                — SOURCE UNIQUE des couleurs (PALETTE.light/dark, colors(), DATA)
@@ -73,7 +77,8 @@ src/
 └── components/
     ├── ui/SwipePager.jsx          — carrousel de pages (balayage au doigt entre onglets)
     ├── ui/CycleFields.jsx         — champs partagés des deux éditeurs de cycles
-    ├── ui/RichTextArea.jsx        — zone de texte : listes continuées + aperçu en direct
+    ├── ui/RichTextArea.jsx        — zone de texte : textarea de repli → RichEditor
+    ├── ui/RichEditor.jsx          — champ CodeMirror, syntaxe rendue sous les doigts
     ├── ui/SyntaxHelp.jsx          — le « ? » qui montre la syntaxe disponible
     │                                (WeekStepper, AutoTextarea, ColorDot, NumberField…)
     ├── Logo.jsx                   — ClimbingPlannerLogo (la marque « Charge », en-tête bureau)
@@ -1345,6 +1350,7 @@ sans les autres produit à chaque fois un défaut différent :
 | `lib/rich-text.js` | ce que font **Entrée** et **Tab** | la liste ne se continue pas toute seule |
 | `components/RichText.jsx` | le **rendu** | la syntaxe s'affiche telle quelle, en clair |
 | `ui/SyntaxHelp.jsx` | l'**aide** derrière le « ? » | la syntaxe existe mais personne ne la découvre |
+| `lib/rich-text-cm.js` | le rendu **dans le champ** | on tape `**gras**` sans voir de gras |
 
 - **`parseItem()` est partagée** entre la saisie et le rendu : ce qui se continue
   tout seul à la touche Entrée se rend forcément de la même façon. Deux
@@ -1390,22 +1396,52 @@ touches qui savent ce qu'on écrit :
   tordus — curseur au milieu d'un mot, dans le marqueur, sélection sur plusieurs
   lignes — sans ouvrir un navigateur.
 
-**Le texte se compile en direct**, sous le champ, à chaque caractère tapé.
-Écrire `**gras**` sans jamais voir de gras, c'est écrire à l'aveugle : on
-n'apprend qu'on s'est trompé d'étoile qu'après avoir enregistré et rouvert.
+**La syntaxe se rend DANS le champ, pendant la frappe** (`ui/RichEditor.jsx`,
+`lib/rich-text-cm.js`). Écrire `**gras**` sans jamais voir de gras, c'est
+écrire à l'aveugle : on n'apprend qu'on s'est trompé d'étoile qu'après avoir
+enregistré et rouvert.
 
-- L'aperçu n'apparaît **que s'il y a de la mise en forme à montrer**
-  (`hasRichSyntax`, testée). Sur une note écrite en prose il recopierait mot
-  pour mot le champ du dessus — du bruit, et la moitié d'un écran de téléphone
-  prise pour rien. La fonction ignore donc ce qui ressemble à de la syntaxe
-  sans en être : « 20-25 répétitions », « 3*4 séries », un `#` collé à son mot.
-- **Pourquoi sous le champ et non dedans.** Rendre le texte *à la place* de ce
-  qu'on tape demande un vrai éditeur (Obsidian embarque CodeMirror). Un
-  `<textarea>` ne peut pas : son contenu est du texte brut. Le calque
-  transparent qu'on pose parfois par-dessus ne tient que si rien ne change la
-  largeur des caractères — or le gras et les titres la changent, et le curseur
-  se met à glisser à côté des lettres au fil de la ligne.
-- La prop `preview` (défaut `true`) le coupe si un écran n'en veut pas.
+- **Le principe est celui d'Obsidian, en une phrase** : la ligne où se trouve
+  le curseur reste en clair, les autres sont rendues. Sans cette exception, les
+  marqueurs d'une ligne rendue sont invisibles — et donc impossibles à
+  atteindre pour corriger une étoile de travers.
+- **Pourquoi CodeMirror et pas un `<textarea>`.** Un textarea ne peut pas
+  afficher de gras : son contenu est du texte brut. Le calque transparent qu'on
+  pose parfois par-dessus ne tient que si rien ne change la largeur des
+  caractères — or le gras et les titres la changent, et le curseur se met à
+  glisser à côté des lettres au fil de la ligne. CodeMirror dessine son propre
+  texte, donc il peut le styliser.
+- **Pourquoi pas un éditeur maison en `contentEditable`** : **Gboard**. La
+  saisie prédictive d'Android réécrit le mot en cours par-dessus lui-même, et
+  c'est précisément ce qu'un éditeur fait main rate. L'app est d'abord un APK.
+- ⚠️ **L'analyseur markdown de CodeMirror n'est pas installé, exprès.** Il
+  connaît des syntaxes que l'app ne rend pas (tableaux, citations, HTML) et les
+  styliserait dans le champ sans que la lecture en tienne compte. `parseItem`
+  est donc la même fonction des deux côtés et les motifs en ligne sont recopiés
+  dans le même ordre : une quatrième idée de ce qu'est la syntaxe finirait par
+  contredire les trois qui se lisent déjà ensemble.
+- **Entrée et Tab restent dans `lib/rich-text.js`** : `fromPure()`
+  (`RichEditor.jsx`) traduit ces fonctions pures en transaction CodeMirror.
+  Le champ, l'aide et les tests disent donc toujours la même chose.
+- **Chargé à la demande.** L'import est dynamique : CodeMirror part dans son
+  propre paquet (273 Ko, 90 Ko compressés) et le paquet principal n'en porte
+  que la glu. L'accueil ne paie rien pour un champ de notes qu'on n'ouvrira
+  peut-être pas.
+- **Le `<textarea>` reste**, comme filet : il tient la place le temps du
+  premier chargement d'une session, et resterait seul si l'import échouait
+  (hors ligne sur un onglet jamais visité). Un champ de notes doit s'ouvrir,
+  toujours. La bascule **reprend le curseur** là où il était, et l'aperçu sous
+  le champ (`hasRichSyntax`) ne sert plus **que** dans ce mode de repli — une
+  fois la syntaxe rendue dans le champ, il en serait la copie inutile.
+- ⚠️ **`useState(Composant)` appelle le composant.** React prend une fonction
+  passée à `useState` pour un initialiseur paresseux : ranger un composant dans
+  un état l'exécute, sans props, et l'écran blanchit. Il faut
+  `useState(() => Composant)` des deux côtés — l'initialisation et le setter.
+  C'est arrivé en rangeant le module chargé à la demande.
+- ⚠️ **CodeMirror possède son texte, React non.** On ne lui repasse la valeur du
+  parent que si elle diffère de ce qu'il affiche (réouverture, modèle chargé) :
+  sinon chaque frappe déclencherait un remplacement complet du document et le
+  curseur repartirait à la fin.
 
 **Les liens sont filtrés** (`safeHref`). `javascript:` et `data:` sont les deux
 façons classiques de faire exécuter du code par un texte écrit par quelqu'un
@@ -1437,6 +1473,41 @@ posé à côté de chaque zone de texte qui la comprend.
 - `place()` est appelée **depuis les gestionnaires**, jamais depuis l'effet :
   mesurer dans un effet déclencherait un second rendu à chaque ouverture (et
   `react-hooks/set-state-in-effect` le refuse).
+
+### La couleur d'un microcycle (`lib/color.js`, `MicroColorDot`)
+
+Un microcycle n'a pas de couleur à lui par défaut : il prend celle de son bloc,
+et c'est ce qu'on veut presque toujours — les quatre semaines d'un mésocycle
+forment une famille. Ce qu'on veut *parfois*, c'est en éclaircir une pour la
+distinguer des autres **sans quitter la famille**.
+
+- **Le réglage est en HSL, pas en RGB.** Éclaircir en RGB demande de bouger
+  trois nombres à la fois dans la bonne proportion, et à la moindre erreur la
+  teinte part ailleurs. Ici la luminosité est **un** curseur, et elle est en
+  tête parce que c'est le geste qu'on vient faire ; teinte et saturation
+  suivent. Le sélecteur natif reste dessous (« RGB exact ») pour la fois où
+  l'on connaît son `#rrggbb`. Chaque curseur porte le dégradé de ce qu'il fait.
+- `lib/color.js` ne **définit** aucune couleur, il les transforme : la règle
+  « une seule source de couleurs » (`theme/palette.js`) reste entière. Les
+  conversions sont pures et testées (`npm run test:color`) — un aller-retour
+  qui dérive se verrait tout de suite, la teinte bougeant à chaque ouverture du
+  panneau.
+- ⚠️ **La teinte dérive aux extrêmes, et ce n'est pas un défaut.** À L = 95 les
+  trois canaux valent tous ~240 : un arrondi d'une unité sur 255 y déplace la
+  teinte de plusieurs degrés. Invisible, la couleur y étant presque blanche. Le
+  test tolère donc plus loin des bords qu'au milieu, et la **luminosité**, elle,
+  est exacte — c'est le curseur qu'on déplace.
+- **`microColor(micro, meso)`** (`lib/cycles.js`) est le seul point de vérité :
+  sa couleur s'il en a une, celle du bloc sinon. Trois écrans la lisent —
+  l'éditeur, `CyclesTimeline` et `MesoDetailModal`. Recopier ce `||` trois fois,
+  c'est s'assurer qu'un jour l'un des trois affichera autre chose.
+- **Aucune migration** : `micro.color` est absent partout, et un microcycle sans
+  couleur se comporte exactement comme avant. « Reprendre celle du bloc » la
+  remet à `null` plutôt que de recopier la couleur du mésocycle — sinon elle
+  cesserait de suivre le bloc quand celui-ci change de couleur.
+- `ColorDot` (mésocycle, bloc de course) garde le sélecteur natif seul : ces
+  couleurs-là n'héritent de rien, il n'y a ni famille à retrouver ni luminosité
+  à ajuster par rapport à quoi que ce soit.
 
 **Où la syntaxe s'applique** : notes de séance (`SessionFormModal`), retour de
 l'athlète (`SessionModal`), objectifs de cycles et de microcycles (`AutoTextarea`
@@ -1663,9 +1734,10 @@ curl -s "$U""diag.json"                     # tailles, temps, href suspects
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
-npm run test     # tous les tests (CalDAV + syntaxe des notes)
+npm run test     # tous les tests (CalDAV + syntaxe des notes + couleurs)
 npm run test:caldav  # protocole CalDAV (node --test, sans dépendance)
 npm run test:text    # saisie en liste et filtrage des liens (lib/rich-text.js)
+npm run test:color   # conversions HSL ↔ hex (lib/color.js)
 npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
 npm run cap:open # ouvre Android Studio
 ./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement

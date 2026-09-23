@@ -119,3 +119,12 @@ export function mesoLastDay(meso) {
   const end = mesoEndDate(meso);
   return end ? addDays(end, -1) : null;
 }
+
+// La couleur d'un microcycle : la sienne s'il en a une, sinon celle de son
+// bloc. Une seule fonction pour les trois écrans qui la lisent — l'éditeur, la
+// timeline et la modale d'objectif. Recopier ce `||` à trois endroits, c'est
+// s'assurer qu'un jour l'un des trois affichera autre chose que les deux
+// autres.
+export function microColor(micro, meso) {
+  return micro?.color || meso?.color;
+}

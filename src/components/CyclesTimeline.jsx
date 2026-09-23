@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
-import { mesoEndDate, recomputeMesoDates } from "../lib/cycles.js";
+import { mesoEndDate, recomputeMesoDates, microColor } from "../lib/cycles.js";
 import { ReminderModal } from "./ReminderModal.jsx";
 import {
   getReminderCompletionRate,
@@ -236,6 +236,7 @@ export function CyclesTimeline({
                     const isNarrow = segPx < 18;
                     const label = fitLabel(micro.label, segPx);
                     const showSub = segPx >= 28 && label;
+                    const mColor = microColor(micro, meso);
                     return (
                       <div
                         key={micro.id}
@@ -243,18 +244,18 @@ export function CyclesTimeline({
                         style={{
                           ...styles.timelineMicroSeg,
                           width: `${microPct}%`,
-                          borderRightColor: isLast ? "transparent" : meso.color + "44",
+                          borderRightColor: isLast ? "transparent" : mColor + "44",
                         }}
                         onClick={e => openDetail(e, meso, micro)}
                       >
                         {isNarrow ? (
-                          <div style={{ width: 3, height: 12, borderRadius: 2, background: meso.color, opacity: 0.5 }} />
+                          <div style={{ width: 3, height: 12, borderRadius: 2, background: mColor, opacity: 0.5 }} />
                         ) : (
                           <div>
-                            <div style={{ ...styles.timelineMicroLabel, color: meso.color }}>
+                            <div style={{ ...styles.timelineMicroLabel, color: mColor }}>
                               {label}
                             </div>
-                            {showSub && <div style={{ ...styles.timelineMicroSub, color: meso.color }}>{micro.durationWeeks}s</div>}
+                            {showSub && <div style={{ ...styles.timelineMicroSub, color: mColor }}>{micro.durationWeeks}s</div>}
                           </div>
                         )}
                       </div>

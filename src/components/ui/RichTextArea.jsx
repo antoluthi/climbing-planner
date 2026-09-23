@@ -1,45 +1,41 @@
-import { useRef, useLayoutEffect } from "react";
+import { useRef, useState, useEffect, useLayoutEffect } from "react";
 import { handleEnter, handleTab, hasRichSyntax } from "../../lib/rich-text.js";
 import { SyntaxHelp } from "./SyntaxHelp.jsx";
 import { RichText } from "../RichText.jsx";
-import { useThemeCtx } from "../../theme/ThemeContext.jsx";
-import { colors } from "../../theme/palette.js";
-import { RADIUS } from "../../theme/makeStyles.js";
 
-// ─── LA ZONE DE TEXTE QUI TIENT LA LISTE À VOTRE PLACE ───────────────────────
-// Un `<textarea>` ordinaire, plus deux touches qui savent ce qu'on est en train
-// d'écrire :
+// ─── LA ZONE DE TEXTE QUI COMPREND CE QU'ON ÉCRIT ────────────────────────────
+// Deux champs en un, et le second remplace le premier dès qu'il est prêt :
 //
-//   · **Entrée** dans une liste continue la liste — même indentation, marqueur
-//     suivant. Sur un élément vide, elle remonte d'un niveau, puis sort.
-//   · **Tab / Maj+Tab** imbriquent et désimbriquent, *seulement* sur une ligne
-//     de liste. Ailleurs, Tab garde son rôle : quitter le champ. Le voler en
-//     permanence rendrait le formulaire impraticable au clavier.
+//   1. un `<textarea>` ordinaire, qui sait déjà continuer les listes (Entrée,
+//      Tab) et montrer un aperçu du rendu sous lui ;
+//   2. `RichEditor` (CodeMirror), qui **rend la syntaxe dans le champ**, sous
+//      les doigts — le gras devient gras pendant qu'on l'écrit.
 //
-// Toute la décision est dans `lib/rich-text.js`, pure et testée ; ici il ne
-// reste que le branchement au DOM et la remise en place du curseur.
+// **Pourquoi les deux.** CodeMirror est chargé à la demande, pour ne pas partir
+// dans le paquet principal : il y a donc un instant, au premier champ ouvert
+// d'une session, où il n'est pas encore là. Le `<textarea>` tient la place
+// pendant ce temps — et resterait seul si le chargement échouait (hors ligne
+// sur un onglet jamais visité). Un champ de notes doit s'ouvrir, toujours.
 //
-// ⚠ **Le curseur ne se replace pas tout seul.** La valeur appartient au parent :
-// quand on la réécrit, React redessine le champ et le curseur retombe à la fin.
-// On note donc où il doit aller et on l'y remet après le rendu — dans un
-// `useLayoutEffect`, avant que le navigateur ne peigne, sinon le curseur
-// clignote une image à la mauvaise place.
+// La bascule **reprend le curseur** là où il était : sans ça, taper dans les
+// premières millisecondes reviendrait à écrire dans un champ qui va disparaître.
 //
-// ─── L'APERÇU, QUI SE REFAIT À CHAQUE FRAPPE ─────────────────────────────────
-// Écrire `**gras**` sans jamais voir de gras, c'est écrire à l'aveugle : on ne
-// sait qu'on s'est trompé d'étoile qu'après avoir enregistré et rouvert. Le
-// texte se **compile donc en direct**, sous le champ, à chaque caractère tapé.
-//
-// Il n'apparaît que s'il y a de la mise en forme à montrer (`hasRichSyntax`) :
-// sur une note écrite en prose, il recopierait mot pour mot le champ du dessus,
-// et prendrait la moitié de l'écran d'un téléphone pour rien.
-//
-// **Pourquoi sous le champ et non dedans.** Rendre le texte *à la place* de ce
-// qu'on tape demande un vrai éditeur (Obsidian en embarque un, CodeMirror). Un
-// `<textarea>` ne peut pas : son contenu est du texte brut. Le calque
-// transparent qu'on pose parfois par-dessus tient tant que rien ne change la
-// largeur des caractères — or le gras et les titres la changent, et le curseur
-// se met à glisser à côté des lettres au fil de la ligne.
+// ⚠ **Le curseur ne se replace pas tout seul** (côté `<textarea>`). La valeur
+// appartient au parent : quand on la réécrit, React redessine le champ et le
+// curseur retombe à la fin. On note donc où il doit aller et on l'y remet dans
+// un `useLayoutEffect`, avant que le navigateur ne peigne.
+
+// Un seul chargement pour toute l'app, quel que soit le nombre de champs.
+let editorPromise = null;
+let EditorModule = null;
+function loadEditor() {
+  if (!editorPromise) {
+    editorPromise = import("./RichEditor.jsx")
+      .then(m => { EditorModule = m.default; return m.default; })
+      .catch(() => null);          // on reste sur le textarea, sans bruit
+  }
+  return editorPromise;
+}
 
 export function RichTextArea({
   value,
@@ -51,15 +47,33 @@ export function RichTextArea({
   label,
   help = true,
   preview = true,
+  rich = true,
   labelStyle,
   ariaLabel,
   onKeyDown: onKeyDownProp,
   ...rest
 }) {
-  const { isDark } = useThemeCtx();
-  const c = colors(isDark);
   const ref = useRef(null);
   const pending = useRef(null);
+  // ⚠ L'initialiseur est **paresseux**, et ce n'est pas un détail de style :
+  // `useState(Composant)` prend la fonction pour un initialiseur et **appelle**
+  // le composant, sans props. On stocke donc via `() => …`, des deux côtés —
+  // ici et dans le `setEditor` du chargement.
+  const [Editor, setEditor] = useState(() => (rich ? EditorModule : null));
+  const [handoff, setHandoff] = useState(null);   // curseur repris du textarea
+
+  useEffect(() => {
+    if (!rich || Editor) return;
+    let alive = true;
+    loadEditor().then(mod => {
+      if (!alive || !mod) return;
+      const el = ref.current;
+      // Le champ avait le focus : on dit à l'éditeur où reprendre.
+      if (el && document.activeElement === el) setHandoff(el.selectionStart);
+      setEditor(() => mod);
+    });
+    return () => { alive = false; };
+  }, [rich, Editor]);
 
   const fit = (el) => {
     if (!el || !autoGrow) return;
@@ -111,7 +125,28 @@ export function RichTextArea({
     pass();
   };
 
-  const field = (
+  // Le champ rendu par CodeMirror hérite du cadre du textarea (fond, bordure,
+  // rayon) : les deux doivent se ressembler assez pour que la bascule ne se
+  // voie pas. Ce qui ne s'applique qu'à un textarea est retiré.
+  const boxed = (css = {}) => {
+    const out = { ...css, overflow: "hidden", cursor: "text" };
+    // Ce qui n'a de sens que sur un textarea : la poignée de redimensionnement
+    // et la hauteur minimale, que l'éditeur reçoit par sa propre prop.
+    delete out.resize;
+    delete out.minHeight;
+    return out;
+  };
+
+  const field = Editor ? (
+    <Editor
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      minHeight={autoGrow ? 20 : (style?.minHeight ?? rows * 20)}
+      autoFocusAt={handoff}
+      style={boxed(style)}
+    />
+  ) : (
     <textarea
       {...rest}
       ref={ref}
@@ -125,20 +160,10 @@ export function RichTextArea({
     />
   );
 
-  const previewed = preview && hasRichSyntax(value);
-  const previewBlock = previewed && (
-    <div style={{
-      marginTop: 8, padding: "2px 10px 6px",
-      background: c.surface2, border: `1px solid ${c.borderSubtle}`,
-      borderRadius: RADIUS.control,
-    }}>
-      <div style={{
-        fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
-        textTransform: "uppercase", color: c.textDim, paddingTop: 6,
-      }}>Aperçu</div>
-      <RichText text={value} style={{ padding: "4px 0 0" }} />
-    </div>
-  );
+  // L'aperçu ne sert plus **que** tant que l'éditeur n'est pas là : une fois
+  // la syntaxe rendue dans le champ, il en serait la copie inutile.
+  const previewed = !Editor && preview && hasRichSyntax(value);
+  const previewBlock = previewed && <PreviewBlock value={value} />;
 
   if (!label && !help) return previewed ? <>{field}{previewBlock}</> : field;
 
@@ -151,5 +176,13 @@ export function RichTextArea({
       {field}
       {previewBlock}
     </>
+  );
+}
+
+function PreviewBlock({ value }) {
+  return (
+    <div style={{ marginTop: 8 }}>
+      <RichText text={value} style={{ padding: "4px 0 0" }} />
+    </div>
   );
 }

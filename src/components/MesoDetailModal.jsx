@@ -3,7 +3,7 @@ import { colors } from "../theme/palette.js";
 import { Modal, ModalHeader, ModalBody, ModalFooter } from "./ui/Modal.jsx";
 import { Button } from "./ui/Button.jsx";
 import { RichText } from "./RichText.jsx";
-import { mesoLastDay, microStarts, weeksOf } from "../lib/cycles.js";
+import { mesoLastDay, microStarts, weeksOf, microColor } from "../lib/cycles.js";
 import { addDays } from "../lib/helpers.js";
 
 // ─── DÉTAIL D'UN MÉSOCYCLE ───────────────────────────────────────────────────
@@ -75,13 +75,17 @@ export function MesoDetailModal({ meso, focusMicroId = null, onClose }) {
               const ms = starts[i] || null;
               const me = ms ? addDays(ms, mw * 7 - 1) : null;
               const focus = micro.id === focusMicroId;
+              // Sa couleur à lui, celle du bloc s'il n'en a pas : la carte le
+              // dit par sa teinte, comme la timeline par son segment.
+              const mTint = microColor(micro, meso) || c.accent;
               return (
                 <div key={micro.id} style={{
-                  background: focus ? tint + "1a" : c.card,
-                  border: `1px solid ${focus ? tint + "66" : c.border}`,
+                  background: focus ? mTint + "1a" : c.card,
+                  border: `1px solid ${focus ? mTint + "66" : c.border}`,
                   borderRadius: 12, padding: "10px 12px",
                 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 999, background: mTint, flexShrink: 0 }} />
                     <span style={{ fontSize: 14, fontWeight: 700, color: c.text, flex: 1, minWidth: 0 }}>
                       {micro.label}
                     </span>
