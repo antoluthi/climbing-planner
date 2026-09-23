@@ -1,5 +1,7 @@
 import { getMondayOf, addDays, localDateStr, weekKey, getDaySessions, isEventItem } from "./helpers.js";
 import { withTimeout } from "./promise-timeout.js";
+// « Journal complet » a une seule définition, dans lib/hooper.js.
+import { isHooperFilled } from "./hooper.js";
 
 // ─── NOTIFICATIONS DE SÉANCE ─────────────────────────────────────────────────
 // Une séance planifiée donne **une seule notification, qui change de nature en
@@ -96,14 +98,6 @@ const SWEEP_BACK_DAYS = 14;  // jusqu'où on va chercher les rappels périmés �
 
 export function hooperNotificationId(dateISO) {
   return notificationId("hooper:" + dateISO);
-}
-
-// Les quatre curseurs réglés. Une entrée partielle (HooperSection en écrit)
-// n'est pas un ressenti : le rappel reste.
-export function isHooperFilled(data, dateISO) {
-  const h = (data?.hooper || []).find(e => e.date === dateISO);
-  if (!h) return false;
-  return [h.sleep, h.fatigue, h.stress, h.soreness].every(v => v != null);
 }
 
 // Les jours de la fenêtre dont le ressenti manque encore — l'ordre du jour de

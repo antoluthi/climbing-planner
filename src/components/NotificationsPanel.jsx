@@ -6,7 +6,10 @@ import { BellIcon } from "./NotificationBell.jsx";
 import { colors } from "../theme/palette.js";
 
 // ─── PANNEAU DE NOTIFICATIONS ─────────────────────────────────────────────────
-// Liste des notifications reçues. Deux familles :
+// Trois familles, dans cet ordre — ce qui attend un geste de ma part d'abord :
+//  - **à faire** (`lib/todo.js`) : ressenti du jour, retours de séance en
+//    attente. Déduites du planning, jamais stockées : noter fait disparaître la
+//    ligne. C'est le pendant, dans l'app, des notifications du tiroir Android ;
 //  - actionnables : coach_request → boutons Accepter / Refuser (c'est
 //    l'acceptation qui crée le lien coach-athlète, consentement mutuel) ;
 //  - informatives : plan_update / coach_accepted / coach_declined —
@@ -57,7 +60,8 @@ function notifText(n) {
 }
 
 export function NotificationsPanel({
-  notifications, onClose, onRespondRequest, onMarkInfosRead,
+  notifications, pending = [], onOpenPending,
+  onClose, onRespondRequest, onMarkInfosRead,
 }) {
   const { isDark } = useThemeCtx();
   const T = modalTokens(isDark);
@@ -91,7 +95,54 @@ export function NotificationsPanel({
         onClose={onClose}
       />
       <ModalBody style={{ gap: 8, padding: "12px 14px" }}>
-        {notifications.length === 0 && (
+        {/* ── Ce qui attend un geste ── */}
+        {pending.length > 0 && (
+          <>
+            <div style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
+              textTransform: "uppercase", color: T.textLight, padding: "2px 2px 0",
+            }}>À faire</div>
+            {pending.map(item => (
+              <div
+                key={item.id}
+                style={{
+                  display: "flex", gap: 10, alignItems: "center",
+                  background: colors(isDark).surface,
+                  border: `1px solid ${T.accent}44`,
+                  borderRadius: 10, padding: "10px 12px",
+                }}
+              >
+                <span style={{ fontSize: 15, lineHeight: "20px", flexShrink: 0 }}>
+                  {item.kind === "hooper" ? "◉" : "✎"}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: T.text, lineHeight: 1.45, fontWeight: 600 }}>
+                    {item.title}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.textLight, marginTop: 2, lineHeight: 1.4 }}>
+                    {item.body}
+                    {item.daysAgo > 0 && (
+                      <span style={{ marginLeft: 4 }}>
+                        · {item.daysAgo === 1 ? "hier" : `il y a ${item.daysAgo} jours`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Button variant="primary" size="sm" onClick={() => onOpenPending?.(item)}>
+                  Noter
+                </Button>
+              </div>
+            ))}
+            {notifications.length > 0 && (
+              <div style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
+                textTransform: "uppercase", color: T.textLight, padding: "8px 2px 0",
+              }}>Activité</div>
+            )}
+          </>
+        )}
+
+        {notifications.length === 0 && pending.length === 0 && (
           <div style={{
             padding: "36px 20px", textAlign: "center",
             color: T.textLight, display: "flex", flexDirection: "column",

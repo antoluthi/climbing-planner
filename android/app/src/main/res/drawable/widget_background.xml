@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Le widget ne peut pas suivre le thème de l'app (il vit dans le lanceur) :
-     il prend le noir de la DA, qui tient sur n'importe quel fond d'écran. -->
+<!-- Le widget vit dans le lanceur : il ne peut pas suivre le thème de l'app et
+     prend celui du sombre, où l'app passe l'essentiel de son temps.
+
+     Les valeurs sont celles de `theme/palette.js` (PALETTE.dark), converties en
+     #AARRGGBB : `card` #121212, `border` rgba(255,255,255,0.08) → #14FFFFFF,
+     rayon RADIUS.cardLg = 18. Une carte de l'app posée sur l'écran d'accueil. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#0A0A0A" />
-    <corners android:radius="20dp" />
-    <stroke android:width="1dp" android:color="#1FFFFFFF" />
+    <solid android:color="#121212" />
+    <corners android:radius="18dp" />
+    <stroke android:width="1dp" android:color="#14FFFFFF" />
 </shape>

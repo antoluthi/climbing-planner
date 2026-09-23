@@ -1,5 +1,6 @@
 import { addDays, localDateStr } from "./helpers.js";
 import { getActiveRemindersForDate, isReminderCheckedOn } from "./reminders.js";
+import { isHooperFilled } from "./hooper.js";
 import { withTimeout } from "./promise-timeout.js";
 
 // ─── WIDGET D'ÉCRAN D'ACCUEIL ────────────────────────────────────────────────
@@ -72,8 +73,11 @@ export function buildDaySnapshot(data, date) {
     total: active.length,
     // Rien de noté : la ligne devient l'invitation à le faire — c'est un bouton
     // sur le widget, pas un constat.
-    journal: bits.length ? bits.join(" · ") : "Remplir le journal",
-    journalDone: bits.length > 0,
+    journal: bits.length ? bits.join(" · ") : "Rien de noté",
+    // « Fait » se juge au ressenti seul (lib/hooper.js) : le poids et la note
+    // sont facultatifs, et un journal resterait éternellement « à finir » si on
+    // les exigeait. Le résumé au-dessus dit quand même tout ce qui est noté.
+    journalDone: isHooperFilled(data, dateStr),
   };
 }
 
