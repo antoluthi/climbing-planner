@@ -4,6 +4,8 @@ import { DAYS, getMesoColor } from "../lib/constants.js";
 import { getChargeColor, normalizeCharge10, chargeLabel } from "../lib/charge.js";
 import { getMondayOf, addDays, weekKey } from "../lib/helpers.js";
 import { RichText } from "./RichText.jsx";
+import { RichTextArea } from "./ui/RichTextArea.jsx";
+import { SyntaxHelp } from "./ui/SyntaxHelp.jsx";
 import { ConfirmModal } from "./ConfirmModal.jsx";
 import { Z } from "../theme/makeStyles.js";
 import { pushLayer, lockBodyScroll } from "../lib/native.js";
@@ -516,9 +518,16 @@ export function SessionModal({
                   <span style={{ color: textLight, fontSize: 12 }}>{notesOpen ? "▲" : "▼"}</span>
                 </button>
                 {notesOpen && (
-                  <textarea
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+                    <SyntaxHelp />
+                  </div>
+                )}
+                {notesOpen && (
+                  <RichTextArea
                     value={notes}
-                    onChange={e => setNotes(e.target.value)}
+                    onChange={setNotes}
+                    help={false}
+                    ariaLabel="Notes du ressenti"
                     placeholder="Sensations, observations, ajustements…"
                     style={{
                       marginTop: 8, width: "100%", boxSizing: "border-box",
@@ -552,9 +561,7 @@ export function SessionModal({
                       <div style={{ fontSize: 10, fontWeight: 700, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6 }}>
                         Notes de la séance
                       </div>
-                      <div style={{ fontSize: 13, color: text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-                        {session.notes}
-                      </div>
+                      <RichText text={session.notes} style={{ padding: 0, fontSize: 13, color: text }} />
                     </div>
                   )}
 
@@ -574,9 +581,7 @@ export function SessionModal({
                       <div style={{ fontSize: 10, fontWeight: 700, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6 }}>
                         Description de l'événement
                       </div>
-                      <div style={{ fontSize: 13, color: text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-                        {session.content}
-                      </div>
+                      <RichText text={session.content} style={{ padding: 0, fontSize: 13, color: text }} />
                     </div>
                   )}
 

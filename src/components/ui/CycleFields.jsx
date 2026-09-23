@@ -1,6 +1,7 @@
 import { Fragment, useState } from "react";
 import { colors } from "../../theme/palette.js";
 import { weeksOf } from "../../lib/cycles.js";
+import { RichTextArea } from "./RichTextArea.jsx";
 
 // ─── CHAMPS PARTAGÉS DES CYCLES ──────────────────────────────────────────────
 // Extraits de `CyclesView` quand la piste des blocs de course est arrivée : les
@@ -47,19 +48,20 @@ export function WeekStepper({ isDark, value, onChange, min = 1, max = 24, compac
 // et une liste à puces s'y écrit comme dans une note (rendue par RichText dans
 // le détail du mésocycle).
 export function AutoTextarea({ value, onChange, placeholder, style, rows = 2 }) {
-  const fit = (el) => {
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = el.scrollHeight + "px";
-  };
+  // Une description de cycle est rendue par `RichText` : elle se saisit donc
+  // avec la même assistance que les autres zones de texte — Entrée continue la
+  // liste, Tab imbrique. Le « ? » n'y est pas : ces champs n'ont pas de
+  // libellé où l'accrocher, et l'aide est à un écran de là (formulaire de
+  // séance, ressenti).
   return (
-    <textarea
-      ref={fit}
-      rows={rows}
+    <RichTextArea
       value={value}
+      onChange={onChange}
       placeholder={placeholder}
-      onChange={e => { fit(e.target); onChange(e.target.value); }}
-      style={{ ...style, resize: "none", overflow: "hidden", lineHeight: 1.45 }}
+      rows={rows}
+      style={style}
+      autoGrow
+      help={false}
     />
   );
 }

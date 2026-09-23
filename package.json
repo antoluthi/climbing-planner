@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "npm run test:caldav && npm run test:text",
     "test:caldav": "node --test api/caldav.test.mjs",
+    "test:text": "node --test src/lib/rich-text.test.mjs",
     "preview": "vite preview",
     "cap:sync": "vite build --mode capacitor && npx cap sync android",
     "cap:open": "npx cap open android"
