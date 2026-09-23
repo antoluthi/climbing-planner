@@ -155,3 +155,16 @@ export function safeHref(raw) {
   if (/^www\./i.test(url)) return "https://" + url;
   return null;
 }
+
+// Y a-t-il, dans ce texte, quelque chose que le rendu afficherait autrement ?
+// C'est ce qui décide de montrer un aperçu : sur une note écrite en prose, il
+// serait la copie conforme du champ juste au-dessus — du bruit, et de la
+// hauteur prise pour rien sur un téléphone.
+const INLINE_RE = /\*\*[^\n]+\*\*|~~[^\n]+~~|\*[^*\n]+\*|`[^`\n]+`|\[[^\]\n]+\]\([^)\n]+\)/;
+export function hasRichSyntax(text) {
+  const value = String(text ?? "");
+  if (!value.trim()) return false;
+  if (INLINE_RE.test(value)) return true;
+  return value.split("\n").some(line =>
+    /^\s*#{1,3}\s+\S/.test(line) || parseItem(line) !== null);
+}
