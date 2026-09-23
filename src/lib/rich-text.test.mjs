@@ -10,7 +10,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseItem, indentWidth, handleEnter, handleTab, safeHref } from "./rich-text.js";
+import { parseItem, indentWidth, handleEnter, handleTab, safeHref, hasRichSyntax } from "./rich-text.js";
 
 const at = (s) => ({ value: s.replace("|", ""), pos: s.indexOf("|") });
 const enter = (s) => { const { value, pos } = at(s); return handleEnter(value, pos); };
@@ -111,4 +111,28 @@ test("safeHref refuse tout ce qui peut exécuter du code", () => {
     "",
     null,
   ]) assert.equal(safeHref(bad), null, `refusé : ${bad}`);
+});
+
+test("hasRichSyntax ne se déclenche que s'il y a vraiment de la mise en forme", () => {
+  for (const plain of [
+    "",
+    "   ",
+    "Sortie longue, allure 5:30/km",
+    "20-25 répétitions",      // un tiret collé n'est pas une puce
+    "note du 3*4 séries",     // une seule étoile n'ouvre rien
+    "#sansespace",            // un dièse collé n'est pas un titre
+  ]) assert.equal(hasRichSyntax(plain), false, `plat : ${JSON.stringify(plain)}`);
+
+  for (const rich of [
+    "# Titre",
+    "- puce",
+    "1. étape",
+    "[ ] à faire",
+    "du **gras** au milieu",
+    "du ~~barré~~",
+    "de l'*italique*",
+    "du `code`",
+    "un [lien](https://exemple.fr)",
+    "texte\n- puce en seconde ligne",
+  ]) assert.equal(hasRichSyntax(rich), true, `riche : ${JSON.stringify(rich)}`);
 });

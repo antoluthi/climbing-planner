@@ -28,6 +28,12 @@ export const SPACE = {
   0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 7: 32, 8: 48,
 };
 
+// L'interligne du texte riche. Deux styles en dépendent et doivent rester
+// d'accord : `richText.lineHeight`, qui espace les lignes, et la hauteur de
+// `richMarker`, la colonne dans laquelle puce et rang se centrent. Les écrire
+// deux fois, c'est les voir diverger un jour et la puce repartir de travers.
+export const RICH_LINE = 1.7;
+
 // ─── Z-INDEX SCALE ────────────────────────────────────────────────────────────
 // Hiérarchie unifiée pour éviter les conflits d'overlays.
 // modal (100) → confirm/nested (200) → popover (300) → toast (500).
@@ -429,11 +435,19 @@ export function makeStyles(isDark) {
     infoTd: { padding: "5px 8px", color: t.text, borderBottom: `1px solid ${t.border}`, verticalAlign: "top" },
     infoIndexBadge: { display: "inline-block", minWidth: 20, textAlign: "center", fontWeight: 700, borderRadius: 3, padding: "1px 4px", fontSize: 11 },
     // ── Rich text ──
-    richText: { fontSize: 12, color: t.text, lineHeight: 1.7, padding: "8px 0" },
+    richText: { fontSize: 12, color: t.text, lineHeight: RICH_LINE, padding: "8px 0" },
     richUl: { paddingLeft: 16, display: "flex", flexDirection: "column", gap: 2 },
     richLi: { display: "flex", gap: 6, alignItems: "flex-start" },
-    richBullet: { color: t.accent, flexShrink: 0, marginTop: 3 },
-    richCheckbox: { width: 13, height: 13, borderRadius: 3, border: `1px solid ${t.border2}`, background: "none", flexShrink: 0, marginTop: 3, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
+    // La colonne du marqueur : une boîte haute d'**exactement une ligne** de
+    // texte, dans laquelle la puce (ou le rang, ou la case) se centre toute
+    // seule. Elle remplace le `marginTop` qui traînait sur chacun d'eux — un
+    // décalage réglé à l'œil pour une taille de police, donc faux pour toutes
+    // les autres, et c'est ce qui faisait retomber la puce sous son texte.
+    // `em` : la hauteur suit la police du parent, pas une valeur en dur, et
+    // `RICH_LINE` est la même constante que l'interligne de `richText`.
+    richMarker: { flexShrink: 0, height: `${RICH_LINE}em`, display: "inline-flex", alignItems: "center" },
+    richBullet: { color: t.accent, lineHeight: 1 },
+    richCheckbox: { width: 13, height: 13, borderRadius: 3, border: `1px solid ${t.border2}`, background: "none", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
     richCheckboxDone: { background: t.accent, borderColor: t.accent },
     richImg: { maxWidth: "100%", borderRadius: 6, marginTop: 4 },
     richLink: { color: t.accent, textDecoration: "underline", textUnderlineOffset: 2 },
@@ -444,7 +458,9 @@ export function makeStyles(isDark) {
     richH2: { fontSize: 14, fontWeight: 700, color: t.text, lineHeight: 1.4, marginTop: 8 },
     richH3: { fontSize: 12.5, fontWeight: 700, color: t.textMuted, lineHeight: 1.45, marginTop: 6, textTransform: "uppercase", letterSpacing: "0.06em" },
     // Le rang d'une liste numérotée : chiffres alignés, donc chasse fixe.
-    richOrd: { color: t.accent, flexShrink: 0, marginTop: 3, fontVariantNumeric: "tabular-nums", fontSize: 11, fontWeight: 700 },
+    // Taille héritée, pas 11 px en dur : la boîte du marqueur se mesure en `em`,
+    // un rang plus petit que son texte s'y centrerait de travers.
+    richOrd: { color: t.accent, fontVariantNumeric: "tabular-nums", fontWeight: 700, lineHeight: 1 },
     // ── Detail modal ──
     detailModal: { background: t.modalBg, border: `1px solid ${t.border2}`, borderRadius: 10, width: "min(600px, 96vw)", maxHeight: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: D ? "0 24px 80px rgba(0,0,0,0.6)" : "0 24px 80px rgba(0,0,0,0.15)" },
     detailBody: { overflowY: "auto", padding: "16px 20px", flex: 1 },

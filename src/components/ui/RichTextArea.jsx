@@ -1,6 +1,10 @@
 import { useRef, useLayoutEffect } from "react";
-import { handleEnter, handleTab } from "../../lib/rich-text.js";
+import { handleEnter, handleTab, hasRichSyntax } from "../../lib/rich-text.js";
 import { SyntaxHelp } from "./SyntaxHelp.jsx";
+import { RichText } from "../RichText.jsx";
+import { useThemeCtx } from "../../theme/ThemeContext.jsx";
+import { colors } from "../../theme/palette.js";
+import { RADIUS } from "../../theme/makeStyles.js";
 
 // ─── LA ZONE DE TEXTE QUI TIENT LA LISTE À VOTRE PLACE ───────────────────────
 // Un `<textarea>` ordinaire, plus deux touches qui savent ce qu'on est en train
@@ -20,6 +24,22 @@ import { SyntaxHelp } from "./SyntaxHelp.jsx";
 // On note donc où il doit aller et on l'y remet après le rendu — dans un
 // `useLayoutEffect`, avant que le navigateur ne peigne, sinon le curseur
 // clignote une image à la mauvaise place.
+//
+// ─── L'APERÇU, QUI SE REFAIT À CHAQUE FRAPPE ─────────────────────────────────
+// Écrire `**gras**` sans jamais voir de gras, c'est écrire à l'aveugle : on ne
+// sait qu'on s'est trompé d'étoile qu'après avoir enregistré et rouvert. Le
+// texte se **compile donc en direct**, sous le champ, à chaque caractère tapé.
+//
+// Il n'apparaît que s'il y a de la mise en forme à montrer (`hasRichSyntax`) :
+// sur une note écrite en prose, il recopierait mot pour mot le champ du dessus,
+// et prendrait la moitié de l'écran d'un téléphone pour rien.
+//
+// **Pourquoi sous le champ et non dedans.** Rendre le texte *à la place* de ce
+// qu'on tape demande un vrai éditeur (Obsidian en embarque un, CodeMirror). Un
+// `<textarea>` ne peut pas : son contenu est du texte brut. Le calque
+// transparent qu'on pose parfois par-dessus tient tant que rien ne change la
+// largeur des caractères — or le gras et les titres la changent, et le curseur
+// se met à glisser à côté des lettres au fil de la ligne.
 
 export function RichTextArea({
   value,
@@ -30,11 +50,14 @@ export function RichTextArea({
   autoGrow = false,
   label,
   help = true,
+  preview = true,
   labelStyle,
   ariaLabel,
   onKeyDown: onKeyDownProp,
   ...rest
 }) {
+  const { isDark } = useThemeCtx();
+  const c = colors(isDark);
   const ref = useRef(null);
   const pending = useRef(null);
 
@@ -102,7 +125,22 @@ export function RichTextArea({
     />
   );
 
-  if (!label && !help) return field;
+  const previewed = preview && hasRichSyntax(value);
+  const previewBlock = previewed && (
+    <div style={{
+      marginTop: 8, padding: "2px 10px 6px",
+      background: c.surface2, border: `1px solid ${c.borderSubtle}`,
+      borderRadius: RADIUS.control,
+    }}>
+      <div style={{
+        fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
+        textTransform: "uppercase", color: c.textDim, paddingTop: 6,
+      }}>Aperçu</div>
+      <RichText text={value} style={{ padding: "4px 0 0" }} />
+    </div>
+  );
+
+  if (!label && !help) return previewed ? <>{field}{previewBlock}</> : field;
 
   return (
     <>
@@ -111,6 +149,7 @@ export function RichTextArea({
         {help && <span style={{ marginLeft: label ? 0 : "auto" }}><SyntaxHelp /></span>}
       </div>
       {field}
+      {previewBlock}
     </>
   );
 }

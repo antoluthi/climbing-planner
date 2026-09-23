@@ -57,12 +57,14 @@ export function RichText({ text, onCheckToggle, style }) {
             const done = box.marker.toLowerCase() === "[x]";
             return (
               <div key={i} style={{ ...styles.richLi, ...pad }}>
-                <div
-                  style={{ ...styles.richCheckbox, ...(done ? styles.richCheckboxDone : {}) }}
-                  onClick={() => onCheckToggle?.(i, !done)}
-                >
-                  {done && <span style={{ fontSize: 9, color: colors(isDark).onColor }}>✓</span>}
-                </div>
+                <span style={styles.richMarker}>
+                  <span
+                    style={{ ...styles.richCheckbox, ...(done ? styles.richCheckboxDone : {}) }}
+                    onClick={() => onCheckToggle?.(i, !done)}
+                  >
+                    {done && <span style={{ fontSize: 9, color: colors(isDark).onColor }}>✓</span>}
+                  </span>
+                </span>
                 <span style={done ? { textDecoration: "line-through", opacity: 0.5 } : {}}>
                   {renderInline(box.content, styles)}
                 </span>
@@ -70,11 +72,16 @@ export function RichText({ text, onCheckToggle, style }) {
             );
           }
 
+          // Le marqueur vit dans sa colonne (`richMarker`, haute d'une ligne) :
+          // puce, rang ou case s'y centrent de la même façon, quelle que soit
+          // la taille du texte.
           return (
             <div key={i} style={{ ...styles.richLi, ...pad }}>
-              {item.ordered
-                ? <span style={styles.richOrd}>{item.marker}</span>
-                : <span style={styles.richBullet}>{BULLETS[level]}</span>}
+              <span style={styles.richMarker}>
+                {item.ordered
+                  ? <span style={styles.richOrd}>{item.marker}</span>
+                  : <span style={styles.richBullet}>{BULLETS[level]}</span>}
+              </span>
               <span>{renderInline(item.content, styles)}</span>
             </div>
           );

@@ -54,7 +54,7 @@ src/
 │   ├── widget.js                 — pont avec le widget Android (SharedPreferences)
 │   ├── hooper.js                 — hooperLabel, hooperColor, isHooperFilled, HOOPER_SCALE
 │   └── rich-text.js              — syntaxe des notes côté saisie : parseItem, handleEnter,
-│                                   handleTab, safeHref (pur, testé sous Node)
+│                                   handleTab, safeHref, hasRichSyntax (pur, testé sous Node)
 │
 ├── theme/
 │   ├── palette.js                — SOURCE UNIQUE des couleurs (PALETTE.light/dark, colors(), DATA)
@@ -73,7 +73,7 @@ src/
 └── components/
     ├── ui/SwipePager.jsx          — carrousel de pages (balayage au doigt entre onglets)
     ├── ui/CycleFields.jsx         — champs partagés des deux éditeurs de cycles
-    ├── ui/RichTextArea.jsx        — zone de texte qui continue les listes (Entrée, Tab)
+    ├── ui/RichTextArea.jsx        — zone de texte : listes continuées + aperçu en direct
     ├── ui/SyntaxHelp.jsx          — le « ? » qui montre la syntaxe disponible
     │                                (WeekStepper, AutoTextarea, ColorDot, NumberField…)
     ├── Logo.jsx                   — ClimbingPlannerLogo (la marque « Charge », en-tête bureau)
@@ -1355,6 +1355,16 @@ sans les autres produit à chaque fois un défaut différent :
 - **L'ordre des motifs en ligne compte** (`renderInline`) : le gras est cherché
   **avant** l'italique. Sur `**gras**` les deux mordent au même endroit, et c'est
   le premier de la liste qui gagne à position égale.
+- **Le marqueur vit dans sa propre colonne** (`richMarker`) : une boîte haute
+  d'exactement une ligne, dans laquelle puce, rang ou case se centrent d'eux-
+  mêmes. Elle remplace le `marginTop: 3` que chacun portait — un décalage réglé
+  à l'œil pour **une** taille de police, donc faux pour toutes les autres, et
+  c'est ce qui faisait retomber la puce sous son texte. La hauteur est en `em`
+  et vient de `RICH_LINE` (`theme/makeStyles.js`), la même constante que
+  l'interligne de `richText` : écrites deux fois, elles finiraient par diverger.
+  Pour la même raison le rang d'une liste numérotée n'a plus de taille à lui —
+  un marqueur plus petit que son texte se centrerait de travers dans une boîte
+  mesurée en `em`.
 
 **La saisie.** `ui/RichTextArea.jsx` est un `<textarea>` ordinaire plus deux
 touches qui savent ce qu'on écrit :
@@ -1376,9 +1386,26 @@ touches qui savent ce qu'on écrit :
   que le navigateur ne peigne — sinon il clignote une image à la mauvaise place.
 - Toute la décision est dans `lib/rich-text.js`, **pure** : elle prend le texte
   et la position du curseur, rend le nouveau texte et la nouvelle position.
-  Aucun DOM, donc `npm run test:text` (16 cas, `node --test`) couvre les cas
+  Aucun DOM, donc `npm run test:text` (17 cas, `node --test`) couvre les cas
   tordus — curseur au milieu d'un mot, dans le marqueur, sélection sur plusieurs
   lignes — sans ouvrir un navigateur.
+
+**Le texte se compile en direct**, sous le champ, à chaque caractère tapé.
+Écrire `**gras**` sans jamais voir de gras, c'est écrire à l'aveugle : on
+n'apprend qu'on s'est trompé d'étoile qu'après avoir enregistré et rouvert.
+
+- L'aperçu n'apparaît **que s'il y a de la mise en forme à montrer**
+  (`hasRichSyntax`, testée). Sur une note écrite en prose il recopierait mot
+  pour mot le champ du dessus — du bruit, et la moitié d'un écran de téléphone
+  prise pour rien. La fonction ignore donc ce qui ressemble à de la syntaxe
+  sans en être : « 20-25 répétitions », « 3*4 séries », un `#` collé à son mot.
+- **Pourquoi sous le champ et non dedans.** Rendre le texte *à la place* de ce
+  qu'on tape demande un vrai éditeur (Obsidian embarque CodeMirror). Un
+  `<textarea>` ne peut pas : son contenu est du texte brut. Le calque
+  transparent qu'on pose parfois par-dessus ne tient que si rien ne change la
+  largeur des caractères — or le gras et les titres la changent, et le curseur
+  se met à glisser à côté des lettres au fil de la ligne.
+- La prop `preview` (défaut `true`) le coupe si un écran n'en veut pas.
 
 **Les liens sont filtrés** (`safeHref`). `javascript:` et `data:` sont les deux
 façons classiques de faire exécuter du code par un texte écrit par quelqu'un
