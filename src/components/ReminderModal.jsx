@@ -37,7 +37,7 @@ import { colors } from "../theme/palette.js";
 // Nom et couleur restent modifiables à tout moment : ils ne décident jamais de
 // ce qui était dû un jour donné.
 
-export function ReminderModal({ reminder, reminderState, onSave, onDelete, onClose }) {
+export function ReminderModal({ reminder, reminderState, onSave, onDelete, onPurge, onClose }) {
   const { isDark } = useThemeCtx();
   const T = modalTokens(isDark);
   const c = colors(isDark);
@@ -98,6 +98,7 @@ export function ReminderModal({ reminder, reminderState, onSave, onDelete, onClo
   const toggleDay = (d) => patch({ days: recDays.includes(d) ? recDays.filter(x => x !== d) : [...recDays, d].sort() });
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [alsoPurge, setAlsoPurge] = useState(false);
 
   const recurrenceOf = () => recKind === "daily"
     ? { kind: "daily" }
@@ -305,9 +306,27 @@ export function ReminderModal({ reminder, reminderState, onSave, onDelete, onClo
       {confirmDelete && (
         <ConfirmModal
           title="Supprimer ce rappel ?"
-          sub="Tous ses blocs et l'historique des coches seront également supprimés."
-          confirmLabel="Supprimer"
-          onConfirm={() => { markPristine(); onDelete?.(reminder.id); onClose(); }}
+          sub="Il quitte la liste et cesse de réclamer quoi que ce soit. Ce qui est déjà noté reste dans les stats et dans les journaux des jours passés."
+          extra={
+            <label style={{
+              display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer",
+              fontSize: 12, color: T.textMid, lineHeight: 1.45, marginTop: 4,
+            }}>
+              <input
+                type="checkbox"
+                checked={alsoPurge}
+                onChange={e => setAlsoPurge(e.target.checked)}
+                style={{ marginTop: 2, accentColor: T.danger, flexShrink: 0 }}
+              />
+              <span>Effacer aussi l'historique — les coches disparaissent des stats. Irréversible.</span>
+            </label>
+          }
+          confirmLabel={alsoPurge ? "Supprimer et effacer" : "Supprimer"}
+          onConfirm={() => {
+            markPristine();
+            (alsoPurge ? onPurge : onDelete)?.(reminder.id);
+            onClose();
+          }}
           onClose={() => setConfirmDelete(false)}
         />
       )}

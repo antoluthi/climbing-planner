@@ -7,7 +7,9 @@ import { ConfirmModal } from "./ConfirmModal.jsx";
 import { CustomCycleModal } from "./CustomCycleModal.jsx";
 import { ReminderModal } from "./ReminderModal.jsx";
 import {
-  getReminderCompletionRate,
+  reminderProgress,
+  formatPeriod,
+  liveReminders,
   formatRecurrence,
   DAY_NAMES_SHORT,
   displayPeriod,
@@ -25,7 +27,7 @@ export function CyclesView({
   customCycles, onAddCustomCycle, onUpdateCustomCycle, onDeleteCustomCycle,
   locked, onSetLocked, canEdit, objectives,
   reminders = [], reminderState = {},
-  onAddReminder, onUpdateReminder, onDeleteReminder,
+  onAddReminder, onUpdateReminder, onDeleteReminder, onPurgeReminder,
   runBlocks = [], kmGoal = false, runLocked = true, onSetRunLocked,
   onAddRunBlock, onUpdateRunBlock, onDeleteRunBlock, onSetRunBlockOverride,
 }) {
@@ -138,6 +140,7 @@ export function CyclesView({
         onAddReminder={onAddReminder}
         onUpdateReminder={onUpdateReminder}
         onDeleteReminder={onDeleteReminder}
+        onPurgeReminder={onPurgeReminder}
         canEditReminders /* rappels = données perso, gérables même en lecture seule */
       />
     );
@@ -254,17 +257,17 @@ export function CyclesView({
           )}
         </div>
 
-        {reminders.length === 0 && (
+        {liveReminders(reminders).length === 0 && (
           <div style={{ color: colors(isDark).textMuted, fontSize: 12, fontStyle: "italic", textAlign: "center", paddingTop: 8, paddingBottom: 4 }}>
             Aucun rappel. Ex : créatine, étirements, vitamine D…
           </div>
         )}
 
-        {reminders.map(rem => (
+        {liveReminders(reminders).map(rem => (
           <ReminderCard
             key={rem.id}
             reminder={rem}
-            completionRate={getReminderCompletionRate(rem, reminderState, new Date())}
+            progress={reminderProgress(rem, reminderState)}
             isDark={isDark}
             disabled={!canEdit}
             onClick={() => canEdit && setEditingReminder(rem)}
@@ -282,6 +285,7 @@ export function CyclesView({
             setEditingReminder(null);
           }}
           onDelete={onDeleteReminder ? (id) => { onDeleteReminder(id); setEditingReminder(null); } : undefined}
+          onPurge={onPurgeReminder ? id => { onPurgeReminder(id); setEditingReminder(null); } : undefined}
           onClose={() => setEditingReminder(null)}
         />
       )}
@@ -543,7 +547,7 @@ function MicroRow({ micro, meso, start, isDark, fieldBase, onUpdateMicro, onAskD
 // − 4 sem. + : au pouce, un pas à la fois. Le champ nombre du bureau demandait
 // un clavier et un appui long pour changer une semaine.
 // ─── ReminderCard ────────────────────────────────────────────────────────────
-function ReminderCard({ reminder, completionRate, isDark, disabled, onClick }) {
+function ReminderCard({ reminder, progress, isDark, disabled, onClick }) {
   const text     = colors(isDark).text;
   const textMid  = colors(isDark).textCard;
   const textLight= colors(isDark).textMuted;
@@ -558,7 +562,7 @@ function ReminderCard({ reminder, completionRate, isDark, disabled, onClick }) {
   const ended = reminderStatus(reminder) === "ended";
   const isDaily = shown?.recurrence?.kind !== "weekdays";
   const activeDays = isDaily ? [0, 1, 2, 3, 4, 5, 6] : (shown?.recurrence?.days || []);
-  const pct = Math.round((completionRate || 0) * 100);
+  const pct = progress?.rate == null ? null : Math.round(progress.rate * 100);
 
   return (
     <button
@@ -612,28 +616,34 @@ function ReminderCard({ reminder, completionRate, isDark, disabled, onClick }) {
             }}>Terminé</span>
           )}
         </div>
-        {(reminder.startDate || reminder.endDate) && (
+        {shown && (shown.startDate || shown.endDate) && (
           <div style={{ fontSize: 10, color: textLight, marginTop: 3 }}>
-            {reminder.startDate ? `Du ${reminder.startDate}` : "Sans début"}
-            {reminder.endDate   ? ` au ${reminder.endDate}` : reminder.startDate ? " · sans fin" : ""}
+            {formatPeriod(shown)}
           </div>
         )}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
-        <span style={{
-          fontFamily: "'Newsreader', Georgia, serif",
-          fontSize: 17, fontWeight: 700, color: reminder.color,
-          lineHeight: 1,
-        }}>
-          {pct}%
-        </span>
+      {/* Un pourcentage n'a de sens que si quelque chose a pu être raté : sur
+          un rappel qui commence la semaine prochaine, la légende suffit. */}
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "flex-end",
+        flexShrink: 0, maxWidth: 104,
+      }}>
+        {pct != null && (
+          <span style={{
+            fontFamily: "'Newsreader', Georgia, serif",
+            fontSize: 17, fontWeight: 700, color: reminder.color,
+            lineHeight: 1,
+          }}>
+            {pct}%
+          </span>
+        )}
         <span style={{
           fontSize: 9, fontWeight: 600, color: textLight,
           letterSpacing: "0.06em", textTransform: "uppercase",
-          marginTop: 4,
+          marginTop: pct != null ? 4 : 0, textAlign: "right", lineHeight: 1.3,
         }}>
-          30 derniers j.
+          {progress?.label}
         </span>
       </div>
     </button>

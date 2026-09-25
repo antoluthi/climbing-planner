@@ -1,7 +1,7 @@
 import { colors } from "../theme/palette.js";
 import { RADIUS } from "../theme/makeStyles.js";
 import { SANS, MONO, RoundCheck } from "./ui/Ascent.jsx";
-import { getActiveRemindersForDate, isReminderCheckedOn } from "../lib/reminders.js";
+import { getActiveRemindersForDate, isReminderCheckedOn, isArchived } from "../lib/reminders.js";
 import { hasDayLog } from "../lib/helpers.js";
 
 // ─── JOURNAL D'UNE JOURNÉE ───────────────────────────────────────────────────
@@ -71,15 +71,22 @@ export function DayJournalBlock({ isDark, data, dateStr, onOpenLog, onToggleRemi
 
       {reminders.length > 0 && (
         <div style={{ padding: "2px 4px 0" }}>
-          {reminders.map(r => (
-            <RoundCheck
-              key={r.id}
-              isDark={isDark}
-              checked={isReminderCheckedOn(data.reminderState, r.id, dateStr)}
-              onChange={() => onToggleReminder?.(r.id, dateStr)}
-              label={r.name}
-            />
-          ))}
+          {/* Un rappel supprimé reste visible sur les jours qu'il couvrait —
+              c'est tout l'intérêt d'archiver plutôt que de jeter. Mais on ne
+              le coche plus : il n'existe plus, la case serait un mensonge. */}
+          {reminders.map(r => {
+            const gone = isArchived(r);
+            return (
+              <div key={r.id} style={gone ? { opacity: 0.55, pointerEvents: "none" } : undefined}>
+                <RoundCheck
+                  isDark={isDark}
+                  checked={isReminderCheckedOn(data.reminderState, r.id, dateStr)}
+                  onChange={gone ? undefined : () => onToggleReminder?.(r.id, dateStr)}
+                  label={gone ? `${r.name} (supprimé)` : r.name}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
