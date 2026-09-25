@@ -67,6 +67,7 @@ src/
 │
 ├── hooks/
 │   ├── useWindowWidth.js          — largeur fenêtre réactive
+│   ├── usePopover.js              — état d'une bulle ancrée (ancre, ouverture, rectangle)
 │   ├── useSwipe.js                — balayage horizontal (onglets / périodes)
 │   ├── useDragReorder.js          — réarrangement vertical à la poignée (cartes de cycles)
 │   ├── useSupabaseSync.js         — session auth, loadFromCloud, saveToCloud, uploadNow, writeStatus
@@ -80,6 +81,7 @@ src/
     ├── ui/RichTextArea.jsx        — zone de texte : textarea de repli → RichEditor
     ├── ui/RichEditor.jsx          — champ CodeMirror, syntaxe rendue sous les doigts
     ├── ui/SyntaxHelp.jsx          — le « ? » qui montre la syntaxe disponible
+    ├── ui/Popover.jsx             — bulle ancrée, portée dans <body> (hors empilement)
     │                                (WeekStepper, AutoTextarea, ColorDot, NumberField…)
     ├── Logo.jsx                   — ClimbingPlannerLogo (la marque « Charge », en-tête bureau)
     ├── SyncButtons.jsx            — boutons export/import/sync
@@ -1466,13 +1468,58 @@ posé à côté de chaque zone de texte qui la comprend.
   et un `open` qui s'en déduit : le survol ouvre le temps du survol, le clic
   **épingle** jusqu'au prochain clic (ou Échap). Le survol n'est câblé que si
   `(hover: hover) and (pointer: fine)` — au doigt, il n'existe pas.
-- Le panneau est en **`position: fixed`** (`Z.popoverHi`), ancré au bouton par
-  `getBoundingClientRect` : les zones de texte vivent dans des modales à
-  défilement, et un panneau `absolute` s'y ferait couper au bord. Il se place
-  au-dessus du bouton quand il n'y a plus la place en dessous.
-- `place()` est appelée **depuis les gestionnaires**, jamais depuis l'effet :
-  mesurer dans un effet déclencherait un second rendu à chaque ouverture (et
-  `react-hooks/set-state-in-effect` le refuse).
+- Le panneau passe par **`ui/Popover.jsx`** : porté dans `<body>`, donc hors de
+  tout contexte d'empilement et de tout `overflow`. Voir sa section pour les
+  deux pièges que ça évite, et ce que le portail change au survol.
+
+### Une bulle ancrée sort toujours de son arbre (`ui/Popover.jsx`, `hooks/usePopover.js`)
+
+Un petit panneau accroché à un bouton — l'aide de syntaxe, le réglage de
+couleur d'un microcycle. Deux pièges l'attendent, et ils se ressemblent assez
+pour qu'on croie les avoir évités alors qu'il n'en reste qu'un.
+
+1. ⚠️ **`z-index` ne franchit pas un contexte d'empilement.** Une carte de
+   mésocycle porte `position: relative; z-index: 0` — ça suffit à en créer un.
+   Un panneau rendu dedans, même en `Z.popoverHi`, ne se compare qu'aux frères
+   **de cette carte** : la carte suivante, peinte après, lui passe dessus. À
+   l'écran le panneau semble **coupé net** à la limite de sa carte, et on
+   cherche un `overflow` qui n'existe pas. C'est exactement ce qui est arrivé
+   au réglage de couleur : `position: fixed` était bien là, aucun ancêtre ne
+   le rognait, et il était quand même tronché.
+2. **`position: fixed` ne protège pas de tout.** Il échappe au défilement et
+   aux `overflow`, mais un ancêtre porteur d'un `transform` (le carrousel
+   d'onglets en pose un pendant le geste) en redevient le bloc conteneur.
+
+La seule réponse qui tienne dans les deux cas : **rendre ailleurs**. Un portail
+vers `document.body` sort de l'arbre, donc d'un coup de tous les contextes
+d'empilement, de tous les `overflow` et de tous les `transform` des ancêtres.
+D'où un composant partagé plutôt qu'une recette recopiée : `SyntaxHelp` et
+`MicroColorDot` passent tous deux par lui.
+
+- ⚠️ **Le portail change aussi qui est « dehors ».** Le panneau n'est plus un
+  descendant du bouton : un clic dedans compte comme un clic extérieur et
+  referme tout. C'est ce qui rendait le réglage de couleur **inutilisable** —
+  on attrapait un curseur, la bulle se fermait. La fermeture teste donc le
+  bouton **et** le panneau. Même cause pour le survol de `SyntaxHelp` : aller
+  à la souris sur le panneau déclenche le `mouseleave` du bouton, d'où un
+  délai de grâce de 140 ms annulé dès qu'on entre dans le panneau.
+- **La position se calcule à l'initialisation de l'état**, depuis le rectangle
+  que `usePopover` capture dans le gestionnaire de clic. React interdit de lire
+  une `ref` pendant le rendu, et mesurer depuis un effet impose un second rendu
+  à chaque ouverture (`react-hooks/set-state-in-effect` le refuse). Le panneau
+  ne se monte donc qu'à l'ouverture : `{open && <Popover…>}`.
+- **On ne mesure jamais sa hauteur** : il reçoit la place disponible du côté le
+  plus généreux (`maxHeight` + défilement). Un panneau qu'on mesure se fait
+  quand même couper sur une fenêtre courte.
+- ⚠️ **Ce bug a passé les tests.** Le pilote réglait le curseur par
+  `locator.fill()`, qui n'émet **pas** de `mousedown` : la fermeture au clic
+  extérieur n'était jamais déclenchée. Un panneau interactif se teste par un
+  vrai clic et un vrai glissement (`mouse.down` / `move` / `up`), et en
+  vérifiant par `elementFromPoint` que rien ne peint par-dessus.
+- **Pas d'`accentColor` sur les curseurs** du réglage de couleur : elle teinte
+  aussi la partie remplie de la barre et efface le dégradé — or c'est lui qui
+  dit ce que le curseur va faire. Le repère vaut mieux que la teinte de la
+  poignée, laissée au navigateur.
 
 ### La couleur d'un microcycle (`lib/color.js`, `MicroColorDot`)
 
@@ -1505,6 +1552,8 @@ distinguer des autres **sans quitter la famille**.
   couleur se comporte exactement comme avant. « Reprendre celle du bloc » la
   remet à `null` plutôt que de recopier la couleur du mésocycle — sinon elle
   cesserait de suivre le bloc quand celui-ci change de couleur.
+- Le panneau passe par `ui/Popover.jsx` — voir juste au-dessus pourquoi il
+  est porté dans `<body>` et non rendu dans la carte.
 - `ColorDot` (mésocycle, bloc de course) garde le sélecteur natif seul : ces
   couleurs-là n'héritent de rien, il n'y a ni famille à retrouver ni luminosité
   à ajuster par rapport à quoi que ce soit.
