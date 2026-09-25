@@ -7,10 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "npm run test:caldav && npm run test:text && npm run test:color",
+    "test": "npm run test:caldav && npm run test:text && npm run test:color && npm run test:reminders",
     "test:caldav": "node --test api/caldav.test.mjs",
     "test:text": "node --test src/lib/rich-text.test.mjs",
     "test:color": "node --test src/lib/color.test.mjs",
+    "test:reminders": "node --test src/lib/reminders.test.mjs",
     "preview": "vite preview",
     "cap:sync": "vite build --mode capacitor && npx cap sync android",
     "cap:open": "npx cap open android"
