@@ -30,14 +30,18 @@ const DEFAULT_DATA = {
   schemaVersion: 3,
 };
 
-// ─── Migration schemaVersion 2 → 3 → 4 → 5 → 6 ───────────────────────────────
+// ─── Migration schemaVersion 2 → 3 → 4 → 5 → 6 → 7 ──────────────────────────
 // v2 : discipline / mode / chargePlanned sur sessions et quickSessions.
 // v3 : data.reminders / data.reminderState (+ rapatrie l'ancien data.creatine).
 // v4 : entrées Hooper partielles → total null (sinon stats faussées).
 // v5 : échelle de charge unifiée 0-10 — les charges escalade legacy
 //      (vol×int×compl, 0-216) des séances ET de leurs blocs sont ramenées
 //      sur 0-10 ; les feedbacks "adaptedCharge" legacy deviennent un rpe.
-const SCHEMA_VERSION = 6;
+// v7 : un rappel porte des **blocs datés** (`periods`) au lieu d'une plage
+//      unique à la racine. Modifier la plage d'un rappel terminé réécrivait
+//      son historique — la heatmap déduit « était-ce dû ce jour-là ? » de la
+//      définition courante. Voir `lib/reminders.js`.
+const SCHEMA_VERSION = 7;
 
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
@@ -116,7 +120,7 @@ function migrateReminders(data) {
       id: creatineId,
       name: "Créatine",
       color: DATA.picker[0],
-      recurrence: { kind: "daily" },
+      periods: [{ id: creatineId + "_p0", recurrence: { kind: "daily" } }],
       createdAt: new Date().toISOString(),
     });
     if (hasAnyCreatine) {
@@ -125,6 +129,25 @@ function migrateReminders(data) {
   }
   // data.creatine est laissé en place pour rollback safety (read-only désormais).
   return { ...data, reminders, reminderState };
+}
+
+// ── Migration v7 : la plage d'un rappel devient son premier bloc ──
+// Les champs de la racine sont **laissés en place** : une ligne cloud écrite
+// par une version d'avant reste lisible (`reminderPeriods` sait la relire), et
+// un rollback ne perd rien. Ils cessent simplement d'être la source de vérité.
+function migrateReminderPeriods(reminder) {
+  if (!reminder || Array.isArray(reminder.periods)) return reminder;
+  // Même sans champ de planification, l'ancienne forme valait « tous les jours,
+  // sans fin » : produire un bloc vide éteindrait le rappel en silence.
+  return {
+    ...reminder,
+    periods: [{
+      id: `${reminder.id || "rem"}_p0`,
+      startDate: reminder.startDate || undefined,
+      endDate: reminder.endDate || undefined,
+      recurrence: reminder.recurrence || { kind: "daily" },
+    }],
+  };
 }
 
 export function migrateData(data) {
@@ -150,6 +173,9 @@ export function migrateData(data) {
     customSessions,
   });
 
+  // v7 : la plage unique d'un rappel devient son premier bloc.
+  const remindersWithPeriods = (withReminders.reminders || []).map(migrateReminderPeriods);
+
   // v4 : entrées Hooper partielles → total null (exclues des agrégats).
   const hooper = (withReminders.hooper || []).map(h => {
     const complete = [h.fatigue, h.stress, h.soreness, h.sleep].every(v => v != null);
@@ -159,6 +185,7 @@ export function migrateData(data) {
 
   return {
     ...withReminders,
+    reminders: remindersWithPeriods,
     hooper,
     schemaVersion: SCHEMA_VERSION,
   };

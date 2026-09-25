@@ -10,6 +10,8 @@ import {
   getReminderCompletionRate,
   formatRecurrence,
   DAY_NAMES_SHORT,
+  displayPeriod,
+  reminderStatus,
 } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
 import { PageTitle, PrimaryButton, Segmented } from "./ui/Ascent.jsx";
@@ -272,6 +274,7 @@ export function CyclesView({
 
       {editingReminder && (
         <ReminderModal
+          reminderState={reminderState}
           reminder={editingReminder.id ? editingReminder : null}
           onSave={(r) => {
             if (editingReminder.id) onUpdateReminder?.(r);
@@ -549,8 +552,12 @@ function ReminderCard({ reminder, completionRate, isDark, disabled, onClick }) {
   const surface  = colors(isDark).card;
   const surface2 = colors(isDark).surface;
 
-  const isDaily = reminder.recurrence?.kind !== "weekdays";
-  const activeDays = isDaily ? [0, 1, 2, 3, 4, 5, 6] : (reminder.recurrence?.days || []);
+  // Le bloc affiché : celui en cours, sinon le dernier. Un rappel terminé
+  // continue donc de montrer ce qu'il demandait, en retrait.
+  const shown = displayPeriod(reminder);
+  const ended = reminderStatus(reminder) === "ended";
+  const isDaily = shown?.recurrence?.kind !== "weekdays";
+  const activeDays = isDaily ? [0, 1, 2, 3, 4, 5, 6] : (shown?.recurrence?.days || []);
   const pct = Math.round((completionRate || 0) * 100);
 
   return (
@@ -564,6 +571,7 @@ function ReminderCard({ reminder, completionRate, isDark, disabled, onClick }) {
         borderRadius: 10,
         padding: "10px 14px",
         marginBottom: 6,
+        opacity: ended ? 0.62 : 1,
         cursor: disabled ? "default" : "pointer",
         fontFamily: "inherit",
         textAlign: "left", width: "100%",
@@ -596,7 +604,13 @@ function ReminderCard({ reminder, completionRate, isDark, disabled, onClick }) {
               );
             })}
           </div>
-          <span style={{ fontSize: 11, color: textMid }}>{formatRecurrence(reminder.recurrence)}</span>
+          <span style={{ fontSize: 11, color: textMid }}>{formatRecurrence(shown?.recurrence)}</span>
+          {ended && (
+            <span style={{
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
+              color: textLight, border: `1px solid ${border}`, borderRadius: 999, padding: "2px 7px",
+            }}>Terminé</span>
+          )}
         </div>
         {(reminder.startDate || reminder.endDate) && (
           <div style={{ fontSize: 10, color: textLight, marginTop: 3 }}>
