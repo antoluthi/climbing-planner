@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
 import { colors } from "../../theme/palette.js";
-import { RADIUS, Z } from "../../theme/makeStyles.js";
 import { RichText } from "../RichText.jsx";
 import { SANS, MONO } from "./Ascent.jsx";
+import { Popover } from "./Popover.jsx";
+import { usePopover } from "../../hooks/usePopover.js";
 
 // ─── LA SYNTAXE, À PORTÉE DE POUCE ───────────────────────────────────────────
 // Une syntaxe qu'on ne voit nulle part n'existe pas : personne ne devine que
@@ -44,63 +45,48 @@ const ROWS = [
 export function SyntaxHelp({ size = 18 }) {
   const { isDark } = useThemeCtx();
   const c = colors(isDark);
-  const [pinned, setPinned] = useState(false);   // clic : reste ouverte
-  const [hovering, setHovering] = useState(false); // survol : le temps du survol
-  const [pos, setPos] = useState(null);
-  const btnRef = useRef(null);
-  const open = pinned || hovering;
+  const { anchorRef, open, rect, show, close } = usePopover();
+  // Épinglé = ouvert par un clic, donc insensible au survol. En `ref` et non
+  // en état : personne ne le lit pendant le rendu, et le passer en état
+  // redessinerait le panneau à chaque aller-retour de souris.
+  const pinned = useRef(false);
+  const leaving = useRef(null);
 
-  // Le panneau est en `fixed`, pas en `absolute` : les zones de texte vivent
-  // dans des modales à défilement, et un panneau absolu s'y ferait couper au
-  // bord. Il est donc ancré au bouton par ses coordonnées d'écran, et ramené
-  // dans la fenêtre s'il déborde.
-  const place = useCallback(() => {
-    const r = btnRef.current?.getBoundingClientRect();
-    if (!r) return;
-    const width = Math.min(300, window.innerWidth - 24);
-    const left = Math.min(Math.max(12, r.left + r.width / 2 - width / 2), window.innerWidth - width - 12);
-    const below = r.bottom + 8;
-    const fitsBelow = below + 340 < window.innerHeight;
-    setPos({ left, width, top: fitsBelow ? below : undefined, bottom: fitsBelow ? undefined : window.innerHeight - r.top + 8 });
-  }, []);
+  const shut = useCallback(() => { pinned.current = false; clearTimeout(leaving.current); close(); }, [close]);
 
-  // L'effet ne fait que **s'abonner** : la position, elle, se calcule au moment
-  // où l'on ouvre (dans le gestionnaire) — la mesurer depuis un effet
-  // déclencherait un second rendu à chaque ouverture.
-  useEffect(() => {
-    if (!open) return;
-    const shut = () => { setPinned(false); setHovering(false); };
-    const close = (e) => { if (!btnRef.current?.contains(e.target)) shut(); };
-    const onKey = (e) => { if (e.key === "Escape") shut(); };
-    // `true` : on écoute à la capture, sinon un clic dans une modale qui
-    // arrête la propagation ne fermerait jamais le panneau.
-    document.addEventListener("mousedown", close, true);
-    document.addEventListener("touchstart", close, true);
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      document.removeEventListener("mousedown", close, true);
-      document.removeEventListener("touchstart", close, true);
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [open, place]);
+  // Le panneau est **porté dans `<body>`** : il n'est plus un descendant du
+  // bouton, donc aller dessus à la souris déclenche le `mouseleave` du bouton.
+  // D'où ce délai de grâce, annulé dès qu'on entre dans le panneau — sans lui,
+  // l'aide se refermerait au moment précis où l'on va la lire.
+  const enter = () => { clearTimeout(leaving.current); if (!open) show(); };
+  const leave = () => {
+    clearTimeout(leaving.current);
+    leaving.current = setTimeout(() => { if (!pinned.current) close(); }, 140);
+  };
+  useEffect(() => () => clearTimeout(leaving.current), []);
+
+  // ⚠ Survol et clic ne peuvent pas être le même état. Sur un ordinateur
+  // l'aide est déjà ouverte quand le clic arrive : une simple bascule la
+  // refermerait, et elle serait impossible à garder ouverte — elle
+  // disparaîtrait à l'instant où l'on ramène la souris vers le champ.
+  const onClick = () => {
+    clearTimeout(leaving.current);
+    if (open && pinned.current) { pinned.current = false; close(); return; }
+    pinned.current = true;
+    if (!open) show();
+  };
 
   const hoverable = typeof window !== "undefined"
     && window.matchMedia?.("(hover: hover) and (pointer: fine)").matches;
 
   return (
-    <span
-      style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}
-      onMouseEnter={hoverable ? () => { place(); setHovering(true); } : undefined}
-      onMouseLeave={hoverable ? () => setHovering(false) : undefined}
-    >
+    <>
       <button
-        ref={btnRef}
+        ref={anchorRef}
         type="button"
-        onClick={() => { place(); setPinned(p => !p); }}
+        onClick={onClick}
+        onMouseEnter={hoverable ? enter : undefined}
+        onMouseLeave={hoverable ? leave : undefined}
         aria-label="Syntaxe disponible"
         aria-expanded={open}
         title="Syntaxe disponible"
@@ -110,22 +96,17 @@ export function SyntaxHelp({ size = 18 }) {
           background: open ? c.accent + "1e" : "transparent",
           color: open ? c.accent : c.textMuted,
           fontSize: Math.round(size * 0.62), fontWeight: 700, lineHeight: 1,
-          fontFamily: SANS, cursor: "pointer",
+          fontFamily: SANS, cursor: "pointer", flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >?</button>
 
-      {open && pos && (
-        <div
-          role="tooltip"
-          style={{
-            position: "fixed", left: pos.left, top: pos.top, bottom: pos.bottom,
-            width: pos.width, zIndex: Z.popoverHi,   // au-dessus des modales, sous les toasts
-            background: c.modalBg, border: `1px solid ${c.borderStrong}`,
-            borderRadius: RADIUS.card, padding: "12px 14px",
-            boxShadow: "0 16px 40px rgba(0,0,0,0.28)",
-            fontFamily: SANS, maxHeight: "min(340px, 70vh)", overflowY: "auto",
-          }}
+      {open && (
+        <Popover
+          anchorRef={anchorRef} rect={rect} onClose={shut}
+          width={300} align="center" role="tooltip" label="Syntaxe disponible"
+          onMouseEnter={hoverable ? enter : undefined}
+          onMouseLeave={hoverable ? leave : undefined}
         >
           <div style={{
             fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
@@ -154,8 +135,8 @@ export function SyntaxHelp({ size = 18 }) {
             imbriquent une puce ; <strong style={{ color: c.textMuted }}>Entrée</strong> sur une puce
             vide sort de la liste.
           </div>
-        </div>
+        </Popover>
       )}
-    </span>
+    </>
   );
 }
