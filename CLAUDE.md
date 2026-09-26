@@ -790,6 +790,45 @@ l'app modélisait déjà tout le reste ainsi :
   bloc, laissent chaque jour écoulé exactement tel qu'il était. C'est la seule
   chose que le modèle en blocs apporte, et elle est invisible à l'œil.
 
+**Supprimer, c'est archiver.** Jeter la ligne **et** ses coches faisait
+disparaître un mois de suspension notée de la heatmap et des journaux passés —
+or ce qu'on veut en supprimant un rappel, c'est qu'il cesse de réclamer quelque
+chose, pas effacer ce qu'on a fait. `archiveReminder()` **clôt donc le bloc
+ouvert** et pose `archivedAt`. Aucun traitement particulier côté historique :
+les blocs écoulés sont intacts, donc les jours passés répondent exactement
+comme avant — c'est la leçon du drapeau `enabled`, un indicateur global consulté
+par `isReminderActiveOn` finit toujours par mentir sur le passé.
+
+- `liveReminders()` filtre les listes de l'éditeur ; l'historique, lui, passe
+  par `getActiveRemindersForDate`, qui ne connaît que les blocs.
+- Dans le journal d'un jour passé, un rappel supprimé **reste visible mais ne se
+  coche plus** (« (supprimé) », `pointerEvents: none`) : la case serait un
+  mensonge sur quelque chose qui n'existe plus.
+- L'oubli volontaire existe toujours — une case « Effacer aussi l'historique »
+  dans la confirmation, qui appelle `purgeReminder`. C'est la seule des deux
+  opérations qui soit irréversible, et le dialogue le dit.
+
+**Le taux affiché est borné par le rappel lui-même** (`reminderProgress`). Un
+pourcentage sur 30 jours glissants ment dès que le rappel n'a pas 30 jours : un
+bloc commencé avant-hier s'affichait à 7 %, les 28 jours où il n'existait pas
+comptant comme des échecs. Quatre cas, quatre libellés :
+
+| État | Ce qui s'affiche |
+|---|---|
+| commence plus tard | « commence dans 4 jours » — **aucun pourcentage**, on n'a rien pu rater |
+| bloc de moins de 30 jours | « depuis le 23 sept. » sur les jours réellement écoulés |
+| bloc plus ancien | « 30 derniers jours » |
+| rappel terminé | le bilan de son dernier bloc |
+
+- La fenêtre **ne franchit jamais la limite du bloc en cours** : après une
+  reprise, le taux ne repart pas avec les échecs du bloc précédent — sinon
+  « Reprendre » ferait plonger le pourcentage sans qu'on y soit pour rien.
+- `total === 0` (récurrence lun/mer/ven, bloc commencé un mardi) → « aucune
+  échéance encore », toujours sans pourcentage.
+- ⚠️ `formatPeriod()` prend la date du jour : « depuis le 29 sept. » sur un bloc
+  qui commence dans quatre jours se lit comme s'il courait déjà. Un début à
+  venir donne « à partir du ».
+
 Côté écran (`ReminderModal`) : nom et couleur restent modifiables à tout moment
 — ils ne décident jamais de ce qui était dû. Les blocs terminés s'affichent en
 **lecture seule** avec leur bilan (« du 25 août au 24 sept. · Tous les jours ·

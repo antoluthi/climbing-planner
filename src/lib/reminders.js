@@ -179,14 +179,21 @@ export function periodCompletion(reminder, period, reminderState, today = new Da
   return { done, total };
 }
 
-export function formatPeriod(period) {
+// ⚠️ Le temps du verbe dépend de la date du jour : « depuis le 29 sept. » sur
+// un bloc qui commence dans quatre jours se lit comme s'il courait déjà.
+export function formatPeriod(period, today = new Date()) {
   if (!period) return "—";
-  const f = iso => {
-    const d = fromISODate(iso);
-    return d ? d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : "";
+  const iso = toISODate(today);
+  const f = d => {
+    const x = fromISODate(d);
+    return x ? x.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : "";
   };
   if (period.startDate && period.endDate) return `du ${f(period.startDate)} au ${f(period.endDate)}`;
-  if (period.startDate) return `depuis le ${f(period.startDate)}`;
+  if (period.startDate) {
+    return period.startDate > iso
+      ? `à partir du ${f(period.startDate)}`
+      : `depuis le ${f(period.startDate)}`;
+  }
   if (period.endDate) return `jusqu'au ${f(period.endDate)}`;
   return "sans fin";
 }
@@ -311,4 +318,99 @@ export function fromISODate(iso) {
 // copies auraient divergé au premier ajustement.
 export function displayPeriod(reminder, today = new Date()) {
   return openPeriod(reminder, today) || lastPeriod(reminder);
+}
+
+// ─── SUPPRIMER SANS PERDRE CE QUI A ÉTÉ FAIT ─────────────────────────────────
+// Supprimer un rappel jetait sa ligne **et** toutes ses coches : un mois de
+// suspension notée disparaissait de la heatmap et des journaux passés. Or ce
+// qu'on veut en le supprimant, c'est qu'il cesse de réclamer quelque chose —
+// pas effacer ce qu'on a fait.
+//
+// Supprimer **clôt donc le bloc ouvert** et pose `archivedAt`. Aucun traitement
+// particulier côté historique : les blocs écoulés sont intacts, donc les jours
+// passés répondent exactement comme avant. C'est la leçon du drapeau `enabled`
+// — un indicateur global consulté par `isReminderActiveOn` finit toujours par
+// mentir sur le passé.
+export function archiveReminder(reminder, today = new Date()) {
+  if (!reminder) return reminder;
+  const iso = toISODate(today);
+  const eve = shiftISO(iso, -1);
+  const periods = reminderPeriods(reminder)
+    // Un bloc qui n'avait pas encore commencé n'a rien à laisser derrière lui.
+    .filter(p => !(p.startDate && p.startDate >= iso))
+    .map(p => (!p.endDate || p.endDate >= iso ? { ...p, endDate: eve } : p))
+    // Clore la veille d'un bloc commencé aujourd'hui donnerait une plage vide.
+    .filter(p => !p.startDate || !p.endDate || p.startDate <= p.endDate);
+  return { ...reminder, periods, archivedAt: iso };
+}
+
+export function isArchived(reminder) {
+  return !!reminder?.archivedAt;
+}
+
+// Ce qu'on liste et ce qu'on peut encore modifier. L'historique, lui, passe
+// toujours par `getActiveRemindersForDate` — qui ne connaît que les blocs.
+export function liveReminders(reminders) {
+  return (reminders || []).filter(r => !isArchived(r));
+}
+
+// ─── « X % », mais sur quoi ? ────────────────────────────────────────────────
+// Un taux sur 30 jours glissants ment dès que le rappel n'a pas 30 jours :
+// un bloc commencé avant-hier s'affichait à 7 % parce que 28 jours où il
+// n'existait pas comptaient comme des échecs. Et sur un rappel qui commence
+// la semaine prochaine, un pourcentage n'a aucun sens — on n'a rien pu rater.
+//
+// La fenêtre est donc **bornée par le rappel lui-même** : au plus 30 jours, et
+// jamais avant le début du bloc en cours. Le libellé dit lequel des deux cas
+// s'applique, sans quoi « 60 % » sur deux jours se lirait comme « 60 % sur le
+// mois ».
+export const PROGRESS_WINDOW = 30;
+
+export function reminderProgress(reminder, reminderState, today = new Date()) {
+  const iso = toISODate(today);
+  const status = reminderStatus(reminder, today);
+  const none = { done: 0, total: 0, rate: null };
+
+  if (status === "upcoming") {
+    const start = openPeriod(reminder, today)?.startDate;
+    const days = daysBetween(iso, start);
+    return {
+      ...none, kind: "upcoming", startDate: start, days,
+      label: days === 1 ? "commence demain"
+           : days > 1 ? `commence dans ${days} jours`
+           : "commence aujourd'hui",
+    };
+  }
+
+  const block = status === "ended" ? lastPeriod(reminder) : openPeriod(reminder, today);
+  if (!block) return { ...none, kind: "none", label: "" };
+
+  if (status === "ended") {
+    const { done, total } = periodCompletion(reminder, block, reminderState, today);
+    return {
+      done, total, rate: total ? done / total : null,
+      kind: "ended", label: total ? "sur le dernier bloc" : "aucune échéance",
+    };
+  }
+
+  const start = block.startDate || (reminder?.createdAt || "").slice(0, 10) || iso;
+  const elapsed = daysBetween(start, iso) + 1;             // bornes incluses
+  const full = elapsed >= PROGRESS_WINDOW;
+  const from = full ? shiftISO(iso, -(PROGRESS_WINDOW - 1)) : start;
+  // La fenêtre ne franchit jamais la limite du bloc : on la découpe dedans.
+  const { done, total } = periodCompletion(reminder, { ...block, startDate: from }, reminderState, today);
+  return {
+    done, total, rate: total ? done / total : null,
+    kind: full ? "window" : "sinceStart",
+    label: total === 0 ? "aucune échéance encore"
+         : full ? `${PROGRESS_WINDOW} derniers jours`
+         : `depuis le ${fromISODate(start)?.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`,
+  };
+}
+
+// Nombre de jours de `a` à `b` (0 si même jour, négatif si b précède a).
+export function daysBetween(a, b) {
+  const da = fromISODate(a), db = fromISODate(b);
+  if (!da || !db) return 0;
+  return Math.round((db - da) / 86400000);
 }

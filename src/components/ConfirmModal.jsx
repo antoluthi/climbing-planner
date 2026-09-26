@@ -5,7 +5,7 @@ import { Button } from "./ui/Button.jsx";
 // Dialogue de confirmation minimaliste. API inchangée — utilisé partout
 // (suppressions, abandon de modifications via useConfirmClose).
 export function ConfirmModal({
-  title, sub, onConfirm, onClose,
+  title, sub, extra, onConfirm, onClose,
   confirmLabel = "Supprimer", cancelLabel = "Annuler",
   danger = true,
 }) {
@@ -22,6 +22,9 @@ export function ConfirmModal({
           {title}
         </div>
         {sub && <div style={{ fontSize: 13, color: T.textMid, lineHeight: 1.5 }}>{sub}</div>}
+        {/* Une nuance que le titre ne peut pas porter — par exemple « effacer
+            aussi l'historique », qui change la nature du geste. */}
+        {extra}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
           <Button variant="secondary" size="md" onClick={onClose}>{cancelLabel}</Button>
           <Button variant={danger ? "danger" : "primary"} size="md" onClick={() => { onConfirm(); onClose(); }}>

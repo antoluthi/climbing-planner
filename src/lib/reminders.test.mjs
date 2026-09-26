@@ -166,3 +166,128 @@ test("un enabled:false traînant n'efface plus le passé", () => {
   const avecDrapeau = { ...suspension, enabled: false };
   assert.equal(isReminderActiveOn(avecDrapeau, D("2026-09-15")), true);
 });
+
+// ─── SUPPRIMER SANS PERDRE, ET UN TAUX QUI NE MENT PAS ───────────────────────
+
+import {
+  archiveReminder, isArchived, liveReminders, reminderProgress, daysBetween, formatPeriod,
+} from "./reminders.js";
+
+const T = D("2026-10-15");                       // « aujourd'hui » de référence
+
+test("PROPRIÉTÉ — supprimer un rappel laisse son passé intact", () => {
+  // Un bloc en cours depuis le 1er octobre, supprimé le 15.
+  const r = { id: "r", createdAt: "2026-09-01T00:00:00Z",
+              periods: [{ id: "p", startDate: "2026-10-01", recurrence: daily }] };
+  const avant = [];
+  for (let iso = "2026-10-01"; iso < "2026-10-15"; iso = shiftISO(iso, 1)) {
+    avant.push([iso, isReminderActiveOn(r, D(iso))]);
+  }
+  const arch = archiveReminder(r, T);
+  for (const [iso, était] of avant) {
+    assert.equal(isReminderActiveOn(arch, D(iso)), était, `le ${iso} a changé`);
+  }
+  assert.equal(isReminderActiveOn(arch, T), false, "plus rien à faire aujourd'hui");
+  assert.equal(isReminderActiveOn(arch, D("2026-10-20")), false, "ni demain");
+  assert.equal(isArchived(arch), true);
+});
+
+test("un rappel supprimé reste compté dans l'historique", () => {
+  const r = archiveReminder(
+    { id: "r", periods: [{ id: "p", startDate: "2026-10-01", recurrence: daily }] }, T);
+  const rs = { r: { "2026-10-02": true } };
+  assert.equal(countMissedRemindersOn([r], rs, D("2026-10-03")), 1, "un jour non coché du passé");
+  assert.equal(countMissedRemindersOn([r], rs, D("2026-10-02")), 0, "un jour coché");
+  assert.equal(countMissedRemindersOn([r], rs, T), 0, "plus rien aujourd'hui");
+  assert.deepEqual(getActiveRemindersForDate([r], D("2026-10-05")).map(x => x.id), ["r"],
+    "le journal d'un jour passé le voit encore");
+});
+
+test("supprimer un rappel qui n'avait pas commencé ne laisse pas de bloc vide", () => {
+  const futur = { id: "r", periods: [{ id: "p", startDate: "2026-12-01", recurrence: daily }] };
+  assert.deepEqual(reminderPeriods(archiveReminder(futur, T)), []);
+  const aujourdhui = { id: "r", periods: [{ id: "p", startDate: "2026-10-15", recurrence: daily }] };
+  assert.deepEqual(reminderPeriods(archiveReminder(aujourdhui, T)), [],
+    "un bloc commencé aujourd'hui ne devient pas une plage inversée");
+});
+
+test("liveReminders sépare la liste de l'historique", () => {
+  const vivant = { id: "a", periods: [{ id: "p", recurrence: daily }] };
+  const supprime = archiveReminder({ id: "b", periods: [{ id: "q", startDate: "2026-10-01", recurrence: daily }] }, T);
+  assert.deepEqual(liveReminders([vivant, supprime]).map(r => r.id), ["a"]);
+});
+
+test("le taux ne s'affiche pas pour un rappel qui n'a pas commencé", () => {
+  const futur = { id: "r", periods: [{ id: "p", startDate: "2026-10-18", recurrence: daily }] };
+  const p = reminderProgress(futur, {}, T);
+  assert.equal(p.kind, "upcoming");
+  assert.equal(p.rate, null, "aucun pourcentage : on n'a rien pu rater");
+  assert.equal(p.label, "commence dans 3 jours");
+  assert.equal(reminderProgress(
+    { id: "r", periods: [{ id: "p", startDate: "2026-10-16", recurrence: daily }] }, {}, T).label,
+    "commence demain");
+});
+
+test("un rappel jeune est mesuré depuis son début, pas sur 30 jours", () => {
+  // Commencé il y a 2 jours (13, 14, 15), un seul coché.
+  const r = { id: "r", periods: [{ id: "p", startDate: "2026-10-13", recurrence: daily }] };
+  const p = reminderProgress(r, { r: { "2026-10-13": true } }, T);
+  assert.equal(p.kind, "sinceStart");
+  assert.equal(p.total, 3, "trois jours écoulés, pas trente");
+  assert.equal(p.done, 1);
+  assert.ok(p.label.startsWith("depuis le"), p.label);
+});
+
+test("passé 30 jours, la fenêtre glisse et le dit", () => {
+  const r = { id: "r", periods: [{ id: "p", startDate: "2026-01-01", recurrence: daily }] };
+  const p = reminderProgress(r, {}, T);
+  assert.equal(p.kind, "window");
+  assert.equal(p.total, 30);
+  assert.equal(p.label, "30 derniers jours");
+});
+
+test("la fenêtre ne remonte jamais avant le bloc en cours", () => {
+  // Un vieux bloc, puis une reprise il y a 4 jours : le taux ne doit pas
+  // additionner les deux, sinon « reprendre » ferait plonger le pourcentage.
+  const r = { id: "r", periods: [
+    { id: "p1", startDate: "2026-08-01", endDate: "2026-08-31", recurrence: daily },
+    { id: "p2", startDate: "2026-10-12", recurrence: daily },
+  ] };
+  const p = reminderProgress(r, {}, T);
+  assert.equal(p.total, 4, "du 12 au 15, et rien du bloc d'août");
+});
+
+test("un rappel terminé rend le bilan de son dernier bloc", () => {
+  const r = { id: "r", periods: [{ id: "p", startDate: "2026-10-01", endDate: "2026-10-10", recurrence: daily }] };
+  const p = reminderProgress(r, { r: { "2026-10-01": true, "2026-10-02": true } }, T);
+  assert.equal(p.kind, "ended");
+  assert.equal(p.total, 10);
+  assert.equal(p.done, 2);
+  assert.equal(p.label, "sur le dernier bloc");
+});
+
+test("pas de pourcentage tant qu'aucune échéance n'est tombée", () => {
+  // Bloc lun/mer/ven commencé un mardi : rien n'était encore dû.
+  const mardi = "2026-10-13";
+  const r = { id: "r", periods: [{ id: "p", startDate: mardi, recurrence: { kind: "weekdays", days: [1] } }] };
+  const p = reminderProgress(r, {}, D(mardi));
+  assert.equal(p.total, 0);
+  assert.equal(p.rate, null);
+  assert.equal(p.label, "aucune échéance encore");
+});
+
+test("daysBetween compte les jours, bornes comprises ou non", () => {
+  assert.equal(daysBetween("2026-10-01", "2026-10-15"), 14);
+  assert.equal(daysBetween("2026-10-15", "2026-10-15"), 0);
+  assert.equal(daysBetween("2026-10-15", "2026-10-01"), -14);
+});
+
+test("formatPeriod accorde le temps du verbe à la date du jour", () => {
+  // « depuis le 29 sept. » sur un bloc à venir se lit comme s'il courait déjà.
+  const futur = { startDate: "2026-10-20" };
+  assert.equal(formatPeriod(futur, T), "à partir du 20 oct.");
+  assert.equal(formatPeriod({ startDate: "2026-10-01" }, T), "depuis le 1 oct.");
+  assert.equal(formatPeriod({ startDate: "2026-10-01", endDate: "2026-10-10" }, T), "du 1 oct. au 10 oct.");
+  assert.equal(formatPeriod({ endDate: "2026-10-30" }, T), "jusqu'au 30 oct.");
+  assert.equal(formatPeriod({}, T), "sans fin");
+});

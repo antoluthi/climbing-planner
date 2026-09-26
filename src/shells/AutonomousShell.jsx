@@ -50,6 +50,7 @@ import { writeWidgetSnapshot, drainWidgetToggles, applyPendingToggles } from "..
 import { NotificationBell } from "../components/NotificationBell.jsx";
 import { NotificationsPanel } from "../components/NotificationsPanel.jsx";
 import { getSessionCharge } from "../lib/charge.js";
+import { archiveReminder } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
 
 export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan }) {
@@ -572,11 +573,21 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
     return { ...d, reminderState: { ...prev, [reminderId]: forR } };
   });
 
-  const deleteReminder = (id) => setData(d => {
-    const reminders = (d.reminders || []).filter(r => r.id !== id);
+  // Supprimer un rappel, c'est le faire **cesser de réclamer** quelque chose —
+  // pas effacer ce qu'on a fait. On clôt donc son bloc ouvert et on l'archive :
+  // il quitte la liste, mais la heatmap et les journaux des jours passés le
+  // voient toujours, coches comprises.
+  const deleteReminder = (id) => setData(d => ({
+    ...d,
+    reminders: (d.reminders || []).map(r => (r.id === id ? archiveReminder(r) : r)),
+  }));
+
+  // L'oubli volontaire, lui, existe aussi : il jette la ligne **et** ses
+  // coches. C'est la seule opération irréversible des deux.
+  const purgeReminder = (id) => setData(d => {
     const reminderState = { ...(d.reminderState || {}) };
     delete reminderState[id];
-    return { ...d, reminders, reminderState };
+    return { ...d, reminders: (d.reminders || []).filter(r => r.id !== id), reminderState };
   });
 
   // ── Rendu d'un onglet ──────────────────────────────────────────────────────
@@ -692,6 +703,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
             onAddReminder={addReminder}
             onUpdateReminder={updateReminder}
             onDeleteReminder={deleteReminder}
+            onPurgeReminder={purgeReminder}
             runBlocks={data.runBlocks || []}
             kmGoal={!!data.profile?.kmGoal}
             // Verrou propre à la course : fermé par défaut, comme les
