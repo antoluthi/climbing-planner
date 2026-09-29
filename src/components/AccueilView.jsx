@@ -1057,6 +1057,11 @@ function AccueilViewBody({
     const idx = mesoCtx.micro ? micros.findIndex(m => m.id === mesoCtx.micro.id) : -1;
     return {
       color: meso.color,
+      // La semaine porte **sa** couleur quand elle en a une : en éclaircir une
+      // pour la distinguer de ses voisines ne se voyait que dans l'éditeur.
+      // Sans couleur propre, le nom du microcycle reste en gris — c'est le nom
+      // du bloc qui doit ressortir.
+      microColor: mesoCtx.micro?.color || null,
       meso: meso.label,
       micro: mesoCtx.micro?.label || null,
       rank: idx >= 0 && micros.length > 1 ? `${idx + 1}/${micros.length}` : null,
@@ -1167,7 +1172,7 @@ function AccueilViewBody({
               <span style={{ fontSize: 11, color: c.textDim }}>·</span>
               <span style={{
                 fontSize: 11, fontWeight: 600, letterSpacing: "0.6px",
-                textTransform: "uppercase", color: c.textMuted,
+                textTransform: "uppercase", color: planPosition.microColor || c.textMuted,
               }}>
                 {planPosition.micro}
               </span>

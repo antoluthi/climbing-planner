@@ -51,12 +51,62 @@ export function markDirty(at = new Date().toISOString()) {
   return writeSyncMeta({ dirtyAt: at });
 }
 
-export function markSynced(userId, syncedAt) {
-  return writeSyncMeta({ userId, syncedAt: syncedAt ?? null, dirtyAt: null });
-}
-
 export function clearSyncMeta() {
   try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+  writeSyncBase(null, null);
+}
+
+// ─── LA BASE ─────────────────────────────────────────────────────────────────────────
+// Le planning tel que le cloud le contenait à `syncedAt` : l'état sur lequel
+// cet appareil et le cloud étaient d'accord la dernière fois. C'est la
+// troisième voie de la fusion (`lib/merge-plan.js`) : sans elle, impossible de
+// savoir si une séance différente ici a été modifiée ici, ou si on n'en a
+// qu'une vieille copie.
+//
+// Elle porte la date qu'elle décrit (`at`) et ne sert que si c'est **bien**
+// celle du marqueur : une base qui ne correspondrait plus à `syncedAt` ferait
+// prendre des modifications d'ailleurs pour des modifications d'ici.
+//
+// Elle double la place du planning en localStorage. Si elle ne tient plus, on
+// la jette : la fusion retombe sur deux voies, ce qui vaut mieux qu'un
+// planning qui ne s'enregistrerait plus.
+const BASE_KEY = "climbing_planner_base_v1";
+let baseCache;   // { at, data } | null — undefined : pas encore lue
+
+export function readSyncBase(at) {
+  if (baseCache === undefined) {
+    try { baseCache = JSON.parse(localStorage.getItem(BASE_KEY) || "null"); } catch { baseCache = null; }
+  }
+  if (!baseCache || !at || baseCache.at !== at) return null;
+  return baseCache.data ?? null;
+}
+
+export function writeSyncBase(at, data) {
+  baseCache = at && data ? { at, data } : null;
+  try {
+    if (baseCache) localStorage.setItem(BASE_KEY, JSON.stringify(baseCache));
+    else localStorage.removeItem(BASE_KEY);
+  } catch {
+    dropSyncBase();
+  }
+}
+
+// Place perdue au profit du planning lui-même (`saveData`) : c'est lui qui compte.
+export function dropSyncBase() {
+  baseCache = null;
+  try { localStorage.removeItem(BASE_KEY); } catch { /* ignore */ }
+}
+
+// Un échange vient d'aboutir : le cloud contient `base` à la date `syncedAt`.
+// `dirty` : reste-t-il du local que cet échange n'a pas emporté ?
+export function settleSync({ userId, syncedAt, base, dirty = false }) {
+  writeSyncBase(syncedAt, base);
+  const prev = readSyncMeta();
+  return writeSyncMeta({
+    userId,
+    syncedAt: syncedAt ?? null,
+    dirtyAt: dirty ? (prev.dirtyAt || new Date().toISOString()) : null,
+  });
 }
 
 // ─── LA DÉCISION ─────────────────────────────────────────────────────────────

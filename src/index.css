@@ -42,3 +42,11 @@ body { overflow-x: hidden; }
 
 /* Le glissement entre onglets est piloté par components/ui/SwipePager.jsx :
    la page suit le doigt, donc l'animation ne peut pas être une keyframe. */
+
+/* Cases d'un champ à séparateurs fixes (components/ui/SegmentField.jsx) : les
+   « 0 » d'attente prennent la couleur atténuée du thème, posée sur le champ
+   par --cp-seg-ph depuis la palette. */
+.cp-seg::placeholder {
+  color: var(--cp-seg-ph);
+  opacity: 1;
+}

@@ -21,7 +21,7 @@ export function RoleOnboardingModal({ onSelect }) {
   const chosen = selected !== undefined;
 
   return (
-    <Modal maxWidth={420} dismissOnBackdrop={false} closeOnEsc={false} ariaLabel="Quel est votre rôle ?">
+    <Modal maxWidth={420} closeOnEsc={false} ariaLabel="Quel est votre rôle ?">
       <ModalHeader eyebrow="Bienvenue" title="Quel est votre rôle ?" />
       <ModalBody style={{ gap: 12 }}>
         <p style={{ fontSize: 12, color: T.textLight, lineHeight: 1.5, margin: 0 }}>

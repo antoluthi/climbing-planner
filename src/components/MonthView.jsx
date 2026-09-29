@@ -1,6 +1,7 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getChargeColor, getSessionCharge } from "../lib/charge.js";
 import { DAYS, getCustomCyclesForDate, getMesoForDate } from "../lib/constants.js";
+import { microColor } from "../lib/cycles.js";
 import { addDays, getMonthWeeks, getDaySessions } from "../lib/helpers.js";
 import { colors } from "../theme/palette.js";
 
@@ -24,6 +25,10 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
       </div>
       {weeks.map((weekMonday, wi) => {
         const mesoInfo = getMesoForDate(mesocycles, weekMonday);
+        // La bande d'une semaine prend la couleur de **son microcycle** — une
+        // semaine éclaircie pour se distinguer de ses voisines doit se
+        // distinguer ici aussi. Le nom du bloc, lui, garde la sienne.
+        const microCol = mesoInfo ? microColor(mesoInfo.micro, mesoInfo.meso) : null;
         const prevMesoInfo = wi > 0 ? getMesoForDate(mesocycles, weeks[wi - 1]) : null;
         const isNewMeso = mesoInfo && (!prevMesoInfo || prevMesoInfo.meso.id !== mesoInfo.meso.id);
         const isNewMicro = !isNewMeso && mesoInfo?.micro && prevMesoInfo?.micro && prevMesoInfo.micro.id !== mesoInfo.micro.id;
@@ -33,16 +38,16 @@ export function MonthView({ data, currentDate, onSelectWeek, isMobile, mesocycle
           {isNewMeso && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 6px 2px", borderLeft: `3px solid ${mesoInfo.meso.color}` }}>
               <span style={{ fontSize: 9, fontWeight: 700, color: mesoInfo.meso.color, letterSpacing: "0.09em", textTransform: "uppercase" }}>{mesoInfo.meso.label}</span>
-              {mesoInfo.micro && <span style={{ fontSize: 9, color: mesoInfo.meso.color + "bb", background: mesoInfo.meso.color + "22", padding: "0 5px", borderRadius: 8, border: `1px solid ${mesoInfo.meso.color}33` }}>{mesoInfo.micro.label}</span>}
+              {mesoInfo.micro && <span style={{ fontSize: 9, color: microCol + "bb", background: microCol + "22", padding: "0 5px", borderRadius: 8, border: `1px solid ${microCol}33` }}>{mesoInfo.micro.label}</span>}
             </div>
           )}
           {(isNewMicro || isFirstMicro) && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 6px 1px 14px", borderLeft: `3px solid ${mesoInfo.meso.color}44` }}>
-              <span style={{ fontSize: 8, color: mesoInfo.meso.color + "bb", letterSpacing: "0.06em" }}>↳</span>
-              <span style={{ fontSize: 9, color: mesoInfo.meso.color + "cc", background: mesoInfo.meso.color + "18", padding: "0 5px", borderRadius: 8, border: `1px solid ${mesoInfo.meso.color}28` }}>{mesoInfo.micro.label}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 6px 1px 14px", borderLeft: `3px solid ${microCol}44` }}>
+              <span style={{ fontSize: 8, color: microCol + "bb", letterSpacing: "0.06em" }}>↳</span>
+              <span style={{ fontSize: 9, color: microCol + "cc", background: microCol + "18", padding: "0 5px", borderRadius: 8, border: `1px solid ${microCol}28` }}>{mesoInfo.micro.label}</span>
             </div>
           )}
-          <div style={{ ...styles.monthWeekRow, borderLeft: mesoInfo ? `3px solid ${mesoInfo.meso.color}55` : "3px solid transparent" }}>
+          <div style={{ ...styles.monthWeekRow, borderLeft: microCol ? `3px solid ${microCol}55` : "3px solid transparent" }}>
           {Array.from({ length: 7 }, (_, di) => {
             const date = addDays(weekMonday, di);
             const inMonth = date.getMonth() === month;

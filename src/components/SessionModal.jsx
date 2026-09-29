@@ -85,6 +85,26 @@ export function SessionModal({
   const sessionDone = status === "done" || status === "adapted";
   const sessionMissed = status === "not_done";
 
+  // ⚠️ **Remplir le ressenti coche « Fait » tout seul.** Mettre quatre étoiles
+  // à une séance, c'est déjà dire qu'on l'a faite : redemander de cocher la
+  // pastille juste après posait une question dont la réponse était déjà donnée.
+  //
+  // C'est l'étoile qui déclenche, parce que c'est le seul geste délibéré des
+  // deux : le curseur de charge arrive **déjà rempli** à la charge planifiée
+  // (on confirme ou on ajuste), donc « le RPE est renseigné » est vrai d'emblée
+  // — c'est bien ce qu'on veut, il n'y a pas à le bouger pour que ça compte.
+  //
+  // Deux garde-fous. On ne touche au statut que s'il est **encore nul** : un
+  // « Adaptée » ou un « Manquée » choisi à la main n'est jamais réécrit. Et
+  // ça se passe dans le gestionnaire du clic, **pas dans un effet** : un effet
+  // reposerait « Fait » à l'instant où l'on retire le statut, et la pastille
+  // deviendrait impossible à décocher.
+  const rateQuality = (star) => {
+    const next = star === quality ? null : star;
+    setQuality(next);
+    if (next != null && rpe != null && status == null) setStatus("done");
+  };
+
   // ── Move helpers ──
   const targetMonday = targetWeekKey ? getMondayOf(addDays(new Date(targetWeekKey + "T00:00:00"), 1)) : null;
   const prevWeekKey = targetMonday ? weekKey(getMondayOf(addDays(targetMonday, -7))) : smWeekKey;
@@ -204,6 +224,9 @@ export function SessionModal({
     return { fg: c, bg: c + "22" };
   })();
 
+  // Pas de fermeture au clic sur le fond — même raison que `ui/Modal.jsx` :
+  // sélectionner une note et relâcher à côté ne doit pas jeter le ressenti en
+  // cours de saisie. La croix, Échap et le bouton retour d'Android suffisent.
   return (
     <div
       style={{
@@ -214,7 +237,6 @@ export function SessionModal({
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: 12,
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
         role="dialog"
@@ -487,7 +509,7 @@ export function SessionModal({
                   {[1, 2, 3, 4, 5].map(s => (
                     <button
                       key={s}
-                      onClick={() => setQuality(s === quality ? null : s)}
+                      onClick={() => rateQuality(s)}
                       aria-label={`${s} étoile${s > 1 ? "s" : ""}`}
                       style={{
                         background: "none", border: "none", cursor: "pointer",

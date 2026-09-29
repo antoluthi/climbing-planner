@@ -44,19 +44,20 @@ src/
 │   │                               getSessionCharge, climbingCharge10, RPE_LABELS, chargeLabel, getChargeColor,
 │   │                               VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, getNbMouvementsZone
 │   ├── storage.js                — generateId, loadData, saveData (localStorage)
-│   ├── pace.js                   — temps · distance · allure/vitesse liés (parse, format, calcul)
+│   ├── pace.js                   — temps · distance · allure/vitesse liés : champs à séparateurs
+│   │                               fixes, frappe, état du trio (pur, testé sous Node)
 │   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
 │   ├── session-feedbacks.js      — upsertSessionFeedback (miroir Supabase des ressentis)
-│   ├── sync-meta.js              — marqueur de synchro local + decideSync (pull/push/merge/reset/idle)
-│   ├── merge-plan.js             — fusion de deux plannings (réunion par id / par date)
+│   ├── sync-meta.js              — marqueur de synchro + base (dernier état commun) + decideSync
+│   ├── merge-plan.js             — fusion à trois voies de deux plannings (pur, testé sous Node)
 │   ├── cycles.js                 — chaînage des mésocycles : ancre, durées, réarrangement
 │   ├── supabase-public.js        — client anon (sans session) + fetchPublicPlans()
 │   ├── notifications.js          — rappels de séance (plan pur + plugin Capacitor)
 │   ├── todo.js                   — ce qui reste à noter (ressenti, retours de séance)
 │   ├── widget.js                 — pont avec le widget Android (SharedPreferences)
 │   ├── hooper.js                 — hooperLabel, hooperColor, isHooperFilled, HOOPER_SCALE
-│   ├── reminders.js              — rappels en **blocs datés** : reminderPeriods, periodCovering,
-│   │                               isReminderActiveOn, withNewPeriod (pur, testé sous Node)
+│   ├── reminders.js              — rappels : isReminderActiveOn, softDeleteReminder,
+│   │                               reminderProgress, formatRange (pur, testé sous Node)
 │   ├── rich-text.js              — syntaxe des notes côté saisie : parseItem, handleEnter,
 │   │                               handleTab, safeHref, hasRichSyntax (pur, testé sous Node)
 │   ├── rich-text-cm.js           — l'extension CodeMirror qui rend la syntaxe dans le champ
@@ -72,7 +73,8 @@ src/
 │   ├── usePopover.js              — état d'une bulle ancrée (ancre, ouverture, rectangle)
 │   ├── useSwipe.js                — balayage horizontal (onglets / périodes)
 │   ├── useDragReorder.js          — réarrangement vertical à la poignée (cartes de cycles)
-│   ├── useSupabaseSync.js         — session auth, loadFromCloud, saveToCloud, uploadNow, writeStatus
+│   ├── useSupabaseSync.js         — session auth, lecture et écriture gardée de la ligne, writeStatus
+│   │                                (le moteur de synchro, lui, vit dans context/DataProvider.jsx)
 │   ├── useCommunitySessionsSync.js — sync séances communautaires (lecture seule)
 │   ├── useSessionsCatalog.js      — CRUD sessions_catalog (bibliothèque de modèles)
 │   └── useCoachAthletes.js        — relations coach-athlète (coach_athletes)
@@ -84,6 +86,7 @@ src/
     ├── ui/RichEditor.jsx          — champ CodeMirror, syntaxe rendue sous les doigts
     ├── ui/SyntaxHelp.jsx          — le « ? » qui montre la syntaxe disponible
     ├── ui/Popover.jsx             — bulle ancrée, portée dans <body> (hors empilement)
+    ├── ui/SegmentField.jsx        — champ à séparateurs fixes (1:45:30, 5:30, 8.50)
     │                                (WeekStepper, AutoTextarea, ColorDot, NumberField…)
     ├── Logo.jsx                   — ClimbingPlannerLogo (la marque « Charge », en-tête bureau)
     ├── SyncButtons.jsx            — boutons export/import/sync
@@ -455,15 +458,75 @@ dans un `draft` et ne la pose dans `data.weeks` (ou `data.quickSessions` pour un
 événement) qu'au « Terminer » ou au « Plus tard ». C'est ce qui permet à la
 flèche de retour de rouvrir le formulaire tel quel, sans séance fantôme.
 
-### Le trio lié (`lib/pace.js`)
+### Le trio lié (`lib/pace.js`, `ui/SegmentField.jsx`)
 
 `allure = durée / distance`, `vitesse = distance / (durée/60)`. En renseigner
-deux calcule le troisième — celui qui se calcule est celui qui n'est pas dans
-les deux derniers champs saisis (`computeThird`), et il s'affiche en accent.
-`sanitizeClockInput` interdit les allures impossibles : taper `6:70` donne
-`6:59`. Les durées circulent en **minutes fractionnaires** (5:30/km sur 8,4 km
-ne tombe pas juste à la minute) ; `estimatedTime` reste en minutes entières
-pour le reste de l'app.
+deux calcule le troisième, **à chaque frappe**. Les durées circulent en
+**minutes fractionnaires** (5:30/km sur 8,4 km ne tombe pas juste à la
+minute) ; `estimatedTime` reste en minutes entières pour le reste de l'app.
+
+**Des séparateurs qu'on ne peut pas effacer.** Le temps se saisit en
+`h:mm:ss`, l'allure en `m:ss`, la distance en `km.cc`, la vitesse en `km.d` :
+une case par morceau, et le `:` ou le `.` **dessiné** entre elles. Un `:`
+effaçable transformait « 50:00 » en « 5000 » — cinq mille minutes, et une
+allure de 555:33/km.
+
+- Un clic avant le séparateur va dans la case d'avant, un clic après dans
+  celle d'après ; un clic dans la marge ou sur le séparateur lui-même va dans
+  la case la plus proche. Au doigt, une case de deux chiffres fait 20 px.
+- La case cliquée est **entièrement sélectionnée** : taper « 2 » dans des
+  heures qui valent « 1 » veut dire 2 h, pas 12. Une case pleine qui reçoit
+  quand même un chiffre repart de ce chiffre au lieu de le refuser sans un mot.
+- Retour arrière au début d'une case efface le dernier chiffre de la
+  précédente : le séparateur est **sauté**, jamais effacé. Les flèches passent
+  d'une case à l'autre aux bords. Une case remplie jusqu'au bout passe à la
+  suivante ; tout ce qui n'est pas un chiffre (`:` `.` `,` espace) aussi.
+- ⚠️ **Sur Android, le séparateur tapé n'arrive que par `onChange`.** Gboard
+  rapporte `key: "Unidentified"` au clavier : c'est pourquoi
+  `applySegmentInput` traite un caractère non numérique comme « case suivante »
+  en plus de `applySegmentKey`. Le clavier est en `inputMode="decimal"` : sa
+  virgule (ou son point) sert de touche « suivant ».
+- Pourquoi des cases plutôt qu'un masque sur un seul champ : un masque doit
+  replacer le curseur par-dessus le séparateur qu'il réécrit à chaque frappe,
+  et c'est ce que la saisie d'Android défait.
+- Une valeur reste une chaîne, mais ses séparateurs y sont **toujours**
+  (`":45:00"`, `"8.50"`, `"::"`) : c'est ce qui dit à quelle case appartient
+  chaque chiffre. Case vide = zéro ; toutes vides = pas de valeur. À la sortie
+  du champ, les cases se complètent (`normalizeField`) : 7 secondes → `07`
+  **au début**, 5 centièmes → `50` **à la fin** (,5 km, c'est 500 m). Les
+  heures vides restent vides, un « 0 » grisé les dit.
+- Toute la décision est pure (`applySegmentInput`, `applySegmentKey`) ; le
+  composant ne fait que la poser dans le DOM. Le curseur est reposé dans un
+  `requestAnimationFrame`, après le rendu : React replace sinon le curseur à
+  la fin dès que la valeur change.
+
+**Lequel se calcule : les deux derniers saisis font foi** (`updateTrio`). Le
+troisième porte la marque « calculé » sous son champ, parce que la règle,
+elle, ne se voit pas. Taper dans le champ calculé en fait une source : c'est
+alors la plus ancienne des deux autres qui devient calculée (50:00 · 9 km,
+allure retapée à 4:30 → la distance passe à 11,11 km si le temps a été saisi
+après elle).
+
+- ⚠️ **Un formulaire qui s'ouvre déjà rempli n'a pas d'ordre de saisie.** Sans
+  en supposer un, modifier un champ ne recalculait rien : une séance rouverte
+  à 45:00 · 9 km · 5:00, passée à 54:00, gardait son allure de 5:00. Le cas
+  touchait la modification, le retour de « quand & où » et le chargement d'un
+  modèle. `seedTrio` tient l'allure (ou la vitesse) pour calculée et la
+  distance pour la source la plus récente — retoucher l'allure fait donc
+  bouger le temps, pas la longueur de la sortie. Deux champs sur trois : le
+  troisième est calculé d'emblée.
+- Une source vidée **vide** le champ calculé, au lieu de le laisser afficher
+  une valeur qui ne correspond plus à rien ; il revient dès que la source
+  revient. Une source à zéro fait de même.
+- On n'écrit jamais dans le champ sous les doigts : vider le champ calculé pour
+  le retaper ne le voit pas se remplir aussitôt.
+- Changer de discipline en route convertit : le temps passe de minutes simples
+  (escalade, « 90 ») à `h:mm:ss` (« 1:30:00 ») — lu tel quel, « 90 » ferait
+  90 heures — et l'allure devient une vitesse (5:00/km = 12 km/h).
+- Distance, allure et D+ ne sont enregistrés que pour une discipline à trio :
+  une séance passée de Course à Escalade ne garde pas ses kilomètres.
+- Tests : `npm run test:pace` (23 cas), dont le bug de la séance rouverte et
+  le `:` qui ne s'efface plus.
 
 ### Échéances (case « Événement »)
 
@@ -559,7 +622,7 @@ toutes lettres, puis chaque microcycle avec ses dates et le sien.
 
 ### Voir ses cycles sur le calendrier (`components/CalendarView.jsx`)
 
-Les jours d'un mésocycle prennent une **teinte de sa couleur** dans les trois
+Les jours d'un cycle prennent une **teinte de sa couleur** dans les trois
 vues — sur l'année, les blocs se lisent comme des bandes. Sous la grille, une
 **légende** nomme les cycles de la période affichée (« en cours » pour celui du
 moment) et ouvre leur objectif d'une touche.
@@ -574,8 +637,17 @@ moment) et ouvre leur objectif d'une touche.
 - Les dates viennent de `recomputeMesoDates` — même règle que l'éditeur et la
   timeline. Un plan partiellement daté se peint donc quand même, **sans rien
   réécrire** dans les données.
-- Le bureau garde ses vues historiques (`MonthView`, `YearView`, `DayColumn`),
-  qui affichaient déjà la couleur du mésocycle à leur façon.
+- ⚠️ **La teinte vient du microcycle, pas du seul bloc** (`cycleColorAt` →
+  `microColor(micro, meso)`). Le calendrier lisait `meso.color` et jetait le
+  microcycle que `getMesoForDate` lui rendait pourtant : éclaircir une semaine
+  pour la distinguer de ses voisines ne se voyait alors **que** dans l'éditeur,
+  ce qui vide le réglage de son sens. Sans couleur propre, `microColor` reprend
+  celle du bloc — le cas courant, et l'affichage ne change pas.
+- Le bureau garde ses vues historiques (`MonthView`, `YearView`, `DayColumn`)
+  et suit la même règle : la bande d'une semaine (filet de gauche en mois,
+  fond de ligne en année) prend la couleur de **son** microcycle, le nom du
+  bloc gardant la sienne. Sur l'accueil, c'est le nom du microcycle qui la
+  porte, quand il en a une.
 
 ### CyclesTimeline — texte adaptatif (`components/CyclesTimeline.jsx`)
 `ResizeObserver` sur le conteneur mesure la largeur réelle en pixels.
@@ -694,7 +766,10 @@ de bon. Le bloc se pose en tête du jour sélectionné dans le calendrier —
 résumé de ce qui est noté (bien-être, poids, kcal, note), bouton
 Remplir/Modifier qui ouvre `DayLogModal` **sur cette date**, et les rappels
 **actifs ce jour-là** (récurrence et plage), cochables après coup. Cocher écrit
-`reminderState[id][cetteDate]`, jamais celle du jour.
+`reminderState[id][cetteDate]`, jamais celle du jour. Un rappel **supprimé**
+depuis y figure encore, en retrait et marqué « (supprimé) », et **se coche
+toujours** — voir la section des rappels : on supprime pour qu'il arrête de
+réclamer, pas pour perdre la main sur ce qu'on a fait.
 
 Ce bloc ne se lit toutefois **que pour le jour sélectionné**, sous la grille :
 noter le ressenti d'hier demandait de le sélectionner d'abord, puis de
@@ -736,104 +811,87 @@ Le slider de ressenti étant **pré-rempli à la charge planifiée**, confirmer
 sans y toucher donne un écart de zéro : le graphe d'écart dessine alors un
 trait sur la ligne du zéro (`DeviationBar`) plutôt que rien du tout.
 
-### Un rappel est une suite de blocs datés (`lib/reminders.js`)
-
-Une coche est un **fait** daté : « j'ai fait ma suspension le 12 septembre ».
-Savoir qu'on était *censé* la faire ce jour-là, en revanche, se déduisait de la
-plage et de la récurrence **actuelles** — donc d'une opinion révisable. Finir un
-mois de suspension puis modifier le rappel pour repartir dessus ne perdait pas
-l'historique : il le **réécrivait**.
-
-Trois façons dont ça cassait, toutes silencieuses :
-
-- rétrécir la plage → les jours d'avant devenaient « aucun rappel actif », et un
-  mois de cases vertes disparaissait de la heatmap alors que les coches étaient
-  toujours en base ;
-- l'étendre vers l'arrière → des jours où le rappel n'existait pas devenaient
-  « actif et non coché » : la heatmap **inventait des échecs**, en rouge ;
-- passer de `daily` à `weekdays` → les deux à la fois, dans le même geste.
-
-**Un rappel porte donc des blocs**, comme un mésocycle ou un bloc de course —
-l'app modélisait déjà tout le reste ainsi :
+### Un rappel, une plage — et supprimer n'efface rien (`lib/reminders.js`)
 
 ```js
-{ id, name, color, createdAt, periods: [{ id, startDate?, endDate?, recurrence }] }
+{ id, name, color, createdAt,
+  recurrence: { kind: 'daily' | 'weekdays', days?: [] },
+  startDate?, endDate?, deletedAt? }
 ```
 
-- **On n'édite pas un bloc écoulé, on en ouvre un nouveau.** `withNewPeriod()`
-  clôt l'ouvert la veille et ajoute le suivant ; rien de ce qui est passé n'est
-  touché. C'est `periodHasElapsed()` qui tranche : tant qu'aucun jour du bloc
-  n'est derrière nous, le corriger ne réécrit rien et l'éditeur le permet.
-- **Les blocs ne se chevauchent jamais** : `periodCovering()` rend donc **un**
-  bloc sans arbitrage, et l'éditeur refuse un début antérieur à la fin du
-  précédent. Sans cette règle, « quel bloc couvrait ce jour ? » serait un choix
-  arbitraire — exactement le genre de décision qui se met à mentir.
-- ⚠️ **Le drapeau `enabled` a disparu du calcul.** `enabled === false` faisait
-  retourner false pour **toutes** les dates, passé compris : couper un rappel
-  depuis le Compte effaçait tout son historique de la heatmap. Personne ne
-  l'écrivait (drapeau mort), mais une vieille ligne cloud peut le porter. Arrêter
-  un rappel, c'est clore son bloc — geste qui n'a aucun effet rétroactif.
-- **Migration `v7`** (`storage.js`) : la plage de la racine devient le premier
-  bloc. Les champs d'origine sont **laissés en place** — un rollback ne perd
-  rien — et `reminderPeriods()` sait de toute façon relire l'ancienne forme à la
-  volée, comme `normalizeCharge10` côté charges : une ligne venue du cloud peut
-  arriver non migrée.
-- ⚠️ Un rappel legacy **sans aucun champ** de planification valait « tous les
-  jours, sans fin ». Le migrer en `periods: []` l'**éteindrait sans rien dire** :
-  la forme d'avant se lit donc toujours comme un bloc quotidien. Un
-  `periods: []` explicite, lui, est bien un rappel sans bloc.
-- `displayPeriod()` (bloc en cours, sinon le dernier) sert aux **deux** listes de
-  rappels — `CyclesView` et `CyclesTimeline` en ont chacune une copie, qui
-  lisaient `reminder.recurrence` à la racine.
-- Les tests (`npm run test:reminders`) portent surtout **deux propriétés**, pas
-  la récurrence : reprendre un rappel, et changer sa récurrence en cours de
-  bloc, laissent chaque jour écoulé exactement tel qu'il était. C'est la seule
-  chose que le modèle en blocs apporte, et elle est invisible à l'œil.
+Tout se modifie, à tout moment, d'une pièce : nom, couleur, récurrence, début,
+fin. Un rappel qu'on reprend, c'est le même rappel dont on repousse la fin —
+pas un nouvel objet à ouvrir à côté.
 
-**Supprimer, c'est archiver.** Jeter la ligne **et** ses coches faisait
-disparaître un mois de suspension notée de la heatmap et des journaux passés —
-or ce qu'on veut en supprimant un rappel, c'est qu'il cesse de réclamer quelque
-chose, pas effacer ce qu'on a fait. `archiveReminder()` **clôt donc le bloc
-ouvert** et pose `archivedAt`. Aucun traitement particulier côté historique :
-les blocs écoulés sont intacts, donc les jours passés répondent exactement
-comme avant — c'est la leçon du drapeau `enabled`, un indicateur global consulté
-par `isReminderActiveOn` finit toujours par mentir sur le passé.
+**Deux choses qui ne vont pas de soi :**
 
-- `liveReminders()` filtre les listes de l'éditeur ; l'historique, lui, passe
-  par `getActiveRemindersForDate`, qui ne connaît que les blocs.
-- Dans le journal d'un jour passé, un rappel supprimé **reste visible mais ne se
-  coche plus** (« (supprimé) », `pointerEvents: none`) : la case serait un
-  mensonge sur quelque chose qui n'existe plus.
-- L'oubli volontaire existe toujours — une case « Effacer aussi l'historique »
-  dans la confirmation, qui appelle `purgeReminder`. C'est la seule des deux
-  opérations qui soit irréversible, et le dialogue le dit.
+- ⚠️ **`deletedAt` est une date, pas un booléen**, et c'est toute la différence
+  avec le drapeau `enabled` qu'il remplace. Un booléen consulté par
+  `isReminderActiveOn` répond « non » pour *toutes* les dates, passé compris :
+  couper un rappel effaçait alors son historique de la heatmap, un mois de
+  suspension notée disparaissant d'un coup. Une date ne coupe **qu'à partir
+  d'elle**. Personne n'écrivait `enabled` (drapeau mort), mais une vieille ligne
+  cloud peut encore le porter — il n'entre plus dans aucun calcul.
+- ⚠️ **Le début peut être dans le passé, à dessein.** On se rend compte le
+  mercredi d'un rappel qu'on aurait dû commencer lundi : le faire démarrer lundi
+  rend ces deux jours cochables depuis leur journal. L'éditeur ne pose donc
+  **aucun `min`** sur ce champ.
+
+**Supprimer, c'est arrêter de réclamer — pas effacer.** `softDeleteReminder()`
+pose la date du jour ; le rappel quitte les listes de l'éditeur
+(`liveReminders`) et cesse d'apparaître dans les journaux **à partir de ce
+jour-là**. Les jours d'avant, eux, ne bougent pas : la heatmap les compte comme
+avant, et dans le journal d'un jour passé le rappel **reste visible et se coche
+encore**, avec la mention « (supprimé) » et en retrait. Le figer en lecture
+seule serait la moitié du geste — on supprime un rappel pour qu'il arrête de
+demander quelque chose, pas pour perdre la main sur ce qu'on a fait.
+
+- `liveReminders()` filtre les listes de l'éditeur ; l'historique passe par
+  `getActiveRemindersForDate`, qui connaît les supprimés jusqu'à leur date.
+- L'oubli volontaire existe aussi — la case « Effacer aussi l'historique » de la
+  confirmation appelle `purgeReminder`, qui jette la ligne **et** ses coches.
+  C'est la seule des deux opérations qui soit irréversible, et le dialogue le
+  dit.
+
+**⚠️ Compromis assumé : modifier les dates réécrit ce que la heatmap dit du
+passé.** Une coche est un fait daté (« j'ai fait ma suspension le 12
+septembre ») et ne bouge jamais ; « était-ce dû ce jour-là ? », en revanche, se
+déduit de la définition **courante**. Rétrécir la plage fait donc disparaître
+des cases de la heatmap, l'étendre vers l'arrière y invente des échecs.
+L'alternative — des blocs datés immuables, un par période, qu'on n'édite pas
+mais qu'on rouvre — a été implémentée (migration `v7`) puis **retirée** : elle
+rendait impossible la correction d'un rappel en cours, pour un problème qu'on
+ne rencontre qu'en réécrivant délibérément son propre plan.
+
+- **Migration `v8`** (`storage.js`) : les `periods` redeviennent une plage
+  unique — du début du premier bloc à la fin du dernier, la récurrence du
+  dernier étant la plus récemment voulue — et `archivedAt` devient `deletedAt`.
+  Un rappel qui n'avait **aucun** bloc (il ne réclamait donc plus rien) est
+  marqué supprimé à sa naissance plutôt que rallumé en quotidien. Les coches
+  ne sont jamais touchées ; `npm run test:storage` le vérifie, migration
+  idempotente comprise.
 
 **Le taux affiché est borné par le rappel lui-même** (`reminderProgress`). Un
 pourcentage sur 30 jours glissants ment dès que le rappel n'a pas 30 jours : un
-bloc commencé avant-hier s'affichait à 7 %, les 28 jours où il n'existait pas
+rappel commencé avant-hier s'affichait à 7 %, les 28 jours où il n'existait pas
 comptant comme des échecs. Quatre cas, quatre libellés :
 
 | État | Ce qui s'affiche |
 |---|---|
 | commence plus tard | « commence dans 4 jours » — **aucun pourcentage**, on n'a rien pu rater |
-| bloc de moins de 30 jours | « depuis le 23 sept. » sur les jours réellement écoulés |
-| bloc plus ancien | « 30 derniers jours » |
-| rappel terminé | le bilan de son dernier bloc |
+| rappel de moins de 30 jours | « depuis le 23 sept. » sur les jours réellement écoulés |
+| rappel plus ancien | « 30 derniers jours » |
+| rappel terminé ou supprimé | « sur toute sa durée », arrêté la veille de sa fin |
 
-- La fenêtre **ne franchit jamais la limite du bloc en cours** : après une
-  reprise, le taux ne repart pas avec les échecs du bloc précédent — sinon
-  « Reprendre » ferait plonger le pourcentage sans qu'on y soit pour rien.
-- `total === 0` (récurrence lun/mer/ven, bloc commencé un mardi) → « aucune
+- `total === 0` (récurrence lun/mer/ven, rappel commencé un mardi) → « aucune
   échéance encore », toujours sans pourcentage.
-- ⚠️ `formatPeriod()` prend la date du jour : « depuis le 29 sept. » sur un bloc
+- ⚠️ `formatRange()` prend la date du jour : « depuis le 29 sept. » sur un rappel
   qui commence dans quatre jours se lit comme s'il courait déjà. Un début à
   venir donne « à partir du ».
-
-Côté écran (`ReminderModal`) : nom et couleur restent modifiables à tout moment
-— ils ne décident jamais de ce qui était dû. Les blocs terminés s'affichent en
-**lecture seule** avec leur bilan (« du 25 août au 24 sept. · Tous les jours ·
-20/31 »), et un rappel fini n'offre que **« Reprendre »**. La carte le marque
-« Terminé » et s'efface légèrement.
+- Les deux listes de rappels — `CyclesView` et `CyclesTimeline` — en ont chacune
+  une copie, qui lisent toutes deux `reminder.recurrence` et `formatRange`.
+- Les tests (`npm run test:reminders`) portent surtout sur la seule propriété
+  qui compte : une suppression ne change **aucun** jour antérieur à sa date.
 
 ### Rappels journaliers — câblage
 Trois écrans les touchent : **Cycles** (créer / modifier / supprimer, que les
@@ -986,6 +1044,23 @@ choisi — vert, ambre, corail, avec le rond de gauche qui se remplit. Le statut
 d'une séance porte une couleur : c'est elle qui doit se voir, pas le cadre.
 Recliquer retire toujours le statut.
 
+### Remplir le ressenti coche « Fait » tout seul
+
+Mettre quatre étoiles à une séance, c'est déjà dire qu'on l'a faite : redemander
+de cocher la pastille juste après posait une question dont la réponse était
+donnée. Noter la qualité met donc le statut à `done`.
+
+- **C'est l'étoile qui déclenche**, parce que c'est le seul geste délibéré des
+  deux : le curseur de charge arrive **déjà rempli** à la charge planifiée (on
+  confirme ou on ajuste), donc « le RPE est renseigné » est vrai d'emblée — il
+  n'y a pas à le bouger pour que le ressenti compte comme rempli.
+- **Un statut choisi à la main n'est jamais réécrit** : on ne touche au statut
+  que s'il est encore nul. « Adaptée » ou « Manquée » suivi d'étoiles reste
+  « Adaptée » ou « Manquée ».
+- ⚠️ **Dans le gestionnaire du clic, pas dans un effet.** Un effet reposerait
+  « Fait » à l'instant où l'on retire le statut (les étoiles sont toujours là),
+  et la pastille deviendrait impossible à décocher.
+
 ### Pas d'écran de remerciement
 
 Enregistrer un ressenti fermait la modale sur un « Merci pour ton retour. »
@@ -993,13 +1068,17 @@ suivi d'un bouton « Fermer » : un clic de plus pour n'apprendre rien. La
 confirmation passe par le **toast** que pose déjà le shell (« Ressenti
 enregistré »), qui n'arrête pas le geste en cours.
 
-### Synchronisation (refonte août 2026)
+### Synchronisation (refonte août 2026, file et fusion à trois voies en septembre)
 
-Une seule règle, une seule fonction : `reconcile()` dans `context/DataProvider.jsx`.
-Elle demande à la base la **date** de la ligne (`fetchCloudHead` — deux colonnes,
-pas le blob), la compare au **marqueur local** (`lib/sync-meta.js`) et agit.
+**Tout passe par une seule file** : `runSync(raison)` dans
+`context/DataProvider.jsx` — connexion, retour au premier plan, temps réel,
+enregistrement (500 ms après la dernière modification), boutons du compte. Une
+passe à la fois ; une demande pendant une passe s'ajoute derrière, et plusieurs
+demandes s'y regroupent.
 
-`decideSync()` est pure et sans réseau, c'est là qu'est toute la politique :
+Une passe demande à la base la **date** de la ligne (`fetchCloudHead` — deux
+colonnes, pas le blob), la compare au **marqueur local** (`lib/sync-meta.js`) et
+agit. `decideSync()` est pure et sans réseau, c'est là qu'est toute la politique :
 
 | Situation | Geste |
 |---|---|
@@ -1008,65 +1087,135 @@ pas le blob), la compare au **marqueur local** (`lib/sync-meta.js`) et agit.
 | `updated_at` cloud > `syncedAt` local | `pull`, ou **`merge`** s'il reste du local non envoyé |
 | Cloud = notre dernier envoi | `push` si `dirtyAt`, sinon rien |
 
-**On ne départage jamais deux versions à la date.** Choisir un gagnant perd ce
-que l'autre a ajouté ; quand les deux côtés ont bougé, on **réunit** les deux
-(`lib/merge-plan.js`) : collections par `id` (séances, cycles, rappels,
-échéances), journaux par date (notes, poids, Hooper, sommeil, coches), et le
-local qui gagne sur une entrée présente des deux côtés. Contrepartie assumée :
-une suppression faite ailleurs pendant la divergence peut être annulée — une
-séance qui revient se resupprime, une séance perdue ne se retrouve pas.
+L'enregistrement courant prend un raccourci : il tente directement l'écriture
+conditionnelle (une requête, pas deux) et ne repasse par le chemin complet que
+si elle est refusée.
 
-**L'écriture est conditionnelle** (`writeRowGuarded`) : un `UPDATE … WHERE
-updated_at = <ce qu'on croit connaître>`. Zéro ligne touchée = quelqu'un a
-écrit entre-temps → on relit, on fusionne, on réessaie (deux fois au plus).
-C'est le garde-fou qui manquait le jour où un téléphone à la copie périmée a
-poussé sa version par-dessus une séance saisie sur le PC. Le premier envoi
-(aucun marqueur) et le `reset` anti-fuite restent des upserts francs : il n'y a
-rien à préserver.
+**Le 29 septembre, un PC s'est vidé sous les yeux de son utilisateur** : des
+ressentis donnés sur le PC ont disparu après un passage sur le téléphone.
+Reproduit avec deux navigateurs contre une fausse base Supabase : trois chemins
+indépendants menaient au même résultat, tous corrigés.
 
-Conséquence : `dirtyAt` n'est plus jamais comparé à une date serveur. Il ne
-répond qu'à « reste-t-il quelque chose à envoyer ? », et l'horloge de
-l'appareil n'a plus voix au chapitre nulle part.
+1. ⚠️ **L'envoi présentait la date d'après avec les données d'avant.** Le
+   téléphone, resté sur l'ancien état, notait une séance ; le rapatriement du
+   réveil arrivait pendant les 500 ms d'attente de l'envoi et avançait le
+   marqueur ; l'envoi partait alors avec les données périmées **et** la date
+   fraîche — la garde passait, et le téléphone écrasait tout ce que le PC avait
+   fait. D'où la file : un rapatriement ne peut plus se glisser entre une
+   modification et son envoi, et chaque envoi est gardé par la date **des
+   données qu'il envoie**. Une frappe faite pendant un téléchargement est
+   refusionnée par-dessus (`adoptData`) au lieu d'être écrasée.
+2. ⚠️ **La fusion à deux voies donnait raison aux copies périmées.** Face au
+   local et au cloud seuls, une séance différente des deux côtés ne dit pas qui
+   l'a changée ; « le local gagne » faisait gagner la vieille copie du
+   téléphone sur **toutes** les séances qu'il n'avait pas touchées (le PC notait
+   A et B, le téléphone notait C hors ligne : A et B perdaient leur ressenti).
+   La fusion est désormais **à trois voies** (`lib/merge-plan.js`), avec la
+   **base** — l'état sur lequel l'appareil et le cloud étaient d'accord la
+   dernière fois, gardée dans `climbing_planner_base_v1` et datée : elle ne
+   sert que si sa date est celle du marqueur.
+3. ⚠️ **L'envoi de secours était un upsert sans condition.** Au passage en
+   arrière-plan (`pagehide` / `visibilitychange`), un `fetch` keepalive
+   poussait le dernier instantané en attente — et un envoi échoué restait armé,
+   prêt à écraser la ligne au prochain changement d'app. Il est maintenant
+   gardé comme les autres (`PATCH … updated_at=eq.<syncedAt>`) : si la ligne a
+   bougé, il ne touche à rien. Il ne lit pas sa réponse (la page s'en va), donc
+   le marqueur reste sale et la prochaine passe constate. Au-delà de 64 Ko de
+   corps, le navigateur refuse le keepalive : `dirtyAt` s'en charge au
+   prochain lancement.
+
+**La fusion à trois voies, entrée par entrée** :
+
+| Local | Cloud | Résultat |
+|---|---|---|
+| = base | changé | le cloud |
+| changé | = base | le local |
+| changé | changé | objets : champ par champ ; sinon le local (l'appareil en main) |
+| absent | = base | supprimée — la suppression passe (à deux voies, elle revenait) |
+| absent | changé | gardée : mieux vaut une séance à resupprimer qu'une perdue |
+
+- Les séances se suivent par `id` **à travers toutes les semaines** : leur place
+  (`semaine|jour`) est un champ comme un autre. Une séance déplacée sur le PC
+  pendant qu'on la notait sur le téléphone arrive au nouveau jour avec son
+  ressenti, au lieu d'exister en double.
+- Pas d'`id` (anciennes données) ou un `id` partagé par plusieurs séances
+  (planifiées depuis un même modèle) : elles se suivent par leur place, et sans
+  `id` par leur contenu — une modification devient « retirée puis ajoutée ».
+- Les listes identifiées (cycles, rappels, échéances…) gardent l'ordre de celui
+  qui a réordonné par rapport à la base : un mésocycle glissé sur le PC reste
+  glissé. Les journaux (Hooper, sommeil) se suivent par date, les coches de
+  rappels et les notes par clé.
+- Sans base (premier échange après la mise à jour, base perdue faute de place),
+  on retombe sur l'ancienne réunion à deux voies — qui ne perd au moins jamais
+  ce qui n'existe que d'un côté.
+- ⚠️ **Le mode vient de la décision, pas de `dirtyAt`.** Un navigateur qui a
+  servi à un autre compte porte un marqueur sale : le fusionner ferait entrer
+  ce planning étranger dans le compte. `pull` remplace donc le local, et ne
+  garde que les frappes faites *pendant* le téléchargement.
+- Tests : `npm run test:merge` (16 cas), dont le scénario du PC vidé.
+
+**La base double la place du planning** dans le localStorage. Si elle ne tient
+plus, `saveData` la jette pour enregistrer le planning lui-même : c'est lui qui
+compte.
 
 Le marqueur (`climbing_planner_sync_v1`) contient `{ userId, syncedAt, dirtyAt }` :
 - `syncedAt` est l'`updated_at` **du serveur**, recopié tel quel après chaque
-  échange réussi (l'upsert relit la colonne). Les deux dates comparées viennent
-  donc de la même horloge — celle de Postgres, imposée par le trigger de la
-  migration `20260823`. Comparaison en **instants** (`Date.parse`), jamais en
-  chaînes : PostgREST rend `…+00:00`, l'app produit `…Z`.
+  échange réussi. Les deux dates comparées viennent donc de la même horloge —
+  celle de Postgres, imposée par le trigger de la migration `20260823`.
+  Comparaison en **instants** (`Date.parse`), jamais en chaînes : PostgREST rend
+  `…+00:00`, l'app produit `…Z`.
 - `dirtyAt` est l'heure locale de la **première** modification pas encore
   confirmée. Il survit à la fermeture de l'app : hors ligne, rien ne se perd.
+  `settleSync` ne l'efface que si l'écran n'a pas bougé pendant l'échange.
+- ⚠️ `writeStatus` (le rôle) **n'avance plus** le marqueur : elle rajeunit la
+  ligne sans savoir si quelqu'un l'avait modifiée juste avant, et l'avancer
+  aurait laissé le prochain envoi passer la garde par-dessus. Le prix : un
+  rapatriement inutile à la passe suivante.
 
-`reconcile()` est appelée à la **connexion**, au **retour au premier plan**
-(`visibilitychange` / `focus` / `online`, anti-rafale 3 s), sur **notification
-temps réel**, et par le bouton « Charger depuis le cloud » (qui, lui, force le
-pull). Le réveil rafraîchit aussi bibliothèque, athlètes et notifications.
+Auto-save (`useEffect` sur `data`) : localStorage **toujours**, cloud par la file
+une fois la première passe réussie (`syncReadyRef`). Un planning posé par la
+synchro elle-même est reconnu **à son identité** (`adoptedRef`) et n'est pas pris
+pour une modification. En vue athlète, l'écriture part sur la ligne de l'athlète
+(`saveToCloud`, upsert simple) et ne touche jamais le marqueur du coach.
 
-Ce que ça répare :
-- `loadFromCloud` sélectionnait la ligne **sans `eq(user_id)`**. RLS autorise un
-  coach à lire les lignes de ses athlètes : la requête en renvoyait plusieurs,
-  `maybeSingle()` partait en `PGRST116`, l'exception était avalée — **un coach
-  avec un athlète ne chargeait jamais ses propres données**.
+Ce que la refonte d'août avait déjà réparé :
+- `loadFromCloud` sélectionnait la ligne **sans `eq(user_id)`** : un coach avec
+  un athlète ne chargeait jamais ses propres données.
 - Rien ne relisait la base après le démarrage. Dans l'APK la WebView survit à
-  l'arrière-plan, et le temps réel ne délivre que connecté : deux appareils
-  devaient être ouverts **en même temps** pour se synchroniser.
+  l'arrière-plan, et le temps réel ne délivre que connecté : d'où la passe au
+  réveil (`visibilitychange` / `focus` / `online`, anti-rafale 3 s), qui
+  rafraîchit aussi bibliothèque, athlètes et notifications.
 - L'auto-save du montage marquait les données « modifiées » alors que rien
-  n'avait bougé — au démarrage suivant, ce faux « plus récent » écrasait le
-  planning saisi ailleurs. D'où la comparaison par identité avec l'objet chargé
-  au montage (et non un « premier passage », que le double montage de React en
-  développement rendait inopérant).
+  n'avait bougé. D'où la comparaison par identité avec l'objet chargé au montage.
 
-Auto-save (`useEffect` sur `data`) : localStorage **toujours**, cloud seulement
-une fois la première réconciliation faite (`syncReadyRef`) — sinon on pousserait
-à l'aveugle par-dessus une ligne plus fraîche. En vue athlète, l'écriture part
-sur la ligne de l'athlète et ne touche jamais le marqueur du coach.
-
-Conservé de la version précédente : flush `pagehide` / `visibilitychange` par
-`fetch({ keepalive: true })`, et l'abandon silencieux si le jeton a expiré (le
-marqueur reste sale, la prochaine occasion réessaie).
+**Tester la synchronisation** : le banc à deux appareils vit hors du dépôt
+(une fausse base PostgREST en Node et deux contextes Chromium) ; ce qui s'y
+reproduit se reporte en test pur dans `lib/merge-plan.test.mjs`. Une course de
+synchronisation se vérifie en retenant une requête (`page.route`) au moment
+voulu, pas en espérant la bonne vitesse de réseau.
 
 L'état est visible dans **Compte > Données** : « Synchronisé il y a n min » ou
 « Modifications en attente d'envoi ».
+
+### Une fenêtre de séance suit la séance, pas sa place (`locateSession`)
+
+`SessionModal` s'ouvre à une position (semaine, jour, rang) — depuis le
+calendrier, l'accueil ou la cloche. Mais une synchronisation peut arriver
+pendant qu'elle est ouverte et réordonner la journée : la position désignait
+alors **une autre séance**. Reproduit : une séance insérée ailleurs en tête de
+journée, la fenêtre de « Y » basculait sans rien dire sur « X », et le
+ressenti partait sur X.
+
+- L'`id` est gardé à l'ouverture (`openSessionModal`) ; `locateSession()`
+  (`lib/helpers.js`) retrouve la séance à chaque rendu **et au moment
+  d'écrire** — à sa place, sinon dans le même jour, la même semaine, puis
+  partout. Sans `id`, la position fait foi comme avant.
+- Ressenti, suppression, déplacement et changement d'heure passent tous par
+  elle.
+- **Annuler ne restaure plus les semaines d'avant** : la suppression remet
+  cette séance à sa place, le déplacement la ramène (`undoMove`). Restaurer
+  tout l'instantané défaisait aussi ce qu'une synchro avait apporté entre le
+  geste et l'annulation.
 
 ### Objectif de kilomètres par semaine (`lib/run-goals.js`, `RunBlocksSection`)
 
@@ -1646,9 +1795,12 @@ distinguer des autres **sans quitter la famille**.
   test tolère donc plus loin des bords qu'au milieu, et la **luminosité**, elle,
   est exacte — c'est le curseur qu'on déplace.
 - **`microColor(micro, meso)`** (`lib/cycles.js`) est le seul point de vérité :
-  sa couleur s'il en a une, celle du bloc sinon. Trois écrans la lisent —
-  l'éditeur, `CyclesTimeline` et `MesoDetailModal`. Recopier ce `||` trois fois,
-  c'est s'assurer qu'un jour l'un des trois affichera autre chose.
+  sa couleur s'il en a une, celle du bloc sinon. **Tout ce qui peint un jour ou
+  une semaine passe par elle** — l'éditeur, `CyclesTimeline`, `MesoDetailModal`,
+  le calendrier mobile (`CalendarView`), les vues bureau (`MonthView`,
+  `YearView`) et le nom du microcycle sur l'accueil. Recopier ce `||` partout,
+  c'est s'assurer qu'un jour l'un d'eux affichera autre chose — et c'est
+  exactement ce qui était arrivé aux calendriers, restés sur `meso.color`.
 - **Aucune migration** : `micro.color` est absent partout, et un microcycle sans
   couleur se comporte exactement comme avant. « Reprendre celle du bloc » la
   remet à `null` plutôt que de recopier la couleur du mésocycle — sinon elle
@@ -1680,6 +1832,24 @@ Deux exceptions, qui ne sont pas des modales : l'écran de connexion
 (`AuthPanel`, où il n'y a rien d'autre à faire que taper) et le champ de repas
 de l'accueil, déplié par un bouton « + repas » — là, le clavier est le geste
 suivant.
+
+### Aucune modale ne se ferme au clic sur le fond
+
+Le geste était trop facile à déclencher sans l'avoir voulu : on ouvre un
+formulaire de séance, on va sélectionner du texte, le relâchement de la souris
+tombe à côté du panneau — et toute la saisie part. Le fond n'est donc plus
+cliquable nulle part : `ui/Modal.jsx` (la prop `dismissOnBackdrop` n'existe
+plus), `SessionModal` et `DayLogModal`, les trois seuls qui l'avaient.
+
+- Il reste **trois sorties explicites** : la croix, Échap (qui ne ferme que le
+  calque du dessus) et le bouton retour d'Android, via la pile de calques de
+  `lib/native.js`.
+- Sur `DayLogModal` le clic à côté faisait pire que fermer : `close()`
+  **enregistre l'étape courante**, il écrivait donc dans le journal sans qu'on
+  l'ait demandé.
+- Le `stopPropagation` du panneau, lui, **reste** : la modale est rendue dans
+  l'arbre de la vue qui l'ouvre, pas portée dans `<body>` — sans lui, un clic
+  dedans remonterait jusqu'à la carte ou au bouton qui l'a ouverte.
 
 ### Un composant JSX non importé passe le lint ET le build
 
@@ -1884,11 +2054,14 @@ curl -s "$U""diag.json"                     # tailles, temps, href suspects
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
-npm run test     # tous les tests (CalDAV + notes + couleurs + rappels)
+npm run test     # tous les tests (CalDAV, notes, couleurs, rappels, migrations, allure, fusion)
 npm run test:caldav  # protocole CalDAV (node --test, sans dépendance)
 npm run test:text    # saisie en liste et filtrage des liens (lib/rich-text.js)
 npm run test:color   # conversions HSL ↔ hex (lib/color.js)
-npm run test:reminders # blocs datés : l'historique ne se réécrit pas (lib/reminders.js)
+npm run test:reminders # rappels : supprimer ne change aucun jour passé (lib/reminders.js)
+npm run test:storage   # migrations du blob local (lib/storage.js)
+npm run test:pace      # temps · distance · allure : cases, frappe, recalcul (lib/pace.js)
+npm run test:merge     # fusion à trois voies des plannings (lib/merge-plan.js)
 npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
 npm run cap:open # ouvre Android Studio
 ./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement

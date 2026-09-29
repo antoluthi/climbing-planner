@@ -1,29 +1,31 @@
 import { DATA } from "../theme/palette.js";
 // ─── REMINDERS ───────────────────────────────────────────────────────────────
-// Système de rappels journaliers configurables.
+// Un rappel journalier, dans sa forme simple :
 //
 //   reminders = [{
 //     id, name, color, createdAt,
-//     periods: [{ id, startDate?, endDate?, recurrence }]
+//     recurrence: { kind: 'daily' | 'weekdays', days?: number[] },
+//     startDate?, endDate?,
+//     deletedAt?,          // ISO du jour de la suppression
 //   }]
 //   reminderState = { [reminderId]: { [dateStr]: true } }
 //
-// ⚠️ **Pourquoi des périodes et pas une plage.** Une coche est un **fait** daté :
-// « j'ai fait ma suspension le 12 septembre ». Savoir qu'on était *censé* la
-// faire ce jour-là, en revanche, se déduisait de la plage et de la récurrence
-// **actuelles** — donc d'une opinion révisable. Modifier un rappel terminé pour
-// repartir dessus ne perdait pas l'historique : il le **réécrivait**. Rétrécir
-// la plage effaçait un mois de cases vertes ; l'étendre vers l'arrière
-// *inventait* des échecs sur des jours où le rappel n'existait pas, peints en
-// rouge dans la heatmap.
+// **Supprimer ne jette rien.** Un rappel supprimé quitte les listes et cesse de
+// réclamer quoi que ce soit, mais ses coches restent, et les jours qu'il
+// couvrait se **cochent et se décochent encore** depuis le journal de ces
+// jours-là. D'où `deletedAt` plutôt qu'un retrait du tableau.
 //
-// Un rappel est donc une suite de **blocs datés** — comme un mésocycle ou un
-// bloc de course, qui sont déjà modélisés ainsi dans l'app. On n'édite pas un
-// bloc écoulé : on en ouvre un nouveau. Chaque jour passé se résout contre le
-// bloc qui le couvrait, et devient de ce fait inatteignable.
+// ⚠️ `deletedAt` est une **date**, pas un booléen — et c'est toute la
+// différence avec le drapeau `enabled` qu'il a remplacé. Un booléen consulté
+// par `isReminderActiveOn` répond « non » pour *toutes* les dates, passé
+// compris : couper un rappel effaçait alors son historique de la heatmap. Une
+// date ne coupe qu'à partir d'elle.
 //
-// Les blocs ne se chevauchent jamais : `periodCovering` en renvoie donc **un**
-// sans arbitrage arbitraire, et c'est la règle que l'éditeur fait respecter.
+// ⚠️ **Compromis assumé** : modifier les dates ou la récurrence d'un rappel
+// existant **réécrit** ce que la heatmap dit de ses jours passés (« était-ce
+// dû ce jour-là ? » se déduit de la définition courante). C'est le prix de la
+// simplicité ; l'alternative — des blocs datés immuables — a été essayée et
+// jugée trop lourde à l'usage.
 
 // Palette autorisée pour les rappels.
 export const REMINDER_COLORS = DATA.picker;
@@ -34,47 +36,15 @@ const DAY_LABELS_TWO   = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 export function newReminderId() {
   return "rem_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
-export function newPeriodId() {
-  return "per_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+
+export function isDeleted(reminder) {
+  return !!reminder?.deletedAt;
 }
 
-// Les blocs d'un rappel, triés, quelle que soit la forme reçue.
-//
-// Un rappel d'avant la refonte porte `startDate` / `endDate` / `recurrence` à
-// la racine : il se lit comme **un seul bloc**. La migration `v7` réécrit le
-// stockage local, mais une ligne venue du cloud peut arriver non migrée — même
-// raison que `normalizeCharge10` côté charges : on normalise à la volée plutôt
-// que de supposer que tout le monde est à jour.
-export function reminderPeriods(reminder) {
-  if (!reminder) return [];
-  if (Array.isArray(reminder.periods)) {
-    return reminder.periods
-      .filter(Boolean)
-      .slice()
-      .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
-  }
-  // Pas de `periods` : forme d'avant la refonte. Même sans aucun champ de
-  // planification, elle valait « tous les jours, sans fin » — rendre `[]` ici
-  // **éteindrait** le rappel sans rien dire. Un `periods: []` explicite, lui,
-  // est bien un rappel sans bloc : la branche au-dessus le respecte.
-  return [{
-    id: reminder.id ? `${reminder.id}_p0` : "p0",
-    startDate: reminder.startDate || undefined,
-    endDate: reminder.endDate || undefined,
-    recurrence: reminder.recurrence || { kind: "daily" },
-  }];
-}
-
-// Le bloc qui couvre cette date, ou null. Une date sans bloc n'a jamais rien
-// réclamé — c'est ce qui rend l'historique insensible aux blocs suivants.
-export function periodCovering(reminder, iso) {
-  if (!iso) return null;
-  for (const p of reminderPeriods(reminder)) {
-    if (p.startDate && iso < p.startDate) continue;
-    if (p.endDate && iso > p.endDate) continue;
-    return p;
-  }
-  return null;
+// Ce que montrent les listes de l'éditeur. L'historique, lui, passe par
+// `getActiveRemindersForDate`, qui connaît encore les supprimés.
+export function liveReminders(reminders) {
+  return (reminders || []).filter(r => !isDeleted(r));
 }
 
 function matchesRecurrence(rec, date) {
@@ -85,19 +55,18 @@ function matchesRecurrence(rec, date) {
   return false;
 }
 
-// Renvoie true si le rappel était dû à la `date` (Date object).
-//
-// ⚠️ Plus aucun drapeau global ici. Un `enabled: false` faisait retourner false
-// pour **toutes** les dates, passé compris : couper un rappel depuis le Compte
-// effaçait tout son historique de la heatmap. Arrêter un rappel, c'est clore
-// son bloc — ce qui n'a par construction aucun effet rétroactif.
+// Le rappel était-il dû à cette date ?
 export function isReminderActiveOn(reminder, date) {
   if (!reminder || !date) return false;
-  const p = periodCovering(reminder, toISODate(date));
-  return p ? matchesRecurrence(p.recurrence, date) : false;
+  const iso = toISODate(date);
+  if (reminder.startDate && iso < reminder.startDate) return false;
+  if (reminder.endDate && iso > reminder.endDate) return false;
+  // Supprimé : plus rien à partir de ce jour-là, mais tout le passé demeure.
+  if (reminder.deletedAt && iso >= reminder.deletedAt) return false;
+  return matchesRecurrence(reminder.recurrence, date);
 }
 
-// Renvoie tous les rappels actifs pour une date, triés par createdAt asc.
+// Tous les rappels dus à une date, triés par createdAt asc.
 export function getActiveRemindersForDate(reminders, date) {
   if (!Array.isArray(reminders) || !date) return [];
   return reminders
@@ -105,97 +74,101 @@ export function getActiveRemindersForDate(reminders, date) {
     .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
 }
 
-// ── L'état d'un rappel, et ce qu'on a le droit d'en faire ───────────────────
-
-// Le bloc en cours ou à venir : celui qui n'est pas encore clos.
-export function openPeriod(reminder, today = new Date()) {
+// Supprime sans rien perdre : le rappel disparaît des listes, ses coches
+// restent modifiables sur les jours qu'il couvrait.
+export function softDeleteReminder(reminders, reminderId, today = new Date()) {
   const iso = toISODate(today);
-  return reminderPeriods(reminder).find(p => !p.endDate || p.endDate >= iso) || null;
+  return (reminders || []).map(r => (r.id === reminderId ? { ...r, deletedAt: iso } : r));
 }
 
-export function lastPeriod(reminder) {
-  const ps = reminderPeriods(reminder);
-  return ps.length ? ps[ps.length - 1] : null;
-}
-
-// « à venir » · « en cours » · « terminé » — ce que la carte affiche et ce qui
-// décide entre « Modifier » et « Reprendre ».
+// « à venir » · « en cours » · « terminé » — ce que la carte annonce.
 export function reminderStatus(reminder, today = new Date()) {
   const iso = toISODate(today);
-  const open = openPeriod(reminder, today);
-  if (!open) return "ended";
-  if (open.startDate && open.startDate > iso) return "upcoming";
+  if (!reminder) return "ended";
+  if (reminder.deletedAt && iso >= reminder.deletedAt) return "ended";
+  if (reminder.endDate && iso > reminder.endDate) return "ended";
+  if (reminder.startDate && iso < reminder.startDate) return "upcoming";
   return "running";
 }
 
-// Ce bloc a-t-il déjà des jours derrière lui ? C'est **la** question qui décide
-// si on peut le retoucher : tant qu'aucun de ses jours n'est écoulé, le
-// modifier ne réécrit rien.
-export function periodHasElapsed(period, today = new Date()) {
-  if (!period) return false;
+// ⚠️ Le temps du verbe dépend de la date du jour : « depuis le 29 sept. » sur
+// un rappel qui commence dans quatre jours se lit comme s'il courait déjà.
+export function formatRange(reminder, today = new Date()) {
+  if (!reminder) return "";
   const iso = toISODate(today);
-  return !period.startDate || period.startDate < iso;
-}
-
-// Clôt le bloc ouvert la veille de `fromISO` et en ajoute un nouveau.
-// Immuable : rien de ce qui est écoulé n'est touché.
-export function withNewPeriod(reminder, period, fromISO) {
-  const ps = reminderPeriods(reminder);
-  const eve = shiftISO(fromISO, -1);
-  const closed = ps.map(p => {
-    const stillOpen = !p.endDate || p.endDate >= fromISO;
-    if (!stillOpen) return p;
-    // Un bloc qui n'avait pas commencé est remplacé, pas clos sur une plage vide.
-    if (p.startDate && p.startDate >= fromISO) return null;
-    return { ...p, endDate: eve };
-  }).filter(Boolean);
-  return {
-    ...reminder,
-    periods: [...closed, { id: period.id || newPeriodId(), ...period }],
+  const f = d => {
+    const x = fromISODate(d);
+    return x ? x.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : "";
   };
+  const { startDate: a, endDate: b } = reminder;
+  if (a && b) return `du ${f(a)} au ${f(b)}`;
+  if (a) return a > iso ? `à partir du ${f(a)}` : `depuis le ${f(a)}`;
+  if (b) return `jusqu'au ${f(b)}`;
+  return "sans fin";
 }
 
-// Remplace un bloc en place (seulement légitime s'il n'a pas de jours écoulés).
-export function withUpdatedPeriod(reminder, periodId, patch) {
-  const ps = reminderPeriods(reminder)
-    .map(p => (p.id === periodId ? { ...p, ...patch } : p));
-  return { ...reminder, periods: ps };
-}
-
-// Combien de jours dus dans ce bloc, et combien cochés. Sert à afficher
-// l'historique bloc par bloc — « 28 sur 30 » se lit, « 93 % » beaucoup moins.
-export function periodCompletion(reminder, period, reminderState, today = new Date()) {
-  if (!period) return { done: 0, total: 0 };
-  const todayISO = toISODate(today);
-  const from = period.startDate || (reminder?.createdAt || "").slice(0, 10) || todayISO;
-  const to = [period.endDate || todayISO, todayISO].sort()[0];   // jamais le futur
+// Jours dus et jours cochés entre deux dates incluses.
+export function completionBetween(reminder, reminderState, from, to) {
   let done = 0, total = 0;
   for (let iso = from; iso && iso <= to; iso = shiftISO(iso, 1)) {
     const d = fromISODate(iso);
-    if (!d || !matchesRecurrence(period.recurrence, d)) continue;
+    if (!d || !isReminderActiveOn(reminder, d)) continue;
     total++;
     if (isReminderCheckedOn(reminderState, reminder?.id, iso)) done++;
   }
   return { done, total };
 }
 
-// ⚠️ Le temps du verbe dépend de la date du jour : « depuis le 29 sept. » sur
-// un bloc qui commence dans quatre jours se lit comme s'il courait déjà.
-export function formatPeriod(period, today = new Date()) {
-  if (!period) return "—";
+// ─── « X % », mais sur quoi ? ────────────────────────────────────────────────
+// Un taux sur 30 jours glissants ment dès que le rappel n'a pas 30 jours : un
+// rappel commencé avant-hier s'affichait à 7 % parce que 28 jours où il
+// n'existait pas comptaient comme des échecs. Et sur un rappel qui commence la
+// semaine prochaine, un pourcentage n'a aucun sens — on n'a rien pu rater.
+//
+// La fenêtre est donc bornée par le rappel lui-même, et le libellé dit lequel
+// des cas s'applique : « 60 % » sur deux jours ne doit pas se lire « 60 % sur
+// le mois ».
+export const PROGRESS_WINDOW = 30;
+
+export function reminderProgress(reminder, reminderState, today = new Date()) {
   const iso = toISODate(today);
-  const f = d => {
-    const x = fromISODate(d);
-    return x ? x.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : "";
-  };
-  if (period.startDate && period.endDate) return `du ${f(period.startDate)} au ${f(period.endDate)}`;
-  if (period.startDate) {
-    return period.startDate > iso
-      ? `à partir du ${f(period.startDate)}`
-      : `depuis le ${f(period.startDate)}`;
+  const status = reminderStatus(reminder, today);
+  const none = { done: 0, total: 0, rate: null };
+
+  if (status === "upcoming") {
+    const days = daysBetween(iso, reminder.startDate);
+    return {
+      ...none, kind: "upcoming", days,
+      label: days === 1 ? "commence demain"
+           : days > 1 ? `commence dans ${days} jours`
+           : "commence aujourd'hui",
+    };
   }
-  if (period.endDate) return `jusqu'au ${f(period.endDate)}`;
-  return "sans fin";
+
+  // Le dernier jour qui compte : aujourd'hui, ou la fin si elle est passée.
+  const last = [reminder.endDate, reminder.deletedAt ? shiftISO(reminder.deletedAt, -1) : null, iso]
+    .filter(Boolean).sort()[0];
+  const start = reminder.startDate || (reminder.createdAt || "").slice(0, 10) || last;
+  const elapsed = daysBetween(start, last) + 1;
+  const full = elapsed >= PROGRESS_WINDOW;
+  const from = full ? shiftISO(last, -(PROGRESS_WINDOW - 1)) : start;
+  const { done, total } = completionBetween(reminder, reminderState, from, last);
+
+  return {
+    done, total, rate: total ? done / total : null,
+    kind: status === "ended" ? "ended" : (full ? "window" : "sinceStart"),
+    label: total === 0 ? "aucune échéance encore"
+         : status === "ended" ? "sur toute sa durée"
+         : full ? `${PROGRESS_WINDOW} derniers jours`
+         : `depuis le ${fromISODate(start)?.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`,
+  };
+}
+
+// Nombre de jours de `a` à `b` (0 si même jour, négatif si b précède a).
+export function daysBetween(a, b) {
+  const da = fromISODate(a), db = fromISODate(b);
+  if (!da || !db) return 0;
+  return Math.round((db - da) / 86400000);
 }
 
 export function isReminderCheckedOn(reminderState, reminderId, dateStr) {
@@ -312,105 +285,3 @@ export function fromISODate(iso) {
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
 }
 
-// Le bloc qu'une carte doit montrer : celui en cours, sinon le dernier. Les
-// deux listes de rappels (CyclesView et CyclesTimeline) passent par ici — elles
-// affichaient `reminder.recurrence`, qui n'existe plus à la racine, et deux
-// copies auraient divergé au premier ajustement.
-export function displayPeriod(reminder, today = new Date()) {
-  return openPeriod(reminder, today) || lastPeriod(reminder);
-}
-
-// ─── SUPPRIMER SANS PERDRE CE QUI A ÉTÉ FAIT ─────────────────────────────────
-// Supprimer un rappel jetait sa ligne **et** toutes ses coches : un mois de
-// suspension notée disparaissait de la heatmap et des journaux passés. Or ce
-// qu'on veut en le supprimant, c'est qu'il cesse de réclamer quelque chose —
-// pas effacer ce qu'on a fait.
-//
-// Supprimer **clôt donc le bloc ouvert** et pose `archivedAt`. Aucun traitement
-// particulier côté historique : les blocs écoulés sont intacts, donc les jours
-// passés répondent exactement comme avant. C'est la leçon du drapeau `enabled`
-// — un indicateur global consulté par `isReminderActiveOn` finit toujours par
-// mentir sur le passé.
-export function archiveReminder(reminder, today = new Date()) {
-  if (!reminder) return reminder;
-  const iso = toISODate(today);
-  const eve = shiftISO(iso, -1);
-  const periods = reminderPeriods(reminder)
-    // Un bloc qui n'avait pas encore commencé n'a rien à laisser derrière lui.
-    .filter(p => !(p.startDate && p.startDate >= iso))
-    .map(p => (!p.endDate || p.endDate >= iso ? { ...p, endDate: eve } : p))
-    // Clore la veille d'un bloc commencé aujourd'hui donnerait une plage vide.
-    .filter(p => !p.startDate || !p.endDate || p.startDate <= p.endDate);
-  return { ...reminder, periods, archivedAt: iso };
-}
-
-export function isArchived(reminder) {
-  return !!reminder?.archivedAt;
-}
-
-// Ce qu'on liste et ce qu'on peut encore modifier. L'historique, lui, passe
-// toujours par `getActiveRemindersForDate` — qui ne connaît que les blocs.
-export function liveReminders(reminders) {
-  return (reminders || []).filter(r => !isArchived(r));
-}
-
-// ─── « X % », mais sur quoi ? ────────────────────────────────────────────────
-// Un taux sur 30 jours glissants ment dès que le rappel n'a pas 30 jours :
-// un bloc commencé avant-hier s'affichait à 7 % parce que 28 jours où il
-// n'existait pas comptaient comme des échecs. Et sur un rappel qui commence
-// la semaine prochaine, un pourcentage n'a aucun sens — on n'a rien pu rater.
-//
-// La fenêtre est donc **bornée par le rappel lui-même** : au plus 30 jours, et
-// jamais avant le début du bloc en cours. Le libellé dit lequel des deux cas
-// s'applique, sans quoi « 60 % » sur deux jours se lirait comme « 60 % sur le
-// mois ».
-export const PROGRESS_WINDOW = 30;
-
-export function reminderProgress(reminder, reminderState, today = new Date()) {
-  const iso = toISODate(today);
-  const status = reminderStatus(reminder, today);
-  const none = { done: 0, total: 0, rate: null };
-
-  if (status === "upcoming") {
-    const start = openPeriod(reminder, today)?.startDate;
-    const days = daysBetween(iso, start);
-    return {
-      ...none, kind: "upcoming", startDate: start, days,
-      label: days === 1 ? "commence demain"
-           : days > 1 ? `commence dans ${days} jours`
-           : "commence aujourd'hui",
-    };
-  }
-
-  const block = status === "ended" ? lastPeriod(reminder) : openPeriod(reminder, today);
-  if (!block) return { ...none, kind: "none", label: "" };
-
-  if (status === "ended") {
-    const { done, total } = periodCompletion(reminder, block, reminderState, today);
-    return {
-      done, total, rate: total ? done / total : null,
-      kind: "ended", label: total ? "sur le dernier bloc" : "aucune échéance",
-    };
-  }
-
-  const start = block.startDate || (reminder?.createdAt || "").slice(0, 10) || iso;
-  const elapsed = daysBetween(start, iso) + 1;             // bornes incluses
-  const full = elapsed >= PROGRESS_WINDOW;
-  const from = full ? shiftISO(iso, -(PROGRESS_WINDOW - 1)) : start;
-  // La fenêtre ne franchit jamais la limite du bloc : on la découpe dedans.
-  const { done, total } = periodCompletion(reminder, { ...block, startDate: from }, reminderState, today);
-  return {
-    done, total, rate: total ? done / total : null,
-    kind: full ? "window" : "sinceStart",
-    label: total === 0 ? "aucune échéance encore"
-         : full ? `${PROGRESS_WINDOW} derniers jours`
-         : `depuis le ${fromISODate(start)?.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`,
-  };
-}
-
-// Nombre de jours de `a` à `b` (0 si même jour, négatif si b précède a).
-export function daysBetween(a, b) {
-  const da = fromISODate(a), db = fromISODate(b);
-  if (!da || !db) return 0;
-  return Math.round((db - da) / 86400000);
-}

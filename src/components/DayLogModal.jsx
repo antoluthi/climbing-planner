@@ -96,9 +96,11 @@ export function DayLogModal({ initialDate, data, onClose, onSaveNote, onSaveWeig
 
   const dateLabel = dateObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 
+  // Pas de fermeture au clic sur le fond — même raison que `ui/Modal.jsx`.
+  // Ici, en plus, `close` enregistre l'étape courante : un clic à côté écrivait
+  // donc dans le journal sans qu'on l'ait demandé.
   return (
     <div
-      onClick={close}
       style={{
         position: "fixed", inset: 0, zIndex: Z.daylog,
         background: c.overlayBg, display: "flex",
