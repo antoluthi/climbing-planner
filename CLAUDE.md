@@ -48,8 +48,8 @@ src/
 │   │                               fixes, frappe, état du trio (pur, testé sous Node)
 │   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
 │   ├── session-feedbacks.js      — upsertSessionFeedback (miroir Supabase des ressentis)
-│   ├── sync-meta.js              — marqueur de synchro local + decideSync (pull/push/merge/reset/idle)
-│   ├── merge-plan.js             — fusion de deux plannings (réunion par id / par date)
+│   ├── sync-meta.js              — marqueur de synchro + base (dernier état commun) + decideSync
+│   ├── merge-plan.js             — fusion à trois voies de deux plannings (pur, testé sous Node)
 │   ├── cycles.js                 — chaînage des mésocycles : ancre, durées, réarrangement
 │   ├── supabase-public.js        — client anon (sans session) + fetchPublicPlans()
 │   ├── notifications.js          — rappels de séance (plan pur + plugin Capacitor)
@@ -73,7 +73,8 @@ src/
 │   ├── usePopover.js              — état d'une bulle ancrée (ancre, ouverture, rectangle)
 │   ├── useSwipe.js                — balayage horizontal (onglets / périodes)
 │   ├── useDragReorder.js          — réarrangement vertical à la poignée (cartes de cycles)
-│   ├── useSupabaseSync.js         — session auth, loadFromCloud, saveToCloud, uploadNow, writeStatus
+│   ├── useSupabaseSync.js         — session auth, lecture et écriture gardée de la ligne, writeStatus
+│   │                                (le moteur de synchro, lui, vit dans context/DataProvider.jsx)
 │   ├── useCommunitySessionsSync.js — sync séances communautaires (lecture seule)
 │   ├── useSessionsCatalog.js      — CRUD sessions_catalog (bibliothèque de modèles)
 │   └── useCoachAthletes.js        — relations coach-athlète (coach_athletes)
@@ -1067,13 +1068,17 @@ suivi d'un bouton « Fermer » : un clic de plus pour n'apprendre rien. La
 confirmation passe par le **toast** que pose déjà le shell (« Ressenti
 enregistré »), qui n'arrête pas le geste en cours.
 
-### Synchronisation (refonte août 2026)
+### Synchronisation (refonte août 2026, file et fusion à trois voies en septembre)
 
-Une seule règle, une seule fonction : `reconcile()` dans `context/DataProvider.jsx`.
-Elle demande à la base la **date** de la ligne (`fetchCloudHead` — deux colonnes,
-pas le blob), la compare au **marqueur local** (`lib/sync-meta.js`) et agit.
+**Tout passe par une seule file** : `runSync(raison)` dans
+`context/DataProvider.jsx` — connexion, retour au premier plan, temps réel,
+enregistrement (500 ms après la dernière modification), boutons du compte. Une
+passe à la fois ; une demande pendant une passe s'ajoute derrière, et plusieurs
+demandes s'y regroupent.
 
-`decideSync()` est pure et sans réseau, c'est là qu'est toute la politique :
+Une passe demande à la base la **date** de la ligne (`fetchCloudHead` — deux
+colonnes, pas le blob), la compare au **marqueur local** (`lib/sync-meta.js`) et
+agit. `decideSync()` est pure et sans réseau, c'est là qu'est toute la politique :
 
 | Situation | Geste |
 |---|---|
@@ -1082,65 +1087,135 @@ pas le blob), la compare au **marqueur local** (`lib/sync-meta.js`) et agit.
 | `updated_at` cloud > `syncedAt` local | `pull`, ou **`merge`** s'il reste du local non envoyé |
 | Cloud = notre dernier envoi | `push` si `dirtyAt`, sinon rien |
 
-**On ne départage jamais deux versions à la date.** Choisir un gagnant perd ce
-que l'autre a ajouté ; quand les deux côtés ont bougé, on **réunit** les deux
-(`lib/merge-plan.js`) : collections par `id` (séances, cycles, rappels,
-échéances), journaux par date (notes, poids, Hooper, sommeil, coches), et le
-local qui gagne sur une entrée présente des deux côtés. Contrepartie assumée :
-une suppression faite ailleurs pendant la divergence peut être annulée — une
-séance qui revient se resupprime, une séance perdue ne se retrouve pas.
+L'enregistrement courant prend un raccourci : il tente directement l'écriture
+conditionnelle (une requête, pas deux) et ne repasse par le chemin complet que
+si elle est refusée.
 
-**L'écriture est conditionnelle** (`writeRowGuarded`) : un `UPDATE … WHERE
-updated_at = <ce qu'on croit connaître>`. Zéro ligne touchée = quelqu'un a
-écrit entre-temps → on relit, on fusionne, on réessaie (deux fois au plus).
-C'est le garde-fou qui manquait le jour où un téléphone à la copie périmée a
-poussé sa version par-dessus une séance saisie sur le PC. Le premier envoi
-(aucun marqueur) et le `reset` anti-fuite restent des upserts francs : il n'y a
-rien à préserver.
+**Le 29 septembre, un PC s'est vidé sous les yeux de son utilisateur** : des
+ressentis donnés sur le PC ont disparu après un passage sur le téléphone.
+Reproduit avec deux navigateurs contre une fausse base Supabase : trois chemins
+indépendants menaient au même résultat, tous corrigés.
 
-Conséquence : `dirtyAt` n'est plus jamais comparé à une date serveur. Il ne
-répond qu'à « reste-t-il quelque chose à envoyer ? », et l'horloge de
-l'appareil n'a plus voix au chapitre nulle part.
+1. ⚠️ **L'envoi présentait la date d'après avec les données d'avant.** Le
+   téléphone, resté sur l'ancien état, notait une séance ; le rapatriement du
+   réveil arrivait pendant les 500 ms d'attente de l'envoi et avançait le
+   marqueur ; l'envoi partait alors avec les données périmées **et** la date
+   fraîche — la garde passait, et le téléphone écrasait tout ce que le PC avait
+   fait. D'où la file : un rapatriement ne peut plus se glisser entre une
+   modification et son envoi, et chaque envoi est gardé par la date **des
+   données qu'il envoie**. Une frappe faite pendant un téléchargement est
+   refusionnée par-dessus (`adoptData`) au lieu d'être écrasée.
+2. ⚠️ **La fusion à deux voies donnait raison aux copies périmées.** Face au
+   local et au cloud seuls, une séance différente des deux côtés ne dit pas qui
+   l'a changée ; « le local gagne » faisait gagner la vieille copie du
+   téléphone sur **toutes** les séances qu'il n'avait pas touchées (le PC notait
+   A et B, le téléphone notait C hors ligne : A et B perdaient leur ressenti).
+   La fusion est désormais **à trois voies** (`lib/merge-plan.js`), avec la
+   **base** — l'état sur lequel l'appareil et le cloud étaient d'accord la
+   dernière fois, gardée dans `climbing_planner_base_v1` et datée : elle ne
+   sert que si sa date est celle du marqueur.
+3. ⚠️ **L'envoi de secours était un upsert sans condition.** Au passage en
+   arrière-plan (`pagehide` / `visibilitychange`), un `fetch` keepalive
+   poussait le dernier instantané en attente — et un envoi échoué restait armé,
+   prêt à écraser la ligne au prochain changement d'app. Il est maintenant
+   gardé comme les autres (`PATCH … updated_at=eq.<syncedAt>`) : si la ligne a
+   bougé, il ne touche à rien. Il ne lit pas sa réponse (la page s'en va), donc
+   le marqueur reste sale et la prochaine passe constate. Au-delà de 64 Ko de
+   corps, le navigateur refuse le keepalive : `dirtyAt` s'en charge au
+   prochain lancement.
+
+**La fusion à trois voies, entrée par entrée** :
+
+| Local | Cloud | Résultat |
+|---|---|---|
+| = base | changé | le cloud |
+| changé | = base | le local |
+| changé | changé | objets : champ par champ ; sinon le local (l'appareil en main) |
+| absent | = base | supprimée — la suppression passe (à deux voies, elle revenait) |
+| absent | changé | gardée : mieux vaut une séance à resupprimer qu'une perdue |
+
+- Les séances se suivent par `id` **à travers toutes les semaines** : leur place
+  (`semaine|jour`) est un champ comme un autre. Une séance déplacée sur le PC
+  pendant qu'on la notait sur le téléphone arrive au nouveau jour avec son
+  ressenti, au lieu d'exister en double.
+- Pas d'`id` (anciennes données) ou un `id` partagé par plusieurs séances
+  (planifiées depuis un même modèle) : elles se suivent par leur place, et sans
+  `id` par leur contenu — une modification devient « retirée puis ajoutée ».
+- Les listes identifiées (cycles, rappels, échéances…) gardent l'ordre de celui
+  qui a réordonné par rapport à la base : un mésocycle glissé sur le PC reste
+  glissé. Les journaux (Hooper, sommeil) se suivent par date, les coches de
+  rappels et les notes par clé.
+- Sans base (premier échange après la mise à jour, base perdue faute de place),
+  on retombe sur l'ancienne réunion à deux voies — qui ne perd au moins jamais
+  ce qui n'existe que d'un côté.
+- ⚠️ **Le mode vient de la décision, pas de `dirtyAt`.** Un navigateur qui a
+  servi à un autre compte porte un marqueur sale : le fusionner ferait entrer
+  ce planning étranger dans le compte. `pull` remplace donc le local, et ne
+  garde que les frappes faites *pendant* le téléchargement.
+- Tests : `npm run test:merge` (16 cas), dont le scénario du PC vidé.
+
+**La base double la place du planning** dans le localStorage. Si elle ne tient
+plus, `saveData` la jette pour enregistrer le planning lui-même : c'est lui qui
+compte.
 
 Le marqueur (`climbing_planner_sync_v1`) contient `{ userId, syncedAt, dirtyAt }` :
 - `syncedAt` est l'`updated_at` **du serveur**, recopié tel quel après chaque
-  échange réussi (l'upsert relit la colonne). Les deux dates comparées viennent
-  donc de la même horloge — celle de Postgres, imposée par le trigger de la
-  migration `20260823`. Comparaison en **instants** (`Date.parse`), jamais en
-  chaînes : PostgREST rend `…+00:00`, l'app produit `…Z`.
+  échange réussi. Les deux dates comparées viennent donc de la même horloge —
+  celle de Postgres, imposée par le trigger de la migration `20260823`.
+  Comparaison en **instants** (`Date.parse`), jamais en chaînes : PostgREST rend
+  `…+00:00`, l'app produit `…Z`.
 - `dirtyAt` est l'heure locale de la **première** modification pas encore
   confirmée. Il survit à la fermeture de l'app : hors ligne, rien ne se perd.
+  `settleSync` ne l'efface que si l'écran n'a pas bougé pendant l'échange.
+- ⚠️ `writeStatus` (le rôle) **n'avance plus** le marqueur : elle rajeunit la
+  ligne sans savoir si quelqu'un l'avait modifiée juste avant, et l'avancer
+  aurait laissé le prochain envoi passer la garde par-dessus. Le prix : un
+  rapatriement inutile à la passe suivante.
 
-`reconcile()` est appelée à la **connexion**, au **retour au premier plan**
-(`visibilitychange` / `focus` / `online`, anti-rafale 3 s), sur **notification
-temps réel**, et par le bouton « Charger depuis le cloud » (qui, lui, force le
-pull). Le réveil rafraîchit aussi bibliothèque, athlètes et notifications.
+Auto-save (`useEffect` sur `data`) : localStorage **toujours**, cloud par la file
+une fois la première passe réussie (`syncReadyRef`). Un planning posé par la
+synchro elle-même est reconnu **à son identité** (`adoptedRef`) et n'est pas pris
+pour une modification. En vue athlète, l'écriture part sur la ligne de l'athlète
+(`saveToCloud`, upsert simple) et ne touche jamais le marqueur du coach.
 
-Ce que ça répare :
-- `loadFromCloud` sélectionnait la ligne **sans `eq(user_id)`**. RLS autorise un
-  coach à lire les lignes de ses athlètes : la requête en renvoyait plusieurs,
-  `maybeSingle()` partait en `PGRST116`, l'exception était avalée — **un coach
-  avec un athlète ne chargeait jamais ses propres données**.
+Ce que la refonte d'août avait déjà réparé :
+- `loadFromCloud` sélectionnait la ligne **sans `eq(user_id)`** : un coach avec
+  un athlète ne chargeait jamais ses propres données.
 - Rien ne relisait la base après le démarrage. Dans l'APK la WebView survit à
-  l'arrière-plan, et le temps réel ne délivre que connecté : deux appareils
-  devaient être ouverts **en même temps** pour se synchroniser.
+  l'arrière-plan, et le temps réel ne délivre que connecté : d'où la passe au
+  réveil (`visibilitychange` / `focus` / `online`, anti-rafale 3 s), qui
+  rafraîchit aussi bibliothèque, athlètes et notifications.
 - L'auto-save du montage marquait les données « modifiées » alors que rien
-  n'avait bougé — au démarrage suivant, ce faux « plus récent » écrasait le
-  planning saisi ailleurs. D'où la comparaison par identité avec l'objet chargé
-  au montage (et non un « premier passage », que le double montage de React en
-  développement rendait inopérant).
+  n'avait bougé. D'où la comparaison par identité avec l'objet chargé au montage.
 
-Auto-save (`useEffect` sur `data`) : localStorage **toujours**, cloud seulement
-une fois la première réconciliation faite (`syncReadyRef`) — sinon on pousserait
-à l'aveugle par-dessus une ligne plus fraîche. En vue athlète, l'écriture part
-sur la ligne de l'athlète et ne touche jamais le marqueur du coach.
-
-Conservé de la version précédente : flush `pagehide` / `visibilitychange` par
-`fetch({ keepalive: true })`, et l'abandon silencieux si le jeton a expiré (le
-marqueur reste sale, la prochaine occasion réessaie).
+**Tester la synchronisation** : le banc à deux appareils vit hors du dépôt
+(une fausse base PostgREST en Node et deux contextes Chromium) ; ce qui s'y
+reproduit se reporte en test pur dans `lib/merge-plan.test.mjs`. Une course de
+synchronisation se vérifie en retenant une requête (`page.route`) au moment
+voulu, pas en espérant la bonne vitesse de réseau.
 
 L'état est visible dans **Compte > Données** : « Synchronisé il y a n min » ou
 « Modifications en attente d'envoi ».
+
+### Une fenêtre de séance suit la séance, pas sa place (`locateSession`)
+
+`SessionModal` s'ouvre à une position (semaine, jour, rang) — depuis le
+calendrier, l'accueil ou la cloche. Mais une synchronisation peut arriver
+pendant qu'elle est ouverte et réordonner la journée : la position désignait
+alors **une autre séance**. Reproduit : une séance insérée ailleurs en tête de
+journée, la fenêtre de « Y » basculait sans rien dire sur « X », et le
+ressenti partait sur X.
+
+- L'`id` est gardé à l'ouverture (`openSessionModal`) ; `locateSession()`
+  (`lib/helpers.js`) retrouve la séance à chaque rendu **et au moment
+  d'écrire** — à sa place, sinon dans le même jour, la même semaine, puis
+  partout. Sans `id`, la position fait foi comme avant.
+- Ressenti, suppression, déplacement et changement d'heure passent tous par
+  elle.
+- **Annuler ne restaure plus les semaines d'avant** : la suppression remet
+  cette séance à sa place, le déplacement la ramène (`undoMove`). Restaurer
+  tout l'instantané défaisait aussi ce qu'une synchro avait apporté entre le
+  geste et l'annulation.
 
 ### Objectif de kilomètres par semaine (`lib/run-goals.js`, `RunBlocksSection`)
 
@@ -1979,13 +2054,14 @@ curl -s "$U""diag.json"                     # tailles, temps, href suspects
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
-npm run test     # tous les tests (CalDAV + notes + couleurs + rappels + migrations + allure)
+npm run test     # tous les tests (CalDAV, notes, couleurs, rappels, migrations, allure, fusion)
 npm run test:caldav  # protocole CalDAV (node --test, sans dépendance)
 npm run test:text    # saisie en liste et filtrage des liens (lib/rich-text.js)
 npm run test:color   # conversions HSL ↔ hex (lib/color.js)
 npm run test:reminders # rappels : supprimer ne change aucun jour passé (lib/reminders.js)
 npm run test:storage   # migrations du blob local (lib/storage.js)
 npm run test:pace      # temps · distance · allure : cases, frappe, recalcul (lib/pace.js)
+npm run test:merge     # fusion à trois voies des plannings (lib/merge-plan.js)
 npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
 npm run cap:open # ouvre Android Studio
 ./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement

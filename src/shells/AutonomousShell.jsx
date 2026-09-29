@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 // ── Lib ──
 import supabase from "../lib/supabase.js";
 import { DAYS, getDayLogWarning, getMesoColor, getMesoForDate } from "../lib/constants.js";
-import { getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime, getDayCharge } from "../lib/helpers.js";
+import { getMondayOf, addDays, formatDate, weekKey, localDateStr, calcEndTime, getDayCharge, locateSession } from "../lib/helpers.js";
 import { generateId } from "../lib/storage.js";
 import { upsertSessionFeedback } from "../lib/session-feedbacks.js";
 
@@ -325,17 +325,20 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
 
   const saveSessionFeedback = (feedback) => {
     if (!sessionModal) return;
-    const { weekKey: smKey, dayIndex, sessionIndex } = sessionModal;
+    const ref = sessionModal;
+    const pos = locateSession(data.weeks, ref);
+    if (!pos) { setSessionModal(null); return; }
+    const { weekKey: smKey, dayIndex, sessionIndex } = pos;
 
-    setData(d => ({
-      ...d,
-      weeks: {
-        ...d.weeks,
-        [smKey]: (d.weeks[smKey] || Array(7).fill(null).map(() => [])).map((day, i) =>
-          i === dayIndex ? day.map((s, j) => j === sessionIndex ? { ...s, feedback } : s) : d.weeks[smKey][i]
-        ),
-      },
-    }));
+    // Retrouvée par son id **au moment d'écrire** : une synchro arrivée pendant
+    // que la fenêtre était ouverte a pu déplacer la séance dans la journée.
+    setData(d => {
+      const at = locateSession(d.weeks, ref);
+      if (!at) return d;
+      const days = d.weeks[at.weekKey].map((day, i) =>
+        i === at.dayIndex ? day.map((s, j) => j === at.sessionIndex ? { ...s, feedback } : s) : day);
+      return { ...d, weeks: { ...d.weeks, [at.weekKey]: days } };
+    });
 
     // `feedback` vaut null quand l'athlète retire le statut : la séance
     // redevient « pas encore réalisée ». Le miroir Supabase se remet à zéro
@@ -363,18 +366,45 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
     toast.success(feedback ? "Ressenti enregistré" : "Statut retiré");
   };
 
+  // La position sert à l'ouverture ; l'id, à retrouver la séance ensuite
+  // (`locateSession`).
   const openSessionModal = (wKey, dayIndex, sessionIndex) => {
-    setSessionModal({ weekKey: wKey, dayIndex, sessionIndex });
+    const sessionId = data.weeks[wKey]?.[dayIndex]?.[sessionIndex]?.id ?? null;
+    setSessionModal({ weekKey: wKey, dayIndex, sessionIndex, sessionId });
   };
 
   // ── Déplacer / suggestions ──
-  const moveSession = (fromWKey, fromDi, fromSi, toWKey, toDi, newStartTime, newLocation) => {
+  // Annuler un déplacement ramène **cette** séance, rien d'autre : restaurer les
+  // semaines d'avant déferait aussi ce qu'une synchro aurait apporté entre-temps.
+  // Sans id (anciennes données), on ne sait pas la retrouver : `null`, et
+  // l'appelant retombe sur l'ancienne restauration.
+  function undoMove(d, moved, toWKey, toDi) {
+    const id = moved?.original?.id;
+    if (id == null) return null;
+    const tgt = (d.weeks[toWKey] || []).map(day => [...(day || [])]);
+    const i = (tgt[toDi] || []).findIndex(x => x?.id === id);
+    if (i < 0) return d;
+    tgt[toDi] = tgt[toDi].filter((_, j) => j !== i);
+    const { weekKey: fw, dayIndex: fd, sessionIndex: fs } = moved.from;
+    const weeks = { ...d.weeks, [toWKey]: tgt };
+    const src = (weeks[fw] || Array(7).fill(null).map(() => [])).map(day => [...(day || [])]);
+    const day = src[fd] || [];
+    src[fd] = [...day.slice(0, fs), moved.original, ...day.slice(fs)];
+    return { ...d, weeks: { ...weeks, [fw]: src } };
+  }
+
+  const moveSession = (fromWKey, fromDi, fromSi, toWKey, toDi, newStartTime, newLocation, sessionId = null) => {
     let snapshot = null;
+    let moved = null;
     setData(d => {
       snapshot = d.weeks;
+      const at = locateSession(d.weeks, { weekKey: fromWKey, dayIndex: fromDi, sessionIndex: fromSi, sessionId });
+      if (!at) return d;
+      ({ weekKey: fromWKey, dayIndex: fromDi, sessionIndex: fromSi } = at);
       const src = (d.weeks[fromWKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
       const sess = src[fromDi]?.[fromSi];
       if (!sess) return d;
+      moved = { from: { weekKey: fromWKey, dayIndex: fromDi, sessionIndex: fromSi }, original: sess };
       const updated = { ...sess,
         startTime: newStartTime || sess.startTime || null,
         endTime: newStartTime ? calcEndTime(newStartTime, sess.estimatedTime) : sess.endTime ?? null,
@@ -392,23 +422,27 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
       const targetDate = addDays(new Date(toWKey + "T00:00:00"), toDi + 1);
       const targetLabel = targetDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
       toast.success(`Déplacée au ${targetLabel}`, {
-        undo: () => snapshot && setData(d => ({ ...d, weeks: snapshot })),
+        undo: () => setData(d => undoMove(d, moved, toWKey, toDi) ?? (snapshot ? { ...d, weeks: snapshot } : d)),
       });
     }
   };
 
-  const updateSessionTime = (wKey, di, si, newStartTime) => {
-    setData(d => ({
-      ...d,
-      weeks: {
-        ...d.weeks,
-        [wKey]: (d.weeks[wKey] || Array(7).fill(null).map(() => [])).map((day, i) =>
-          i === di ? day.map((s, j) => j === si
-            ? { ...s, startTime: newStartTime || null, endTime: newStartTime ? calcEndTime(newStartTime, s.estimatedTime) : null }
-            : s) : day
-        ),
-      },
-    }));
+  const updateSessionTime = (wKey, di, si, newStartTime, sessionId = null) => {
+    setData(d => {
+      const at = locateSession(d.weeks, { weekKey: wKey, dayIndex: di, sessionIndex: si, sessionId });
+      if (!at) return d;
+      return {
+        ...d,
+        weeks: {
+          ...d.weeks,
+          [at.weekKey]: d.weeks[at.weekKey].map((day, i) =>
+            i === at.dayIndex ? day.map((s, j) => j === at.sessionIndex
+              ? { ...s, startTime: newStartTime || null, endTime: newStartTime ? calcEndTime(newStartTime, s.estimatedTime) : null }
+              : s) : day
+          ),
+        },
+      };
+    });
   };
 
   const suggestMoveSession = (fromWKey, fromDi, fromSi, toWKey, toDi, note) => {
@@ -739,7 +773,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
             session={session}
             onAuthChange={setSession}
             syncStatus={syncStatus}
-            onUpload={session ? () => uploadNow(data, session.user.id) : null}
+            onUpload={session ? uploadNow : null}
             onPull={session ? pullFromCloud : null}
             onImport={setData}
             onBack={() => setViewMode("accueil")}
@@ -1253,7 +1287,12 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
 
       {/* ── Session Modal ── */}
       {sessionModal && (() => {
-        const { weekKey: smKey, dayIndex: smDi, sessionIndex: smSi } = sessionModal;
+        // À chaque rendu, la séance est retrouvée par son id : une synchro arrivée
+        // pendant que la fenêtre est ouverte ne doit pas y substituer sa voisine.
+        const smPos = locateSession(data.weeks, sessionModal);
+        if (!smPos) return null;
+        const { weekKey: smKey, dayIndex: smDi, sessionIndex: smSi } = smPos;
+        const smId = sessionModal.sessionId ?? null;
         const smSessions = (data.weeks[smKey] || Array(7).fill(null).map(() => []))[smDi] || [];
         const smSession = smSessions[smSi];
         const smMonday = new Date(smKey);
@@ -1271,23 +1310,36 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
             smWeekKey={smKey}
             smDayIndex={smDi}
             smSessionIndex={smSi}
-            onMoveSession={(toWKey, toDi, newTime, newLoc) => moveSession(smKey, smDi, smSi, toWKey, toDi, newTime, newLoc)}
-            onUpdateStartTime={(newTime) => { updateSessionTime(smKey, smDi, smSi, newTime); }}
+            onMoveSession={(toWKey, toDi, newTime, newLoc) => moveSession(smKey, smDi, smSi, toWKey, toDi, newTime, newLoc, smId)}
+            onUpdateStartTime={(newTime) => { updateSessionTime(smKey, smDi, smSi, newTime, smId); }}
             onSuggestMove={(toWKey, toDi, note) => suggestMoveSession(smKey, smDi, smSi, toWKey, toDi, note)}
             moveSuggestions={data.moveSuggestions || []}
             onAcceptSuggestion={acceptMoveSuggestion}
             onRejectSuggestion={rejectMoveSuggestion}
             onDelete={() => {
-              let snapshot = null;
+              const ref = sessionModal;
+              let removed = null;
               setData(d => {
-                snapshot = d.weeks;
-                const ws = (d.weeks[smKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
-                if (ws[smDi]) ws[smDi] = ws[smDi].filter((_, j) => j !== smSi);
-                return { ...d, weeks: { ...d.weeks, [smKey]: ws } };
+                const at = locateSession(d.weeks, ref);
+                if (!at) return d;
+                const ws = d.weeks[at.weekKey].map(day => [...day]);
+                removed = { at, session: ws[at.dayIndex][at.sessionIndex] };
+                ws[at.dayIndex] = ws[at.dayIndex].filter((_, j) => j !== at.sessionIndex);
+                return { ...d, weeks: { ...d.weeks, [at.weekKey]: ws } };
               });
               setSessionModal(null);
+              // Annuler remet **cette** séance à sa place, et rien d'autre : restaurer
+              // toutes les semaines d'avant déferait aussi ce qu'une synchro aurait
+              // apporté entre-temps.
               toast.success("Séance supprimée", {
-                undo: () => snapshot && setData(d => ({ ...d, weeks: snapshot })),
+                undo: () => removed && setData(d => {
+                  const { at, session: sx } = removed;
+                  const ws = (d.weeks[at.weekKey] || Array(7).fill(null).map(() => [])).map(day => [...day]);
+                  if (sx?.id != null && ws.some(day => day.some(x => x?.id === sx.id))) return d;
+                  const day = ws[at.dayIndex] || [];
+                  ws[at.dayIndex] = [...day.slice(0, at.sessionIndex), sx, ...day.slice(at.sessionIndex)];
+                  return { ...d, weeks: { ...d.weeks, [at.weekKey]: ws } };
+                }),
               });
             }}
             onEdit={() => {
@@ -1350,7 +1402,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
             // calendrier se place sur sa journée, pour qu'on y retombe en
             // fermant la modale.
             setCurrentDate(new Date(item.dateISO + "T12:00:00"));
-            setSessionModal({ weekKey: item.weekKey, dayIndex: item.dayIndex, sessionIndex: item.sessionIndex });
+            openSessionModal(item.weekKey, item.dayIndex, item.sessionIndex);
           }}
           onClose={() => setNotifOpen(false)}
           onMarkInfosRead={markInfosRead}

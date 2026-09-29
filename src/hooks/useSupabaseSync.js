@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import supabase from "../lib/supabase.js";
 import { migrateWeekKeys } from "../lib/helpers.js";
-import { markDirty, markSynced, writeSyncMeta, readSyncMeta } from "../lib/sync-meta.js";
-import { mergePlans } from "../lib/merge-plan.js";
 
 
 // Les colonnes plates envoyées à côté du blob JSONB. `status` n'y est pas :
@@ -17,33 +15,20 @@ function buildRow(planData, userId) {
   };
 }
 
-// ── Écriture de la ligne, sans écraser personne ────────────────────────────
+// ── Écriture de la ligne, sans écraser personne ─────────────────────────────────────────────
 // L'écriture est **conditionnelle** : on ne remplace la ligne que si son
-// `updated_at` est bien celui qu'on croit connaître (`expectedAt`). Sinon un
-// autre appareil a écrit entre-temps, l'UPDATE ne touche aucune ligne, et on le
-// sait — c'est ce garde-fou qui manquait quand une séance saisie sur le PC a
-// disparu, poussée dehors par un téléphone qui ne l'avait jamais vue.
+// `updated_at` est bien celui sur lequel nos données sont bâties
+// (`expectedAt`). Sinon un autre appareil a écrit entre-temps, l'UPDATE ne
+// touche aucune ligne, et on le sait : `{ ok: false }`. La fusion n'est pas
+// faite ici — c'est le moteur de `DataProvider` qui la mène, avec la base.
 //
-// Au conflit, on va chercher la version en base, on **fusionne** (voir
-// `lib/merge-plan.js`) et on réessaie. `onMerged` sert à remonter le résultat à
-// l'app : ce qu'on vient d'écrire n'est plus tout à fait ce qu'elle affiche.
-//
-// Fonction de module, et non `useCallback` : elle s'appelle elle-même.
-//
-// Renvoie l'`updated_at` réellement stocké — la seule date qui fasse foi.
-async function writeRowGuarded(planData, userId, expectedAt, onMerged, depth = 0) {
-  // Rien de connu sur la ligne (premier envoi, création de compte) : upsert
-  // classique. Il n'y a rien à préserver.
-  if (!expectedAt) {
-    const { data: saved, error } = await supabase
-      .from("climbing_plans")
-      .upsert(buildRow(planData, userId), { onConflict: "user_id" })
-      .select("updated_at")
-      .maybeSingle();
-    if (error) throw error;
-    return saved?.updated_at ?? null;
-  }
-
+// ⚠️ `expectedAt` doit décrire **les données envoyées**, pas l'état du
+// marqueur au moment de l'envoi. C'est ce décalage qui a vidé un PC : un
+// téléphone resté sur l'ancien état notait une séance, le rapatriement
+// arrivait pendant les 500 ms d'attente de l'envoi et avançait le marqueur, et
+// l'envoi partait avec les données d'avant et la date d'après — la garde
+// passait, le téléphone écrasait tout ce que le PC avait fait.
+async function writeGuarded(planData, userId, expectedAt) {
   const { data: rows, error } = await supabase
     .from("climbing_plans")
     .update(buildRow(planData, userId))
@@ -51,22 +36,19 @@ async function writeRowGuarded(planData, userId, expectedAt, onMerged, depth = 0
     .eq("updated_at", expectedAt)
     .select("updated_at");
   if (error) throw error;
-  if (rows?.length) return rows[0].updated_at ?? null;
+  return rows?.length ? { ok: true, updatedAt: rows[0].updated_at ?? null } : { ok: false };
+}
 
-  // Zéro ligne touchée = la base a bougé. On récupère, on fusionne, on
-  // réessaie — deux fois au plus, pour ne pas boucler contre un appareil qui
-  // écrirait sans arrêt.
-  if (depth >= 2) throw new Error("conflit de synchronisation persistant");
-  const { data: current, error: readErr } = await supabase
+// Premier envoi (le compte n'a pas encore de ligne) ou remise à zéro
+// anti-fuite : il n'y a rien à préserver, l'upsert est franc.
+async function upsertRow(planData, userId) {
+  const { data: saved, error } = await supabase
     .from("climbing_plans")
-    .select("data, updated_at")
-    .eq("user_id", userId)
+    .upsert(buildRow(planData, userId), { onConflict: "user_id" })
+    .select("updated_at")
     .maybeSingle();
-  if (readErr) throw readErr;
-  if (!current) return null;
-  const merged = mergePlans(planData, current.data ?? {});
-  onMerged?.(merged);
-  return writeRowGuarded(merged, userId, current.updated_at, onMerged, depth + 1);
+  if (error) throw error;
+  return saved?.updated_at ?? null;
 }
 
 export function useSupabaseSync() {
@@ -74,6 +56,9 @@ export function useSupabaseSync() {
   const [authChecked, setAuthChecked] = useState(!supabase); // true immediately if no Supabase
   const [syncStatus, setSyncStatus] = useState("idle"); // "idle"|"saving"|"saved"|"offline"
   const saveTimerRef   = useRef(null);
+  // Vue athlète seulement : c'est le seul chemin qui passe encore par
+  // `saveToCloud`. La ligne du compte, elle, est confiée au moteur de
+  // `DataProvider`, qui a son propre envoi de secours — conditionnel.
   const pendingSaveRef = useRef(null); // { planData, userId } — flushed via keepalive on pagehide
   const sessionRef     = useRef(null); // always-fresh session token for the pagehide handler
 
@@ -224,63 +209,40 @@ export function useSupabaseSync() {
     // voyait — l'utilisateur croyait avoir choisi son rôle, et l'onboarding
     // revenait au démarrage suivant.
     if (error) return { error };
-    // Cette écriture rajeunit la ligne sans toucher au planning : on avance le
-    // marqueur pour ne pas déclencher un rapatriement inutile juste après
-    // l'onboarding. `dirtyAt`, lui, n'est pas effacé — rien n'a été envoyé.
-    if (saved?.updated_at) writeSyncMeta({ userId, syncedAt: saved.updated_at });
+    // ⚠️ Le marqueur n'avance **pas** : cette écriture rajeunit la ligne sans
+    // qu'on sache si quelqu'un d'autre l'avait modifiée juste avant. L'avancer
+    // ferait croire à cet appareil qu'il connaît la dernière version — et son
+    // prochain envoi passerait la garde par-dessus celle de l'autre. Le prix :
+    // un rapatriement à la prochaine passe, qui ne change rien.
+    void saved;
     return { error: null };
   }, []);
 
-  // Le marqueur local ne suit QUE notre propre ligne : quand un coach
-  // enregistre le planning d'un athlète, ça ne dit rien de l'état du sien.
-  const isOwnRow = useCallback(
-    (userId) => !!userId && userId === sessionRef.current?.user?.id, []);
-
-  // Ce que cet appareil croit savoir de la ligne. Sur la ligne d'un athlète
-  // (vue coach), on n'a pas de marqueur : l'écriture reste un upsert simple.
-  const expectedFor = useCallback(
-    (userId) => isOwnRow(userId) ? (readSyncMeta().syncedAt ?? null) : null, [isOwnRow]);
-
-  const saveToCloud = useCallback((planData, userId, onMerged) => {
+  // Le planning d'un **athlète**, modifié par son coach en vue athlète. Aucun
+  // marqueur ne décrit cette ligne sur cet appareil : l'écriture reste un
+  // upsert simple, comme avant. (La ligne du compte ne passe plus par ici.)
+  const saveToCloud = useCallback((planData, userId) => {
     if (!supabase || !userId) return;
     clearTimeout(saveTimerRef.current);
     setSyncStatus("saving");
-    if (isOwnRow(userId)) markDirty();
     pendingSaveRef.current = { planData, userId }; // pagehide will flush this if debounce is cancelled
     saveTimerRef.current = setTimeout(async () => {
       try {
-        const updatedAt = await writeRowGuarded(planData, userId, expectedFor(userId), onMerged);
+        await upsertRow(planData, userId);
         pendingSaveRef.current = null; // debounce completed — nothing left to flush
-        if (isOwnRow(userId)) markSynced(userId, updatedAt);
         setSyncStatus("saved");
         setTimeout(() => setSyncStatus("idle"), 2000);
       } catch {
-        // Rien n'est perdu : `dirtyAt` reste posé, la prochaine réconciliation
-        // (retour au premier plan, relance de l'app) renverra les données.
         setSyncStatus("offline");
       }
     }, 500);
-  }, [expectedFor, isOwnRow]);
+  }, []);
 
-  // Immediate upload (no debounce) — used for force-sync & first-login push
-  const uploadNow = useCallback(async (planData, userId, expectedAt, onMerged) => {
-    if (!supabase || !userId) return null;
-    setSyncStatus("saving");
-    try {
-      const updatedAt = await writeRowGuarded(
-        planData, userId,
-        expectedAt === undefined ? expectedFor(userId) : expectedAt,
-        onMerged);
-      pendingSaveRef.current = null;
-      if (isOwnRow(userId)) markSynced(userId, updatedAt);
-      setSyncStatus("saved");
-      setTimeout(() => setSyncStatus("idle"), 2500);
-      return updatedAt;
-    } catch {
-      setSyncStatus("offline");
-      return null;
-    }
-  }, [expectedFor, isOwnRow]);
+  // Ce que l'indicateur de synchronisation affiche, posé par le moteur.
+  const reportSync = useCallback((status) => {
+    setSyncStatus(status);
+    if (status === "saved") setTimeout(() => setSyncStatus(s => (s === "saved" ? "idle" : s)), 2000);
+  }, []);
 
   // Subscribe to realtime changes on the user's own row.
   // Calls onChanged() whenever another device (or tab) saves.
@@ -299,9 +261,8 @@ export function useSupabaseSync() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Indique si un save est en cours (debounce non encore flushed).
-  // Utilisé par le handler Realtime pour éviter d'écraser des modifications locales.
-  const hasPendingSave = useCallback(() => pendingSaveRef.current !== null, []);
-
-  return { session, setSession, authChecked, syncStatus, fetchCloudHead, loadFromCloud, saveToCloud, uploadNow, writeStatus, subscribeToChanges, hasPendingSave };
+  return {
+    session, setSession, authChecked, syncStatus, reportSync,
+    fetchCloudHead, loadFromCloud, writeGuarded, upsertRow, saveToCloud, writeStatus, subscribeToChanges,
+  };
 }

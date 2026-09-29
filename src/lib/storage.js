@@ -1,6 +1,7 @@
 import { DATA } from "../theme/palette.js";
 import { DEFAULT_MESOCYCLES } from "./constants.js";
 import { migrateWeekKeys } from "./helpers.js";
+import { dropSyncBase } from "./sync-meta.js";
 
 export function generateId() {
   return "c_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -244,6 +245,15 @@ export function loadData() {
 
 export function saveData(data) {
   const { role: _role, ...profileWithoutRole } = data.profile ?? {};
-  localStorage.setItem("climbing_planner_v1", JSON.stringify({ ...data, profile: profileWithoutRole }));
+  const json = JSON.stringify({ ...data, profile: profileWithoutRole });
+  try {
+    localStorage.setItem("climbing_planner_v1", json);
+  } catch {
+    // Plus de place : la base de synchronisation (une copie du planning) la
+    // cède au planning lui-même. Sans elle, la fusion retombe sur deux voies ;
+    // sans ceci, les modifications ne survivraient pas à un rechargement.
+    dropSyncBase();
+    try { localStorage.setItem("climbing_planner_v1", json); } catch { /* vraiment plein */ }
+  }
 }
 

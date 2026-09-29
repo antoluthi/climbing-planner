@@ -123,3 +123,33 @@ export function hasDayLog(data, dateStr) {
   const meals = (data.nutrition?.[dateStr] || []).length > 0;
   return hooper || weight || note || meals;
 }
+
+// ─── Retrouver une séance ouverte ────────────────────────────────────────────
+// Une fenêtre de séance s'ouvre à une position (semaine, jour, rang). Mais une
+// synchronisation peut réordonner la journée pendant qu'elle est ouverte : la
+// position seule désignerait alors **une autre séance**, et le ressenti — ou
+// la suppression — partirait sur elle. On garde donc l'`id` à l'ouverture, et
+// on retrouve la séance par lui : à sa place si elle y est toujours, sinon dans
+// le même jour, la même semaine, puis partout (déplacée ailleurs pendant qu'on
+// la regardait). Sans `id` (anciennes données), la position fait foi.
+// Rend `{ weekKey, dayIndex, sessionIndex }`, ou null si elle a disparu.
+export function locateSession(weeks, ref) {
+  if (!ref) return null;
+  const { weekKey: wk, dayIndex: di, sessionIndex: si, sessionId: id } = ref;
+  const at = weeks?.[wk]?.[di]?.[si];
+  if (id == null) return at ? { weekKey: wk, dayIndex: di, sessionIndex: si } : null;
+  if (at?.id === id) return { weekKey: wk, dayIndex: di, sessionIndex: si };
+  const find = (w, d) => (weeks?.[w]?.[d] || []).findIndex(s => s?.id === id);
+  const inDay = find(wk, di);
+  if (inDay >= 0) return { weekKey: wk, dayIndex: di, sessionIndex: inDay };
+  const order = [wk, ...Object.keys(weeks || {}).filter(k => k !== wk)];
+  for (const w of order) {
+    const days = weeks?.[w];
+    if (!Array.isArray(days)) continue;
+    for (let d = 0; d < days.length; d++) {
+      const i = find(w, d);
+      if (i >= 0) return { weekKey: w, dayIndex: d, sessionIndex: i };
+    }
+  }
+  return null;
+}
