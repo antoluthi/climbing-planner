@@ -45,7 +45,6 @@ export function Modal({
   onClose,
   maxWidth = 440,
   zIndex = Z.nested,
-  dismissOnBackdrop = true,
   closeOnEsc = true,
   ariaLabel,
 }) {
@@ -74,12 +73,21 @@ export function Modal({
     return () => window.removeEventListener("keydown", h);
   }, [onClose, closeOnEsc]);
 
+  // ⚠️ **Aucune fermeture au clic sur le fond.** On ouvre un formulaire de
+  // séance, on va sélectionner du texte, le relâchement tombe à côté du panneau
+  // — et tout se perd. Le geste est trop facile à déclencher sans l'avoir voulu
+  // pour fermer quelque chose qui contient de la saisie. Il reste trois sorties
+  // explicites : la croix, Échap, et le bouton retour d'Android (pile de
+  // calques de `native.js`).
+  //
+  // Le `stopPropagation` du panneau, lui, **reste** : la modale est rendue dans
+  // l'arbre de la vue qui l'ouvre, pas portée dans `<body>`. Sans lui, un clic
+  // dedans remonterait jusqu'à la carte ou au bouton qui l'a ouverte.
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
-      onClick={e => { if (dismissOnBackdrop && e.target === e.currentTarget) onClose?.(); }}
       style={{
         position: "fixed", inset: 0,
         background: "rgba(0,0,0,0.55)", backdropFilter: "blur(3px)",

@@ -50,7 +50,7 @@ import { writeWidgetSnapshot, drainWidgetToggles, applyPendingToggles } from "..
 import { NotificationBell } from "../components/NotificationBell.jsx";
 import { NotificationsPanel } from "../components/NotificationsPanel.jsx";
 import { getSessionCharge } from "../lib/charge.js";
-import { archiveReminder } from "../lib/reminders.js";
+import { softDeleteReminder } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
 
 export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan }) {
@@ -574,12 +574,12 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
   });
 
   // Supprimer un rappel, c'est le faire **cesser de réclamer** quelque chose —
-  // pas effacer ce qu'on a fait. On clôt donc son bloc ouvert et on l'archive :
+  // pas effacer ce qu'on a fait. Il porte donc la date du jour où il s'arrête :
   // il quitte la liste, mais la heatmap et les journaux des jours passés le
-  // voient toujours, coches comprises.
+  // voient toujours, et ses cases s'y cochent encore.
   const deleteReminder = (id) => setData(d => ({
     ...d,
-    reminders: (d.reminders || []).map(r => (r.id === id ? archiveReminder(r) : r)),
+    reminders: softDeleteReminder(d.reminders, id),
   }));
 
   // L'oubli volontaire, lui, existe aussi : il jette la ligne **et** ses

@@ -8,11 +8,10 @@ import { CustomCycleModal } from "./CustomCycleModal.jsx";
 import { ReminderModal } from "./ReminderModal.jsx";
 import {
   reminderProgress,
-  formatPeriod,
+  formatRange,
   liveReminders,
   formatRecurrence,
   DAY_NAMES_SHORT,
-  displayPeriod,
   reminderStatus,
 } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
@@ -277,7 +276,6 @@ export function CyclesView({
 
       {editingReminder && (
         <ReminderModal
-          reminderState={reminderState}
           reminder={editingReminder.id ? editingReminder : null}
           onSave={(r) => {
             if (editingReminder.id) onUpdateReminder?.(r);
@@ -556,12 +554,10 @@ function ReminderCard({ reminder, progress, isDark, disabled, onClick }) {
   const surface  = colors(isDark).card;
   const surface2 = colors(isDark).surface;
 
-  // Le bloc affiché : celui en cours, sinon le dernier. Un rappel terminé
-  // continue donc de montrer ce qu'il demandait, en retrait.
-  const shown = displayPeriod(reminder);
+  // Un rappel terminé continue de montrer ce qu'il demandait, en retrait.
   const ended = reminderStatus(reminder) === "ended";
-  const isDaily = shown?.recurrence?.kind !== "weekdays";
-  const activeDays = isDaily ? [0, 1, 2, 3, 4, 5, 6] : (shown?.recurrence?.days || []);
+  const isDaily = reminder.recurrence?.kind !== "weekdays";
+  const activeDays = isDaily ? [0, 1, 2, 3, 4, 5, 6] : (reminder.recurrence?.days || []);
   const pct = progress?.rate == null ? null : Math.round(progress.rate * 100);
 
   return (
@@ -608,7 +604,7 @@ function ReminderCard({ reminder, progress, isDark, disabled, onClick }) {
               );
             })}
           </div>
-          <span style={{ fontSize: 11, color: textMid }}>{formatRecurrence(shown?.recurrence)}</span>
+          <span style={{ fontSize: 11, color: textMid }}>{formatRecurrence(reminder.recurrence)}</span>
           {ended && (
             <span style={{
               fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
@@ -616,9 +612,9 @@ function ReminderCard({ reminder, progress, isDark, disabled, onClick }) {
             }}>Terminé</span>
           )}
         </div>
-        {shown && (shown.startDate || shown.endDate) && (
+        {(reminder.startDate || reminder.endDate) && (
           <div style={{ fontSize: 10, color: textLight, marginTop: 3 }}>
-            {formatPeriod(shown)}
+            {formatRange(reminder)}
           </div>
         )}
       </div>

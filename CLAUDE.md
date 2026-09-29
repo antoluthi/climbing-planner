@@ -55,8 +55,8 @@ src/
 │   ├── todo.js                   — ce qui reste à noter (ressenti, retours de séance)
 │   ├── widget.js                 — pont avec le widget Android (SharedPreferences)
 │   ├── hooper.js                 — hooperLabel, hooperColor, isHooperFilled, HOOPER_SCALE
-│   ├── reminders.js              — rappels en **blocs datés** : reminderPeriods, periodCovering,
-│   │                               isReminderActiveOn, withNewPeriod (pur, testé sous Node)
+│   ├── reminders.js              — rappels : isReminderActiveOn, softDeleteReminder,
+│   │                               reminderProgress, formatRange (pur, testé sous Node)
 │   ├── rich-text.js              — syntaxe des notes côté saisie : parseItem, handleEnter,
 │   │                               handleTab, safeHref, hasRichSyntax (pur, testé sous Node)
 │   ├── rich-text-cm.js           — l'extension CodeMirror qui rend la syntaxe dans le champ
@@ -559,7 +559,7 @@ toutes lettres, puis chaque microcycle avec ses dates et le sien.
 
 ### Voir ses cycles sur le calendrier (`components/CalendarView.jsx`)
 
-Les jours d'un mésocycle prennent une **teinte de sa couleur** dans les trois
+Les jours d'un cycle prennent une **teinte de sa couleur** dans les trois
 vues — sur l'année, les blocs se lisent comme des bandes. Sous la grille, une
 **légende** nomme les cycles de la période affichée (« en cours » pour celui du
 moment) et ouvre leur objectif d'une touche.
@@ -574,8 +574,17 @@ moment) et ouvre leur objectif d'une touche.
 - Les dates viennent de `recomputeMesoDates` — même règle que l'éditeur et la
   timeline. Un plan partiellement daté se peint donc quand même, **sans rien
   réécrire** dans les données.
-- Le bureau garde ses vues historiques (`MonthView`, `YearView`, `DayColumn`),
-  qui affichaient déjà la couleur du mésocycle à leur façon.
+- ⚠️ **La teinte vient du microcycle, pas du seul bloc** (`cycleColorAt` →
+  `microColor(micro, meso)`). Le calendrier lisait `meso.color` et jetait le
+  microcycle que `getMesoForDate` lui rendait pourtant : éclaircir une semaine
+  pour la distinguer de ses voisines ne se voyait alors **que** dans l'éditeur,
+  ce qui vide le réglage de son sens. Sans couleur propre, `microColor` reprend
+  celle du bloc — le cas courant, et l'affichage ne change pas.
+- Le bureau garde ses vues historiques (`MonthView`, `YearView`, `DayColumn`)
+  et suit la même règle : la bande d'une semaine (filet de gauche en mois,
+  fond de ligne en année) prend la couleur de **son** microcycle, le nom du
+  bloc gardant la sienne. Sur l'accueil, c'est le nom du microcycle qui la
+  porte, quand il en a une.
 
 ### CyclesTimeline — texte adaptatif (`components/CyclesTimeline.jsx`)
 `ResizeObserver` sur le conteneur mesure la largeur réelle en pixels.
@@ -694,7 +703,10 @@ de bon. Le bloc se pose en tête du jour sélectionné dans le calendrier —
 résumé de ce qui est noté (bien-être, poids, kcal, note), bouton
 Remplir/Modifier qui ouvre `DayLogModal` **sur cette date**, et les rappels
 **actifs ce jour-là** (récurrence et plage), cochables après coup. Cocher écrit
-`reminderState[id][cetteDate]`, jamais celle du jour.
+`reminderState[id][cetteDate]`, jamais celle du jour. Un rappel **supprimé**
+depuis y figure encore, en retrait et marqué « (supprimé) », et **se coche
+toujours** — voir la section des rappels : on supprime pour qu'il arrête de
+réclamer, pas pour perdre la main sur ce qu'on a fait.
 
 Ce bloc ne se lit toutefois **que pour le jour sélectionné**, sous la grille :
 noter le ressenti d'hier demandait de le sélectionner d'abord, puis de
@@ -736,104 +748,87 @@ Le slider de ressenti étant **pré-rempli à la charge planifiée**, confirmer
 sans y toucher donne un écart de zéro : le graphe d'écart dessine alors un
 trait sur la ligne du zéro (`DeviationBar`) plutôt que rien du tout.
 
-### Un rappel est une suite de blocs datés (`lib/reminders.js`)
-
-Une coche est un **fait** daté : « j'ai fait ma suspension le 12 septembre ».
-Savoir qu'on était *censé* la faire ce jour-là, en revanche, se déduisait de la
-plage et de la récurrence **actuelles** — donc d'une opinion révisable. Finir un
-mois de suspension puis modifier le rappel pour repartir dessus ne perdait pas
-l'historique : il le **réécrivait**.
-
-Trois façons dont ça cassait, toutes silencieuses :
-
-- rétrécir la plage → les jours d'avant devenaient « aucun rappel actif », et un
-  mois de cases vertes disparaissait de la heatmap alors que les coches étaient
-  toujours en base ;
-- l'étendre vers l'arrière → des jours où le rappel n'existait pas devenaient
-  « actif et non coché » : la heatmap **inventait des échecs**, en rouge ;
-- passer de `daily` à `weekdays` → les deux à la fois, dans le même geste.
-
-**Un rappel porte donc des blocs**, comme un mésocycle ou un bloc de course —
-l'app modélisait déjà tout le reste ainsi :
+### Un rappel, une plage — et supprimer n'efface rien (`lib/reminders.js`)
 
 ```js
-{ id, name, color, createdAt, periods: [{ id, startDate?, endDate?, recurrence }] }
+{ id, name, color, createdAt,
+  recurrence: { kind: 'daily' | 'weekdays', days?: [] },
+  startDate?, endDate?, deletedAt? }
 ```
 
-- **On n'édite pas un bloc écoulé, on en ouvre un nouveau.** `withNewPeriod()`
-  clôt l'ouvert la veille et ajoute le suivant ; rien de ce qui est passé n'est
-  touché. C'est `periodHasElapsed()` qui tranche : tant qu'aucun jour du bloc
-  n'est derrière nous, le corriger ne réécrit rien et l'éditeur le permet.
-- **Les blocs ne se chevauchent jamais** : `periodCovering()` rend donc **un**
-  bloc sans arbitrage, et l'éditeur refuse un début antérieur à la fin du
-  précédent. Sans cette règle, « quel bloc couvrait ce jour ? » serait un choix
-  arbitraire — exactement le genre de décision qui se met à mentir.
-- ⚠️ **Le drapeau `enabled` a disparu du calcul.** `enabled === false` faisait
-  retourner false pour **toutes** les dates, passé compris : couper un rappel
-  depuis le Compte effaçait tout son historique de la heatmap. Personne ne
-  l'écrivait (drapeau mort), mais une vieille ligne cloud peut le porter. Arrêter
-  un rappel, c'est clore son bloc — geste qui n'a aucun effet rétroactif.
-- **Migration `v7`** (`storage.js`) : la plage de la racine devient le premier
-  bloc. Les champs d'origine sont **laissés en place** — un rollback ne perd
-  rien — et `reminderPeriods()` sait de toute façon relire l'ancienne forme à la
-  volée, comme `normalizeCharge10` côté charges : une ligne venue du cloud peut
-  arriver non migrée.
-- ⚠️ Un rappel legacy **sans aucun champ** de planification valait « tous les
-  jours, sans fin ». Le migrer en `periods: []` l'**éteindrait sans rien dire** :
-  la forme d'avant se lit donc toujours comme un bloc quotidien. Un
-  `periods: []` explicite, lui, est bien un rappel sans bloc.
-- `displayPeriod()` (bloc en cours, sinon le dernier) sert aux **deux** listes de
-  rappels — `CyclesView` et `CyclesTimeline` en ont chacune une copie, qui
-  lisaient `reminder.recurrence` à la racine.
-- Les tests (`npm run test:reminders`) portent surtout **deux propriétés**, pas
-  la récurrence : reprendre un rappel, et changer sa récurrence en cours de
-  bloc, laissent chaque jour écoulé exactement tel qu'il était. C'est la seule
-  chose que le modèle en blocs apporte, et elle est invisible à l'œil.
+Tout se modifie, à tout moment, d'une pièce : nom, couleur, récurrence, début,
+fin. Un rappel qu'on reprend, c'est le même rappel dont on repousse la fin —
+pas un nouvel objet à ouvrir à côté.
 
-**Supprimer, c'est archiver.** Jeter la ligne **et** ses coches faisait
-disparaître un mois de suspension notée de la heatmap et des journaux passés —
-or ce qu'on veut en supprimant un rappel, c'est qu'il cesse de réclamer quelque
-chose, pas effacer ce qu'on a fait. `archiveReminder()` **clôt donc le bloc
-ouvert** et pose `archivedAt`. Aucun traitement particulier côté historique :
-les blocs écoulés sont intacts, donc les jours passés répondent exactement
-comme avant — c'est la leçon du drapeau `enabled`, un indicateur global consulté
-par `isReminderActiveOn` finit toujours par mentir sur le passé.
+**Deux choses qui ne vont pas de soi :**
 
-- `liveReminders()` filtre les listes de l'éditeur ; l'historique, lui, passe
-  par `getActiveRemindersForDate`, qui ne connaît que les blocs.
-- Dans le journal d'un jour passé, un rappel supprimé **reste visible mais ne se
-  coche plus** (« (supprimé) », `pointerEvents: none`) : la case serait un
-  mensonge sur quelque chose qui n'existe plus.
-- L'oubli volontaire existe toujours — une case « Effacer aussi l'historique »
-  dans la confirmation, qui appelle `purgeReminder`. C'est la seule des deux
-  opérations qui soit irréversible, et le dialogue le dit.
+- ⚠️ **`deletedAt` est une date, pas un booléen**, et c'est toute la différence
+  avec le drapeau `enabled` qu'il remplace. Un booléen consulté par
+  `isReminderActiveOn` répond « non » pour *toutes* les dates, passé compris :
+  couper un rappel effaçait alors son historique de la heatmap, un mois de
+  suspension notée disparaissant d'un coup. Une date ne coupe **qu'à partir
+  d'elle**. Personne n'écrivait `enabled` (drapeau mort), mais une vieille ligne
+  cloud peut encore le porter — il n'entre plus dans aucun calcul.
+- ⚠️ **Le début peut être dans le passé, à dessein.** On se rend compte le
+  mercredi d'un rappel qu'on aurait dû commencer lundi : le faire démarrer lundi
+  rend ces deux jours cochables depuis leur journal. L'éditeur ne pose donc
+  **aucun `min`** sur ce champ.
+
+**Supprimer, c'est arrêter de réclamer — pas effacer.** `softDeleteReminder()`
+pose la date du jour ; le rappel quitte les listes de l'éditeur
+(`liveReminders`) et cesse d'apparaître dans les journaux **à partir de ce
+jour-là**. Les jours d'avant, eux, ne bougent pas : la heatmap les compte comme
+avant, et dans le journal d'un jour passé le rappel **reste visible et se coche
+encore**, avec la mention « (supprimé) » et en retrait. Le figer en lecture
+seule serait la moitié du geste — on supprime un rappel pour qu'il arrête de
+demander quelque chose, pas pour perdre la main sur ce qu'on a fait.
+
+- `liveReminders()` filtre les listes de l'éditeur ; l'historique passe par
+  `getActiveRemindersForDate`, qui connaît les supprimés jusqu'à leur date.
+- L'oubli volontaire existe aussi — la case « Effacer aussi l'historique » de la
+  confirmation appelle `purgeReminder`, qui jette la ligne **et** ses coches.
+  C'est la seule des deux opérations qui soit irréversible, et le dialogue le
+  dit.
+
+**⚠️ Compromis assumé : modifier les dates réécrit ce que la heatmap dit du
+passé.** Une coche est un fait daté (« j'ai fait ma suspension le 12
+septembre ») et ne bouge jamais ; « était-ce dû ce jour-là ? », en revanche, se
+déduit de la définition **courante**. Rétrécir la plage fait donc disparaître
+des cases de la heatmap, l'étendre vers l'arrière y invente des échecs.
+L'alternative — des blocs datés immuables, un par période, qu'on n'édite pas
+mais qu'on rouvre — a été implémentée (migration `v7`) puis **retirée** : elle
+rendait impossible la correction d'un rappel en cours, pour un problème qu'on
+ne rencontre qu'en réécrivant délibérément son propre plan.
+
+- **Migration `v8`** (`storage.js`) : les `periods` redeviennent une plage
+  unique — du début du premier bloc à la fin du dernier, la récurrence du
+  dernier étant la plus récemment voulue — et `archivedAt` devient `deletedAt`.
+  Un rappel qui n'avait **aucun** bloc (il ne réclamait donc plus rien) est
+  marqué supprimé à sa naissance plutôt que rallumé en quotidien. Les coches
+  ne sont jamais touchées ; `npm run test:storage` le vérifie, migration
+  idempotente comprise.
 
 **Le taux affiché est borné par le rappel lui-même** (`reminderProgress`). Un
 pourcentage sur 30 jours glissants ment dès que le rappel n'a pas 30 jours : un
-bloc commencé avant-hier s'affichait à 7 %, les 28 jours où il n'existait pas
+rappel commencé avant-hier s'affichait à 7 %, les 28 jours où il n'existait pas
 comptant comme des échecs. Quatre cas, quatre libellés :
 
 | État | Ce qui s'affiche |
 |---|---|
 | commence plus tard | « commence dans 4 jours » — **aucun pourcentage**, on n'a rien pu rater |
-| bloc de moins de 30 jours | « depuis le 23 sept. » sur les jours réellement écoulés |
-| bloc plus ancien | « 30 derniers jours » |
-| rappel terminé | le bilan de son dernier bloc |
+| rappel de moins de 30 jours | « depuis le 23 sept. » sur les jours réellement écoulés |
+| rappel plus ancien | « 30 derniers jours » |
+| rappel terminé ou supprimé | « sur toute sa durée », arrêté la veille de sa fin |
 
-- La fenêtre **ne franchit jamais la limite du bloc en cours** : après une
-  reprise, le taux ne repart pas avec les échecs du bloc précédent — sinon
-  « Reprendre » ferait plonger le pourcentage sans qu'on y soit pour rien.
-- `total === 0` (récurrence lun/mer/ven, bloc commencé un mardi) → « aucune
+- `total === 0` (récurrence lun/mer/ven, rappel commencé un mardi) → « aucune
   échéance encore », toujours sans pourcentage.
-- ⚠️ `formatPeriod()` prend la date du jour : « depuis le 29 sept. » sur un bloc
+- ⚠️ `formatRange()` prend la date du jour : « depuis le 29 sept. » sur un rappel
   qui commence dans quatre jours se lit comme s'il courait déjà. Un début à
   venir donne « à partir du ».
-
-Côté écran (`ReminderModal`) : nom et couleur restent modifiables à tout moment
-— ils ne décident jamais de ce qui était dû. Les blocs terminés s'affichent en
-**lecture seule** avec leur bilan (« du 25 août au 24 sept. · Tous les jours ·
-20/31 »), et un rappel fini n'offre que **« Reprendre »**. La carte le marque
-« Terminé » et s'efface légèrement.
+- Les deux listes de rappels — `CyclesView` et `CyclesTimeline` — en ont chacune
+  une copie, qui lisent toutes deux `reminder.recurrence` et `formatRange`.
+- Les tests (`npm run test:reminders`) portent surtout sur la seule propriété
+  qui compte : une suppression ne change **aucun** jour antérieur à sa date.
 
 ### Rappels journaliers — câblage
 Trois écrans les touchent : **Cycles** (créer / modifier / supprimer, que les
@@ -985,6 +980,23 @@ pastilles** (`RADIUS.pill`), contour seul au repos, teinte du statut une fois
 choisi — vert, ambre, corail, avec le rond de gauche qui se remplit. Le statut
 d'une séance porte une couleur : c'est elle qui doit se voir, pas le cadre.
 Recliquer retire toujours le statut.
+
+### Remplir le ressenti coche « Fait » tout seul
+
+Mettre quatre étoiles à une séance, c'est déjà dire qu'on l'a faite : redemander
+de cocher la pastille juste après posait une question dont la réponse était
+donnée. Noter la qualité met donc le statut à `done`.
+
+- **C'est l'étoile qui déclenche**, parce que c'est le seul geste délibéré des
+  deux : le curseur de charge arrive **déjà rempli** à la charge planifiée (on
+  confirme ou on ajuste), donc « le RPE est renseigné » est vrai d'emblée — il
+  n'y a pas à le bouger pour que le ressenti compte comme rempli.
+- **Un statut choisi à la main n'est jamais réécrit** : on ne touche au statut
+  que s'il est encore nul. « Adaptée » ou « Manquée » suivi d'étoiles reste
+  « Adaptée » ou « Manquée ».
+- ⚠️ **Dans le gestionnaire du clic, pas dans un effet.** Un effet reposerait
+  « Fait » à l'instant où l'on retire le statut (les étoiles sont toujours là),
+  et la pastille deviendrait impossible à décocher.
 
 ### Pas d'écran de remerciement
 
@@ -1646,9 +1658,12 @@ distinguer des autres **sans quitter la famille**.
   test tolère donc plus loin des bords qu'au milieu, et la **luminosité**, elle,
   est exacte — c'est le curseur qu'on déplace.
 - **`microColor(micro, meso)`** (`lib/cycles.js`) est le seul point de vérité :
-  sa couleur s'il en a une, celle du bloc sinon. Trois écrans la lisent —
-  l'éditeur, `CyclesTimeline` et `MesoDetailModal`. Recopier ce `||` trois fois,
-  c'est s'assurer qu'un jour l'un des trois affichera autre chose.
+  sa couleur s'il en a une, celle du bloc sinon. **Tout ce qui peint un jour ou
+  une semaine passe par elle** — l'éditeur, `CyclesTimeline`, `MesoDetailModal`,
+  le calendrier mobile (`CalendarView`), les vues bureau (`MonthView`,
+  `YearView`) et le nom du microcycle sur l'accueil. Recopier ce `||` partout,
+  c'est s'assurer qu'un jour l'un d'eux affichera autre chose — et c'est
+  exactement ce qui était arrivé aux calendriers, restés sur `meso.color`.
 - **Aucune migration** : `micro.color` est absent partout, et un microcycle sans
   couleur se comporte exactement comme avant. « Reprendre celle du bloc » la
   remet à `null` plutôt que de recopier la couleur du mésocycle — sinon elle
@@ -1680,6 +1695,24 @@ Deux exceptions, qui ne sont pas des modales : l'écran de connexion
 (`AuthPanel`, où il n'y a rien d'autre à faire que taper) et le champ de repas
 de l'accueil, déplié par un bouton « + repas » — là, le clavier est le geste
 suivant.
+
+### Aucune modale ne se ferme au clic sur le fond
+
+Le geste était trop facile à déclencher sans l'avoir voulu : on ouvre un
+formulaire de séance, on va sélectionner du texte, le relâchement de la souris
+tombe à côté du panneau — et toute la saisie part. Le fond n'est donc plus
+cliquable nulle part : `ui/Modal.jsx` (la prop `dismissOnBackdrop` n'existe
+plus), `SessionModal` et `DayLogModal`, les trois seuls qui l'avaient.
+
+- Il reste **trois sorties explicites** : la croix, Échap (qui ne ferme que le
+  calque du dessus) et le bouton retour d'Android, via la pile de calques de
+  `lib/native.js`.
+- Sur `DayLogModal` le clic à côté faisait pire que fermer : `close()`
+  **enregistre l'étape courante**, il écrivait donc dans le journal sans qu'on
+  l'ait demandé.
+- Le `stopPropagation` du panneau, lui, **reste** : la modale est rendue dans
+  l'arbre de la vue qui l'ouvre, pas portée dans `<body>` — sans lui, un clic
+  dedans remonterait jusqu'à la carte ou au bouton qui l'a ouverte.
 
 ### Un composant JSX non importé passe le lint ET le build
 
@@ -1884,11 +1917,12 @@ curl -s "$U""diag.json"                     # tailles, temps, href suspects
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
-npm run test     # tous les tests (CalDAV + notes + couleurs + rappels)
+npm run test     # tous les tests (CalDAV + notes + couleurs + rappels + migrations)
 npm run test:caldav  # protocole CalDAV (node --test, sans dépendance)
 npm run test:text    # saisie en liste et filtrage des liens (lib/rich-text.js)
 npm run test:color   # conversions HSL ↔ hex (lib/color.js)
-npm run test:reminders # blocs datés : l'historique ne se réécrit pas (lib/reminders.js)
+npm run test:reminders # rappels : supprimer ne change aucun jour passé (lib/reminders.js)
+npm run test:storage   # migrations du blob local (lib/storage.js)
 npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
 npm run cap:open # ouvre Android Studio
 ./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement

@@ -1,6 +1,7 @@
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getChargeColor } from "../lib/charge.js";
 import { getMesoForDate } from "../lib/constants.js";
+import { microColor } from "../lib/cycles.js";
 import { getCustomCyclesForDate } from "../lib/constants.js";
 import { addDays, getMonthWeeks, getDaySessions, getDayCharge } from "../lib/helpers.js";
 import { colors } from "../theme/palette.js";
@@ -54,7 +55,11 @@ export function YearView({ data, currentDate, onSelectMonth, isMobile, creatine,
             <div style={styles.yearHeatmap}>
               {weeks.map((wm, wi) => {
                 const mesoInfo  = getMesoForDate(mesocycles, wm);
+                // Une ligne = une semaine, donc la teinte est celle du
+                // **microcycle** ; le filet de gauche garde celle du bloc, pour
+                // que les blocs se lisent encore comme des blocs.
                 const mesoColor = mesoInfo?.meso?.color;
+                const microCol  = mesoInfo ? microColor(mesoInfo.micro, mesoInfo.meso) : null;
                 // Microcycle: check if micro changes mid-week vs previous week
                 const prevMesoInfo = wi > 0 ? getMesoForDate(mesocycles, weeks[wi - 1]) : null;
                 const microChanged = mesoInfo?.micro && prevMesoInfo?.micro && prevMesoInfo.micro.id !== mesoInfo.micro.id;
@@ -65,10 +70,10 @@ export function YearView({ data, currentDate, onSelectMonth, isMobile, creatine,
                     style={{
                       ...styles.yearHeatmapRow,
                       borderLeft: mesoColor ? `2px solid ${mesoColor}99` : "2px solid transparent",
-                      background: mesoColor
+                      background: microCol
                         ? microChanged
-                          ? mesoColor + "1e"   // micro transition: légèrement plus visible
-                          : mesoColor + "12"
+                          ? microCol + "1e"   // micro transition: légèrement plus visible
+                          : microCol + "12"
                         : "transparent",
                       borderRadius: 2,
                       gap: 1,

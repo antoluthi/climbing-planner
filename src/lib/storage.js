@@ -37,11 +37,12 @@ const DEFAULT_DATA = {
 // v5 : échelle de charge unifiée 0-10 — les charges escalade legacy
 //      (vol×int×compl, 0-216) des séances ET de leurs blocs sont ramenées
 //      sur 0-10 ; les feedbacks "adaptedCharge" legacy deviennent un rpe.
-// v7 : un rappel porte des **blocs datés** (`periods`) au lieu d'une plage
-//      unique à la racine. Modifier la plage d'un rappel terminé réécrivait
-//      son historique — la heatmap déduit « était-ce dû ce jour-là ? » de la
-//      définition courante. Voir `lib/reminders.js`.
-const SCHEMA_VERSION = 7;
+// v7 : un rappel porte des blocs datés (`periods`) — **annulée par v8**.
+// v8 : retour à une plage unique à la racine (`startDate` / `endDate` /
+//      `recurrence`), et `archivedAt` devient `deletedAt`. Un rappel se
+//      modifie et se supprime d'une pièce ; ses coches, elles, restent.
+//      Voir `lib/reminders.js`.
+const SCHEMA_VERSION = 8;
 
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
@@ -120,7 +121,7 @@ function migrateReminders(data) {
       id: creatineId,
       name: "Créatine",
       color: DATA.picker[0],
-      periods: [{ id: creatineId + "_p0", recurrence: { kind: "daily" } }],
+      recurrence: { kind: "daily" },
       createdAt: new Date().toISOString(),
     });
     if (hasAnyCreatine) {
@@ -131,23 +132,54 @@ function migrateReminders(data) {
   return { ...data, reminders, reminderState };
 }
 
-// ── Migration v7 : la plage d'un rappel devient son premier bloc ──
-// Les champs de la racine sont **laissés en place** : une ligne cloud écrite
-// par une version d'avant reste lisible (`reminderPeriods` sait la relire), et
-// un rollback ne perd rien. Ils cessent simplement d'être la source de vérité.
-function migrateReminderPeriods(reminder) {
-  if (!reminder || Array.isArray(reminder.periods)) return reminder;
-  // Même sans champ de planification, l'ancienne forme valait « tous les jours,
-  // sans fin » : produire un bloc vide éteindrait le rappel en silence.
-  return {
-    ...reminder,
-    periods: [{
-      id: `${reminder.id || "rem"}_p0`,
-      startDate: reminder.startDate || undefined,
-      endDate: reminder.endDate || undefined,
-      recurrence: reminder.recurrence || { kind: "daily" },
-    }],
-  };
+// ── Migration v8 : les blocs d'un rappel redeviennent une plage unique ──
+// La v7 avait découpé un rappel en blocs datés pour qu'une modification de ses
+// dates ne réécrive pas l'historique. Le remède coûtait plus que le mal : on
+// ne pouvait plus corriger un rappel en cours, il fallait en ouvrir un
+// nouveau. On revient donc à la plage unique, et on assume qu'élargir les
+// dates change ce que la heatmap dit du passé — les **coches**, elles, ne
+// bougent jamais (`reminderState` est daté, voir `lib/reminders.js`).
+//
+// Les champs de la racine ont survécu à la v7 (elle les laissait en place),
+// mais un bloc ouvert après coup les a rendus périmés : la plage se
+// reconstitue donc **depuis les blocs** dès qu'il y en a — du début du
+// premier à la fin du dernier, la récurrence du dernier étant la plus
+// récemment voulue.
+function flattenReminderPeriods(reminder) {
+  if (!reminder || typeof reminder !== "object") return reminder;
+  const { periods, archivedAt, ...rest } = reminder;
+  const out = { ...rest };
+
+  // `archivedAt` (v7) et `deletedAt` disent la même chose : à partir de ce
+  // jour, le rappel ne réclame plus rien, et tout ce qui précède demeure.
+  if (archivedAt && !out.deletedAt) out.deletedAt = archivedAt;
+
+  if (!Array.isArray(periods)) return out;
+
+  if (periods.length === 0) {
+    // Un rappel sans aucun bloc ne réclamait plus rien. Le rendre à nouveau
+    // quotidien le ferait sonner pour des mois où il n'existait pas : on le
+    // marque supprimé à sa naissance, ce qui préserve ses coches sans rien
+    // exiger.
+    if (!out.deletedAt) out.deletedAt = toDateOnly(out.createdAt) || "1970-01-01";
+    return out;
+  }
+
+  // Un bloc sans date de début commence « depuis toujours » : il trie en tête.
+  const startOf = p => p?.startDate || "";
+  const dated = [...periods].sort((a, b) => startOf(a).localeCompare(startOf(b)));
+  const first = dated[0];
+  const last  = dated[dated.length - 1];
+  out.startDate  = first?.startDate || undefined;
+  // Un dernier bloc encore ouvert veut dire « sans fin ».
+  out.endDate    = last?.endDate || undefined;
+  out.recurrence = last?.recurrence || out.recurrence || { kind: "daily" };
+  return out;
+}
+
+function toDateOnly(iso) {
+  if (typeof iso !== "string" || iso.length < 10) return null;
+  return iso.slice(0, 10);
 }
 
 export function migrateData(data) {
@@ -173,8 +205,8 @@ export function migrateData(data) {
     customSessions,
   });
 
-  // v7 : la plage unique d'un rappel devient son premier bloc.
-  const remindersWithPeriods = (withReminders.reminders || []).map(migrateReminderPeriods);
+  // v8 : les blocs d'un rappel redeviennent une plage unique.
+  const reminders = (withReminders.reminders || []).map(flattenReminderPeriods);
 
   // v4 : entrées Hooper partielles → total null (exclues des agrégats).
   const hooper = (withReminders.hooper || []).map(h => {
@@ -185,7 +217,7 @@ export function migrateData(data) {
 
   return {
     ...withReminders,
-    reminders: remindersWithPeriods,
+    reminders,
     hooper,
     schemaVersion: SCHEMA_VERSION,
   };

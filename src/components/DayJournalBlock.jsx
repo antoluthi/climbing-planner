@@ -1,7 +1,7 @@
 import { colors } from "../theme/palette.js";
 import { RADIUS } from "../theme/makeStyles.js";
 import { SANS, MONO, RoundCheck } from "./ui/Ascent.jsx";
-import { getActiveRemindersForDate, isReminderCheckedOn, isArchived } from "../lib/reminders.js";
+import { getActiveRemindersForDate, isReminderCheckedOn, isDeleted } from "../lib/reminders.js";
 import { hasDayLog } from "../lib/helpers.js";
 
 // ─── JOURNAL D'UNE JOURNÉE ───────────────────────────────────────────────────
@@ -71,17 +71,20 @@ export function DayJournalBlock({ isDark, data, dateStr, onOpenLog, onToggleRemi
 
       {reminders.length > 0 && (
         <div style={{ padding: "2px 4px 0" }}>
-          {/* Un rappel supprimé reste visible sur les jours qu'il couvrait —
-              c'est tout l'intérêt d'archiver plutôt que de jeter. Mais on ne
-              le coche plus : il n'existe plus, la case serait un mensonge. */}
+          {/* Un rappel supprimé reste visible sur les jours qu'il couvrait, et
+              il s'y **coche encore**. Le figer en lecture seule serait la moitié
+              du geste : on supprime un rappel pour qu'il cesse de réclamer
+              quelque chose, pas pour perdre la main sur ce qu'on a fait. Il
+              porte sa mention et passe en retrait — il ne réclame plus rien à
+              partir du jour de sa suppression, où il disparaît de la liste. */}
           {reminders.map(r => {
-            const gone = isArchived(r);
+            const gone = isDeleted(r);
             return (
-              <div key={r.id} style={gone ? { opacity: 0.55, pointerEvents: "none" } : undefined}>
+              <div key={r.id} style={gone ? { opacity: 0.62 } : undefined}>
                 <RoundCheck
                   isDark={isDark}
                   checked={isReminderCheckedOn(data.reminderState, r.id, dateStr)}
-                  onChange={gone ? undefined : () => onToggleReminder?.(r.id, dateStr)}
+                  onChange={() => onToggleReminder?.(r.id, dateStr)}
                   label={gone ? `${r.name} (supprimé)` : r.name}
                 />
               </div>
