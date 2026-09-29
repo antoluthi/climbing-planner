@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useThemeCtx } from "../../theme/ThemeContext.jsx";
 import { Modal } from "../ui/Modal.jsx";
 import { RichTextArea } from "../ui/RichTextArea.jsx";
@@ -11,10 +11,10 @@ import { getChargeColor, normalizeCharge10, chargeLabel } from "../../lib/charge
 import { generateId } from "../../lib/storage.js";
 import { calcEndTime } from "../../lib/helpers.js";
 import {
-  parseDuration, parsePace, parseNumber,
-  formatDuration, formatPace, formatNumber,
-  sanitizeClockInput, computeThird,
+  parsePace, parseNumber, formatPace, sanitizeClockInput,
+  parseField, formatField, trioSpecs, seedTrio, updateTrio, convertTrio, readDuration, writeDuration,
 } from "../../lib/pace.js";
+import { SegmentField } from "../ui/SegmentField.jsx";
 import { SessionLibraryModal } from "./SessionLibraryModal.jsx";
 import { ChargeCalculatorModal } from "./ChargeCalculatorModal.jsx";
 import { ConfirmModal } from "../ConfirmModal.jsx";
@@ -31,12 +31,34 @@ import { ConfirmModal } from "../ConfirmModal.jsx";
 //   course / trail                             : temps · distance · allure (liés) + D+
 //   vélo                                       : temps · distance · vitesse (liés) + D+
 //
-// Le trio lié vit dans lib/pace.js : en renseigner deux calcule le troisième.
+// Le trio lié vit dans lib/pace.js : en renseigner deux calcule le troisième,
+// à chaque frappe. Les deux derniers champs tapés font foi ; le troisième
+// porte la marque « calculé », parce que la règle, elle, ne se voit pas.
+// Chaque champ est un `SegmentField` : le « : » et le « . » y sont dessinés,
+// pas tapés, donc impossibles à effacer.
 
 const EVENT_COLORS = DATA.picker.slice(0, 8);
 
 // Disciplines qui se saisissent en distance : le trio lié s'affiche pour elles.
 const RATE_KIND = { running: "pace", trail: "pace", cycling: "speed" };
+
+// Les trois valeurs d'une séance (ou d'un modèle), sous la forme de leurs
+// champs. Sans trio (escalade…), seul le temps compte, en minutes simples.
+function trioFrom(s, kind) {
+  const m = s?.metrics || {};
+  const specs = trioSpecs(kind);
+  const rate = kind === "speed" ? m.speedKmh : (m.pace ? parsePace(m.pace) : null);
+  return {
+    duration: writeDuration(m.durationMin ?? s?.estimatedTime ?? null, !!kind),
+    distance: kind && m.distanceKm != null ? formatField(specs.distance, m.distanceKm) : "",
+    rate: kind && rate != null ? formatField(specs.rate, rate) : "",
+  };
+}
+
+function trioState(s, kind) {
+  const values = trioFrom(s, kind);
+  return kind ? seedTrio(values, kind) : { values, sources: [], computed: null };
+}
 
 function todayISO() {
   const d = new Date();
@@ -72,25 +94,15 @@ export function SessionFormModal({
   // n'apparaissent qu'une fois qu'elle l'est.
   const [discipline, setDiscipline] = useState(initial?.discipline || null);
 
-  // ── Temps (minutes fractionnaires côté trio, minutes entières côté app) ──
-  const [duration, setDuration] = useState(
-    initial?.metrics?.durationMin != null ? formatDuration(initial.metrics.durationMin)
-      : initial?.estimatedTime != null ? String(initial.estimatedTime) : ""
-  );
-  const [distance, setDistance] = useState(
-    initial?.metrics?.distanceKm != null ? String(initial.metrics.distanceKm) : ""
-  );
-  const [rate, setRate] = useState(() => {
-    if (initial?.metrics?.pace) return initial.metrics.pace;
-    if (initial?.metrics?.speedKmh != null) return String(initial.metrics.speedKmh);
-    return "";
-  });
+  // ── Temps · distance · allure (ou vitesse) ──
+  // Un seul état pour les trois : une frappe change une valeur, l'ordre de
+  // saisie et le champ calculé d'un coup (`updateTrio`). Le temps y vit aussi
+  // pour les disciplines sans trio, en minutes simples.
+  const [trio, setTrio] = useState(() => trioState(initial, RATE_KIND[initial?.discipline] || null));
+  const { duration, distance, rate } = trio.values;
   const [elevation, setElevation] = useState(
     initial?.metrics?.elevationM != null ? String(initial.metrics.elevationM) : ""
   );
-  // Ordre de saisie du trio, plus récent d'abord — décide lequel se calcule.
-  const touched = useRef([]);
-  const [computedField, setComputedField] = useState(null);
 
   // ── Charge ──
   const [charge, setCharge] = useState(() => {
@@ -121,71 +133,52 @@ export function SessionFormModal({
   const isClimbing = discipline === "climbing";
 
   // ── Trio lié ────────────────────────────────────────────────────────────────
-  const setters = { duration: setDuration, distance: setDistance, rate: setRate };
-  const values  = { duration, distance, rate };
+  const specs = trioSpecs(kind);
 
-  const onTripleChange = (field, raw) => {
-    // L'allure et le temps se saisissent en minutes:secondes ; distance et
-    // vitesse sont des nombres.
-    const clocked = field === "duration" || (field === "rate" && kind === "pace");
-    const next = clocked ? sanitizeClockInput(raw) : raw.replace(/[^\d.,]/g, "");
-    setters[field](next);
+  const onTripleChange = (field, next, { typed = true } = {}) => {
+    // La mise en forme à la sortie du champ (« 7 » → « 07 ») ne change pas la
+    // valeur : elle ne compte pas comme une saisie et ne déplace rien.
+    if (!typed) { setTrio(t => ({ ...t, values: { ...t.values, [field]: next } })); return; }
+    setTrio(t => updateTrio(t, field, next, kind));
+  };
 
-    const order = [field, ...touched.current.filter(f => f !== field)];
-    // Un champ vidé ne compte plus comme saisi.
-    touched.current = order.filter(f => (f === field ? next.trim() : values[f].trim()));
-
-    const parsed = {
-      duration: parseDuration(field === "duration" ? next : duration),
-      distance: parseNumber(field === "distance" ? next : distance),
-      rate: kind === "pace"
-        ? parsePace(field === "rate" ? next : rate)
-        : parseNumber(field === "rate" ? next : rate),
-    };
-    const res = computeThird(parsed, touched.current, kind || "pace");
-    if (!res) { setComputedField(null); return; }
-    const fmt = res.field === "distance" ? formatNumber(res.value, 2)
-      : res.field === "rate" && kind === "speed" ? formatNumber(res.value, 1)
-      : res.field === "rate" ? formatPace(res.value)
-      : formatDuration(res.value);
-    setters[res.field](fmt);
-    setComputedField(res.field);
+  // Changer de discipline en cours de saisie convertit le trio (`convertTrio`) :
+  // lu tel quel dans sa nouvelle forme, un temps de « 90 » minutes ferait 90 h.
+  const chooseDiscipline = (next) => {
+    const to = RATE_KIND[next] || null;
+    setTrio(t => convertTrio(t, kind, to));
+    setDiscipline(next);
   };
 
   // ── Charger un modèle ───────────────────────────────────────────────────────
   const loadFromLibrary = (s) => {
     setName(s.name || s.title || "");
     setDiscipline(s.discipline || "climbing");
-    if (s.estimatedTime != null) setDuration(String(s.estimatedTime));
-    if (s.metrics?.durationMin != null) setDuration(formatDuration(s.metrics.durationMin));
-    setDistance(s.metrics?.distanceKm != null ? String(s.metrics.distanceKm) : "");
-    setRate(s.metrics?.pace || (s.metrics?.speedKmh != null ? String(s.metrics.speedKmh) : ""));
+    setTrio(trioState(s, RATE_KIND[s.discipline || "climbing"] || null));
     setElevation(s.metrics?.elevationM != null ? String(s.metrics.elevationM) : "");
     setCharge(normalizeCharge10(s.chargePlanned ?? s.charge ?? 5));
     setNotes(s.notes || s.description || "");
-    touched.current = [];
-    setComputedField(null);
     setLibraryOpen(false);
   };
 
   // ── Enregistrement ──────────────────────────────────────────────────────────
-  const durationMin = parseDuration(duration);
+  const durationMin = readDuration(duration, !!kind) || null;
   const canSave = name.trim().length > 0 && !!discipline && (!isEvent || !!startDate);
 
   const buildMetrics = () => {
     const m = {};
     if (durationMin != null) m.durationMin = Math.round(durationMin * 100) / 100;
-    const km = parseNumber(distance);
-    if (km != null) m.distanceKm = km;
-    if (kind === "pace") {
-      const p = parsePace(rate);
-      if (p != null) m.pace = formatPace(p);
-    } else if (kind === "speed") {
-      const v = parseNumber(rate);
-      if (v != null) m.speedKmh = v;
+    // Distance, allure et D+ n'existent que pour une discipline à trio : une
+    // séance passée de Course à Escalade ne garde pas ses kilomètres.
+    if (kind) {
+      const km = parseField(specs.distance, distance);
+      if (km) m.distanceKm = Math.round(km * 100) / 100;
+      const r = parseField(specs.rate, rate);
+      if (r && kind === "pace") m.pace = formatPace(r);
+      if (r && kind === "speed") m.speedKmh = Math.round(r * 10) / 10;
+      const dplus = parseNumber(elevation);
+      if (dplus != null) m.elevationM = dplus;
     }
-    const dplus = parseNumber(elevation);
-    if (dplus != null) m.elevationM = dplus;
     return Object.keys(m).length ? m : undefined;
   };
 
@@ -262,18 +255,26 @@ export function SessionFormModal({
     font: `700 16px ${MONO}`, textAlign: "center",
   });
 
-  const cell = (key, txt, suffix, placeholder) => (
+  const cell = (key, txt, suffix) => (
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: 11, color: c.textMuted, marginBottom: 5, textAlign: "center" }}>
         {txt}{suffix ? <span style={{ color: c.textDim }}> {suffix}</span> : null}
       </div>
-      <input
-        inputMode={key === "distance" || (key === "rate" && kind === "speed") ? "decimal" : "numeric"}
-        value={values[key]}
-        onChange={e => onTripleChange(key, e.target.value)}
-        placeholder={placeholder}
-        style={fieldStyle(computedField === key)}
+      <SegmentField
+        spec={specs[key]}
+        value={trio.values[key]}
+        computed={trio.computed === key}
+        onChange={(next, meta) => onTripleChange(key, next, meta)}
+        ariaLabel={txt}
       />
+      {/* Toujours rendue, vide ou non : la marque qui passe d'un champ à
+          l'autre ne doit pas faire sauter la mise en page. */}
+      <div style={{
+        height: 14, marginTop: 4, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
+        color: c.accent, textAlign: "center",
+      }}>
+        {trio.computed === key ? "calculé" : ""}
+      </div>
     </div>
   );
 
@@ -327,7 +328,7 @@ export function SessionFormModal({
             {disciplineList().map(d => (
               <Chip
                 key={d.id} isDark={isDark} size="sm" label={d.label} color={d.color}
-                active={discipline === d.id} onClick={() => setDiscipline(d.id)}
+                active={discipline === d.id} onClick={() => chooseDiscipline(d.id)}
               />
             ))}
           </div>
@@ -349,15 +350,15 @@ export function SessionFormModal({
                   {kind ? (
                     <>
                       {label("Temps · distance · " + (kind === "pace" ? "allure" : "vitesse"))}
-                      <div style={{ display: "flex", gap: 8 }}>
-                        {cell("duration", "Temps", "", "45:00")}
-                        {cell("distance", "Distance", "km", "8.5")}
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {cell("duration", "Temps", "")}
+                        {cell("distance", "Distance", "km")}
                         {kind === "pace"
-                          ? cell("rate", "Allure", "/km", "5:30")
-                          : cell("rate", "Vitesse", "km/h", "26")}
+                          ? cell("rate", "Allure", "/km")
+                          : cell("rate", "Vitesse", "km/h")}
                       </div>
-                      <div style={{ fontSize: 11, color: c.textDim, marginTop: 6, textAlign: "center" }}>
-                        Renseignes-en deux, le troisième se calcule.
+                      <div style={{ fontSize: 11, color: c.textDim, marginTop: 4, textAlign: "center", lineHeight: 1.45 }}>
+                        Renseignes-en deux, le troisième se calcule. Les deux derniers que tu tapes font foi.
                       </div>
 
                       <div style={{ marginTop: 16 }}>
@@ -381,7 +382,10 @@ export function SessionFormModal({
                         <input
                           inputMode="numeric"
                           value={duration}
-                          onChange={e => setDuration(sanitizeClockInput(e.target.value))}
+                          onChange={e => {
+                            const v = sanitizeClockInput(e.target.value);
+                            setTrio(t => ({ ...t, values: { ...t.values, duration: v } }));
+                          }}
                           placeholder="90"
                           style={{ ...fieldStyle(false), textAlign: "left", flex: 1 }}
                         />

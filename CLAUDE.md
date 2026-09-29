@@ -44,7 +44,8 @@ src/
 │   │                               getSessionCharge, climbingCharge10, RPE_LABELS, chargeLabel, getChargeColor,
 │   │                               VOLUME_ZONES, INTENSITY_ZONES, COMPLEXITY_ZONES, getNbMouvementsZone
 │   ├── storage.js                — generateId, loadData, saveData (localStorage)
-│   ├── pace.js                   — temps · distance · allure/vitesse liés (parse, format, calcul)
+│   ├── pace.js                   — temps · distance · allure/vitesse liés : champs à séparateurs
+│   │                               fixes, frappe, état du trio (pur, testé sous Node)
 │   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
 │   ├── session-feedbacks.js      — upsertSessionFeedback (miroir Supabase des ressentis)
 │   ├── sync-meta.js              — marqueur de synchro local + decideSync (pull/push/merge/reset/idle)
@@ -84,6 +85,7 @@ src/
     ├── ui/RichEditor.jsx          — champ CodeMirror, syntaxe rendue sous les doigts
     ├── ui/SyntaxHelp.jsx          — le « ? » qui montre la syntaxe disponible
     ├── ui/Popover.jsx             — bulle ancrée, portée dans <body> (hors empilement)
+    ├── ui/SegmentField.jsx        — champ à séparateurs fixes (1:45:30, 5:30, 8.50)
     │                                (WeekStepper, AutoTextarea, ColorDot, NumberField…)
     ├── Logo.jsx                   — ClimbingPlannerLogo (la marque « Charge », en-tête bureau)
     ├── SyncButtons.jsx            — boutons export/import/sync
@@ -455,15 +457,75 @@ dans un `draft` et ne la pose dans `data.weeks` (ou `data.quickSessions` pour un
 événement) qu'au « Terminer » ou au « Plus tard ». C'est ce qui permet à la
 flèche de retour de rouvrir le formulaire tel quel, sans séance fantôme.
 
-### Le trio lié (`lib/pace.js`)
+### Le trio lié (`lib/pace.js`, `ui/SegmentField.jsx`)
 
 `allure = durée / distance`, `vitesse = distance / (durée/60)`. En renseigner
-deux calcule le troisième — celui qui se calcule est celui qui n'est pas dans
-les deux derniers champs saisis (`computeThird`), et il s'affiche en accent.
-`sanitizeClockInput` interdit les allures impossibles : taper `6:70` donne
-`6:59`. Les durées circulent en **minutes fractionnaires** (5:30/km sur 8,4 km
-ne tombe pas juste à la minute) ; `estimatedTime` reste en minutes entières
-pour le reste de l'app.
+deux calcule le troisième, **à chaque frappe**. Les durées circulent en
+**minutes fractionnaires** (5:30/km sur 8,4 km ne tombe pas juste à la
+minute) ; `estimatedTime` reste en minutes entières pour le reste de l'app.
+
+**Des séparateurs qu'on ne peut pas effacer.** Le temps se saisit en
+`h:mm:ss`, l'allure en `m:ss`, la distance en `km.cc`, la vitesse en `km.d` :
+une case par morceau, et le `:` ou le `.` **dessiné** entre elles. Un `:`
+effaçable transformait « 50:00 » en « 5000 » — cinq mille minutes, et une
+allure de 555:33/km.
+
+- Un clic avant le séparateur va dans la case d'avant, un clic après dans
+  celle d'après ; un clic dans la marge ou sur le séparateur lui-même va dans
+  la case la plus proche. Au doigt, une case de deux chiffres fait 20 px.
+- La case cliquée est **entièrement sélectionnée** : taper « 2 » dans des
+  heures qui valent « 1 » veut dire 2 h, pas 12. Une case pleine qui reçoit
+  quand même un chiffre repart de ce chiffre au lieu de le refuser sans un mot.
+- Retour arrière au début d'une case efface le dernier chiffre de la
+  précédente : le séparateur est **sauté**, jamais effacé. Les flèches passent
+  d'une case à l'autre aux bords. Une case remplie jusqu'au bout passe à la
+  suivante ; tout ce qui n'est pas un chiffre (`:` `.` `,` espace) aussi.
+- ⚠️ **Sur Android, le séparateur tapé n'arrive que par `onChange`.** Gboard
+  rapporte `key: "Unidentified"` au clavier : c'est pourquoi
+  `applySegmentInput` traite un caractère non numérique comme « case suivante »
+  en plus de `applySegmentKey`. Le clavier est en `inputMode="decimal"` : sa
+  virgule (ou son point) sert de touche « suivant ».
+- Pourquoi des cases plutôt qu'un masque sur un seul champ : un masque doit
+  replacer le curseur par-dessus le séparateur qu'il réécrit à chaque frappe,
+  et c'est ce que la saisie d'Android défait.
+- Une valeur reste une chaîne, mais ses séparateurs y sont **toujours**
+  (`":45:00"`, `"8.50"`, `"::"`) : c'est ce qui dit à quelle case appartient
+  chaque chiffre. Case vide = zéro ; toutes vides = pas de valeur. À la sortie
+  du champ, les cases se complètent (`normalizeField`) : 7 secondes → `07`
+  **au début**, 5 centièmes → `50` **à la fin** (,5 km, c'est 500 m). Les
+  heures vides restent vides, un « 0 » grisé les dit.
+- Toute la décision est pure (`applySegmentInput`, `applySegmentKey`) ; le
+  composant ne fait que la poser dans le DOM. Le curseur est reposé dans un
+  `requestAnimationFrame`, après le rendu : React replace sinon le curseur à
+  la fin dès que la valeur change.
+
+**Lequel se calcule : les deux derniers saisis font foi** (`updateTrio`). Le
+troisième porte la marque « calculé » sous son champ, parce que la règle,
+elle, ne se voit pas. Taper dans le champ calculé en fait une source : c'est
+alors la plus ancienne des deux autres qui devient calculée (50:00 · 9 km,
+allure retapée à 4:30 → la distance passe à 11,11 km si le temps a été saisi
+après elle).
+
+- ⚠️ **Un formulaire qui s'ouvre déjà rempli n'a pas d'ordre de saisie.** Sans
+  en supposer un, modifier un champ ne recalculait rien : une séance rouverte
+  à 45:00 · 9 km · 5:00, passée à 54:00, gardait son allure de 5:00. Le cas
+  touchait la modification, le retour de « quand & où » et le chargement d'un
+  modèle. `seedTrio` tient l'allure (ou la vitesse) pour calculée et la
+  distance pour la source la plus récente — retoucher l'allure fait donc
+  bouger le temps, pas la longueur de la sortie. Deux champs sur trois : le
+  troisième est calculé d'emblée.
+- Une source vidée **vide** le champ calculé, au lieu de le laisser afficher
+  une valeur qui ne correspond plus à rien ; il revient dès que la source
+  revient. Une source à zéro fait de même.
+- On n'écrit jamais dans le champ sous les doigts : vider le champ calculé pour
+  le retaper ne le voit pas se remplir aussitôt.
+- Changer de discipline en route convertit : le temps passe de minutes simples
+  (escalade, « 90 ») à `h:mm:ss` (« 1:30:00 ») — lu tel quel, « 90 » ferait
+  90 heures — et l'allure devient une vitesse (5:00/km = 12 km/h).
+- Distance, allure et D+ ne sont enregistrés que pour une discipline à trio :
+  une séance passée de Course à Escalade ne garde pas ses kilomètres.
+- Tests : `npm run test:pace` (23 cas), dont le bug de la séance rouverte et
+  le `:` qui ne s'efface plus.
 
 ### Échéances (case « Événement »)
 
@@ -1917,12 +1979,13 @@ curl -s "$U""diag.json"                     # tailles, temps, href suspects
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
-npm run test     # tous les tests (CalDAV + notes + couleurs + rappels + migrations)
+npm run test     # tous les tests (CalDAV + notes + couleurs + rappels + migrations + allure)
 npm run test:caldav  # protocole CalDAV (node --test, sans dépendance)
 npm run test:text    # saisie en liste et filtrage des liens (lib/rich-text.js)
 npm run test:color   # conversions HSL ↔ hex (lib/color.js)
 npm run test:reminders # rappels : supprimer ne change aucun jour passé (lib/reminders.js)
 npm run test:storage   # migrations du blob local (lib/storage.js)
+npm run test:pace      # temps · distance · allure : cases, frappe, recalcul (lib/pace.js)
 npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
 npm run cap:open # ouvre Android Studio
 ./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement
