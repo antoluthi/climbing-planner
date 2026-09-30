@@ -16,10 +16,13 @@ import { colors, DATA } from "../theme/palette.js";
 // Le ressenti est la vue par défaut (le moment le plus fréquent d'ouverture).
 // Le détail technique devient un accordéon en bas.
 //
-// **« Déplacer » n'est plus une action à part** : changer de jour est une
-// modification comme une autre, et « Modifier la séance » rouvre le formulaire
-// puis « quand & où », où le jour se choisit. Le panneau de déplacement ne
-// survit que pour deux cas qui ne sont pas de l'édition :
+// **Trois gestes dans le menu « ⋯ ».** « Modifier la séance » rouvre le
+// formulaire puis « quand & où » ; « Déplacer la séance » saute le formulaire
+// et ouvre directement « quand & où », où se choisissent le jour, l'heure et le
+// lieu ; « Supprimer la séance ». Déplacer reste une modification — même
+// écran, même écriture — mais on ne vient pas y retaper ce qu'on ne change
+// pas. Le panneau de déplacement interne ne survit que pour deux cas qui ne
+// sont pas de l'édition :
 //   · l'athlète suivi, qui ne modifie pas le planning mais **suggère** un
 //     déplacement à son coach ;
 //   · le coach, pour **répondre** à ces suggestions.
@@ -66,11 +69,19 @@ export function SessionModal({
   // un récap (discipline, charge, durée, lieu) même quand rien n'est saisi.
 
   // ── Feedback state ──
+  // ⚠️ Un ressenti **neutre** (`{ status: null, done: null, notes }`, ce que
+  // laisse un statut retiré quand des notes existent) n'est pas une séance
+  // manquée. Le lire comme « Manquée » grisait les étoiles et le curseur à la
+  // réouverture — impossible alors de noter quoi que ce soit, ni de voir « Fait »
+  // se cocher tout seul. Seul `done === false` dit « manquée » (forme d'avant
+  // les statuts).
   const initStatus = () => {
     const fb = session.feedback;
     if (!fb) return null;
     if (fb.status) return fb.status;
-    return fb.done ? "done" : "not_done";
+    if (fb.done === true) return "done";
+    if (fb.done === false) return "not_done";
+    return null;
   };
   const [status,         setStatus]         = useState(initStatus);
   // Charge planifiée sur l'échelle unifiée 0-10 (référence du slider ressenti).
@@ -85,24 +96,31 @@ export function SessionModal({
   const sessionDone = status === "done" || status === "adapted";
   const sessionMissed = status === "not_done";
 
-  // ⚠️ **Remplir le ressenti coche « Fait » tout seul.** Mettre quatre étoiles
-  // à une séance, c'est déjà dire qu'on l'a faite : redemander de cocher la
-  // pastille juste après posait une question dont la réponse était déjà donnée.
+  // ⚠️ **Remplir le ressenti coche « Fait » tout seul.** Mettre des étoiles à
+  // une séance, ou dire qu'elle a été plus dure que prévu, c'est déjà dire qu'on
+  // l'a faite : redemander de cocher la pastille juste après posait une
+  // question dont la réponse était donnée.
   //
-  // C'est l'étoile qui déclenche, parce que c'est le seul geste délibéré des
-  // deux : le curseur de charge arrive **déjà rempli** à la charge planifiée
-  // (on confirme ou on ajuste), donc « le RPE est renseigné » est vrai d'emblée
-  // — c'est bien ce qu'on veut, il n'y a pas à le bouger pour que ça compte.
+  // Deux gestes déclenchent : toucher une étoile, et **bouger** le curseur de
+  // charge. Le curseur arrive déjà rempli à la charge planifiée, donc sa
+  // simple présence ne dit rien ; le déplacer, si.
   //
   // Deux garde-fous. On ne touche au statut que s'il est **encore nul** : un
   // « Adaptée » ou un « Manquée » choisi à la main n'est jamais réécrit. Et
-  // ça se passe dans le gestionnaire du clic, **pas dans un effet** : un effet
+  // ça se passe dans le gestionnaire du geste, **pas dans un effet** : un effet
   // reposerait « Fait » à l'instant où l'on retire le statut, et la pastille
   // deviendrait impossible à décocher.
+  const markDoneIfUnset = () => { if (status == null) setStatus("done"); };
+
   const rateQuality = (star) => {
     const next = star === quality ? null : star;
     setQuality(next);
-    if (next != null && rpe != null && status == null) setStatus("done");
+    if (next != null) markDoneIfUnset();
+  };
+
+  const adjustRpe = (value) => {
+    setRpe(value);
+    markDoneIfUnset();
   };
 
   // ── Move helpers ──
@@ -299,6 +317,12 @@ export function SessionModal({
                       style={kebabItemStyle({ color: textMid })}
                     >Modifier la séance…</button>
                   )}
+                  {!isAthleteUser && onReschedule && (
+                    <button
+                      onClick={() => { setKebabOpen(false); onReschedule(); }}
+                      style={kebabItemStyle({ color: textMid })}
+                    >Déplacer la séance…</button>
+                  )}
                   {!isAthleteUser && pendingSuggestions.length > 0 && (
                     <button
                       onClick={() => { setShowMove(true); setKebabOpen(false); }}
@@ -477,7 +501,7 @@ export function SessionModal({
                     <input
                       type="range" min="1" max="10" step="1"
                       value={rpe ?? plannedCharge ?? 5}
-                      onChange={e => setRpe(+e.target.value)}
+                      onChange={e => adjustRpe(+e.target.value)}
                       aria-label="Charge ressentie de 1 à 10"
                       style={{ width: "100%", accentColor: feltColor, cursor: "pointer" }}
                     />
