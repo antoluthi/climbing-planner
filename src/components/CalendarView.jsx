@@ -5,11 +5,13 @@ import { colors, DATA } from "../theme/palette.js";
 import { getMondayOf, addDays, weekKey, localDateStr, getDaySessions, isEventItem, hasDayLog } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
 import { getMesoForDate } from "../lib/constants.js";
-import { mesosInRange, recomputeMesoDates, weeksOf, microColor } from "../lib/cycles.js";
+import { mesosInRange, recomputeMesoDates, weeksOf, microColor, cycleBg } from "../lib/cycles.js";
 import { weekRunSummary, goalBarSegments } from "../lib/run-goals.js";
 import { MesoDetailModal } from "./MesoDetailModal.jsx";
 import { Card, Segmented, RoundIconButton, SportBadge, PageTitle, SANS, MONO, GoalBar } from "./ui/Ascent.jsx";
 import { DayJournalBlock } from "./DayJournalBlock.jsx";
+import { JournalPip } from "./JournalPip.jsx";
+import { WeekTimeGrid } from "./WeekTimeGrid.jsx";
 
 // ─── CALENDRIER (refonte « Ascent ») ──────────────────────────────────────────
 // Un seul écran, trois vues : Mois, Semaine, Année. Reprend la mise en page du
@@ -20,27 +22,77 @@ const WEEKDAYS = ["L", "M", "M", "J", "V", "S", "D"];
 const MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
                 "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
-// Un jour porté par un mésocycle prend une teinte de sa couleur — assez pour
-// lire les blocs d'un coup d'œil sur un mois ou une année, assez discrète pour
-// passer sous les points de séance et les chiffres.
-//
-// La teinte est **posée par-dessus** le fond habituel de la case (un calque de
-// dégradé plat), et ne le remplace pas : en la remplaçant, une couleur sombre à
-// 15 % sur fond noir rendait les jours d'un cycle plus ternes que les jours
-// sans cycle — exactement l'inverse de ce qu'on veut lire.
-// La teinte d'un jour est un **calque** posé par-dessus le fond habituel de la
-// case, pas un remplacement : une couleur sombre à 15 % sur fond noir rendrait
-// les jours d'un cycle plus ternes que les jours sans cycle.
-const cycleBg = (color, isDark, base) => {
-  if (!color) return base;
-  const t = color + (isDark ? "40" : "2b");
-  return `linear-gradient(${t}, ${t}), ${base}`;
-};
+// La semaine se lit en liste (bande des jours + détail du jour choisi) ou en
+// grille horaire, comme un agenda. C'est une préférence d'affichage, pas une
+// donnée du plan : elle vit en localStorage, propre à l'appareil, et ne part
+// pas dans la synchronisation.
+const LAYOUT_KEY = "climbing_week_layout";
+function readLayout() {
+  try { return localStorage.getItem(LAYOUT_KEY) === "grid" ? "grid" : "list"; }
+  catch { return "list"; }
+}
 
 // Une échéance ressort du calendrier par un bandeau à sa couleur, là où une
 // séance n'a qu'un point.
 function eventOf(sessions) {
   return (sessions || []).find(isEventItem) || null;
+}
+
+// ── Liste ou grille horaire ──────────────────────────────────────────────────
+// Deux icônes dans une pastille, celle qui est active à l'accent : l'état se lit
+// d'un coup d'œil, là où une icône seule annoncerait ce qu'elle ferait — et
+// laisserait deviner dans quelle vue on se trouve.
+function LayoutToggle({ isDark, value, onChange }) {
+  const c = colors(isDark);
+  const options = [
+    {
+      value: "list", label: "Semaine en liste",
+      icon: <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />,
+    },
+    {
+      value: "grid", label: "Semaine en grille horaire",
+      icon: (
+        // Un agenda : l'en-tête et ses anneaux, trois séances posées à des
+        // hauteurs différentes.
+        <>
+          <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+          <path d="M3.5 9.5h17M8 3v3.5M16 3v3.5" />
+          <rect x="6" y="11.5" width="3" height="5" rx="0.8" fill="currentColor" stroke="none" />
+          <rect x="10.5" y="13.5" width="3" height="4.5" rx="0.8" fill="currentColor" stroke="none" />
+          <rect x="15" y="11.5" width="3" height="3" rx="0.8" fill="currentColor" stroke="none" />
+        </>
+      ),
+    },
+  ];
+  return (
+    <div role="group" aria-label="Affichage de la semaine" style={{
+      display: "flex", gap: 2, padding: 3, borderRadius: 999, background: c.control, flexShrink: 0,
+    }}>
+      {options.map(o => {
+        const active = o.value === value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            aria-pressed={active}
+            aria-label={o.label}
+            title={o.label}
+            style={{
+              width: 34, height: 30, borderRadius: 999, border: "none", padding: 0, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: active ? c.accent : "transparent",
+              color: active ? c.textOnAccent : c.textMuted,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {o.icon}
+            </svg>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function Chevron({ dir = "left", size = 18 }) {
@@ -62,10 +114,17 @@ export function CalendarView({
 
   const [selected, setSelected] = useState(() => localDateStr(new Date()));
   const [mesoDetail, setMesoDetail] = useState(null);
+  const [layout, setLayout] = useState(readLayout);
+  const chooseLayout = (next) => {
+    setLayout(next);
+    try { localStorage.setItem(LAYOUT_KEY, next); }
+    catch { /* stockage indisponible : le choix vaut pour cette session */ }
+  };
   const selectedObj = new Date(selected + "T12:00:00");
   const selectedSessions = getDaySessions(data, selectedObj);
 
   const mode = viewMode === "month" ? "month" : viewMode === "year" ? "year" : "week";
+  const timeGrid = mode === "week" && layout === "grid";
 
   // Les cycles colorent le fond des jours. Dates chaînées comme dans la
   // timeline : un plan partiellement daté se peint quand même, sans que rien
@@ -131,11 +190,24 @@ export function CalendarView({
       // Sur grand écran la colonne reste étroite : sans ça les boutons
       // pleine largeur s'étirent sur tout le moniteur.
       maxWidth: 600, margin: "0 auto", width: "100%",
+      // En grille horaire, l'écran ne défile plus : seules les heures défilent,
+      // sous le titre et la navigation qui restent en place — comme un agenda.
+      ...(timeGrid ? { height: "100%", display: "flex", flexDirection: "column" } : null),
     }}>
 
       {/* ── Titre + sélecteur de vue ── */}
       <div style={{ padding: `${pad + 8}px ${pad}px 12px` }}>
-        <PageTitle isDark={isDark}>Calendrier</PageTitle>
+        {/* La hauteur ne bouge pas quand la bascule disparaît (Mois, Année) :
+            sinon le sélecteur sauterait de quelques pixels à chaque vue. */}
+        <PageTitle
+          isDark={isDark}
+          style={{ minHeight: 36 }}
+          right={mode === "week" && (
+            <LayoutToggle isDark={isDark} value={layout} onChange={chooseLayout} />
+          )}
+        >
+          Calendrier
+        </PageTitle>
         <Segmented
           isDark={isDark}
           value={mode}
@@ -177,7 +249,22 @@ export function CalendarView({
         </RoundIconButton>
       </div>
 
-      <div {...gridSwipe} data-swipe="calendar-grid" style={{ touchAction: "pan-y" }}>
+      {/* La barre de kilomètres de la semaine : dans la bande des jours en
+          liste, au-dessus des heures en grille. */}
+      {timeGrid && (
+        <div style={{ padding: `0 ${pad}px 8px`, marginTop: -6 }}>
+          <WeekKm isDark={isDark} data={data} monday={getMondayOf(currentDate)} />
+        </div>
+      )}
+
+      <div
+        {...gridSwipe}
+        data-swipe="calendar-grid"
+        style={{
+          touchAction: "pan-y",
+          ...(timeGrid ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" } : null),
+        }}
+      >
       {mode === "month" && (
         <MonthGrid
           isDark={isDark} data={data} currentDate={currentDate}
@@ -186,7 +273,26 @@ export function CalendarView({
         />
       )}
 
-      {mode === "week" && (
+      {timeGrid && (
+        <WeekTimeGrid
+          isDark={isDark} data={data} monday={getMondayOf(currentDate)} today={today}
+          cycleColorAt={cycleColorAt}
+          onOpenSession={onOpenSession}
+          onOpenEvent={onOpenEvent}
+          onOpenLog={onOpenLog}
+          onAddSession={onAddSession}
+          footer={(
+            <div style={{ paddingBottom: 16 }}>
+              <CycleLegend
+                isDark={isDark} mesos={mesos} mode={mode} currentDate={currentDate}
+                onOpen={(meso) => setMesoDetail(meso)}
+              />
+            </div>
+          )}
+        />
+      )}
+
+      {mode === "week" && !timeGrid && (
         <WeekStrip
           isDark={isDark} data={data} currentDate={currentDate}
           selected={selected} setSelected={setSelected} today={today}
@@ -203,14 +309,20 @@ export function CalendarView({
       )}
       </div>
 
-      {/* ── Légende des cycles visibles ── */}
-      <CycleLegend
-        isDark={isDark} mesos={mesos} mode={mode} currentDate={currentDate}
-        onOpen={(meso) => setMesoDetail(meso)}
-      />
+      {/* ── Légende des cycles visibles ──
+          En grille, elle ferme la journée, sous minuit : au-dessus des heures,
+          elle mangerait la place qu'on vient leur donner. */}
+      {!timeGrid && (
+        <CycleLegend
+          isDark={isDark} mesos={mesos} mode={mode} currentDate={currentDate}
+          onOpen={(meso) => setMesoDetail(meso)}
+        />
+      )}
 
-      {/* ── Détail du jour sélectionné (mois et semaine) ── */}
-      {mode !== "year" && (
+      {/* ── Détail du jour sélectionné (mois et semaine en liste) ──
+          La grille montre déjà toute la semaine ; le détail d'un jour (rappels,
+          résumé du journal) reste dans la vue liste, à une touche. */}
+      {mode !== "year" && !timeGrid && (
         <div style={{ padding: `16px ${pad}px 24px` }}>
           <Card isDark={isDark}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: c.textMuted, marginBottom: 12 }}>
@@ -596,35 +708,6 @@ function WeekStrip({ isDark, data, currentDate, selected, setSelected, today, cy
       </div>
       <WeekKm isDark={isDark} data={data} monday={monday} />
     </div>
-  );
-}
-
-// ── Pastille « journal » d'un jour ───────────────────────────────────────────
-// Pleine quand quelque chose est noté ce jour-là (bien-être, poids, repas ou
-// note), creuse sinon : la semaine se lit d'un coup d'œil, et les trous se
-// comblent sans changer d'écran.
-function JournalPip({ isDark, filled, onClick, label }) {
-  const c = colors(isDark);
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      style={{
-        width: "100%", height: 20, borderRadius: 999, cursor: "pointer", padding: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        background: filled ? c.accent + "22" : "transparent",
-        border: `1px solid ${filled ? c.accent + "66" : c.border}`,
-        color: filled ? c.accent : c.textDim,
-      }}
-    >
-      {/* Un crayon : à 11 px, c'est la seule silhouette qui se lit encore, et
-          elle dit « à écrire » plutôt que « à lire ». */}
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M4 20.5h4L20.5 8 16.5 4 4 16.5v4z" />
-      </svg>
-    </button>
   );
 }
 

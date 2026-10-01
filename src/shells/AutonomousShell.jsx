@@ -688,7 +688,10 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
             viewMode={viewMode}
             setViewMode={setViewMode}
             onOpenSession={openSessionModal}
-            onAddSession={(dayIdx) => setSessionBuilderDay(dayIdx)}
+            // La grille horaire passe aussi l'heure du créneau touché : elle
+            // attend « quand & où », qui s'ouvre réglé dessus.
+            onAddSession={(dayIdx, startTime) =>
+              setSessionBuilderDay(startTime ? { dayIndex: dayIdx, startTime } : dayIdx)}
             onOpenEvent={(ev) => setEventDetail(ev)}
             onOpenLog={(dateStr) => setLogDate(dateStr)}
             onToggleReminder={toggleReminderCheck}
@@ -1053,6 +1056,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
         const sbd = sessionBuilderDay;
         const dayIndex = sbd && typeof sbd === "object" ? sbd.dayIndex : sbd;
         const initial = sbd && typeof sbd === "object" ? sbd.initial : null;
+        const slotTime = sbd && typeof sbd === "object" ? sbd.startTime : null;
         const dDay = dayIndex !== null && dayIndex !== undefined ? addDays(monday, dayIndex) : null;
         const dayLabelStr = dDay ? `${DAYS[dayIndex]} ${formatDate(dDay)}` : null;
         const defaultDateISO = dDay ? localDateStr(dDay) : localDateStr(new Date());
@@ -1087,7 +1091,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
               const targetISO = isEventEdit ? (initial.startDate || defaultDateISO) : defaultDateISO;
               if (isEventEdit) removeQuickSession(initial.id);
               // Étape 2 : quand & où. L'écriture n'a lieu qu'à sa sortie.
-              setDraft({ payload, dateISO: targetISO, dayLabel: dayLabelStr, dayDate: dDay });
+              setDraft({ payload, dateISO: targetISO, dayLabel: dayLabelStr, dayDate: dDay, startTime: slotTime });
             }}
           />
         );
@@ -1095,13 +1099,13 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
 
       {/* ── Étape 2 : quand & où ── */}
       {draft && (() => {
-        const { payload, dateISO: ddate, dayLabel: ddl, dayDate } = draft;
+        const { payload, dateISO: ddate, dayLabel: ddl, dayDate, startTime: slotTime } = draft;
         return (
           <SessionScheduleModal
             sessionName={payload.name}
             dayLabel={ddl}
             dayDate={dayDate || new Date()}
-            defaultStartTime={payload.startTime || ""}
+            defaultStartTime={slotTime || payload.startTime || ""}
             defaultLocation={payload.location || ""}
             estimatedTime={payload.estimatedTime ?? null}
             recentLocations={recentLocations}
@@ -1109,7 +1113,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
               setDraft(null);
               const back = new Date(ddate + "T12:00:00");
               const dow = back.getDay();
-              setSessionBuilderDay({ dayIndex: dow === 0 ? 6 : dow - 1, initial: payload });
+              setSessionBuilderDay({ dayIndex: dow === 0 ? 6 : dow - 1, initial: payload, startTime: slotTime });
             }}
             onConfirm={(sched) => { commitNewSession(payload, ddate, sched); setDraft(null); }}
             onSkip={() => { commitNewSession(payload, ddate, null); setDraft(null); }}

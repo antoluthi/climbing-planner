@@ -2,6 +2,9 @@ import { getMondayOf, addDays, localDateStr, weekKey, getDaySessions, isEventIte
 import { withTimeout } from "./promise-timeout.js";
 // « Journal complet » a une seule définition, dans lib/hooper.js.
 import { isHooperFilled } from "./hooper.js";
+// La durée d'une séance qui n'en a pas : une seule valeur pour la grille
+// horaire qui la dessine, la cloche qui la réclame et ces notifications.
+import { DEFAULT_SESSION_MIN } from "./time-grid.js";
 
 // ─── NOTIFICATIONS DE SÉANCE ─────────────────────────────────────────────────
 // Une séance planifiée donne **une seule notification, qui change de nature en
@@ -13,7 +16,7 @@ import { isHooperFilled } from "./hooper.js";
 // `syncSessionNotifications`, et seulement dans l'APK.
 
 const LEAD_MIN = 60;          // rappel une heure avant le départ
-const DEFAULT_LEN_MIN = 90;   // séance sans durée : on demande le ressenti après 1 h 30
+const DEFAULT_LEN_MIN = DEFAULT_SESSION_MIN;   // séance sans durée : on demande le ressenti après 1 h 30
 const MAX = 60;               // Android n'accepte pas une file infinie
 const HORIZON_DAYS = 7;       // fenêtre glissante, replanifiée à chaque réveil
 

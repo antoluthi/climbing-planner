@@ -128,3 +128,15 @@ export function mesoLastDay(meso) {
 export function microColor(micro, meso) {
   return micro?.color || meso?.color;
 }
+
+// La teinte d'un jour porté par un cycle — assez pour lire les blocs d'un coup
+// d'œil, assez discrète pour passer sous les points de séance et les chiffres.
+// C'est un **calque** posé par-dessus le fond habituel de la case (`base`), pas
+// un remplacement : une couleur sombre à 15 % sur fond noir rendrait les jours
+// d'un cycle plus ternes que les jours sans cycle — l'inverse de ce qu'on veut
+// lire. Partagée par la bande semaine et la grille horaire du calendrier.
+export function cycleBg(color, isDark, base) {
+  if (!color) return base;
+  const t = color + (isDark ? "40" : "2b");
+  return `linear-gradient(${t}, ${t}), ${base}`;
+}
