@@ -1005,12 +1005,17 @@ discipline (celle de l'échéance pour une échéance, trois au plus par jour).
 
 ### Modifier une séance, déplacement compris (`SessionModal` → `SessionFormModal` → `SessionScheduleModal`)
 
-« Déplacer » n'est plus une action à part : **changer de jour est une
-modification comme une autre**. Le kebab de `SessionModal` n'offre donc plus
-qu'un « Modifier la séance… », qui rouvre le formulaire pré-rempli puis
-« quand & où » — et c'est là que le jour se choisit, à côté de l'heure et du
-lieu. Deux entrées pour le même geste obligeaient à savoir d'avance laquelle
-répondait à la question qu'on se posait.
+**Changer de jour est une modification comme une autre** : même écran
+(« quand & où », où le jour se choisit à côté de l'heure et du lieu), même
+écriture. Le menu ⋯ de `SessionModal` y mène par deux portes :
+
+- **« Modifier la séance… »** rouvre le formulaire pré-rempli, puis « quand
+  & où » ;
+- **« Déplacer la séance… »** saute le formulaire et ouvre directement
+  « quand & où » — on ne vient pas retaper ce qu'on ne change pas. C'est le
+  même chemin que « Reprogrammer → » sur une séance manquée
+  (`onReschedule`) ;
+- puis **« Supprimer la séance »**, en rouge.
 
 - `SessionScheduleModal` gagne `allowDateChange` : une rangée de sept
   pastilles et une navigation de semaine, au-dessus de l'heure. À la création
@@ -1019,10 +1024,19 @@ répondait à la question qu'on se posait.
 - **Rien n'est écrit avant « Enregistrer »** : la flèche de retour revient au
   formulaire tel qu'il était, et « Annuler » abandonne tout. Même règle qu'à la
   création.
+- ⚠️ **La flèche de retour rouvre ce qu'on était en train d'enregistrer**
+  (`initial: ctx.payload`) : les modifications déjà faites dans le formulaire,
+  pas la séance d'avant. Arrivé par « Déplacer » ou « Reprogrammer », le
+  formulaire s'ouvrait **vide** — le contexte ne portait pas de séance.
+- L'écriture retrouve la séance **par son id** (`locateSession`), comme la
+  fenêtre de séance : une synchro arrivée pendant qu'on choisissait le jour
+  peut avoir réordonné la journée, et la position seule remplacerait la
+  voisine.
 - L'écriture est un seul `setData` : remplacement en place si le jour n'a pas
   bougé, retrait puis ajout sinon. **Le ressenti survit** (`feedback` recopié
   depuis la séance d'avant) : il appartient à la séance vécue, pas au
-  formulaire. Un déplacement propose son annulation dans le toast.
+  formulaire. Un déplacement propose son annulation dans le toast, qui ramène
+  **cette** séance à sa place (`undoMove`) sans restaurer les semaines d'avant.
 - « Reprogrammer → », sur une séance manquée, saute le formulaire et ouvre
   directement « quand & où » (`onReschedule`) : rien n'a changé de ce qu'elle
   est, seulement de quand elle a lieu.
@@ -1046,14 +1060,19 @@ Recliquer retire toujours le statut.
 
 ### Remplir le ressenti coche « Fait » tout seul
 
-Mettre quatre étoiles à une séance, c'est déjà dire qu'on l'a faite : redemander
-de cocher la pastille juste après posait une question dont la réponse était
-donnée. Noter la qualité met donc le statut à `done`.
+Mettre des étoiles à une séance, ou dire qu'elle a été plus dure que prévu,
+c'est déjà dire qu'on l'a faite : redemander de cocher la pastille juste après
+posait une question dont la réponse était donnée. Le statut passe donc à
+`done` tout seul.
 
-- **C'est l'étoile qui déclenche**, parce que c'est le seul geste délibéré des
-  deux : le curseur de charge arrive **déjà rempli** à la charge planifiée (on
-  confirme ou on ajuste), donc « le RPE est renseigné » est vrai d'emblée — il
-  n'y a pas à le bouger pour que le ressenti compte comme rempli.
+- **Deux gestes déclenchent** : toucher une étoile, et **bouger** le curseur de
+  charge (`markDoneIfUnset`). Le curseur arrive déjà rempli à la charge
+  planifiée, donc sa simple présence ne dit rien ; le déplacer, si.
+- ⚠️ **Un ressenti neutre n'est pas une séance manquée.** `{ status: null,
+  done: null, notes }` — ce que laisse un statut retiré quand des notes
+  existent — se rouvrait en « Manquée » : étoiles et curseur grisés, rien à
+  toucher, rien ne se cochait. `initStatus` ne lit plus « manquée » que sur
+  `done === false`.
 - **Un statut choisi à la main n'est jamais réécrit** : on ne touche au statut
   que s'il est encore nul. « Adaptée » ou « Manquée » suivi d'étoiles reste
   « Adaptée » ou « Manquée ».

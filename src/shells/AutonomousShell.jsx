@@ -1150,9 +1150,14 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
       })()}
 
       {sessionEditCtx?.step === "schedule" && (() => {
-        const { weekKey: ek, dayIndex: edi, sessionIndex: esi, payload } = sessionEditCtx;
+        const { weekKey: ek, dayIndex: edi, sessionIndex: esi, sessionId, payload } = sessionEditCtx;
         const eday = addDays(new Date(ek + "T00:00:00"), edi);
-        const prev = (data.weeks[ek] || [])[edi]?.[esi] || {};
+        // Retrouvée par son id, comme dans la fenêtre de séance : une synchro
+        // arrivée pendant qu'on choisissait le jour a pu réordonner la journée, et
+        // la position seule remplacerait alors la voisine.
+        const ref = { weekKey: ek, dayIndex: edi, sessionIndex: esi, sessionId };
+        const here = locateSession(data.weeks, ref);
+        const prev = here ? data.weeks[here.weekKey][here.dayIndex][here.sessionIndex] : {};
         return (
           <SessionScheduleModal
             sessionName={payload.name}
@@ -1164,20 +1169,29 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
             defaultLocation={payload.location || prev.location || ""}
             estimatedTime={payload.estimatedTime ?? null}
             recentLocations={recentLocations}
-            onBack={() => setSessionEditCtx(ctx => ({ ...ctx, step: "form" }))}
+            // Le formulaire rouvre ce qu'on était en train d'enregistrer (les
+            // modifications déjà faites), pas la séance d'avant — et jamais un
+            // formulaire vide quand on est arrivé par « Déplacer ».
+            onBack={() => setSessionEditCtx(ctx => ({ ...ctx, step: "form", initial: ctx.payload ?? ctx.initial }))}
             onSkip={() => setSessionEditCtx(null)}
             onConfirm={(sched) => {
               const target = new Date(sched.dateISO + "T12:00:00");
               const toWeek = weekKey(getMondayOf(target));
               const toDay = (target.getDay() + 6) % 7;
-              const moved = toWeek !== ek || toDay !== edi;
+              const from = here || { weekKey: ek, dayIndex: edi, sessionIndex: esi };
+              const moved = toWeek !== from.weekKey || toDay !== from.dayIndex;
               let snapshot = null;
+              let undoable = null;
               setData(d => {
                 snapshot = d.weeks;
+                const at = locateSession(d.weeks, ref);
+                if (!at) return d;
+                const { weekKey: ek, dayIndex: edi, sessionIndex: esi } = at;
                 const emptyWeek = () => Array(7).fill(null).map(() => []);
                 const src = (d.weeks[ek] || emptyWeek()).map(day => [...day]);
                 const before = src[edi]?.[esi];
                 if (!before) return d;
+                undoable = { from: at, original: before };
                 // Le ressenti appartient à la séance vécue, pas au formulaire :
                 // il survit à la modification comme au déplacement.
                 const next = {
@@ -1187,7 +1201,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
                   endTime: sched.endTime ?? null,
                   location: sched.location || null,
                 };
-                if (!moved) {
+                // Décidé ici, sur la position retrouvée — pas sur celle du rendu.
+                if (toWeek === ek && toDay === edi) {
                   src[edi] = src[edi].map((sx, j) => (j === esi ? next : sx));
                   return { ...d, weeks: { ...d.weeks, [ek]: src } };
                 }
@@ -1203,7 +1218,8 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
                 setCurrentDate(target);
                 toast.success(
                   `Déplacée au ${target.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`,
-                  { undo: () => snapshot && setData(d => ({ ...d, weeks: snapshot })) }
+                  // Annuler ramène cette séance, telle qu'elle était, et rien d'autre.
+                  { undo: () => setData(d => undoMove(d, undoable, toWeek, toDay) ?? (snapshot ? { ...d, weeks: snapshot } : d)) }
                 );
               } else {
                 toast.success("Séance modifiée");
@@ -1350,19 +1366,25 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
                 weekKey: smKey,
                 dayIndex: smDi,
                 sessionIndex: smSi,
+                sessionId: smId,
                 initial: { ...smSession, isCustom: true },
               });
               setSessionModal(null);
             }}
             onReschedule={() => {
-              // Reprogrammer une séance manquée : on saute le formulaire, rien
-              // n'a changé de ce qu'elle est — seulement de quand elle a lieu.
+              // « Déplacer la séance » (menu ⋯), et « Reprogrammer → » sur une séance
+              // manquée : on saute le formulaire, rien n'a changé de ce qu'elle est
+              // — seulement de quand et où elle a lieu. `initial` sert à la flèche de
+              // retour, qui rouvre le formulaire rempli plutôt que vide.
+              const current = { ...smSession, isCustom: true };
               setSessionEditCtx({
                 weekKey: smKey,
                 dayIndex: smDi,
                 sessionIndex: smSi,
+                sessionId: smId,
                 step: "schedule",
-                payload: { ...smSession, isCustom: true },
+                payload: current,
+                initial: current,
               });
               setSessionModal(null);
             }}
