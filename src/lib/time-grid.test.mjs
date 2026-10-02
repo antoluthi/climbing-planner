@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   DAY_MIN, DEFAULT_SESSION_MIN, parseClock, clockLabel, sessionSpan, layoutDay, cascadeOffset,
   weekColumns, layoutAllDay, hiddenPerColumn, slotAt, firstVisibleHour,
+  HOUR_PX, clampHourPx, hoursAt, scrollToKeep, slotStep,
 } from "./time-grid.js";
 
 // ─── Heures ──────────────────────────────────────────────────────────────────
@@ -152,4 +153,37 @@ test("la grille s'ouvre sur le matin, plus tôt si une séance l'exige", () => {
   assert.equal(firstVisibleHour([]), 7);
   assert.equal(firstVisibleHour([span(18, 19), null]), 7);
   assert.equal(firstVisibleHour([span(18, 19), { start: 5 * 60 + 45, end: 7 * 60 }]), 5);
+});
+
+// ─── Zoom ────────────────────────────────────────────────────────────────────
+
+test("zoom borné, et une préférence illisible revient à l'échelle de départ", () => {
+  assert.equal(clampHourPx(60), 60);
+  assert.equal(clampHourPx("60"), 60);
+  assert.equal(clampHourPx(4), HOUR_PX.min);
+  assert.equal(clampHourPx(500), HOUR_PX.max);
+  for (const v of [null, undefined, "", "abc", NaN]) assert.equal(clampHourPx(v), HOUR_PX.default, String(v));
+  // Au plus serré, la journée entière tient sur un téléphone.
+  assert.ok(24 * HOUR_PX.min <= 450);
+});
+
+test("le zoom garde sous les doigts l'heure qui s'y trouvait", () => {
+  const top = 130;                       // en-tête + marge
+  for (const [scroll, y, from, to] of [[310, 200, 44, 90], [600, 50, 44, 16], [0, 400, 120, 30]]) {
+    const hours = hoursAt(y, scroll, top, from);
+    const next = scrollToKeep(hours, y, top, to);
+    assert.ok(Math.abs(hoursAt(y, next, top, to) - hours) < 1e-9, `${from}→${to}`);
+  }
+  // Exemple lu : 14 h sous les doigts à 44 px, toujours 14 h à 88 px.
+  const s0 = scrollToKeep(14, 200, top, 44);
+  assert.equal(hoursAt(200, s0, top, 44), 14);
+  assert.equal(hoursAt(200, scrollToKeep(14, 200, top, 88), top, 88), 14);
+});
+
+test("pas du créneau selon le zoom", () => {
+  assert.equal(slotStep(HOUR_PX.default), 30);
+  assert.equal(slotStep(100), 15);
+  assert.equal(slotStep(HOUR_PX.min), 60);
+  assert.equal(slotAt(14 * 60 + 50, slotStep(100)), 14 * 60 + 45);
+  assert.equal(slotAt(14 * 60 + 50, slotStep(HOUR_PX.min)), 14 * 60);
 });

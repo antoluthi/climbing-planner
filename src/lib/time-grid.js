@@ -153,3 +153,37 @@ export function firstVisibleHour(spans, fallback = 7) {
   if (starts.length === 0) return fallback;
   return Math.min(fallback, Math.floor(Math.min(...starts) / 60));
 }
+
+// ── Zoom ─────────────────────────────────────────────────────────────────────
+// Un pincement change la hauteur d'une heure. Au plus serré, toute la journée
+// tient sur un écran de téléphone (24 × 16 px) ; au plus large, une demi-heure
+// se lit comme une heure à l'échelle de départ.
+export const HOUR_PX = { min: 16, default: 44, max: 120 };
+
+export function clampHourPx(px) {
+  const n = Number(px);
+  if (px == null || px === "" || !Number.isFinite(n)) return HOUR_PX.default;
+  return Math.min(HOUR_PX.max, Math.max(HOUR_PX.min, n));
+}
+
+// Le zoom garde **sous les doigts** l'heure qui s'y trouvait au début du geste,
+// comme une carte qu'on agrandit. `top` est la position de 0 h dans le contenu
+// qui défile (en-tête et marge compris), `offsetY` celle des doigts dans la
+// fenêtre de la grille. `hoursAt` lit l'heure sous les doigts ; `scrollToKeep`
+// rend le défilement qui l'y ramène à la nouvelle échelle.
+export function hoursAt(offsetY, scrollTop, top, hourPx) {
+  return (scrollTop + offsetY - top) / hourPx;
+}
+
+export function scrollToKeep(hours, offsetY, top, hourPx) {
+  return top + hours * hourPx - offsetY;
+}
+
+// Pas d'un créneau touché : un quart d'heure quand on a zoomé pour viser, une
+// heure quand la journée entière tient à l'écran et qu'une demi-heure ne fait
+// plus que quelques pixels.
+export function slotStep(hourPx) {
+  if (hourPx >= 80) return 15;
+  if (hourPx < 26) return 60;
+  return 30;
+}
