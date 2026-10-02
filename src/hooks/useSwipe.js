@@ -10,6 +10,11 @@ import { useRef } from "react";
 //
 // `threshold` : distance minimale en px. `ratio` : combien le déplacement
 // horizontal doit dominer le vertical, pour ne pas capturer un scroll.
+//
+// ⚠️ Un second doigt fait du geste un pincement (le zoom de la grille horaire),
+// jamais un balayage. Sans cette garde, le second `touchstart` remplaçait le
+// point de départ, et le doigt levé en premier pouvait se trouver à plus de
+// 60 px de lui : un pincement changeait de semaine.
 
 export function useSwipe({ onLeft, onRight, threshold = 60, ratio = 1.5, stopPropagation = false } = {}) {
   const start = useRef(null);
@@ -17,6 +22,7 @@ export function useSwipe({ onLeft, onRight, threshold = 60, ratio = 1.5, stopPro
   return {
     onTouchStart: (e) => {
       if (stopPropagation) e.stopPropagation();
+      if (e.touches.length > 1) { start.current = { multi: true }; return; }
       const t = e.touches[0];
       start.current = { x: t.clientX, y: t.clientY };
     },
@@ -24,6 +30,8 @@ export function useSwipe({ onLeft, onRight, threshold = 60, ratio = 1.5, stopPro
     onTouchEnd: (e) => {
       if (stopPropagation) e.stopPropagation();
       if (!start.current) return;
+      // Abandonné jusqu'à ce que le dernier doigt se lève.
+      if (start.current.multi) { if (e.touches.length === 0) start.current = null; return; }
       const t = e.changedTouches[0];
       const dx = t.clientX - start.current.x;
       const dy = t.clientY - start.current.y;

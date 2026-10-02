@@ -396,7 +396,10 @@ par `ui/Modal.jsx`.
 
 Balayage sur la grille → période précédente/suivante, **d'un coup** (pas de
 carrousel ici). La grille horaire de la semaine est dans la même zone : on y
-change de semaine du même geste. La grille passe `stopPropagation: true` à `useSwipe`, et le
+change de semaine du même geste. ⚠️ **Un second doigt annule le balayage**
+(`useSwipe`) : c'est un pincement, le zoom de la grille. Sans cette garde, le
+second `touchstart` remplaçait le point de départ, le doigt levé en premier
+pouvait s'en trouver à plus de 60 px, et un pincement changeait de semaine. La grille passe `stopPropagation: true` à `useSwipe`, et le
 pager ignore de son côté tout geste démarré dans `[data-swipe="calendar-grid"]`
 — le `stopPropagation` d'un handler React ne peut pas arrêter un listener posé
 plus bas dans l'arbre.
@@ -845,6 +848,34 @@ sur un bloc ouvre la séance, comme partout.
   reste celle où l'on était.
 - Un trait à l'accent marque l'heure qu'il est sur aujourd'hui, et son libellé
   remplace la graduation voisine dans la marge.
+- **Pincer pour zoomer.** La hauteur d'une heure va de 16 px (la journée
+  entière sur un écran de téléphone) à 120 px, 44 par défaut. Le zoom garde
+  **sous les doigts** l'heure qui s'y trouvait au début du geste (`hoursAt` /
+  `scrollToKeep`), comme une carte qu'on agrandit ; seul le haut de la journée
+  l'en empêche, on ne défile pas au-dessus de minuit. Le niveau est retenu sur
+  l'appareil (`climbing_week_hour_px`). Sur ordinateur, Ctrl + molette — et le
+  pincement d'un pavé tactile, que le navigateur rapporte justement ainsi.
+  - Le pas du créneau touché suit le zoom (`slotStep`) : le quart d'heure quand
+    on a zoomé pour viser, l'heure quand la journée tient à l'écran.
+  - Dézoomée, une séance courte n'a plus la hauteur d'une ligne : son nom passe
+    sur une ligne centrée, plus petite, puis disparaît (la couleur reste).
+    Coupé à mi-hauteur, il ne se lisait pas davantage. Les demi-heures
+    disparaissent sous 30 px : en dessous, elles font une trame serrée.
+
+Le zoom repose sur deux choix :
+
+- ⚠️ **Pendant le geste, aucun rendu React.** Toutes les positions passent par
+  la variable CSS `--hour` (`calc(8px + 7.5 * var(--hour))`), que le pincement
+  change directement dans le DOM. Redessiner la grille à chaque image du geste
+  ne tiendrait pas soixante images par seconde sur un téléphone moyen. React
+  ne la réécrit qu'à la fin, quand le niveau est enregistré — la même logique
+  que le `transform` du carrousel : ne jamais laisser React croire inchangée
+  une valeur qu'on a déplacée à la main, d'où l'enregistrement à **chaque** fin
+  de geste, annulation comprise.
+- **Écouteurs posés à la main, non passifs.** Ceux de React sont passifs : ils
+  ne peuvent pas empêcher le défilement ni le zoom de la page pendant que deux
+  doigts pincent. La grille porte en plus `touch-action: pan-y`, qui laisse le
+  défilement au navigateur et lui retire le pincement.
 
 Deux pièges, tous deux rencontrés :
 
@@ -857,9 +888,10 @@ Deux pièges, tous deux rencontrés :
    le plus haut passait par-dessus l'en-tête collé en défilant : le corps de la
    grille porte `zIndex: 0`, ce qui en fait un contexte d'empilement.
 
-Tests : `npm run test:grid` (18 cas) — lecture des heures, durée et minuit,
+Tests : `npm run test:grid` (21 cas) — lecture des heures, durée et minuit,
 rangs de la cascade, colonnes d'une échéance (changement d'heure compris),
-rangées du haut et ce qui s'y replie, créneau touché, heure d'ouverture.
+rangées du haut et ce qui s'y replie, créneau touché, heure d'ouverture, et le
+zoom : bornes, heure gardée sous les doigts, pas du créneau.
 
 ### Retirer un statut de séance
 Recliquer sur l'état déjà sélectionné (Fait / Adaptée / Manquée) le retire :
