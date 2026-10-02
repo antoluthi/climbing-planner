@@ -61,7 +61,9 @@ src/
 │   ├── rich-text.js              — syntaxe des notes côté saisie : parseItem, handleEnter,
 │   │                               handleTab, safeHref, hasRichSyntax (pur, testé sous Node)
 │   ├── rich-text-cm.js           — l'extension CodeMirror qui rend la syntaxe dans le champ
-│   └── color.js                  — hexToHsl, hslToHex, withLightness (pur, testé sous Node)
+│   ├── color.js                  — hexToHsl, hslToHex, withLightness (pur, testé sous Node)
+│   └── time-grid.js              — grille horaire de la semaine : durée, cascade, rangée du
+│                                   haut, créneau touché (pur, testé sous Node)
 │
 ├── theme/
 │   ├── palette.js                — SOURCE UNIQUE des couleurs (PALETTE.light/dark, colors(), DATA)
@@ -94,6 +96,8 @@ src/
     ├── RoleOnboardingModal.jsx    — choix du rôle au 1er login
     ├── RoleSection.jsx            — changement de rôle depuis le compte
     ├── DayJournalBlock.jsx        — journal + rappels d'un jour donné (calendrier)
+    ├── JournalPip.jsx             — pastille journal d'un jour (bande semaine, grille horaire)
+    ├── WeekTimeGrid.jsx           — la semaine en grille horaire, comme un agenda (mobile)
     ├── RichText.jsx               — rendu du texte riche (syntaxe façon Obsidian)
     ├── ConfirmModal.jsx           — dialogue de confirmation suppression
     ├── session/SessionFormModal.jsx     — ajout/modification d'une séance (étape 1)
@@ -324,7 +328,7 @@ Sans cette variable, les endpoints `/api/caldav/*` et `/api/calendar/*` retourne
 | viewMode | Description | Accès |
 |---|---|---|
 | `"accueil"` | Page d'accueil — **vue par défaut** au démarrage | tous |
-| `"week"` | Vue semaine (7 colonnes DayColumn) | tous |
+| `"week"` | Vue semaine (7 colonnes DayColumn) — sur mobile, en liste ou en grille horaire | tous |
 | `"month"` | Vue mois (grille calendrier) | tous |
 | `"year"` | Vue année (12 mois) — mois courant encadré à l'accent et **centré à l'ouverture** (`scrollIntoView({ block: "center" })`), aujourd'hui encadré dans sa case | tous |
 | `"dash"` | Statistiques + notes + Hooper + graphiques poids/Hooper | tous |
@@ -391,7 +395,8 @@ par `ui/Modal.jsx`.
 ### Grille du calendrier
 
 Balayage sur la grille → période précédente/suivante, **d'un coup** (pas de
-carrousel ici). La grille passe `stopPropagation: true` à `useSwipe`, et le
+carrousel ici). La grille horaire de la semaine est dans la même zone : on y
+change de semaine du même geste. La grille passe `stopPropagation: true` à `useSwipe`, et le
 pager ignore de son côté tout geste démarré dans `[data-swipe="calendar-grid"]`
 — le `stopPropagation` d'un handler React ne peut pas arrêter un listener posé
 plus bas dans l'arbre.
@@ -774,13 +779,87 @@ réclamer, pas pour perdre la main sur ce qu'on a fait.
 Ce bloc ne se lit toutefois **que pour le jour sélectionné**, sous la grille :
 noter le ressenti d'hier demandait de le sélectionner d'abord, puis de
 descendre. D'où la **pastille journal sous chaque jour de la bande semaine**
-(`JournalPip`, `CalendarView.jsx`) : une touche ouvre `DayLogModal` sur ce
+(`components/JournalPip.jsx`) : une touche ouvre `DayLogModal` sur ce
 jour-là — passé comme à venir. Pleine (accent) quand quelque chose est noté,
 creuse sinon. `hasDayLog()` (`lib/helpers.js`) répond à cette question pour les
 deux écrans à la fois : la pastille et le bloc doivent dire la même chose.
 Chaque jour est **deux boutons empilés**, jamais imbriqués — un `<button>` dans
 un `<button>` n'est pas du HTML valide, et le clic du second remonterait au
 premier.
+
+### La semaine en grille horaire (`components/WeekTimeGrid.jsx`, `lib/time-grid.js`)
+
+La vue liste dit la semaine jour par jour ; un agenda la dit d'un coup d'œil —
+où sont les séances, où sont les trous. D'où une **seconde lecture de la
+semaine**, en option sur mobile : sept colonnes, les heures de 0 h à 24 h,
+chaque séance posée à son heure de départ sur la hauteur de sa durée. Une touche
+sur un bloc ouvre la séance, comme partout.
+
+- **La bascule** : deux icônes dans une pastille à droite du titre (liste ·
+  agenda), affichée en vue Semaine seulement. Deux icônes plutôt qu'une, pour
+  que l'état se lise au lieu d'une icône qui annoncerait ce qu'elle ferait. Le
+  choix vit en localStorage (`climbing_week_layout`), propre à l'appareil, hors
+  synchronisation — comme le filtre de sports des stats. Le titre garde sa
+  hauteur quand la bascule disparaît (Mois, Année) : sinon le sélecteur
+  sauterait de quelques pixels à chaque changement de vue.
+- **Seules les heures défilent.** Titre, sélecteur et navigation de semaine
+  restent en place ; l'écran passe en `height: 100%` et la grille prend le
+  reste. Le détail du jour sélectionné (journal, rappels, liste) n'y est pas :
+  il reste dans la vue liste, à une touche. La légende des cycles ferme la
+  journée, sous minuit — au-dessus des heures, elle mangerait la place qu'on
+  vient de leur donner.
+- **L'en-tête des jours est collé dans le même conteneur que les heures**
+  (`sticky`). Rendu à part, il se décalerait des colonnes dès qu'une barre de
+  défilement prend de la largeur (navigateur de bureau). Sous chaque date, la
+  pastille journal (`JournalPip`) ; les tuiles portent la teinte du cycle
+  (`cycleBg`, `lib/cycles.js`, partagée avec la bande semaine).
+- **La rangée du haut** reçoit ce qui n'a pas d'heure : les échéances, en
+  bandeau continu sur leurs jours (sans arrondi du côté où elles débordent de la
+  semaine), et les séances enregistrées sans heure (« Plus tard »). Au-delà de
+  trois rangées, elle se replie : deux rangées, un « +n » par jour, et un
+  chevron dans la marge pour tout déplier.
+- **Les séances qui se chevauchent se posent en cascade**, pas côte à côte. Une
+  journée fait ~45 px sur un téléphone : trois séances se partageant la largeur
+  n'en avaient que 15 chacune, et leurs noms s'écrivaient lettre par lettre. En
+  cascade, chaque rang est décalé vers la droite et posé sur le précédent
+  (`cascadeOffset` : la moitié de la largeur se répartit entre les rangs, le
+  dernier en garde toujours la moitié). Les blocs sont donc **opaques** — la
+  teinte du sport posée sur le fond —, sinon ils se mélangeraient en se
+  recouvrant. L'heure de départ ne s'écrit que sur un bloc seul : sur un bloc
+  en cascade, le suivant la couperait en morceaux.
+- **Toucher une case vide** pose un créneau « + 14:30 » (à la demi-heure qui
+  contient la touche, `slotAt`) ; le toucher à son tour ouvre l'ajout de
+  séance, jour et heure réglés. Deux temps, comme dans un agenda : une touche
+  égarée à côté d'un bloc ne lance rien. L'heure suit le parcours habituel :
+  `onAddSession(jour, "14:30")` → `sessionBuilderDay.startTime` →
+  `draft.startTime` → `defaultStartTime` de « quand & où », et survit à la
+  flèche de retour. Le créneau porte sa semaine : en changer le fait disparaître
+  sans effet à déclencher.
+- **Durée** : celle de la séance, sinon `DEFAULT_SESSION_MIN` (1 h 30) — la
+  même constante que la cloche (`lib/todo.js`) et les notifications, qui
+  l'importent : la grille dessine une séance jusqu'à l'heure exacte où l'on en
+  réclamera le ressenti. Un bloc ne descend pas sous 30 min de haut, et ce
+  plancher compte aussi pour les chevauchements.
+- **Ouverture sur le matin** : 7 h, ou plus tôt si une séance de la semaine
+  commence avant — une fois, au montage. D'une semaine à l'autre, la hauteur
+  reste celle où l'on était.
+- Un trait à l'accent marque l'heure qu'il est sur aujourd'hui, et son libellé
+  remplace la graduation voisine dans la marge.
+
+Deux pièges, tous deux rencontrés :
+
+1. ⚠️ **L'ancrage de défilement du navigateur** (`overflow-anchor`). D'une
+   semaine à l'autre, la rangée du haut change de hauteur, et le navigateur
+   « compensait » en déplaçant le défilement : les heures sautaient d'une heure
+   sous le doigt. Sous un en-tête collé, l'heure visible ne dépend que de
+   `scrollTop` — `overflowAnchor: "none"` le laisse tel quel.
+2. ⚠️ **Le z-index des blocs en cascade** monte rang après rang. Sans plafond,
+   le plus haut passait par-dessus l'en-tête collé en défilant : le corps de la
+   grille porte `zIndex: 0`, ce qui en fait un contexte d'empilement.
+
+Tests : `npm run test:grid` (18 cas) — lecture des heures, durée et minuit,
+rangs de la cascade, colonnes d'une échéance (changement d'heure compris),
+rangées du haut et ce qui s'y replie, créneau touché, heure d'ouverture.
 
 ### Retirer un statut de séance
 Recliquer sur l'état déjà sélectionné (Fait / Adaptée / Manquée) le retire :
@@ -2073,7 +2152,7 @@ curl -s "$U""diag.json"                     # tailles, temps, href suspects
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
-npm run test     # tous les tests (CalDAV, notes, couleurs, rappels, migrations, allure, fusion)
+npm run test     # tous les tests (CalDAV, notes, couleurs, rappels, migrations, allure, fusion, grille)
 npm run test:caldav  # protocole CalDAV (node --test, sans dépendance)
 npm run test:text    # saisie en liste et filtrage des liens (lib/rich-text.js)
 npm run test:color   # conversions HSL ↔ hex (lib/color.js)
@@ -2081,6 +2160,7 @@ npm run test:reminders # rappels : supprimer ne change aucun jour passé (lib/re
 npm run test:storage   # migrations du blob local (lib/storage.js)
 npm run test:pace      # temps · distance · allure : cases, frappe, recalcul (lib/pace.js)
 npm run test:merge     # fusion à trois voies des plannings (lib/merge-plan.js)
+npm run test:grid      # grille horaire de la semaine : durée, cascade, rangée du haut (lib/time-grid.js)
 npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
 npm run cap:open # ouvre Android Studio
 ./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement

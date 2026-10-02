@@ -1,5 +1,6 @@
 import { addDays, localDateStr, weekKey, getMondayOf, isEventItem } from "./helpers.js";
 import { isHooperFilled } from "./hooper.js";
+import { DEFAULT_SESSION_MIN } from "./time-grid.js";
 
 // ─── CE QUI RESTE À NOTER ────────────────────────────────────────────────────
 // Deux oublis se rattrapent, et aucun des deux ne se voyait dans l'app : le
@@ -18,7 +19,7 @@ import { isHooperFilled } from "./hooper.js";
 
 const HOOPER_DAYS = 3;
 const FEEDBACK_DAYS = 7;
-const DEFAULT_LEN_MIN = 90;   // séance sans durée : due 1 h 30 après le départ
+const DEFAULT_LEN_MIN = DEFAULT_SESSION_MIN;   // séance sans durée : due 1 h 30 après le départ
 
 // Une séance notée n'a plus rien à demander. Un ressenti *neutre* (statut
 // retiré, notes seules) n'est pas une séance notée — c'est même l'inverse.
