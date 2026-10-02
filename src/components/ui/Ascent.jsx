@@ -382,7 +382,15 @@ export function InitialsAvatar({ isDark, initials, size = 40, onClick, photoUrl 
     >
       {photoUrl
         ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        : <span style={{ font: `700 ${Math.round(size * 0.35)}px ${MONO}`, color: c.accent }}>{initials}</span>}
+        : initials
+          ? <span style={{ font: `700 ${Math.round(size * 0.35)}px ${MONO}`, color: c.accent }}>{initials}</span>
+          // Ni photo ni nom : une silhouette, plutôt qu'un tiret qui se lirait
+          // comme une erreur.
+          : <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="none" stroke={c.accent}
+                 strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+            </svg>}
     </button>
   );
 }
