@@ -62,8 +62,10 @@ src/
 │   │                               handleTab, safeHref, hasRichSyntax (pur, testé sous Node)
 │   ├── rich-text-cm.js           — l'extension CodeMirror qui rend la syntaxe dans le champ
 │   ├── color.js                  — hexToHsl, hslToHex, withLightness (pur, testé sous Node)
-│   └── time-grid.js              — grille horaire de la semaine : durée, cascade, rangée du
-│                                   haut, créneau touché (pur, testé sous Node)
+│   ├── time-grid.js              — grille horaire de la semaine : durée, cascade, rangée du
+│   │                               haut, créneau touché (pur, testé sous Node)
+│   └── home-phrase.js            — salutation et phrase de l'accueil, jours de repos
+│                                   (pur, testé sous Node)
 │
 ├── theme/
 │   ├── palette.js                — SOURCE UNIQUE des couleurs (PALETTE.light/dark, colors(), DATA)
@@ -1108,11 +1110,64 @@ mésocycle, depuis `getMesoForDate`), puis la semaine — barres de charge,
 initiales des jours, et une **pastille par séance** à la couleur de sa
 discipline (celle de l'échéance pour une échéance, trois au plus par jour).
 
-### AccueilView — phrase contextuelle
-- Police **Newsreader** (serif élégant) pour la phrase d'accueil
-- Salutation granulaire selon l'heure (matin, après-midi, soir, nuit)
-- Phrase contextuelle dynamique : heure courante, complétion des séances du jour, contexte semaine (mésocycle, charge)
-- Fonctions helpers `getGreeting()` et `getContextualPhrase()` définies localement dans le fichier
+### AccueilView : la phrase sous la salutation (`lib/home-phrase.js`)
+
+Sous « Bonjour, Anto », une phrase dit où l'on en est : la séance du jour, la
+fatigue, le repos, ce qui arrive demain. Police **Newsreader**. Toute la
+logique vit dans `lib/home-phrase.js`, pure : `buildPhraseContext({ data,
+todayObj, mesoCtx, now })` lit le planning, `getContextualPhrase(ctx)` choisit la
+phrase, `getGreeting(heure, prénom)` la salutation. L'heure est un paramètre,
+pas une lecture de l'horloge, pour que les tests la fixent.
+
+**Comment elle s'écrit.** Comme le message de quelqu'un qui suit ton
+entraînement, pas comme un slogan :
+
+- tutoiement, une ou deux phrases courtes : un fait, et un conseil au plus ;
+- ni tiret long, ni point d'exclamation, ni guillemets autour d'un nom de
+  séance ;
+- pas de formules toutes faites (« ce n'est pas un luxe, c'est une
+  nécessité », « faites confiance au travail ») ni d'adverbes d'insistance
+  (« vraiment », « exactement », « optimal »).
+
+`npm run test:phrase` le vérifie sur 6 000 journées tirées au hasard (graine
+fixe) : chaque phrase est relue contre ces règles, plus l'absence de valeur
+manquante (`undefined`, `NaN`) et de vouvoiement. Le test exige au moins
+120 phrases différentes, sans quoi il ne prouverait rien. Pour relire les
+phrases à l'œil, le même tirage se vide en une liste de gabarits.
+
+**Les cas, dans l'ordre** (le premier qui s'applique l'emporte) : ce qui est
+fait, manqué, ou passé sans être noté ; puis l'état du corps (Hooper très
+haut, compétition, deux grosses journées de suite, reprise) ; puis le
+programme du jour.
+
+⚠️ **« Reprise après deux jours off » au lendemain d'une grimpe.** Un jour ne
+comptait comme entraîné qu'au-delà de **5 de charge**, un seuil pensé pour
+l'ancienne échelle, où une séance valait 20 à 40. Sur l'échelle 0-10, une
+séance de bloc à 5 n'était donc pas un entraînement. `isRealTraining()` compte
+désormais toute séance ni manquée, ni réduite à de la mobilité ou à des
+étirements légers ; une échéance n'en est une que si c'est une compétition. Le
+même passage d'échelle avait laissé d'autres seuils morts (25, 30 et 35, jamais
+atteints) : ils sont ramenés sur 0-10.
+
+Quatre autres choses corrigées en chemin :
+
+- **Rien de noté depuis deux semaines** : on ne sait pas, et on ne dit rien
+  (`restDaysBefore` vaut `null`), plutôt que d'annoncer une reprise à quelqu'un
+  qui découvre l'app.
+- **« Bloc » n'est pas de la force, « Lead » n'est pas une compétition** : les
+  deux mots faisaient partie des motifs reconnus, et une séance de bloc
+  recevait des conseils de force.
+- **Après minuit**, « aujourd'hui » est la journée qui commence : ses séances
+  sont devant. La phrase disait qu'elles étaient passées.
+- **Le dimanche, demain est la semaine suivante** : lu par la date, plus par
+  l'index de la semaine, qui s'arrêtait au dimanche.
+
+Une séance dont l'heure est passée (départ plus durée, 1 h 30 sans durée) et
+qui n'est pas notée appelle une seule phrase : « Ta séance est passée. Pense à
+la noter. » Les conseils pour l'aborder n'ont plus de sens. « Passée » et non
+« terminée » : on ne sait pas encore si elle a été faite. ⚠️ Un jour **sans**
+séance passait ce test (toutes les séances d'une liste vide sont finies) : la
+condition exige `sessionCount > 0`.
 
 ### Modifier une séance, déplacement compris (`SessionModal` → `SessionFormModal` → `SessionScheduleModal`)
 
@@ -2184,7 +2239,7 @@ curl -s "$U""diag.json"                     # tailles, temps, href suspects
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
-npm run test     # tous les tests (CalDAV, notes, couleurs, rappels, migrations, allure, fusion, grille)
+npm run test     # tous les tests (CalDAV, notes, couleurs, rappels, migrations, allure, fusion, grille, accueil)
 npm run test:caldav  # protocole CalDAV (node --test, sans dépendance)
 npm run test:text    # saisie en liste et filtrage des liens (lib/rich-text.js)
 npm run test:color   # conversions HSL ↔ hex (lib/color.js)
@@ -2193,6 +2248,7 @@ npm run test:storage   # migrations du blob local (lib/storage.js)
 npm run test:pace      # temps · distance · allure : cases, frappe, recalcul (lib/pace.js)
 npm run test:merge     # fusion à trois voies des plannings (lib/merge-plan.js)
 npm run test:grid      # grille horaire de la semaine : durée, cascade, rangée du haut (lib/time-grid.js)
+npm run test:phrase    # phrase d'accueil : jours de repos, règles d'écriture (lib/home-phrase.js)
 npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
 npm run cap:open # ouvre Android Studio
 ./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement

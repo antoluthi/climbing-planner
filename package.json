@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "npm run test:caldav && npm run test:text && npm run test:color && npm run test:reminders && npm run test:storage && npm run test:pace && npm run test:merge && npm run test:grid",
+    "test": "npm run test:caldav && npm run test:text && npm run test:color && npm run test:reminders && npm run test:storage && npm run test:pace && npm run test:merge && npm run test:grid && npm run test:phrase",
     "test:caldav": "node --test api/caldav.test.mjs",
     "test:text": "node --test src/lib/rich-text.test.mjs",
     "test:color": "node --test src/lib/color.test.mjs",
@@ -16,6 +16,7 @@
     "test:pace": "node --test src/lib/pace.test.mjs",
     "test:merge": "node --test src/lib/merge-plan.test.mjs",
     "test:grid": "node --test src/lib/time-grid.test.mjs",
+    "test:phrase": "node --test src/lib/home-phrase.test.mjs",
     "preview": "vite preview",
     "cap:sync": "vite build --mode capacitor && npx cap sync android",
     "cap:open": "npx cap open android"
