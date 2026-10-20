@@ -5,6 +5,7 @@ import { isHooperFilled } from "./hooper.js";
 // La durée d'une séance qui n'en a pas : une seule valeur pour la grille
 // horaire qui la dessine, la cloche qui la réclame et ces notifications.
 import { DEFAULT_SESSION_MIN } from "./time-grid.js";
+import { PALETTE } from "../theme/palette.js";
 
 // ─── NOTIFICATIONS DE SÉANCE ─────────────────────────────────────────────────
 // Une séance planifiée donne **une seule notification, qui change de nature en
@@ -125,7 +126,7 @@ export function planHooperNotifications(data, now = new Date(), hour = HOOPER_HO
       at: at > now ? at : new Date(now.getTime() + SOON_MS),
       extra: { kind: "hooper", dateISO },
       title: "Ressenti du jour",
-      body: "Sommeil, fatigue, stress, courbatures — une minute, et la journée est notée.",
+      body: "Sommeil, fatigue, stress, courbatures. Une minute, et la journée est notée.",
       ongoing: true,     // non balayable : elle part quand le ressenti est noté
       autoCancel: false, // la toucher sans rien remplir ne la fait pas disparaître
     });
@@ -168,6 +169,19 @@ export function locateSession(data, { sessionId, dateISO }) {
 // figeait l'écran sans un mot (cf. lib/promise-timeout.js).
 const CALL_MS = 4000;
 const call = (p, label) => withTimeout(p, CALL_MS, label);
+
+// Couleur des notifications : l'accent de l'app. Android en teinte la pastille
+// de l'icône et le nom de l'app ; sans elle, chaque constructeur met la sienne
+// (du bleu chez Samsung). Le fond de la carte, lui, suit le thème clair ou
+// sombre du téléphone : une app ne le peint pas, sauf pour un service au
+// premier plan ou un lecteur média.
+// L'accent est le même dans les deux thèmes ; on prend celui du sombre, comme
+// le widget. ⚠ On ne passe que du `#rrggbb` : une couleur illisible fait
+// rejeter TOUTE la planification, et le `#aarrggbb` d'Android n'est pas le
+// `#rrggbbaa` du CSS. D'où la vérification ; au pire, la couleur du système
+// revient.
+const ACCENT = PALETTE.dark.accent;
+const NOTIFICATION_COLOR = /^#[0-9a-f]{6}$/i.test(ACCENT) ? ACCENT : null;
 
 // ⚠ PIÈGE : ne JAMAIS renvoyer un plugin Capacitor depuis une fonction `async`.
 // La valeur de retour d'une fonction async est résolue comme un « thenable » :
@@ -276,6 +290,7 @@ export async function syncNotifications(data, { sessions = false, hooper = false
           body: n.body,
           extra: n.extra,
           smallIcon: "ic_stat_charge",
+          ...(NOTIFICATION_COLOR ? { iconColor: NOTIFICATION_COLOR } : {}),
           ...(n.ongoing ? { ongoing: true } : {}),
           ...(n.autoCancel === false ? { autoCancel: false } : {}),
           schedule: { at: n.at, allowWhileIdle: true },

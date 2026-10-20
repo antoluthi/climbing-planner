@@ -1516,6 +1516,7 @@ ordinateur.
 | `supabase/migrations/20260823_climbing_plans_updated_at.sql` | Trigger `BEFORE INSERT OR UPDATE` sur `climbing_plans` : `updated_at = now()` côté serveur — la synchronisation compare des dates, elles doivent venir d'une seule horloge | ✅ appliquée |
 | `supabase/migrations/20260824_climbing_plans_status_solo.sql` | `CHECK` de `climbing_plans.status` élargi à `'solo'` — la contrainte d'origine ne connaissait que coach/athlete/auto, donc « athlète solo » repartait en 23514 et le rôle n'était jamais enregistré | ✅ appliquée |
 | `supabase/migrations/20260825_drop_auto_role.sql` | `status = 'auto'` → `'coach'` — le rôle « autonome » ne se distinguait du coach nulle part et a été retiré de l'app | ⏳ **à coller** (facultatif : l'app lit déjà 'auto' comme coach) |
+| `supabase/migrations/20261020_explicit_api_grants.sql` | `GRANT SELECT` sur `climbing_plans` à `anon` (plannings publics) et à `service_role` (CalDAV, iCal) : les deux seuls accès qui ne tenaient qu'aux anciens droits par défaut de Supabase | **sans effet sur le projet actuel** (les tables existantes gardent leurs droits) ; à passer sur une base recréée |
 
 Statuts vérifiés le 20 août 2026 contre le projet Supabase (existence des
 tables, colonnes, RPC et buckets via l'API REST) ; les trois d'août sur
@@ -1524,6 +1525,31 @@ concatène les 9 dernières dans l'ordre, idempotent et ré-exécutable.
 `supabase/legacy/` conserve les scripts SQL antérieurs aux migrations — dont
 `supabase-community-sessions.sql`, seule définition de `community_sessions`
 (utilisée par `useCommunitySessionsSync.js`), qui n'a pas d'équivalent en migration.
+
+### ⚠️ Une nouvelle table a besoin d'un GRANT (depuis le 30 octobre 2026)
+
+À partir de cette date, Supabase n'ouvre plus d'office l'API (supabase-js,
+PostgREST, GraphQL) aux **nouvelles** tables du schéma `public`, ni à leurs
+séquences, quelle que soit la façon de les créer (éditeur SQL compris). Sans
+GRANT, la table répond `permission denied` (42501) **même si une policy RLS
+l'autorise** : la policy choisit les lignes, le GRANT ouvre la table. Les
+tables existantes gardent leurs droits.
+
+Toute migration qui crée une table porte donc ses droits, dans le même fichier,
+et seulement ceux dont le code a besoin :
+
+```sql
+ALTER TABLE public.ma_table ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.ma_table TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.ma_table_id_seq TO authenticated;  -- si `id` est un serial
+-- GRANT SELECT ON public.ma_table TO anon;          seulement pour une lecture publique (policy TO anon)
+-- GRANT SELECT ON public.ma_table TO service_role;  seulement si api/ la lit (clé service_role)
+```
+
+Même chose pour une fonction appelée en RPC : `GRANT EXECUTE … TO
+authenticated` (déjà le cas de `search_athletes` et `get_my_coaches`).
+L'erreur 42501 se reconnaît à son message, qui contient la requête GRANT à
+exécuter.
 
 ## APK Android (Capacitor)
 
@@ -1603,6 +1629,23 @@ tiroir au lieu de s'empiler à côté.
 - `res/drawable/ic_stat_charge.xml` : la marque en silhouette blanche. Sans
   icône de statut, Android retomberait sur celle du lanceur — fond noir plein,
   donc carré blanc dans la barre d'état.
+- **Couleur : l'accent de la palette** (`iconColor`, posé sur chaque
+  notification par `syncNotifications`). Android en teinte la pastille de
+  l'icône et le nom de l'app ; sans couleur, chaque constructeur met la sienne,
+  du bleu chez Samsung sur une app orange et noire. Lue dans
+  `PALETTE.dark.accent`, pas recopiée : la règle « une seule source de
+  couleurs » tient aussi ici.
+  - ⚠️ **Le fond de la carte ne se règle pas.** Il suit le thème clair ou
+    sombre du téléphone ; `setColorized` n'est honoré que pour un service au
+    premier plan ou un lecteur média. Une app orange et noire a donc des
+    notifications noires si le téléphone est en sombre, blanches sinon.
+  - ⚠️ **Une couleur illisible fait rejeter toute la planification** (le
+    plugin rejette l'appel `schedule` entier sur un `Color.parseColor` raté).
+    Android ne lit que `#rrggbb` / `#aarrggbb` : un accent passé un jour en
+    `rgba()` est écarté, et la couleur du système revient plutôt que les
+    rappels.
+  - Une notification **déjà affichée** garde sa couleur : le ressenti du jour
+    n'est jamais reposé (voir plus bas), il prend la nouvelle au lendemain.
 
 ### Rappel du ressenti (`planHooperNotifications`, bascule « Ressenti du jour »)
 
