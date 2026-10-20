@@ -299,26 +299,11 @@ export function makeStyles(isDark) {
     yearDayEmpty: t.dayEmpty,
 
     dashboard: { padding: "20px 24px", overflowY: "auto", flex: 1 },
-    dashCards: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28 },
-    dashCard: {
-      background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8,
-      padding: "14px 16px", display: "flex", flexDirection: "column", gap: 4,
-    },
-    dashCardVal: { fontSize: 24, fontWeight: 700, color: t.text, lineHeight: 1 },
-    dashCardLabel: { fontSize: 10, color: t.textMuted, letterSpacing: "0.06em", textTransform: "uppercase" },
-    dashSection: { marginBottom: 28 },
-    dashSectionTitle: { fontSize: 14, fontWeight: 600, color: t.navColor, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 10, fontFamily: "'Newsreader', Georgia, serif" },
     dashChartBg: t.surface,
     dashGrid: t.border,
     dashText: t.textMuted,
     dashTooltipBg: t.surface,
     dashTooltipText: t.text,
-    // ── Sleep ──
-    sleepImportBtn: { fontSize: 11, padding: "4px 10px", borderRadius: RADIUS.pill, border: `1px solid ${t.border2}`, background: t.accentFaint, color: t.accent, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.03em", whiteSpace: "nowrap" },
-    sleepEmptyMsg: { textAlign: "center", padding: "28px 0", color: t.textMuted, fontSize: 12 },
-    sleepCard: { background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4, flex: "1 1 80px" },
-    sleepLegend: { display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 8 },
-    sleepLegendDot: { width: 8, height: 8, borderRadius: "50%", display: "inline-block", marginRight: 4 },
 
     // ── Profile view ──
     profileView: { padding: "20px 20px 40px", overflowY: "auto", flex: 1, maxWidth: 600, margin: "0 auto", width: "100%" },

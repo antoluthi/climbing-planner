@@ -46,7 +46,6 @@ src/
 │   ├── storage.js                — generateId, loadData, saveData (localStorage)
 │   ├── pace.js                   — temps · distance · allure/vitesse liés : champs à séparateurs
 │   │                               fixes, frappe, état du trio (pur, testé sous Node)
-│   ├── garmin-csv.js             — parseGarminSleepCSV (formats KV et tabulaire)
 │   ├── session-feedbacks.js      — upsertSessionFeedback (miroir Supabase des ressentis)
 │   ├── sync-meta.js              — marqueur de synchro + base (dernier état commun) + decideSync
 │   ├── merge-plan.js             — fusion à trois voies de deux plannings (pur, testé sous Node)
@@ -64,8 +63,11 @@ src/
 │   ├── color.js                  — hexToHsl, hslToHex, withLightness (pur, testé sous Node)
 │   ├── time-grid.js              — grille horaire de la semaine : durée, cascade, rangée du
 │   │                               haut, créneau touché (pur, testé sous Node)
-│   └── home-phrase.js            — salutation et phrase de l'accueil, jours de repos
-│                                   (pur, testé sous Node)
+│   ├── home-phrase.js            — salutation et phrase de l'accueil, jours de repos
+│   │                               (pur, testé sous Node)
+│   └── stats.js                  — la page Stats : périodes et plages libres, découpage,
+│                                   comparaison à date, fait / manqué / prévu, lectures de
+│                                   chaque section (pur, testé sous Node)
 │
 ├── theme/
 │   ├── palette.js                — SOURCE UNIQUE des couleurs (PALETTE.light/dark, colors(), DATA)
@@ -118,13 +120,10 @@ src/
     ├── MesoDetailModal.jsx        — objectif d'un mésocycle + ses microcycles
     ├── PublicPlansSection.jsx     — liste des plannings publics (dans Compte)
     ├── NotificationsSection.jsx   — bascule « Rappels de séance » (dans Compte)
-    ├── DailyNotesSection.jsx      — notes + checkbox créatine
     ├── DayLogModal.jsx            — assistant journal quotidien (Hooper → poids → notes)
-    ├── Dashboard.jsx              — stats + graphiques poids & Hooper
-    ├── ActivityHeatmap.jsx        — heatmap d'activité GitHub-style
-    ├── SleepSection.jsx           — section sommeil (graphiques, import CSV)
-    ├── HooperSection.jsx          — section indice Hooper
-    ├── WeightSection.jsx          — section poids
+    ├── Dashboard.jsx              — la page Stats (résumé, charge, répartition, récupération…)
+    ├── ActivityHeatmap.jsx        — régularité sur un an, façon GitHub (bas de la page Stats)
+    ├── StatsRangePicker.jsx       — « Période à analyser » : raccourcis, cycles, dates précises
     ├── PhotoCropModal.jsx         — recadrage/zoom avatar
     ├── CoachAthletesSection.jsx   — section "Mes athlètes" dans ProfileView
     ├── CalendarSyncSection.jsx    — section sync calendrier (CalDAV/iCal)
@@ -157,7 +156,8 @@ src/
   weekMeta: {},        // { "2026-W10": { mesocycle, microcycle, objective, rpe } }
   customSessions: [],  // sessions personnalisées (legacy, migré → sessions_catalog)
   mesocycles: [],      // DEFAULT_MESOCYCLES
-  sleep: [],           // [{ date, duration, quality, deep, light, rem }]
+  sleep: [],           // [{ date, total, deep, rem, light, awake, score }] : plus rien ne le lit
+                       // (l'import CSV Garmin a été retiré en octobre 2026)
   hooper: [],          // [{ date, fatigue, stress, douleur, humeur, sommeil }]
   notes: {},           // { "2026-03-09": "texte" }
   creatine: {},        // { "2026-03-09": true }
@@ -351,6 +351,10 @@ Navigation : les vues calendrier (week/month/year) sont regroupées sous un bout
   - Curseur `pointer` uniquement si on n'est pas déjà sur la période en cours
   - Tooltip : "Aller à la semaine en cours" / "Aller au mois en cours" / "Aller à l'année en cours"
   - Quand on y est : mention « Semaine / Mois / Année en cours » sous le libellé
+- **Ouvrir le calendrier sur un jour** (une barre ou une case des stats, une
+  notification touchée) : `setCurrentDate(jour)` suffit. Le jour sélectionné de
+  `CalendarView` part de `currentDate` à son montage ; il partait d'aujourd'hui,
+  si bien qu'on arrivait sur la bonne semaine avec la journée du jour ouverte.
 
 ## Navigation par swipe (mobile)
 
@@ -672,9 +676,11 @@ moment) et ouvre leur objectif d'une touche.
 - SVG d'overlay inside le div de crop (position:absolute, pointerEvents:none) — PAS en sibling
 
 ### Créatine
-- Checkbox toujours visible dans `DailyNotesSection`, décochée par défaut
+- `data.creatine[date] = true` quand cochée, supprimée quand décochée ; lue par
+  les vues bureau (mois, année) et le shell
 - Pas de toggle opt-in dans le profil
-- `data.creatine[date] = true` quand cochée, supprimée quand décochée
+- La case de `DailyNotesSection` n'existe plus : le composant n'était importé
+  nulle part, il a été supprimé avec la refonte des stats (octobre 2026)
 
 ### Thème (`theme/palette.js` + `makeStyles.js` + `ThemeContext.jsx`)
 
@@ -1044,50 +1050,154 @@ c'est une habitude, elle a ses propres rappels. À ne pas confondre avec
 `hasDayLog()` (`lib/helpers.js`), qui répond à « y a-t-il quelque chose de
 noté ce jour-là ? » — c'est ce que remplit la pastille du calendrier.
 
-### Dashboard — graphiques (`components/Dashboard.jsx`)
-- **Périodes** : Semaine · Mois · Année, mêmes libellés et même `Segmented` que
-  le calendrier. Un seul découpage sert toutes les séries (`getBuckets`) : la
-  semaine se lit en jours, le mois en semaines, l'année en mois.
-- **Écart de charge** (remplace le graphe « RPE moyen ») : `feedback.rpe −
-  chargePlanned`, moyenné par période. Au-dessus de zéro la séance a été plus
-  dure que prévu (charge sous-estimée), en dessous plus facile — deux teintes de
-  part et d'autre d'une ligne de zéro, jamais un dégradé.
-- **Qualité et forme, toujours superposées** (plus de case à cocher : ces trois
-  lectures ne valent qu'ensemble). Les barres gardent l'axe de gauche ; les deux
-  courbes partagent **un seul** axe à droite.
-  - **Pourquoi un seul.** Trois mesures, trois échelles (écart −5..+5, qualité
-    1-5, Hooper 4-28). Empilées telles quelles, ce serait trois axes verticaux
-    dont l'alignement est arbitraire — le graphe inventerait une corrélation.
-    Les deux superpositions sont donc **indexées sur une base commune** : « % du
-    mieux possible », domaine borné en dur 0-100, une seule direction (plus haut
-    = mieux). Une mauvaise semaine fait plonger les deux courbes ensemble.
-  - Le Hooper y est **retourné** et nommé « forme » (4 → 100 %, 28 → 0 %) : sans
-    ça, les deux courbes voudraient dire l'inverse l'une de l'autre sur le même
-    axe. L'infobulle rend les **valeurs brutes** (★ 4/5, « Hooper 12 —
-    Récupération normale ») : l'indice sert à superposer, pas à lire.
-  - Couleurs : `qualityLine` (prune) et `hooperLine`. La prune est la seule
-    famille, avec le cyan, qui reste séparable des trois autres séries dans les
-    **deux** thèmes en vision des couleurs déficiente (ΔE ≥ 9,8 clair / 8,7
-    sombre) ; le cyan frôlait le vert-d'eau du Hooper. Reste une limite connue,
-    antérieure : en clair, `hooperLine` (#1c8a5a) et l'accent (#ff4500) sont à
-    ΔE 7,6 en protanopie — acceptable parce que l'un est une courbe et l'autre
-    des barres, et que la légende nomme les quatre séries.
-- Graphique poids : scaffold période complète avec données manquantes nulles
-- Graphique Hooper : barres (BarChart) au lieu de lignes, scaffold identique
-- Sélecteur de plage Sem / Mois / An pour tous les graphiques stats
-- **Heatmap d'activité** (`components/ActivityHeatmap.jsx`, GitHub-style) : 53 semaines × 7 jours, sélecteur de métrique (Charge / RPE / **Qualité** / Hooper / Rappels), labels mois et jours, tooltip hover, légende adaptée à la métrique, adaptatif mobile. La métrique **Qualité** moyenne les étoiles du retour (`feedback.quality`, 1-5) sur les séances du jour : rampe séquentielle `DATA.heatmap.quality`, une seule teinte, luminosité monotone, et un premier échelon distinct de la case vide — une séance à 1 ★ ne doit pas se lire « aucune donnée »
-  - La métrique **Rappels** ne mesure qu'une chose : le **nombre de rappels
-    manqués** ce jour-là (actifs et non cochés). Zéro manqué prend le premier
-    échelon de `DATA.heatmap.reminders`, franchement **positif** ; la teinte
-    vire au rouge à mesure qu'il en reste, jusqu'à « 4 et + ». Ni taux ni
-    proportion : trois rappels cochés sur quatre, c'est **un** manqué, comme un
-    seul rappel oublié. Deux cas restent neutres — un jour **sans rappel actif**
-    (rien à rater) et la **journée en cours** tant qu'il reste des cases à
-    cocher (ce qui n'est pas fait n'est pas encore manqué). La rampe ne part
-    donc plus du gris de la case vide : « aucun manqué » et « aucun rappel »
-    sont deux choses différentes et doivent se distinguer à l'œil. La légende
-    dit « Aucun manqué → 4 et + » plutôt que « Moins → Plus », qui ne veut rien
-    dire sur un compte d'échecs.
+### La page Stats (`components/Dashboard.jsx`, `lib/stats.js`)
+
+Refaite en octobre 2026 après un audit : la page empilait des graphes qui ne
+suivaient pas tous la période choisie (heatmap, « Charge 4 sem. », sommeil), et
+répondait mal aux questions simples. Elle se lit maintenant de haut en bas, et
+**tout ce qui est sous le sélecteur suit la période** :
+
+1. **Période** : 4 sem. · Semaine · Mois · Année · Dates, avec navigation, et
+   dessous le **découpage** (par jour · semaine · mois, voir plus bas).
+   **4 semaines par défaut, à chaque ouverture** (le choix n'est pas retenu) :
+   la semaine en cours seule est presque vide un lundi. Ce sont des semaines du
+   calendrier, la semaine en cours et les trois d'avant, parce que le plan se
+   construit en semaines. En vue Mois, les semaines du bord **s'arrêtent au
+   mois** (le 29 septembre ne compte pas dans octobre).
+2. **Résumé**, quatre cartes : séances faites sur dues (non notées, manquées et
+   à venir en note), temps, charge, km (Hooper moyen à la place s'il n'y a pas
+   de course). Toucher une carte descend à sa section.
+3. **Charge**, empilée par sport : plein = fait, atténué = prévu ou passé sans
+   retour, si bien que le total d'une barre est celui du calendrier.
+   Pointillés : la moyenne par tranche de la période d'avant. Toucher une barre
+   ouvre son détail **sous** le graphe (où il ne cache rien), avec « Voir dans
+   le calendrier » (`onOpenDay` → `setCurrentDate` + `setViewMode`).
+4. **Répartition** par sport, sur le temps (sur le nombre de séances si aucune
+   durée n'est saisie).
+5. **Récupération** : le Hooper sur **l'échelle du journal** (`lib/hooper.js` :
+   ≤ 14 bien récupéré, ≤ 17 modérément fatigué, au-delà très fatigué), et le
+   critère qui pèse le plus.
+6. **Ressenti face au plan** : l'écart moyen (ressenti − prévu) dit en une
+   phrase, par tranche et par sport, et la qualité moyenne en étoiles.
+7. **Course** (course et trail) : km faits et prévus, l'objectif de la semaine
+   en trait sur les semaines entières, « objectif tenu n semaines sur m » sur
+   les semaines terminées. Ni D+ ni allure, à dessein pour l'instant.
+8. **Poids** (axe au demi-kilo, variation sur la période) et **Repas**
+   (moyennes par jour noté, pas par jour du calendrier).
+9. **Habitudes** : la tenue de chaque rappel, et les jours de journal remplis,
+   comptés depuis le premier jour jamais noté.
+10. **Régularité** : la heatmap, toujours l'année écoulée (voir plus bas).
+
+Les règles qui ne se voient pas :
+
+- **« Fait » veut dire noté fait** (ou adapté). Une séance passée sans retour
+  n'est ni faite ni manquée : elle est « non notée », et la carte Séances le
+  dit. Les totaux du résumé et de la répartition ne comptent que le fait.
+  Une échéance passée a eu lieu : sa charge compte, mais ce n'est pas une
+  séance (ni dans le nombre, ni dans le temps).
+- **La comparaison se fait à date** (`comparisonWindows`) : un mardi, la
+  semaine en cours se compare au lundi et au mardi de la semaine d'avant, pas
+  à toute la semaine. Et **pas de variation tant que rien n'est noté** dans la
+  période, ni quand la période d'avant n'a rien de fait : « −100 % » un mardi
+  matin ne dirait que « lundi n'est pas encore noté », et face à des mois où
+  l'app ne servait pas encore, tout serait « nouveau ». La carte dit « à
+  noter ».
+- **Les moyennes d'écart sont pondérées par séance** : une semaine d'une seule
+  séance ne pèse pas autant qu'une semaine de cinq (l'ancienne carte faisait
+  la moyenne des moyennes).
+- **Une section utilisée une fois reste affichée**, vide ou pleine (« Aucune
+  pesée sur la période ») : la page garde sa forme d'une période à l'autre. Une
+  fonction jamais utilisée (pas de pesée, pas de repas) ne prend pas de place.
+- **Nombres à la française** (`fmtNum`, `fmtSigned`, `fmtDuration` : virgule,
+  vrai signe moins) et aucun tiret long dans les textes. L'axe du poids coupait
+  ses graduations (« .635 ») : il est gradué au demi-kilo, sans marge négative.
+- ⚠️ **Toucher un graphe Recharts lui donne le focus**, et Chrome entourait les
+  barres d'un cadre orange. `index.css` retire l'outline hors clavier
+  (`.recharts-wrapper *:focus:not(:focus-visible)`). Les graphes portent en
+  plus `key={periodKey}` : une infobulle restée ouverte par un toucher ne
+  survit pas au changement de période.
+- Un sport isolé (filtre) sort aussi les **échéances** : elles n'ont pas de
+  sport.
+- Le **sommeil** a été retiré avec son import CSV Garmin, qui ne fonctionnait
+  pas. `data.sleep` reste dans le blob, rien ne le lit plus.
+- Tests : `npm run test:stats` (32 cas) : périodes et bornes du mois,
+  comparaison à date (31 mars → 28 février compris), état d'une séance, résumé,
+  charge empilée, répartition, écart pondéré, Hooper, poids, repas, course et
+  objectifs, rappels et journal, écriture des nombres ; et pour les plages
+  libres : découpage d'office, plafond de tranches, tranches coupées, années
+  sur l'axe, flèches, comparaison, raccourcis, cycles, erreurs de saisie.
+
+**Une plage libre, et le découpage à part** (`StatsRangePicker.jsx`,
+`lib/stats.js`). Choisir la plage et choisir la finesse des barres sont deux
+questions : « Dates » ouvre une feuille pour la première, la ligne « Par »
+répond à la seconde, pour n'importe quelle période.
+
+- La feuille va du plus rapide au plus précis : des **raccourcis** (30 derniers
+  jours, 3, 6 ou 12 derniers mois, depuis le 1er janvier), **un cycle du plan**
+  (les mésocycles aux dates de l'éditeur, `cycleRanges` → `recomputeMesoDates`,
+  « en cours » et « à venir » signalés), puis **deux dates**. Une sélection
+  libre vaut `{ range: "custom", start, end, label? }` : `label` est le nom du
+  cycle, affiché sous les dates (« Force · 28 jours »).
+- **Les flèches décalent de la longueur de la plage** (`stepSelection`) :
+  70 jours en arrière pour une plage de 70 jours. Le nom du cycle tombe alors,
+  ce n'est plus lui.
+- **Le découpage se choisit tout seul** (`autoGrain` : par jour jusqu'à
+  14 jours, par semaine jusqu'à 120, par mois au-delà) et se change à la main.
+  Le choix tient aux flèches tant qu'il reste lisible (`resolveGrain`) ;
+  choisir une autre période le remet en automatique.
+- **Au-delà de 100 tranches, un découpage n'est plus proposé** (`MAX_POINTS`) :
+  il reste affiché, grisé, avec « trop long par jour ». Un an par jour, c'est
+  365 traits sur 300 px. Trois mois par jour passent encore (92 au plus).
+- **Au-delà de 35, vue simplifiée** (`DENSE_POINTS`) : la charge passe à une
+  seule couleur (le détail par sport reste dans Répartition), le Hooper passe
+  des barres à une courbe, les étiquettes s'espacent (`tickInterval`). Une
+  barre de 3 px ne se vise pas : on **glisse le doigt** et une infobulle suit.
+  Les graphes portent alors `data-no-swipe`, sans quoi le carrousel d'onglets
+  partirait avec le geste.
+- **Une plage libre se compare** à autant de jours juste avant
+  (`comparisonFor`), à date si elle contient aujourd'hui.
+- Une tranche coupée par la période (une semaine commencée un mercredi, le mois
+  du bord) ne compte que ses jours, et son détail le dit : « Du 12 au 16 août »,
+  pas « Semaine du 10 août ».
+- Une plage écrit son année quand ce n'est pas celle d'aujourd'hui, et les deux
+  quand elle en chevauche deux. Sur plusieurs années, l'axe des mois l'écrit sur
+  janvier (« janv 26 ») et sur le premier mois.
+- ⚠️ **La feuille est portée dans `<body>`.** Rendue dans la page, elle vivrait
+  dans un calque du carrousel (`SwipePager`), qui porte `will-change:
+  transform` : un contexte d'empilement, **et** le repère de ses
+  `position: fixed`. La barre du bas passait par-dessus (et restait touchable),
+  et la feuille se décalait d'autant que la page avait défilé. Toutes les
+  modales rendues dans une page ont ce défaut (`MesoDetailModal` depuis le
+  calendrier, par exemple) ; celles que rend le shell y échappent.
+
+**La heatmap de régularité** (`components/ActivityHeatmap.jsx`) ferme la page :
+53 semaines × 7 jours, l'année écoulée quelle que soit la période (le titre le
+dit). Trois métriques : Charge · Hooper · Rappels (RPE et Qualité sont parties :
+la première doublait la charge, la seconde est dans « Ressenti face au plan »).
+
+- **Une case se touche** : son détail s'affiche sous la grille (séances du
+  jour, Hooper, rappels cochés ou non) avec « Ouvrir ce jour ». L'ancienne
+  infobulle n'écoutait que le survol de la souris, donc rien au doigt, et sur
+  les semaines récentes elle sortait de l'écran d'environ 100 px.
+- La case touchée se calcule **depuis la position du doigt** (colonne, ligne),
+  interstices compris : une cible de 11 px ne se vise pas au pouce.
+- La charge d'un jour est celle du calendrier : séances **et échéances**
+  (l'ancienne heatmap ignorait les échéances, que le graphe comptait).
+- Le Hooper prend les couleurs du journal (`hooperColor`), et sa légende dit
+  « Bien récupéré → Très fatigué ». Elle montrait une rampe que les cases
+  n'utilisaient pas.
+- Les lignes portent L, M, V, D (lundi, mercredi, vendredi, dimanche) : le
+  vendredi était étiqueté « J ».
+- La métrique **Rappels** ne mesure qu'une chose : le **nombre de rappels
+  manqués** ce jour-là (actifs et non cochés). Zéro manqué prend le premier
+  échelon de `DATA.heatmap.reminders`, franchement **positif** ; la teinte
+  vire au rouge à mesure qu'il en reste, jusqu'à « 4 et + ». Ni taux ni
+  proportion : trois rappels cochés sur quatre, c'est **un** manqué, comme un
+  seul rappel oublié. Deux cas restent neutres : un jour **sans rappel actif**
+  (rien à rater) et la **journée en cours** tant qu'il reste des cases à
+  cocher (ce qui n'est pas fait n'est pas encore manqué). « Aucun manqué » et
+  « aucun rappel » sont deux choses différentes et doivent se distinguer à
+  l'œil.
 
 ### AccueilView — séances du jour
 La carte liste **toutes** les séances de la journée, triées par heure de départ
@@ -1493,9 +1603,11 @@ ordinateur.
 - Depuis « Tous », toucher un sport l'**isole**. Le traiter comme un décochage
   partirait des sept disciplines pour en retirer une — l'inverse de l'intention.
 - **Un seul point de filtrage** : `filterDataBySports()` retire les séances
-  écartées de `weeks`, et tout ce qui en dérive suit (charge, écart, qualité,
-  heatmap). Poids, Hooper et sommeil voyagent dans le même objet et restent
-  entiers — ils ne dépendent d'aucun sport. Sans filtre, la fonction renvoie
+  écartées de `weeks`, et tout ce qui en dérive suit (résumé, charge,
+  répartition, écart, course, heatmap). Les échéances sortent aussi
+  (`buildDayIndex(data, { includeEvents: false })`) : elles n'ont pas de sport.
+  Poids, Hooper et repas voyagent dans le même objet et restent entiers : ils
+  ne dépendent d'aucun sport. Sans filtre, la fonction renvoie
   l'objet **d'origine** : une nouvelle identité à chaque rendu ferait retracer
   tous les graphes.
 - La sélection est une préférence d'affichage : elle vit en localStorage
@@ -1516,6 +1628,7 @@ ordinateur.
 | `supabase/migrations/20260823_climbing_plans_updated_at.sql` | Trigger `BEFORE INSERT OR UPDATE` sur `climbing_plans` : `updated_at = now()` côté serveur — la synchronisation compare des dates, elles doivent venir d'une seule horloge | ✅ appliquée |
 | `supabase/migrations/20260824_climbing_plans_status_solo.sql` | `CHECK` de `climbing_plans.status` élargi à `'solo'` — la contrainte d'origine ne connaissait que coach/athlete/auto, donc « athlète solo » repartait en 23514 et le rôle n'était jamais enregistré | ✅ appliquée |
 | `supabase/migrations/20260825_drop_auto_role.sql` | `status = 'auto'` → `'coach'` — le rôle « autonome » ne se distinguait du coach nulle part et a été retiré de l'app | ⏳ **à coller** (facultatif : l'app lit déjà 'auto' comme coach) |
+| `supabase/migrations/20261020_explicit_api_grants.sql` | `GRANT SELECT` sur `climbing_plans` à `anon` (plannings publics) et à `service_role` (CalDAV, iCal) : les deux seuls accès qui ne tenaient qu'aux anciens droits par défaut de Supabase | **sans effet sur le projet actuel** (les tables existantes gardent leurs droits) ; à passer sur une base recréée |
 
 Statuts vérifiés le 20 août 2026 contre le projet Supabase (existence des
 tables, colonnes, RPC et buckets via l'API REST) ; les trois d'août sur
@@ -1524,6 +1637,31 @@ concatène les 9 dernières dans l'ordre, idempotent et ré-exécutable.
 `supabase/legacy/` conserve les scripts SQL antérieurs aux migrations — dont
 `supabase-community-sessions.sql`, seule définition de `community_sessions`
 (utilisée par `useCommunitySessionsSync.js`), qui n'a pas d'équivalent en migration.
+
+### ⚠️ Une nouvelle table a besoin d'un GRANT (depuis le 30 octobre 2026)
+
+À partir de cette date, Supabase n'ouvre plus d'office l'API (supabase-js,
+PostgREST, GraphQL) aux **nouvelles** tables du schéma `public`, ni à leurs
+séquences, quelle que soit la façon de les créer (éditeur SQL compris). Sans
+GRANT, la table répond `permission denied` (42501) **même si une policy RLS
+l'autorise** : la policy choisit les lignes, le GRANT ouvre la table. Les
+tables existantes gardent leurs droits.
+
+Toute migration qui crée une table porte donc ses droits, dans le même fichier,
+et seulement ceux dont le code a besoin :
+
+```sql
+ALTER TABLE public.ma_table ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.ma_table TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.ma_table_id_seq TO authenticated;  -- si `id` est un serial
+-- GRANT SELECT ON public.ma_table TO anon;          seulement pour une lecture publique (policy TO anon)
+-- GRANT SELECT ON public.ma_table TO service_role;  seulement si api/ la lit (clé service_role)
+```
+
+Même chose pour une fonction appelée en RPC : `GRANT EXECUTE … TO
+authenticated` (déjà le cas de `search_athletes` et `get_my_coaches`).
+L'erreur 42501 se reconnaît à son message, qui contient la requête GRANT à
+exécuter.
 
 ## APK Android (Capacitor)
 
@@ -1603,6 +1741,23 @@ tiroir au lieu de s'empiler à côté.
 - `res/drawable/ic_stat_charge.xml` : la marque en silhouette blanche. Sans
   icône de statut, Android retomberait sur celle du lanceur — fond noir plein,
   donc carré blanc dans la barre d'état.
+- **Couleur : l'accent de la palette** (`iconColor`, posé sur chaque
+  notification par `syncNotifications`). Android en teinte la pastille de
+  l'icône et le nom de l'app ; sans couleur, chaque constructeur met la sienne,
+  du bleu chez Samsung sur une app orange et noire. Lue dans
+  `PALETTE.dark.accent`, pas recopiée : la règle « une seule source de
+  couleurs » tient aussi ici.
+  - ⚠️ **Le fond de la carte ne se règle pas.** Il suit le thème clair ou
+    sombre du téléphone ; `setColorized` n'est honoré que pour un service au
+    premier plan ou un lecteur média. Une app orange et noire a donc des
+    notifications noires si le téléphone est en sombre, blanches sinon.
+  - ⚠️ **Une couleur illisible fait rejeter toute la planification** (le
+    plugin rejette l'appel `schedule` entier sur un `Color.parseColor` raté).
+    Android ne lit que `#rrggbb` / `#aarrggbb` : un accent passé un jour en
+    `rgba()` est écarté, et la couleur du système revient plutôt que les
+    rappels.
+  - Une notification **déjà affichée** garde sa couleur : le ressenti du jour
+    n'est jamais reposé (voir plus bas), il prend la nouvelle au lendemain.
 
 ### Rappel du ressenti (`planHooperNotifications`, bascule « Ressenti du jour »)
 
@@ -2239,7 +2394,7 @@ curl -s "$U""diag.json"                     # tailles, temps, href suspects
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
-npm run test     # tous les tests (CalDAV, notes, couleurs, rappels, migrations, allure, fusion, grille, accueil)
+npm run test     # tous les tests (CalDAV, notes, couleurs, rappels, migrations, allure, fusion, grille, accueil, stats)
 npm run test:caldav  # protocole CalDAV (node --test, sans dépendance)
 npm run test:text    # saisie en liste et filtrage des liens (lib/rich-text.js)
 npm run test:color   # conversions HSL ↔ hex (lib/color.js)
@@ -2249,6 +2404,7 @@ npm run test:pace      # temps · distance · allure : cases, frappe, recalcul (
 npm run test:merge     # fusion à trois voies des plannings (lib/merge-plan.js)
 npm run test:grid      # grille horaire de la semaine : durée, cascade, rangée du haut (lib/time-grid.js)
 npm run test:phrase    # phrase d'accueil : jours de repos, règles d'écriture (lib/home-phrase.js)
+npm run test:stats     # page Stats : périodes, comparaison à date, sections (lib/stats.js)
 npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
 npm run cap:open # ouvre Android Studio
 ./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement
@@ -2260,8 +2416,8 @@ npm run cap:open # ouvre Android Studio
 - Code-splitting via `manualChunks` (Recharts séparé du bundle principal)
 - ~~Migrer le stockage avatar base64 → Supabase Storage (URL)~~ ✅ fait (avatar-storage.js + bucket `avatars`)
 - Tests unitaires (helpers, charge, storage) + CI GitHub Actions — amorcé avec `lib/rich-text.js` (`npm run test:text`)
-- Sync Garmin Connect pour le sommeil (voir `garmin-sync-notes.md` — bloqué auth)
-- Import CSV sommeil Garmin (bouton déjà présent dans stats)
+- ~~Sommeil Garmin (sync ou import CSV)~~ abandonné en octobre 2026 : l'import ne
+  fonctionnait pas, la section et son code ont été retirés
 - Notifications push PWA
 - Vue "tableau de bord coach" : résumé de tous les athlètes sur une seule page
 - Invitation coach→athlète par lien (au lieu de recherche par nom)

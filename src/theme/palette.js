@@ -84,15 +84,8 @@ const light = {
   dangerBg:      "rgba(192,57,43,0.10)",
   dangerBorder:  "rgba(192,57,43,0.30)",
   info:          "#3a63c8",
-  // Ligne de l'indice Hooper superposée au graphe d'écart : troisième teinte,
-  // séparable de l'accent et de `info` y compris en vision des couleurs
-  // déficiente (validé : ΔE ≥ 21 deutan/protan).
-  hooperLine:    "#1c8a5a",
-  // Qualité de séance (les étoiles du retour), superposée au même graphe que
-  // l'écart et la forme. Teinte prune : la seule famille, avec le cyan, qui
-  // reste séparable des trois autres séries dans les DEUX thèmes en vision des
-  // couleurs déficiente (ΔE ≥ 9,8 clair / 8,7 sombre) — le cyan frôlait le
-  // vert-d'eau du Hooper.
+  // Qualité de séance (les étoiles du retour, dans les stats). Teinte prune :
+  // elle se distingue de l'accent et de `info`, qui portent l'écart à côté.
   qualityLine:   "#8e3a6b",
   infoBg:        "rgba(58,99,200,0.10)",
   infoBorder:    "rgba(58,99,200,0.30)",
@@ -155,8 +148,7 @@ const dark = {
   dangerBg:      "rgba(255,107,95,0.12)",
   dangerBorder:  "rgba(255,107,95,0.35)",
   info:          "#6c8cff",
-  hooperLine:    "#5fe0c0",   // cf. commentaire côté clair
-  qualityLine:   "#e08ab8",   // idem
+  qualityLine:   "#e08ab8",   // cf. commentaire côté clair
   infoBg:        "rgba(108,140,255,0.12)",
   infoBorder:    "rgba(108,140,255,0.35)",
 };
@@ -209,32 +201,20 @@ export const DATA = {
 
   // Types de blocs — affichés en petit filet coloré. Recopiés dans les séances
   // créées, donc fixes eux aussi.
-  // Rampes de la heatmap d'activité : 5 paliers, du vide à l'intensité max.
-  // « charge » et « rpe » montent vers l'accent ; « hooper » est divergente
-  // (bien → mal). « reminders » compte les rappels **manqués** : son premier
-  // palier vaut « aucun manqué » et doit donc être franchement positif — pas le
-  // gris d'une case vide, qui lui veut dire « aucun rappel ce jour-là ».
+  // Rampes de la heatmap de régularité : 5 paliers. « charge » monte vers
+  // l'accent. « reminders » compte les rappels **manqués** : son premier palier
+  // vaut « aucun manqué » et doit donc être franchement positif, pas le gris
+  // d'une case vide, qui lui veut dire « aucun rappel ce jour-là ». Le Hooper
+  // n'a pas de rampe à lui : il prend l'échelle du journal (`DATA.hooper`).
   heatmap: {
     charge:    { light: ["#f0f0f1", "#e6d8cf", "#d4b09a", "#c07a52", "#b04a24"],
                  dark:  ["#1c1c1c", "#33241d", "#5c3d2c", "#9a6143", "#e8926a"] },
-    rpe:       { light: ["#f0f0f1", "#eae0cc", "#d6c08e", "#b89a55", "#8a6a35"],
-                 dark:  ["#1c1c1c", "#2a2418", "#4d422a", "#8a7442", "#c9a95e"] },
-    hooper:    { light: ["#f0f0f1", "#cfe0d4", "#4d7a5b", "#8a6a35", "#a44a4a"],
-                 dark:  ["#1c1c1c", "#24332a", "#8fb89a", "#c9a95e", "#c26b74"] },
     reminders: { light: ["#4d7a5b", "#7a8446", "#8a6a35", "#9a5a3c", "#a44a4a"],
                  dark:  ["#8fb89a", "#b0b87e", "#c9a95e", "#c98c68", "#c26b74"] },
-    // Qualité de séance (1-5 étoiles). Rampe **séquentielle** : une seule
-    // teinte, du pâle au soutenu — plus c'est dense, meilleure était la séance.
-    // Luminosité strictement monotone (0.918 → 0.487 en clair, 0.299 → 0.787 en
-    // sombre), et le premier échelon reste distinct de la case vide : une
-    // séance notée 1 ★ ne doit pas se lire « aucune donnée ».
-    quality:   { light: ["#dae8e0", "#b8d9c4", "#88c2a0", "#4f9975", "#256f4f"],
-                 dark:  ["#24312a", "#2c4636", "#3f6b50", "#5f9a74", "#8fc9a8"] },
   },
 
-  // Séries de graphiques : phases de sommeil, et main gauche / droite pour les
-  // suspensions. Fixes — ce sont des catégories, pas des états du thème.
-  sleep: { deep: "#4a6b8a", rem: "#6d5f8a", light: "#3f7f84", awake: "#9a5f3a66" },
+  // Séries de graphiques : main gauche / droite pour les suspensions. Fixes,
+  // ce sont des catégories, pas des états du thème.
   hands: { left: "#6d5f8a", right: "#a05a72" },
 
   // Couleur de repli quand un libellé n'a pas de couleur connue.

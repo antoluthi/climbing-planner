@@ -112,7 +112,10 @@ export function CalendarView({
   const c = colors(isDark);
   const today = localDateStr(new Date());
 
-  const [selected, setSelected] = useState(() => localDateStr(new Date()));
+  // Le jour sélectionné part de la date affichée : arrivé depuis les stats ou
+  // une notification sur un autre jour, c'est celui-là qu'on vient voir. Au
+  // démarrage, la date affichée est aujourd'hui.
+  const [selected, setSelected] = useState(() => localDateStr(currentDate || new Date()));
   const [mesoDetail, setMesoDetail] = useState(null);
   const [layout, setLayout] = useState(readLayout);
   const chooseLayout = (next) => {

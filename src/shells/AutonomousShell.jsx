@@ -706,11 +706,12 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
               isLoading={!!session && !cloudLoaded}
               sports={statsSports}
               onEditSports={() => setSportSheet(true)}
-              onUpdateSleep={newRows => setData(d => {
-                const map = Object.fromEntries((d.sleep || []).map(r => [r.date, r]));
-                for (const r of newRows) map[r.date] = r;
-                return { ...d, sleep: Object.values(map).sort((a, b) => a.date.localeCompare(b.date)) };
-              })}
+              // Une barre ou une case touchée mène au calendrier, sur ce jour
+              // (ou ce mois, depuis la vue Année).
+              onOpenDay={(dateISO, mode) => {
+                setCurrentDate(new Date(dateISO + "T12:00:00"));
+                setViewMode(mode === "month" ? "month" : "week");
+              }}
             />
           </Suspense>
         );

@@ -33,9 +33,9 @@ export function SportFilterSheet({ selected, onChange, onClose }) {
       <ModalHeader eyebrow="Statistiques" title="Sports affichés" onClose={onClose} />
       <div style={{ padding: "4px 18px 18px" }}>
         <p style={{ fontSize: 12, color: c.textMuted, lineHeight: 1.5, margin: "0 0 14px" }}>
-          Ne concerne que ce qui vient des séances — charge, écart, qualité et
-          l’activité. Le poids, le bien-être et le sommeil ne dépendent d’aucun
-          sport et restent affichés en entier.
+          Ne concerne que ce qui vient des séances : résumé, charge,
+          répartition, ressenti, course et régularité. Le Hooper, le poids et
+          les repas ne dépendent d’aucun sport et restent affichés en entier.
         </p>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
