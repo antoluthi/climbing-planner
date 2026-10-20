@@ -50,3 +50,10 @@ body { overflow-x: hidden; }
   color: var(--cp-seg-ph);
   opacity: 1;
 }
+
+/* Graphiques (Recharts) : toucher une barre donne le focus à un calque du
+   graphe, et Chrome l'entourait d'un cadre orange. Le cadre reste au clavier,
+   où il dit où l'on est ; au doigt et à la souris, il n'a rien à dire. */
+.recharts-wrapper *:focus:not(:focus-visible) {
+  outline: none;
+}

@@ -28,53 +28,33 @@ export function Skeleton({
   );
 }
 
-// Dashboard stats skeleton : 3 cards de chiffres + 2 zones graphique
+// Stats : la silhouette de la page, dans l'ordre où elle s'affiche — titre,
+// sélecteur de période, les quatre cartes du résumé, puis un graphe.
 export function DashboardSkeleton() {
   const { isDark } = useThemeCtx();
   const surface = colors(isDark).card;
   const border  = colors(isDark).borderSubtle;
+  const card = { background: surface, border: `1px solid ${border}`, borderRadius: 16 };
   return (
     <div
       role="status"
       aria-label="Chargement des statistiques"
-      style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 24 }}
+      style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 18, maxWidth: 600, margin: "0 auto", width: "100%" }}
     >
-      {/* Title */}
-      <Skeleton width={120} height={14} />
-
-      {/* 3 stats cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-        {[0, 1, 2].map(i => (
-          <div key={i} style={{
-            background: surface, border: `1px solid ${border}`,
-            borderRadius: 8, padding: "14px 16px",
-            display: "flex", flexDirection: "column", gap: 6,
-          }}>
-            <Skeleton width={60} height={24} />
-            <Skeleton width="60%" height={10} />
+      <Skeleton width={90} height={26} />
+      <Skeleton width="100%" height={36} radius={999} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} style={{ ...card, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+            <Skeleton width="45%" height={10} />
+            <Skeleton width="60%" height={20} />
           </div>
         ))}
       </div>
-
-      {/* Chart 1 */}
       <div>
-        <Skeleton width={100} height={11} style={{ marginBottom: 10 }} />
-        <div style={{
-          background: surface, border: `1px solid ${border}`,
-          borderRadius: 8, padding: 14,
-        }}>
-          <Skeleton width="100%" height={180} radius={4} />
-        </div>
-      </div>
-
-      {/* Chart 2 */}
-      <div>
-        <Skeleton width={140} height={11} style={{ marginBottom: 10 }} />
-        <div style={{
-          background: surface, border: `1px solid ${border}`,
-          borderRadius: 8, padding: 14,
-        }}>
-          <Skeleton width="100%" height={140} radius={4} />
+        <Skeleton width={70} height={11} style={{ marginBottom: 10 }} />
+        <div style={{ ...card, padding: 16 }}>
+          <Skeleton width="100%" height={190} radius={6} />
         </div>
       </div>
     </div>

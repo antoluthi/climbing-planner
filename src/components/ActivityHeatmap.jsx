@@ -1,29 +1,46 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { getMondayOf, addDays, localDateStr } from "../lib/helpers.js";
 import { getSessionCharge } from "../lib/charge.js";
-import {
-  getActiveRemindersForDate,
-  isReminderCheckedOn,
-} from "../lib/reminders.js";
+import { hooperLabel, hooperColor } from "../lib/hooper.js";
+import { getActiveRemindersForDate, isReminderCheckedOn } from "../lib/reminders.js";
+import { itemsBetween, EVENT_KEY } from "../lib/stats.js";
 import { colors, DATA } from "../theme/palette.js";
-import { Chip } from "./ui/Ascent.jsx";
+import { Chip, Card, SectionLabel, SportDot, SecondaryButton, SANS, MONO } from "./ui/Ascent.jsx";
 
-function hooperLabel(total) {
-  if (total <= 10) return "Bien récupéré";
-  if (total <= 14) return "Récupération normale";
-  if (total <= 17) return "Attention fatigue";
-  if (total <= 20) return "Fatigue élevée";
-  return "Repos recommandé";
-}
+// ─── RÉGULARITÉ (heatmap façon GitHub) ───────────────────────────────────────
+// L'année écoulée, jour par jour, quelle que soit la période choisie plus haut
+// (le titre le dit). Trois lectures : la charge, le Hooper, les rappels.
+//
+// Au doigt, une case se touche : son détail s'affiche sous la grille, où il ne
+// cache rien et ne sort jamais de l'écran. La case touchée se repère même dans
+// l'interstice entre deux cases : on calcule la colonne et la ligne depuis la
+// position du doigt, plutôt que de compter sur une cible de 11 px.
+//
+// La charge d'un jour est celle du calendrier (`index`, construit par la page
+// avec `buildDayIndex`) : séances et échéances, une séance manquée valant 0.
 
-// ─── ACTIVITY HEATMAP (GitHub-style) ──────────────────────────────────────────
+const CELL = 11;
+const GAP = 2;
+const STEP = CELL + GAP;
+const WEEKS = 53;
+// Une ligne sur deux porte son initiale : lundi, mercredi, vendredi, dimanche.
+const DAY_LABELS = ["L", "", "M", "", "V", "", "D"];
+const DAY_COL_W = 14 + 4;
 
-export function ActivityHeatmap({ data }) {
-  const { styles, isDark } = useThemeCtx();
-  const [metric, setMetric] = useState("charge"); // "charge" | "rpe" | "quality" | "hooper" | "reminders"
-  const [tooltip, setTooltip] = useState(null);
+const METRICS = [
+  { value: "charge", label: "Charge" },
+  { value: "hooper", label: "Hooper" },
+  { value: "reminders", label: "Rappels" },
+];
+
+export function ActivityHeatmap({ data, index, onOpenDay }) {
+  const { isDark } = useThemeCtx();
+  const c = colors(isDark);
+  const [metric, setMetric] = useState("charge");
+  const [selected, setSelected] = useState(null);
   const containerRef = useRef(null);
+  const gridRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
@@ -33,314 +50,221 @@ export function ActivityHeatmap({ data }) {
     return () => ro.disconnect();
   }, []);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayISO = localDateStr(new Date());
 
-  // Build per-day data from sessions
-  const dayData = {};
-  Object.entries(data.weeks || {}).forEach(([key, days]) => {
-    const monday = new Date(key + "T12:00:00");
-    (days || []).forEach((daySessions, idx) => {
-      const d = addDays(monday, idx);
-      const dateStr = d.toISOString().slice(0, 10);
-      const sessions = (daySessions || []).filter(Boolean);
-      const charge = sessions.reduce((s, se) => s + getSessionCharge(se), 0);
-      const done = sessions.filter(s => s.feedback?.done === true);
-      const rpeVals = done.filter(s => s.feedback?.rpe != null).map(s => s.feedback.rpe);
-      const avgRpe = rpeVals.length ? rpeVals.reduce((a, b) => a + b, 0) / rpeVals.length : null;
-      // Qualité ressentie (les étoiles du retour) : moyenne du jour. Une séance
-      // faite mais non notée n'entre pas dans la moyenne — elle n'a rien dit.
-      const qualVals = done.filter(s => s.feedback?.quality != null).map(s => s.feedback.quality);
-      const avgQuality = qualVals.length ? qualVals.reduce((a, b) => a + b, 0) / qualVals.length : null;
-      dayData[dateStr] = { charge, avgRpe, avgQuality, rated: qualVals.length, sessionCount: sessions.length };
-    });
-  });
-  (data.hooper || []).forEach(h => {
-    if (!dayData[h.date]) dayData[h.date] = { charge: 0, avgRpe: null, avgQuality: null, rated: 0, sessionCount: 0 };
-    dayData[h.date].hooper = h.total;
-  });
-
-  // 53 weeks ending with the week that contains today
-  const endMonday = getMondayOf(today);
-  const startMonday = getMondayOf(addDays(endMonday, -52 * 7));
-  const WEEKS = 53;
-
-  const reminders = data.reminders || [];
-  const reminderState = data.reminderState || {};
-  // Comparaison de chaînes plutôt que d'instants : un fuseau où minuit n'existe
-  // pas (changement d'heure) décalerait `getTime()` d'une heure et « aujourd'hui »
-  // ne serait aujourd'hui nulle part.
-  const todayStr = localDateStr(today);
-
-  const weeks = Array.from({ length: WEEKS }, (_, w) => {
-    return Array.from({ length: 7 }, (_, d) => {
+  // Les valeurs de chaque jour ne dépendent que des données : les couleurs,
+  // la métrique et la case touchée se calculent au rendu, sans tout refaire.
+  const weeks = useMemo(() => {
+    const today = new Date(todayISO + "T12:00:00");
+    const hooperByDate = new Map((data.hooper || []).filter(h => h?.date).map(h => [h.date, h]));
+    const reminders = data.reminders || [];
+    const reminderState = data.reminderState || {};
+    const startMonday = addDays(getMondayOf(today), -(WEEKS - 1) * 7);
+    return Array.from({ length: WEEKS }, (_, w) => Array.from({ length: 7 }, (_, d) => {
       const date = addDays(startMonday, w * 7 + d);
       const dateStr = localDateStr(date);
-      const entry = dayData[dateStr] || { charge: 0, avgRpe: null, avgQuality: null, rated: 0, sessionCount: 0, hooper: null };
-      // Rappels du jour (actifs ce jour-là)
+      const e = index?.get(dateStr);
+      let charge = 0, sessionCount = 0;
+      if (e) {
+        // Une séance manquée vaut 0 : `getSessionCharge` le sait déjà.
+        for (const s of e.sessions) { sessionCount++; charge += getSessionCharge(s); }
+        for (const ev of e.events) charge += getSessionCharge(ev);
+      }
+      const h = hooperByDate.get(dateStr);
       const active = getActiveRemindersForDate(reminders, date);
-      const remindersActive = active.length;
-      const remindersMissed = active.filter(r => !isReminderCheckedOn(reminderState, r.id, dateStr)).length;
-      const remindersDetail = active.map(r => ({
-        id: r.id, name: r.name, color: r.color,
-        checked: isReminderCheckedOn(reminderState, r.id, dateStr),
-      }));
+      const missed = active.filter(r => !isReminderCheckedOn(reminderState, r.id, dateStr)).length;
       return {
         date, dateStr,
-        isFuture: date > today,
-        isToday: dateStr === todayStr,
-        remindersActive, remindersMissed, remindersDetail,
-        ...entry,
+        isFuture: dateStr > todayISO,
+        isToday: dateStr === todayISO,
+        charge, sessionCount,
+        hooper: h?.total ?? null,
+        remindersActive: active.length,
+        remindersMissed: missed,
+        remindersDetail: active.map(r => ({ id: r.id, name: r.name, checked: isReminderCheckedOn(reminderState, r.id, dateStr) })),
       };
-    });
-  });
+    }));
+  }, [data, index, todayISO]);
 
-  // Color per metric
-  const getColor = (day) => {
-    const empty = colors(isDark).surface2;   // case sans donnée : neutre
-    const future = colors(isDark).card;
-    if (day.isFuture) return future;
+  const empty = c.surface2;
+  const colorOf = (day) => {
+    if (day.isFuture) return c.card;
     if (metric === "charge") {
-      const v = day.charge || 0;
-      if (v === 0) return empty;
-      const lvls = isDark ? DATA.heatmap.charge.dark : DATA.heatmap.charge.light;
-      if (v <= 2) return lvls[0];
-      if (v <= 5) return lvls[1];
-      if (v <= 8) return lvls[2];
-      if (v <= 12) return lvls[3];
-      return lvls[4];
-    }
-    if (metric === "rpe") {
-      const v = day.avgRpe;
-      if (v == null) return empty;
-      const lvls = isDark ? DATA.heatmap.rpe.dark : DATA.heatmap.rpe.light;
-      if (v <= 4) return lvls[0];
-      if (v <= 6) return lvls[1];
-      if (v <= 7.5) return lvls[2];
-      if (v <= 8.5) return lvls[3];
-      return lvls[4];
-    }
-    if (metric === "quality") {
-      const v = day.avgQuality;
-      if (v == null) return empty;
-      // Un échelon par étoile — plus dense, meilleure était la séance. Les
-      // seuils tombent à mi-chemin pour qu'une moyenne (2 séances à 4 et 5)
-      // aille à l'échelon le plus proche plutôt que toujours vers le bas.
-      const lvls = isDark ? DATA.heatmap.quality.dark : DATA.heatmap.quality.light;
-      if (v < 1.5) return lvls[0];
-      if (v < 2.5) return lvls[1];
-      if (v < 3.5) return lvls[2];
-      if (v < 4.5) return lvls[3];
-      return lvls[4];
+      const v = day.charge;
+      if (!v) return empty;
+      const lv = isDark ? DATA.heatmap.charge.dark : DATA.heatmap.charge.light;
+      return v <= 2 ? lv[0] : v <= 5 ? lv[1] : v <= 8 ? lv[2] : v <= 12 ? lv[3] : lv[4];
     }
     if (metric === "hooper") {
-      const v = day.hooper;
-      if (v == null) return empty;
-      // Hooper: low=good (green), high=bad (red)
-      if (v <= 10) return colors(isDark).success;
-      if (v <= 14) return colors(isDark).success;
-      if (v <= 17) return colors(isDark).warn;
-      if (v <= 20) return colors(isDark).warn;
-      return colors(isDark).danger;
+      // La même échelle que le journal et la section Récupération.
+      return day.hooper == null ? empty : hooperColor(day.hooper, isDark);
     }
-    if (metric === "reminders") {
-      // Une seule grandeur ici : le **nombre de rappels manqués**. Zéro manqué
-      // se lit positivement, et la couleur vire au rouge à mesure qu'il en
-      // reste. Rien d'autre n'entre dans le calcul — ni combien de rappels
-      // existaient, ni un taux : trois rappels sur quatre cochés, c'est un
-      // manqué, comme un seul rappel non coché.
-      if (day.remindersActive === 0) return empty;   // rien à rater ce jour-là
-      // La journée en cours n'a encore rien manqué : ce qui reste à cocher,
-      // c'est du travail en attente, pas un échec. Elle ne vire au vert que
-      // quand tout est fait.
-      if (day.isToday && day.remindersMissed > 0) return empty;
-      const lvls = isDark ? DATA.heatmap.reminders.dark : DATA.heatmap.reminders.light;
-      return lvls[Math.min(day.remindersMissed, lvls.length - 1)];
-    }
-    return empty;
+    // Rappels : le nombre de rappels **manqués**. Un jour sans rappel dû reste
+    // neutre, et la journée en cours n'a encore rien manqué tant qu'il reste
+    // quelque chose à cocher.
+    if (day.remindersActive === 0) return empty;
+    if (day.isToday && day.remindersMissed > 0) return empty;
+    const lv = isDark ? DATA.heatmap.reminders.dark : DATA.heatmap.reminders.light;
+    return lv[Math.min(day.remindersMissed, lv.length - 1)];
   };
 
-  const CELL = 11;
-  const GAP = 2;
-  const DAY_LABELS = ["L", "", "M", "", "J", "", "D"];
-  const DAY_COL_W = 14 + 4; // day-label column width + margin
-  // Fit as many weeks as the container allows; always show the most recent ones
   const maxWeeks = containerWidth > 0
-    ? Math.min(53, Math.max(4, Math.floor((containerWidth - DAY_COL_W) / (CELL + GAP))))
-    : 53;
+    ? Math.min(WEEKS, Math.max(4, Math.floor((containerWidth - DAY_COL_W) / STEP)))
+    : WEEKS;
+  const visible = weeks.slice(-maxWeeks);
 
-  // Legend colors per metric
-  const legendColors = {
-    charge:    isDark ? DATA.heatmap.charge.dark    : DATA.heatmap.charge.light,
-    rpe:       isDark ? DATA.heatmap.rpe.dark       : DATA.heatmap.rpe.light,
-    hooper:    isDark ? DATA.heatmap.hooper.dark    : DATA.heatmap.hooper.light,
-    quality:   isDark ? DATA.heatmap.quality.dark   : DATA.heatmap.quality.light,
-    reminders: isDark ? DATA.heatmap.reminders.dark : DATA.heatmap.reminders.light,
-  };
-
-
-  const muted = colors(isDark).textMuted;
-
-  // Les bornes de la légende disent ce que la rampe mesure. « Moins / Plus » ne
-  // veut rien dire quand l'échelle compte des rappels manqués.
-  const legendEnds = metric === "reminders" ? ["Aucun manqué", "4 et +"] : ["Moins", "Plus"];
-
-  const visibleWeeks = weeks.slice(-maxWeeks);
-  // Recompute month labels for the visible slice
-  const visibleMonthLabels = [];
-  visibleWeeks.forEach((week, wi) => {
+  const monthLabels = [];
+  visible.forEach((week, wi) => {
     const d = week[0].date;
     if (wi === 0 || d.getDate() <= 7) {
-      const prev = visibleMonthLabels[visibleMonthLabels.length - 1];
-      if (!prev || wi - prev.wi >= 3)
-        visibleMonthLabels.push({ wi, label: d.toLocaleDateString("fr-FR", { month: "short" }) });
+      const prev = monthLabels[monthLabels.length - 1];
+      if (!prev || wi - prev.wi >= 3) monthLabels.push({ wi, label: d.toLocaleDateString("fr-FR", { month: "short" }) });
     }
   });
 
-  return (
-    <div style={styles.dashSection} ref={containerRef}>
-      {/* Title */}
-      <div style={styles.dashSectionTitle}>Activité</div>
-      {/* Métrique — chips, comme les filtres du reste de l'app */}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-        {[["charge", "Charge"], ["rpe", "RPE"], ["quality", "Qualité"], ["hooper", "Hooper"], ["reminders", "Rappels"]].map(([k, l]) => (
-          <Chip key={k} isDark={isDark} size="sm" label={l}
-                active={metric === k} onClick={() => setMetric(k)} />
-        ))}
-      </div>
+  // Toucher la grille : la case sous le doigt, interstices compris.
+  const pick = (e) => {
+    const r = gridRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const col = Math.floor((e.clientX - r.left) / STEP);
+    const row = Math.floor((e.clientY - r.top) / STEP);
+    const day = visible[col]?.[row];
+    if (!day || day.isFuture) return;
+    setSelected(s => (s === day.dateStr ? null : day.dateStr));
+  };
 
-      {/* Grid — no overflow, sized to container */}
-      <div style={{ display: "flex", gap: 0 }}>
-        {/* Day labels column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: GAP, paddingTop: 18, marginRight: 4, flexShrink: 0 }}>
-          {DAY_LABELS.map((l, i) => (
-            <div key={i} style={{ width: 10, height: CELL, fontSize: 8, color: muted, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-              {l}
+  const sel = selected ? weeks.flat().find(d => d.dateStr === selected) : null;
+  const legend = metric === "hooper"
+    ? { swatches: [hooperColor(10, isDark), hooperColor(16, isDark), hooperColor(20, isDark)], ends: ["Bien récupéré", "Très fatigué"] }
+    : metric === "reminders"
+      ? { swatches: isDark ? DATA.heatmap.reminders.dark : DATA.heatmap.reminders.light, ends: ["Aucun manqué", "4 et +"] }
+      : { swatches: isDark ? DATA.heatmap.charge.dark : DATA.heatmap.charge.light, ends: ["Moins", "Plus"] };
+
+  return (
+    <section style={{ marginBottom: 22 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+        <SectionLabel isDark={isDark}>Régularité</SectionLabel>
+        <span style={{ fontSize: 12, color: c.textMuted, margin: "0 4px 8px" }}>sur un an</span>
+      </div>
+      <Card isDark={isDark} padding={16} radius={16}>
+        <div ref={containerRef}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+            {METRICS.map(m => (
+              <Chip key={m.value} isDark={isDark} size="sm" label={m.label}
+                    active={metric === m.value} onClick={() => setMetric(m.value)} />
+            ))}
+          </div>
+
+          <div style={{ display: "flex" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: GAP, paddingTop: 18, marginRight: 4, flexShrink: 0 }}>
+              {DAY_LABELS.map((l, i) => (
+                <div key={i} style={{ width: 10, height: CELL, fontSize: 8, color: c.textMuted, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                  {l}
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+              <div style={{ position: "relative", height: 16, marginBottom: 2 }}>
+                {monthLabels.map(({ wi, label }) => (
+                  <span key={wi} style={{ position: "absolute", left: wi * STEP, fontSize: 9, color: c.textMuted, whiteSpace: "nowrap", lineHeight: "16px" }}>
+                    {label}
+                  </span>
+                ))}
+              </div>
+              <div ref={gridRef} onClick={pick} role="grid" aria-label="Régularité, jour par jour"
+                   style={{ display: "flex", gap: GAP, cursor: "pointer", alignSelf: "flex-start" }}>
+                {visible.map((week, wi) => (
+                  <div key={wi} style={{ display: "flex", flexDirection: "column", gap: GAP }}>
+                    {week.map((day, di) => (
+                      <div key={di} style={{
+                        width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
+                        background: colorOf(day),
+                        boxShadow: day.dateStr === selected
+                          ? `0 0 0 1.5px ${c.text}`
+                          : day.isToday ? `inset 0 0 0 1px ${c.accent}` : "none",
+                      }} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10, color: c.textMuted, marginRight: 3 }}>{legend.ends[0]}</span>
+            {legend.swatches.map((col, i) => (
+              <div key={i} style={{ width: CELL, height: CELL, borderRadius: 2, background: col, flexShrink: 0 }} />
+            ))}
+            <span style={{ fontSize: 10, color: c.textMuted, marginLeft: 3 }}>{legend.ends[1]}</span>
+          </div>
+
+          {sel ? (
+            <DayDetail isDark={isDark} day={sel} metric={metric} index={index} todayISO={todayISO}
+                       onOpen={onOpenDay ? () => onOpenDay(sel.dateStr, "week") : null}
+                       onClose={() => setSelected(null)} />
+          ) : (
+            <div style={{ fontSize: 11, color: c.textMuted, marginTop: 8 }}>Touche une case pour le détail du jour.</div>
+          )}
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+const STATE_LABEL = { done: "faite", missed: "manquée", unrated: "pas notée", planned: "prévue" };
+
+function DayDetail({ isDark, day, metric, index, todayISO, onOpen, onClose }) {
+  const c = colors(isDark);
+  const items = itemsBetween(index || new Map(), day.dateStr, day.dateStr, todayISO);
+  const title = day.date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
+  let headline;
+  if (metric === "charge") {
+    headline = items.length ? `Charge ${day.charge}, ${plural(items.filter(i => !i.event).length, "séance", "séances")}` : "Aucune séance ce jour-là.";
+  } else if (metric === "hooper") {
+    headline = day.hooper != null ? `Hooper ${day.hooper}, ${hooperLabel(day.hooper).toLowerCase()}` : "Aucun ressenti noté ce jour-là.";
+  } else {
+    headline = day.remindersActive === 0 ? "Aucun rappel dû ce jour-là."
+      : day.remindersMissed === 0 ? `Tous les rappels cochés (${day.remindersActive}).`
+      : `${plural(day.remindersMissed, "rappel manqué", "rappels manqués")} sur ${day.remindersActive}${day.isToday ? ", journée en cours" : ""}.`;
+  }
+  return (
+    <div style={{ marginTop: 12, padding: "12px 12px 10px", borderRadius: 12, background: c.surface2, fontFamily: SANS }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: c.text }}>{title.charAt(0).toUpperCase() + title.slice(1)}</span>
+        <button type="button" onClick={onClose} aria-label="Fermer le détail"
+          style={{ background: "none", border: "none", color: c.textMuted, cursor: "pointer", padding: 4, lineHeight: 0 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <div style={{ fontSize: 13, color: c.text, marginBottom: 6 }}>{headline}</div>
+      {metric === "charge" && items.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {items.map((it, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, opacity: it.state === "missed" ? 0.55 : 1 }}>
+              <SportDot disciplineId={it.sport} color={it.sport === EVENT_KEY ? DATA.fallback : undefined} size={7} />
+              <span style={{ flex: 1, minWidth: 0, color: c.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                             textDecoration: it.state === "missed" ? "line-through" : "none" }}>{it.name}</span>
+              <span style={{ fontSize: 11, color: it.state === "done" ? c.success : c.textMuted }}>{it.event ? "échéance" : STATE_LABEL[it.state]}</span>
+              <span style={{ font: `600 12px ${MONO}`, color: c.textCard, width: 22, textAlign: "right" }}>{it.state === "missed" ? 0 : it.charge}</span>
             </div>
           ))}
         </div>
-
-        {/* Weeks */}
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-          {/* Month labels row */}
-          <div style={{ position: "relative", height: 16, marginBottom: 2 }}>
-            {visibleMonthLabels.map(({ wi, label }) => (
-              <span key={wi} style={{
-                position: "absolute",
-                left: wi * (CELL + GAP),
-                fontSize: 9,
-                color: muted,
-                whiteSpace: "nowrap",
-                lineHeight: "16px",
-              }}>{label}</span>
-            ))}
-          </div>
-
-          {/* Grid */}
-          <div style={{ display: "flex", gap: GAP }}>
-            {visibleWeeks.map((week, wi) => (
-              <div key={wi} style={{ display: "flex", flexDirection: "column", gap: GAP }}>
-                {week.map((day, di) => (
-                  <div
-                    key={di}
-                    style={{
-                      width: CELL,
-                      height: CELL,
-                      borderRadius: 2,
-                      background: getColor(day),
-                      cursor: day.isFuture ? "default" : "pointer",
-                      flexShrink: 0,
-                    }}
-                    onMouseEnter={e => {
-                      if (day.isFuture) return;
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      setTooltip({ day, x: rect.left, y: rect.top });
-                    }}
-                    onMouseLeave={() => setTooltip(null)}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div style={{ display: "flex", alignItems: "center", gap: 3, marginTop: 8, justifyContent: "flex-start", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 9, color: muted, marginRight: 2 }}>{legendEnds[0]}</span>
-        {legendColors[metric].map((c, i) => (
-          <div key={i} style={{ width: CELL, height: CELL, borderRadius: 2, background: c, flexShrink: 0 }} />
-        ))}
-        <span style={{ fontSize: 9, color: muted, marginLeft: 2 }}>{legendEnds[1]}</span>
-      </div>
-
-      {/* Tooltip (portal-style fixed) */}
-      {tooltip && (
-        <div style={{
-          position: "fixed",
-          left: tooltip.x + 14,
-          top: tooltip.y - 10,
-          background: colors(isDark).card,
-          border: `1px solid ${colors(isDark).border}`,
-          borderRadius: 6,
-          padding: "6px 10px",
-          fontSize: 11,
-          color: colors(isDark).text,
-          pointerEvents: "none",
-          zIndex: 9999,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-          whiteSpace: metric === "reminders" ? "normal" : "nowrap",
-          maxWidth: metric === "reminders" ? 220 : undefined,
-        }}>
-          <div style={{ fontWeight: 600, marginBottom: 2 }}>
-            {tooltip.day.date.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
-          </div>
-          {metric === "charge" && (
-            <div>Charge : {tooltip.day.charge || 0}
-              {tooltip.day.sessionCount > 0 && <span style={{ color: muted, marginLeft: 4 }}>({tooltip.day.sessionCount} séance{tooltip.day.sessionCount !== 1 ? "s" : ""})</span>}
+      )}
+      {metric === "reminders" && day.remindersActive > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {day.remindersDetail.map(r => (
+            <div key={r.id} style={{ fontSize: 13, color: c.text, display: "flex", gap: 8 }}>
+              <span style={{ color: r.checked ? c.success : c.danger, width: 12 }}>{r.checked ? "✓" : "✗"}</span>
+              {r.name}
             </div>
-          )}
-          {metric === "rpe" && (
-            <div>RPE moyen : {tooltip.day.avgRpe != null ? tooltip.day.avgRpe.toFixed(1) : <span style={{ color: muted }}>aucune donnée</span>}</div>
-          )}
-          {metric === "quality" && (
-            <div>Qualité : {tooltip.day.avgQuality != null
-              ? `${"\u2605".repeat(Math.round(tooltip.day.avgQuality))}${"\u2606".repeat(5 - Math.round(tooltip.day.avgQuality))} ${tooltip.day.avgQuality.toFixed(1)} / 5`
-              : <span style={{ color: muted }}>aucune séance notée</span>}</div>
-          )}
-          {metric === "hooper" && (
-            <div>Hooper : {tooltip.day.hooper != null ? `${tooltip.day.hooper} — ${hooperLabel(tooltip.day.hooper)}` : <span style={{ color: muted }}>aucune donnée</span>}</div>
-          )}
-          {metric === "reminders" && (
-            <div>
-              {tooltip.day.remindersActive === 0 ? (
-                <span style={{ color: muted }}>aucun rappel actif</span>
-              ) : (
-                <>
-                  <div>
-                    {tooltip.day.remindersMissed === 0
-                      ? "Aucun rappel manqué"
-                      : `${tooltip.day.remindersMissed} rappel${tooltip.day.remindersMissed > 1 ? "s" : ""} manqué${tooltip.day.remindersMissed > 1 ? "s" : ""}`}
-                    <span style={{ color: muted }}>
-                      {" "}sur {tooltip.day.remindersActive}
-                      {tooltip.day.isToday && tooltip.day.remindersMissed > 0 ? " · journée en cours" : ""}
-                    </span>
-                  </div>
-                  <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
-                    {tooltip.day.remindersDetail.map(r => (
-                      <div key={r.id} style={{ fontSize: 10 }}>
-                        <span style={{ color: r.checked ? colors(isDark).success : colors(isDark).danger, marginRight: 4 }}>
-                          {r.checked ? "✓" : "✗"}
-                        </span>
-                        {r.name}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+          ))}
         </div>
+      )}
+      {onOpen && (
+        <SecondaryButton isDark={isDark} height={36} onClick={onOpen} style={{ marginTop: 10, width: "100%", fontSize: 13 }}>
+          Ouvrir ce jour
+        </SecondaryButton>
       )}
     </div>
   );
