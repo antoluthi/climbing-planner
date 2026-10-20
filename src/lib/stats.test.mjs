@@ -5,6 +5,9 @@ import {
   buildDayIndex, sessionState, summarize, delta, chargeSeries, stackKeys, averageDone,
   sportBreakdown, feelStats, deviationVerdict, hooperStats, weightStats, nutritionStats,
   runStats, habitStats, fmtNum, fmtSigned, fmtDuration, shiftISO, itemsBetween,
+  windowOf, autoGrain, pointsFor, grainAllowed, resolveGrain, bucketsFor, stepSelection,
+  selectionIsCurrent, rangeLabel, selectionCaption, previousPhrase, comparisonFor,
+  quickRanges, cycleRanges, rangeError, tickInterval, MAX_POINTS,
 } from "./stats.js";
 
 // Mardi 20 octobre 2026 : un milieu de semaine, un milieu de mois.
@@ -304,4 +307,146 @@ test("nombres à la française", () => {
   assert.equal(fmtDuration(150), "2 h 30");
   assert.equal(fmtDuration(120), "2 h");
   assert.equal(shiftISO("2026-10-25", 1), "2026-10-26");   // changement d'heure
+});
+
+// ─── Plages libres et découpage ──────────────────────────────────────────────
+
+test("découpage automatique : par jour, par semaine, par mois selon la longueur", () => {
+  assert.equal(autoGrain("2026-10-07", "2026-10-20"), "day");      // 14 jours
+  assert.equal(autoGrain("2026-10-06", "2026-10-20"), "week");     // 15 jours
+  assert.equal(autoGrain("2026-08-12", "2026-10-20"), "week");     // 70 jours
+  assert.equal(autoGrain("2026-01-01", "2026-12-31"), "month");
+  // Les raccourcis retrouvent leur découpage d'avant.
+  for (const [range, grain] of [["sem", "day"], ["4sem", "week"], ["mois", "week"], ["an", "month"]]) {
+    const w = windowOf({ range, ref: REF });
+    assert.equal(autoGrain(w.start, w.end), grain, range);
+  }
+});
+
+test("au-delà de 100 points, un découpage n'est plus proposé", () => {
+  assert.equal(pointsFor("2026-01-01", "2026-12-31", "day"), 365);
+  assert.equal(pointsFor("2026-01-01", "2026-12-31", "week"), 53);
+  assert.equal(pointsFor("2026-01-01", "2026-12-31", "month"), 12);
+  assert.ok(!grainAllowed("2026-01-01", "2026-12-31", "day"));
+  assert.ok(grainAllowed("2026-08-12", "2026-10-20", "day"));      // 70 jours
+  // Trois mois par jour restent possibles, quel que soit le jour où on les prend.
+  for (const today of [TODAY, "2026-09-30", "2026-12-31", "2027-05-31"]) {
+    const q = quickRanges(today).find(r => r.key === "3m");
+    assert.ok(grainAllowed(q.start, q.end, "day"), today);
+  }
+  // Demandé mais trop fin : on retombe sur le découpage qui va de soi.
+  assert.equal(resolveGrain({ range: "an", ref: REF }, "day"), "month");
+  assert.equal(resolveGrain({ range: "an", ref: REF }, "week"), "week");
+  assert.equal(resolveGrain({ range: "custom", start: "2026-08-12", end: "2026-10-20" }, null), "week");
+  // Le nombre annoncé est celui qu'on construit.
+  for (const g of ["day", "week", "month"]) {
+    assert.equal(bucketsFor("2025-11-18", "2026-02-03", g).length, pointsFor("2025-11-18", "2026-02-03", g), g);
+  }
+  assert.ok(MAX_POINTS >= 92);
+});
+
+test("tranches d'une plage libre : bornées aux deux bouts", () => {
+  const w = bucketsFor("2026-08-12", "2026-10-20", "week");
+  assert.deepEqual([w[0].start, w[0].end, w[0].full, w[0].label], ["2026-08-12", "2026-08-16", false, "12/8"]);
+  assert.deepEqual([w.at(-1).start, w.at(-1).end, w.at(-1).full], ["2026-10-19", "2026-10-20", false]);
+  assert.ok(w.slice(1, -1).every(b => b.full));
+  const m = bucketsFor("2026-08-12", "2026-10-20", "month");
+  assert.deepEqual(m.map(b => [b.start, b.end, b.full]), [
+    ["2026-08-12", "2026-08-31", false], ["2026-09-01", "2026-09-30", true], ["2026-10-01", "2026-10-20", false],
+  ]);
+  // Par jour : nommés jusqu'à une semaine, datés au-delà.
+  assert.deepEqual(bucketsFor("2026-10-21", "2026-10-23", "day").map(b => b.label), ["Mer", "Jeu", "Ven"]);
+  assert.equal(bucketsFor("2026-10-01", "2026-10-20", "day")[0].label, "1/10");
+});
+
+test("sur deux années, janvier porte son année", () => {
+  const m = bucketsFor("2025-11-01", "2026-02-28", "month");
+  assert.deepEqual(m.map(b => b.label), ["nov 25", "déc", "janv 26", "févr"]);
+  assert.deepEqual(bucketsFor("2026-01-01", "2026-03-31", "month").map(b => b.label), ["janv", "févr", "mars"]);
+});
+
+test("les flèches décalent une plage libre de sa longueur", () => {
+  const sel = { range: "custom", start: "2026-08-12", end: "2026-10-20", label: "Force" };
+  assert.deepEqual(stepSelection(sel, -1), { range: "custom", start: "2026-06-03", end: "2026-08-11" });
+  assert.deepEqual(stepSelection(sel, 1), { range: "custom", start: "2026-10-21", end: "2026-12-29" });
+  // Un raccourci, lui, passe au précédent.
+  assert.equal(windowOf(stepSelection({ range: "4sem", ref: REF }, -1)).end, "2026-09-27");
+  assert.ok(selectionIsCurrent(sel, TODAY));
+  assert.ok(!selectionIsCurrent(stepSelection(sel, -1), TODAY));
+});
+
+test("comparaison d'une plage libre : la même longueur juste avant, à date", () => {
+  // 70 jours, dont 70 écoulés : les 70 jours d'avant, entiers.
+  assert.deepEqual(comparisonFor({ range: "custom", start: "2026-08-12", end: "2026-10-20" }, TODAY), {
+    cur: { start: "2026-08-12", end: "2026-10-20" },
+    prev: { start: "2026-06-03", end: "2026-08-11" },
+    partial: false,
+  });
+  // Un cycle en cours (29 sept. → 26 oct.) : 22 jours écoulés contre les 22
+  // premiers jours des 28 d'avant.
+  assert.deepEqual(comparisonFor({ range: "custom", start: "2026-09-29", end: "2026-10-26" }, TODAY), {
+    cur: { start: "2026-09-29", end: "2026-10-20" },
+    prev: { start: "2026-09-01", end: "2026-09-22" },
+    partial: true,
+  });
+  assert.equal(comparisonFor({ range: "custom", start: "2026-11-02", end: "2026-11-29" }, TODAY), null);
+  assert.equal(previousPhrase({ range: "custom", start: "2026-08-12", end: "2026-10-20" }), "aux 70 jours d'avant");
+  assert.equal(previousPhrase({ range: "mois", ref: REF }), "au mois d'avant");
+});
+
+test("libellés d'une plage libre : l'année quand ce n'est pas celle d'aujourd'hui", () => {
+  assert.equal(rangeLabel("2026-08-12", "2026-10-20", TODAY), "12 août – 20 oct.");
+  assert.equal(rangeLabel("2025-03-03", "2025-04-12", TODAY), "3 mars – 12 avr. 2025");
+  assert.equal(rangeLabel("2025-11-18", "2026-02-03", TODAY), "18 nov. 2025 – 3 févr. 2026");
+  assert.equal(selectionCaption({ range: "custom", start: "2026-09-29", end: "2026-10-26", label: "Force" }), "Force · 28 jours");
+  assert.equal(selectionCaption({ range: "custom", start: TODAY, end: TODAY }), "1 jour");
+});
+
+test("raccourcis : tous finissent aujourd'hui", () => {
+  const q = Object.fromEntries(quickRanges(TODAY).map(r => [r.key, r]));
+  assert.deepEqual([q["30d"].start, q["30d"].end], ["2026-09-21", TODAY]);
+  assert.equal(q["3m"].start, "2026-07-21");
+  assert.equal(q["12m"].start, "2025-10-21");
+  assert.equal(q.ytd.start, "2026-01-01");
+  // Le 31 mai, trois mois avant tomberait le 31 février : on part du 1er mars.
+  assert.equal(quickRanges("2027-05-31").find(r => r.key === "3m").start, "2027-03-01");
+});
+
+test("les cycles du plan comme plages, le plus récent d'abord", () => {
+  const mesos = [
+    { id: "a", label: "Reprise", color: "#a78bff", startDate: "2026-08-03", durationWeeks: 4, anchor: true },
+    { id: "b", label: "Continuité", color: "#5fe0c0", durationWeeks: 4 },
+    { id: "c", label: "Force", color: "#ff4500", durationWeeks: 4 },
+    { id: "d", label: "Pic", durationWeeks: 2 },
+  ];
+  const r = cycleRanges(mesos, TODAY);
+  assert.deepEqual(r.map(x => [x.label, x.start, x.end, x.status]), [
+    ["Pic", "2026-10-26", "2026-11-08", "future"],
+    ["Force", "2026-09-28", "2026-10-25", "current"],
+    ["Continuité", "2026-08-31", "2026-09-27", "past"],
+    ["Reprise", "2026-08-03", "2026-08-30", "past"],
+  ]);
+  assert.deepEqual(cycleRanges([{ id: "x", label: "Sans date", durationWeeks: 3 }], TODAY), []);
+});
+
+test("dates saisies à la main : ce qui ne va pas se dit", () => {
+  assert.equal(rangeError("", "2026-10-20"), "Choisis une date de début et une date de fin.");
+  assert.equal(rangeError("2026-10-20", "2026-10-01"), "La fin est avant le début.");
+  assert.equal(rangeError("2019-01-01", "2026-10-20"), "Cinq ans au plus.");
+  assert.equal(rangeError("2026-10-01", "2026-10-20"), null);
+});
+
+test("étiquettes de l'axe : toutes jusqu'à 12, puis une huitaine", () => {
+  assert.equal(tickInterval(7), 0);
+  assert.equal(tickInterval(12), 0);
+  assert.equal(tickInterval(70), 8);       // une étiquette tous les 9 jours
+  assert.ok(70 / (tickInterval(70) + 1) <= 8);
+});
+
+test("course jour par jour : l'objectif de la semaine seulement sur une vraie semaine", () => {
+  const data = { profile: { kmGoal: true }, runBlocks: [{ id: "b", startDate: "2026-09-28", durationWeeks: 8, baseKm: 20, increasePct: 0 }], weeks: {} };
+  const idx = buildDayIndex(data);
+  assert.equal(runStats(idx, bucketsFor("2026-10-19", "2026-10-25", "day"), data, TODAY).weekGoal, 20);
+  assert.equal(runStats(idx, bucketsFor("2026-10-01", "2026-10-30", "day"), data, TODAY).weekGoal, null);
+  assert.equal(runStats(idx, bucketsFor("2026-10-21", "2026-10-27", "day"), data, TODAY).weekGoal, null);
 });

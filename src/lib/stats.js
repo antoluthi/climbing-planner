@@ -13,6 +13,7 @@ import { hooperLabel, isHooperFilled } from "./hooper.js";
 import { isReminderActiveOn, isReminderCheckedOn } from "./reminders.js";
 import { RUN_DISCIPLINES, goalForWeek } from "./run-goals.js";
 import { disciplineList } from "./disciplines.js";
+import { recomputeMesoDates, mesoLastDay } from "./cycles.js";
 
 // ── Dates ────────────────────────────────────────────────────────────────────
 // Midi plutôt que minuit : un changement d'heure ne fait alors jamais basculer
@@ -34,67 +35,140 @@ const dm = (s) => { const d = parse(s); return `${d.getDate()}/${d.getMonth() + 
 const shortDate = (s) => parse(s).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 
 // ── Périodes ─────────────────────────────────────────────────────────────────
-// Quatre lectures. Les quatre dernières semaines s'ouvrent par défaut : la
-// semaine en cours seule est presque vide un lundi. Ce sont des semaines du
-// calendrier (lundi → dimanche), parce que le plan se construit en semaines :
-// la semaine en cours y figure, avec ce qui reste à faire.
+// Deux réglages indépendants : **quelle période** on regarde, et **comment on
+// la découpe** (par jour, par semaine, par mois).
+//
+// La période est une « sélection » : un raccourci et sa date de référence, ou
+// une plage libre (deux dates, choisies à la main ou prises sur un cycle).
+//   { range: "4sem" | "sem" | "mois" | "an", ref: Date }
+//   { range: "custom", start: "2026-08-12", end: "2026-10-20", label? }
+//
+// Les quatre dernières semaines s'ouvrent par défaut : la semaine en cours
+// seule est presque vide un lundi. Ce sont des semaines du calendrier (lundi →
+// dimanche), parce que le plan se construit en semaines : la semaine en cours
+// y figure, avec ce qui reste à faire.
 export const RANGES = [
   { value: "4sem", label: "4 sem." },
   { value: "sem", label: "Semaine" },
   { value: "mois", label: "Mois" },
   { value: "an", label: "Année" },
+  { value: "custom", label: "Dates" },
 ];
 export const DEFAULT_RANGE = "4sem";
 
+export const GRAINS = [
+  { value: "day", label: "jour" },
+  { value: "week", label: "semaine" },
+  { value: "month", label: "mois" },
+];
+// Au-delà de 100 points, un découpage est trop fin pour un téléphone (un an par
+// jour, c'est 365 traits) : il n'est plus proposé. Trois mois par jour passent
+// encore (92 au plus). Au-delà de 35, les graphes passent en vue simplifiée.
+// Une plage libre fait cinq ans au plus.
+export const MAX_POINTS = 100;
+export const DENSE_POINTS = 35;
+export const MAX_RANGE_DAYS = 1830;
+
 const DAY_NAMES = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-// La fenêtre affichée et son découpage. Chaque tranche porte son genre
-// (`day`, `week`, `month`) et, pour une semaine, si elle est entière : un
-// objectif de kilomètres hebdomadaire n'a de sens que sur une semaine complète.
-export function periodOf(range, ref) {
+export const rangeDays = (start, end) => daysIn(start, end);
+
+function presetWindow(range, ref) {
   const r = new Date(ref); r.setHours(12, 0, 0, 0);
   if (range === "sem") {
-    const monday = getMondayOf(r);
-    const buckets = DAY_NAMES.map((label, i) => {
-      const d = iso(addDays(monday, i));
-      return { kind: "day", label, start: d, end: d, full: true };
-    });
-    return { range, start: buckets[0].start, end: buckets[6].end, buckets };
+    const monday = iso(getMondayOf(r));
+    return { start: monday, end: shiftISO(monday, 6) };
   }
   if (range === "mois") {
-    const first = iso(new Date(r.getFullYear(), r.getMonth(), 1, 12));
-    const last = iso(new Date(r.getFullYear(), r.getMonth() + 1, 0, 12));
-    const buckets = [];
-    for (let monday = iso(getMondayOf(parse(first))); monday <= last; monday = shiftISO(monday, 7)) {
-      // Les semaines du bord s'arrêtent au mois : le 29 septembre ne compte
-      // pas dans octobre.
-      const start = maxISO(monday, first);
-      const end = minISO(shiftISO(monday, 6), last);
-      buckets.push({ kind: "week", label: dm(start), start, end, monday, full: start === monday && end === shiftISO(monday, 6) });
-    }
-    return { range, start: first, end: last, buckets };
+    return { start: iso(new Date(r.getFullYear(), r.getMonth(), 1, 12)), end: iso(new Date(r.getFullYear(), r.getMonth() + 1, 0, 12)) };
   }
   if (range === "an") {
-    const y = r.getFullYear();
-    const buckets = Array.from({ length: 12 }, (_, m) => {
-      const first = new Date(y, m, 1, 12);
-      return {
-        kind: "month",
-        label: first.toLocaleDateString("fr-FR", { month: "short" }).replace(".", ""),
-        start: iso(first),
-        end: iso(new Date(y, m + 1, 0, 12)),
-        full: true,
-      };
-    });
-    return { range, start: buckets[0].start, end: buckets[11].end, buckets };
+    return { start: `${r.getFullYear()}-01-01`, end: `${r.getFullYear()}-12-31` };
   }
   // "4sem" : la semaine de la date de référence et les trois d'avant.
   const lastMonday = iso(getMondayOf(r));
-  const buckets = [3, 2, 1, 0].map(k => {
-    const monday = shiftISO(lastMonday, -7 * k);
-    return { kind: "week", label: dm(monday), start: monday, end: shiftISO(monday, 6), monday, full: true };
-  });
-  return { range: "4sem", start: buckets[0].start, end: buckets[3].end, buckets };
+  return { start: shiftISO(lastMonday, -21), end: shiftISO(lastMonday, 6) };
+}
+
+export function windowOf(sel) {
+  if (sel?.range === "custom") return { start: sel.start, end: sel.end };
+  return presetWindow(sel?.range, sel?.ref);
+}
+
+// Le découpage qui va de soi pour une longueur donnée : par jour jusqu'à deux
+// semaines, par semaine jusqu'à environ quatre mois, par mois au-delà. Les
+// raccourcis y retrouvent leur découpage d'avant (semaine par jour, quatre
+// semaines et mois par semaine, année par mois).
+export function autoGrain(start, end) {
+  const n = daysIn(start, end);
+  return n <= 14 ? "day" : n <= 120 ? "week" : "month";
+}
+
+// Combien de tranches un découpage donnerait, sans les construire.
+export function pointsFor(start, end, grain) {
+  if (grain === "day") return daysIn(start, end);
+  if (grain === "week") {
+    const a = parse(iso(getMondayOf(parse(start))));
+    const b = parse(iso(getMondayOf(parse(end))));
+    return Math.round((b - a) / (7 * 86400000)) + 1;
+  }
+  const a = parse(start), b = parse(end);
+  return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+}
+
+export const grainAllowed = (start, end, grain) => pointsFor(start, end, grain) <= MAX_POINTS;
+
+// Le découpage effectif : celui qu'on a demandé s'il tient, sinon celui qui va
+// de soi. Une plage allongée ne garde donc pas un « par jour » devenu illisible.
+export function resolveGrain(sel, wanted) {
+  const { start, end } = windowOf(sel);
+  return wanted && grainAllowed(start, end, wanted) ? wanted : autoGrain(start, end);
+}
+
+// Les tranches d'une plage. Chacune porte son genre (`day`, `week`, `month`)
+// et dit si elle est entière : les tranches du bord s'arrêtent à la plage (le
+// 29 septembre ne compte pas dans octobre), et un objectif de kilomètres
+// hebdomadaire n'a de sens que sur une semaine complète.
+export function bucketsFor(start, end, grain) {
+  if (grain === "day") {
+    // Jusqu'à une semaine, les jours se nomment ; au-delà, ils se datent.
+    const named = daysIn(start, end) <= 7;
+    return [...eachDay(start, end)].map(d => ({
+      kind: "day", label: named ? DAY_NAMES[(parse(d).getDay() + 6) % 7] : dm(d), start: d, end: d, full: true,
+    }));
+  }
+  if (grain === "week") {
+    const out = [];
+    for (let monday = iso(getMondayOf(parse(start))); monday <= end; monday = shiftISO(monday, 7)) {
+      const s = maxISO(monday, start);
+      const e = minISO(shiftISO(monday, 6), end);
+      out.push({ kind: "week", label: dm(s), start: s, end: e, monday, full: s === monday && e === shiftISO(monday, 6) });
+    }
+    return out;
+  }
+  const out = [];
+  const a = parse(start), b = parse(end);
+  // Sur plusieurs années, janvier (et le premier mois) porte son année :
+  // deux « janv » côte à côte ne se distinguent pas.
+  const multiYear = a.getFullYear() !== b.getFullYear();
+  let y = a.getFullYear(), m = a.getMonth();
+  while (y < b.getFullYear() || (y === b.getFullYear() && m <= b.getMonth())) {
+    const first = iso(new Date(y, m, 1, 12));
+    const last = iso(new Date(y, m + 1, 0, 12));
+    const s = maxISO(first, start);
+    const e = minISO(last, end);
+    let label = new Date(y, m, 1, 12).toLocaleDateString("fr-FR", { month: "short" }).replace(".", "");
+    if (multiYear && (m === 0 || out.length === 0)) label += ` ${String(y).slice(2)}`;
+    out.push({ kind: "month", label, start: s, end: e, full: s === first && e === last });
+    if (m === 11) { y++; m = 0; } else m++;
+  }
+  return out;
+}
+
+// La fenêtre d'un raccourci et son découpage habituel.
+export function periodOf(range, ref) {
+  const { start, end } = presetWindow(range, ref);
+  return { range, start, end, buckets: bucketsFor(start, end, autoGrain(start, end)) };
 }
 
 // Période d'avant ou d'après, depuis une date de référence.
@@ -106,14 +180,28 @@ export function stepRef(range, ref, dir) {
   return addDays(r, 28 * dir);
 }
 
+// Les flèches : un raccourci passe au précédent ; une plage libre recule de sa
+// propre longueur (70 jours en arrière pour une plage de 70 jours). Elle cesse
+// alors d'être « un cycle » : son nom ne la suit pas.
+export function stepSelection(sel, dir) {
+  if (sel?.range !== "custom") return { ...sel, ref: stepRef(sel.range, sel.ref, dir) };
+  const n = daysIn(sel.start, sel.end);
+  return { range: "custom", start: shiftISO(sel.start, n * dir), end: shiftISO(sel.end, n * dir) };
+}
+
 export function isCurrentPeriod(range, ref, todayISO) {
-  const p = periodOf(range, ref);
+  const p = presetWindow(range, ref);
   return p.start <= todayISO && todayISO <= p.end;
+}
+
+export function selectionIsCurrent(sel, todayISO) {
+  const { start, end } = windowOf(sel);
+  return start <= todayISO && todayISO <= end;
 }
 
 // Le libellé de la période, sous la même forme que le calendrier.
 export function periodLabel(range, ref) {
-  const p = periodOf(range, ref);
+  const p = presetWindow(range, ref);
   if (range === "mois") {
     const s = parse(p.start).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
     return s.charAt(0).toUpperCase() + s.slice(1);
@@ -122,8 +210,33 @@ export function periodLabel(range, ref) {
   return `${shortDate(p.start)} – ${shortDate(p.end)}`;
 }
 
+// Une plage libre dit son année quand ce n'est pas celle d'aujourd'hui, et
+// les deux quand elle en chevauche deux.
+export function rangeLabel(start, end, todayISO) {
+  const ya = parse(start).getFullYear(), yb = parse(end).getFullYear();
+  const yt = parse(todayISO).getFullYear();
+  const f = (d, withYear) => parse(d).toLocaleDateString("fr-FR",
+    withYear ? { day: "numeric", month: "short", year: "numeric" } : { day: "numeric", month: "short" });
+  if (start === end) return f(start, ya !== yt);
+  if (ya !== yb) return `${f(start, true)} – ${f(end, true)}`;
+  return `${f(start, false)} – ${f(end, ya !== yt)}`;
+}
+
+export function selectionLabel(sel, todayISO) {
+  return sel?.range === "custom" ? rangeLabel(sel.start, sel.end, todayISO) : periodLabel(sel.range, sel.ref);
+}
+
 export function currentPeriodLabel(range) {
   return { "4sem": "4 dernières semaines", sem: "Semaine en cours", mois: "Mois en cours", an: "Année en cours" }[range] || "";
+}
+
+// Sous le libellé d'une plage libre : sa longueur, et son nom si elle vient
+// d'un cycle (« Force · 28 jours »).
+export function selectionCaption(sel) {
+  if (sel?.range !== "custom") return "";
+  const n = daysIn(sel.start, sel.end);
+  const len = `${n} ${n > 1 ? "jours" : "jour"}`;
+  return sel.label ? `${sel.label} · ${len}` : len;
 }
 
 // Ce à quoi on se compare, pour la phrase sous le résumé.
@@ -131,16 +244,22 @@ export function previousPeriodPhrase(range) {
   return { "4sem": "aux 4 semaines d'avant", sem: "à la semaine d'avant", mois: "au mois d'avant", an: "à l'année d'avant" }[range] || "";
 }
 
+export function previousPhrase(sel) {
+  if (sel?.range !== "custom") return previousPeriodPhrase(sel?.range);
+  const n = daysIn(sel.start, sel.end);
+  return n === 1 ? "à la veille" : `aux ${n} jours d'avant`;
+}
+
 // La comparaison se fait **à date** : un mardi, la semaine en cours n'a que
 // deux jours, et la comparer à toute la semaine d'avant la donnerait toujours
 // en baisse. On prend donc autant de jours de la période d'avant qu'il s'en est
 // écoulé dans celle-ci. Une période entièrement à venir n'a rien à comparer.
 export function comparisonWindows(range, ref, todayISO) {
-  const p = periodOf(range, ref);
+  const p = presetWindow(range, ref);
   if (p.start > todayISO) return null;
   const curEnd = minISO(p.end, todayISO);
   const elapsed = daysIn(p.start, curEnd);
-  const prev = periodOf(range, stepRef(range, ref, -1));
+  const prev = presetWindow(range, stepRef(range, ref, -1));
   const prevEnd = minISO(shiftISO(prev.start, elapsed - 1), prev.end);
   return {
     cur: { start: p.start, end: curEnd },
@@ -148,6 +267,72 @@ export function comparisonWindows(range, ref, todayISO) {
     partial: curEnd < p.end,
   };
 }
+
+// Pour une plage libre, la période d'avant est la même longueur juste avant
+// elle, comparée à date elle aussi (un cycle en cours contre le début de la
+// plage d'avant).
+export function comparisonFor(sel, todayISO) {
+  if (sel?.range !== "custom") return comparisonWindows(sel?.range, sel?.ref, todayISO);
+  const { start, end } = sel;
+  if (start > todayISO) return null;
+  const curEnd = minISO(end, todayISO);
+  const prevStart = shiftISO(start, -daysIn(start, end));
+  return {
+    cur: { start, end: curEnd },
+    prev: { start: prevStart, end: shiftISO(prevStart, daysIn(start, curEnd) - 1) },
+    partial: curEnd < end,
+  };
+}
+
+// ── Choisir une plage ────────────────────────────────────────────────────────
+// Les raccourcis de la feuille « Période à analyser », tous terminés
+// aujourd'hui. « 3 derniers mois » le 20 octobre part du 21 juillet : trois
+// mois pile, aujourd'hui compris.
+export function quickRanges(todayISO) {
+  const t = parse(todayISO);
+  const monthsBack = (n) => {
+    const d = new Date(t.getFullYear(), t.getMonth() - n, 1, 12);
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0, 12).getDate();
+    d.setDate(Math.min(t.getDate(), lastDay));
+    return shiftISO(iso(d), 1);
+  };
+  return [
+    { key: "30d", label: "30 derniers jours", start: shiftISO(todayISO, -29), end: todayISO },
+    { key: "3m", label: "3 derniers mois", start: monthsBack(3), end: todayISO },
+    { key: "6m", label: "6 derniers mois", start: monthsBack(6), end: todayISO },
+    { key: "12m", label: "12 derniers mois", start: monthsBack(12), end: todayISO },
+    { key: "ytd", label: "Depuis le 1er janvier", start: `${t.getFullYear()}-01-01`, end: todayISO },
+  ];
+}
+
+// Les mésocycles du plan comme plages : analyser un bloc entier d'une touche.
+// Mêmes dates que l'éditeur et le calendrier (`recomputeMesoDates`), le plus
+// récent d'abord.
+export function cycleRanges(mesocycles, todayISO) {
+  return recomputeMesoDates(mesocycles || [])
+    .filter(m => m?.startDate)
+    .map(m => {
+      const start = m.startDate;
+      const end = iso(mesoLastDay(m));
+      return {
+        id: m.id, label: m.label || "Cycle", color: m.color || null, start, end,
+        status: todayISO < start ? "future" : todayISO > end ? "past" : "current",
+      };
+    })
+    .sort((a, b) => b.start.localeCompare(a.start));
+}
+
+// Ce qui ne va pas dans deux dates saisies à la main, ou null.
+export function rangeError(start, end) {
+  if (!start || !end) return "Choisis une date de début et une date de fin.";
+  if (end < start) return "La fin est avant le début.";
+  if (daysIn(start, end) > MAX_RANGE_DAYS) return "Cinq ans au plus.";
+  return null;
+}
+
+// Une étiquette sur combien : toutes jusqu'à 12 tranches, puis une huitaine
+// réparties sur l'axe.
+export const tickInterval = (n) => (n <= 12 ? 0 : Math.ceil(n / 8) - 1);
 
 // ── Les séances d'un jour ────────────────────────────────────────────────────
 // Un index par date, construit une fois : chaque lecture de la page ne
@@ -514,7 +699,11 @@ export function runStats(index, buckets, data, todayISO) {
   });
   // Objectifs tenus : sur les semaines terminées seulement.
   const judged = rows.filter(r => r.goal != null && r.end < todayISO);
-  const weekGoal = buckets[0]?.kind === "day" ? goalOf(iso(getMondayOf(parse(buckets[0].start)))) : null;
+  // L'objectif d'une semaine affichée jour par jour : seulement si la plage
+  // est cette semaine-là, du lundi au dimanche. Sur trente jours par jour, il
+  // n'y a pas « une » semaine à qui le rapporter.
+  const oneWeek = buckets.length === 7 && buckets[0]?.kind === "day" && parse(buckets[0].start).getDay() === 1;
+  const weekGoal = oneWeek ? goalOf(buckets[0].start) : null;
   return {
     rows,
     done: round1(rows.reduce((s, r) => s + r.done, 0)),

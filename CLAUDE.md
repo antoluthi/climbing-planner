@@ -65,8 +65,9 @@ src/
 │   │                               haut, créneau touché (pur, testé sous Node)
 │   ├── home-phrase.js            — salutation et phrase de l'accueil, jours de repos
 │   │                               (pur, testé sous Node)
-│   └── stats.js                  — la page Stats : périodes, comparaison à date, fait / manqué /
-│                                   prévu, lectures de chaque section (pur, testé sous Node)
+│   └── stats.js                  — la page Stats : périodes et plages libres, découpage,
+│                                   comparaison à date, fait / manqué / prévu, lectures de
+│                                   chaque section (pur, testé sous Node)
 │
 ├── theme/
 │   ├── palette.js                — SOURCE UNIQUE des couleurs (PALETTE.light/dark, colors(), DATA)
@@ -122,6 +123,7 @@ src/
     ├── DayLogModal.jsx            — assistant journal quotidien (Hooper → poids → notes)
     ├── Dashboard.jsx              — la page Stats (résumé, charge, répartition, récupération…)
     ├── ActivityHeatmap.jsx        — régularité sur un an, façon GitHub (bas de la page Stats)
+    ├── StatsRangePicker.jsx       — « Période à analyser » : raccourcis, cycles, dates précises
     ├── PhotoCropModal.jsx         — recadrage/zoom avatar
     ├── CoachAthletesSection.jsx   — section "Mes athlètes" dans ProfileView
     ├── CalendarSyncSection.jsx    — section sync calendrier (CalDAV/iCal)
@@ -1055,12 +1057,13 @@ suivaient pas tous la période choisie (heatmap, « Charge 4 sem. », sommeil), 
 répondait mal aux questions simples. Elle se lit maintenant de haut en bas, et
 **tout ce qui est sous le sélecteur suit la période** :
 
-1. **Période** : 4 sem. · Semaine · Mois · Année, avec navigation. **4 semaines
-   par défaut, à chaque ouverture** (le choix n'est pas retenu) : la semaine en
-   cours seule est presque vide un lundi. Ce sont des semaines du calendrier,
-   la semaine en cours et les trois d'avant, parce que le plan se construit en
-   semaines. En vue Mois, les semaines du bord **s'arrêtent au mois** (le
-   29 septembre ne compte pas dans octobre).
+1. **Période** : 4 sem. · Semaine · Mois · Année · Dates, avec navigation, et
+   dessous le **découpage** (par jour · semaine · mois, voir plus bas).
+   **4 semaines par défaut, à chaque ouverture** (le choix n'est pas retenu) :
+   la semaine en cours seule est presque vide un lundi. Ce sont des semaines du
+   calendrier, la semaine en cours et les trois d'avant, parce que le plan se
+   construit en semaines. En vue Mois, les semaines du bord **s'arrêtent au
+   mois** (le 29 septembre ne compte pas dans octobre).
 2. **Résumé**, quatre cartes : séances faites sur dues (non notées, manquées et
    à venir en note), temps, charge, km (Hooper moyen à la place s'il n'y a pas
    de course). Toucher une carte descend à sa section.
@@ -1095,8 +1098,10 @@ Les règles qui ne se voient pas :
 - **La comparaison se fait à date** (`comparisonWindows`) : un mardi, la
   semaine en cours se compare au lundi et au mardi de la semaine d'avant, pas
   à toute la semaine. Et **pas de variation tant que rien n'est noté** dans la
-  période : « −100 % » un mardi matin ne dirait que « lundi n'est pas encore
-  noté ». La carte dit « à noter ».
+  période, ni quand la période d'avant n'a rien de fait : « −100 % » un mardi
+  matin ne dirait que « lundi n'est pas encore noté », et face à des mois où
+  l'app ne servait pas encore, tout serait « nouveau ». La carte dit « à
+  noter ».
 - **Les moyennes d'écart sont pondérées par séance** : une semaine d'une seule
   séance ne pèse pas autant qu'une semaine de cinq (l'ancienne carte faisait
   la moyenne des moyennes).
@@ -1115,10 +1120,55 @@ Les règles qui ne se voient pas :
   sport.
 - Le **sommeil** a été retiré avec son import CSV Garmin, qui ne fonctionnait
   pas. `data.sleep` reste dans le blob, rien ne le lit plus.
-- Tests : `npm run test:stats` (20 cas) : périodes et bornes du mois,
+- Tests : `npm run test:stats` (32 cas) : périodes et bornes du mois,
   comparaison à date (31 mars → 28 février compris), état d'une séance, résumé,
   charge empilée, répartition, écart pondéré, Hooper, poids, repas, course et
-  objectifs, rappels et journal, écriture des nombres.
+  objectifs, rappels et journal, écriture des nombres ; et pour les plages
+  libres : découpage d'office, plafond de tranches, tranches coupées, années
+  sur l'axe, flèches, comparaison, raccourcis, cycles, erreurs de saisie.
+
+**Une plage libre, et le découpage à part** (`StatsRangePicker.jsx`,
+`lib/stats.js`). Choisir la plage et choisir la finesse des barres sont deux
+questions : « Dates » ouvre une feuille pour la première, la ligne « Par »
+répond à la seconde, pour n'importe quelle période.
+
+- La feuille va du plus rapide au plus précis : des **raccourcis** (30 derniers
+  jours, 3, 6 ou 12 derniers mois, depuis le 1er janvier), **un cycle du plan**
+  (les mésocycles aux dates de l'éditeur, `cycleRanges` → `recomputeMesoDates`,
+  « en cours » et « à venir » signalés), puis **deux dates**. Une sélection
+  libre vaut `{ range: "custom", start, end, label? }` : `label` est le nom du
+  cycle, affiché sous les dates (« Force · 28 jours »).
+- **Les flèches décalent de la longueur de la plage** (`stepSelection`) :
+  70 jours en arrière pour une plage de 70 jours. Le nom du cycle tombe alors,
+  ce n'est plus lui.
+- **Le découpage se choisit tout seul** (`autoGrain` : par jour jusqu'à
+  14 jours, par semaine jusqu'à 120, par mois au-delà) et se change à la main.
+  Le choix tient aux flèches tant qu'il reste lisible (`resolveGrain`) ;
+  choisir une autre période le remet en automatique.
+- **Au-delà de 100 tranches, un découpage n'est plus proposé** (`MAX_POINTS`) :
+  il reste affiché, grisé, avec « trop long par jour ». Un an par jour, c'est
+  365 traits sur 300 px. Trois mois par jour passent encore (92 au plus).
+- **Au-delà de 35, vue simplifiée** (`DENSE_POINTS`) : la charge passe à une
+  seule couleur (le détail par sport reste dans Répartition), le Hooper passe
+  des barres à une courbe, les étiquettes s'espacent (`tickInterval`). Une
+  barre de 3 px ne se vise pas : on **glisse le doigt** et une infobulle suit.
+  Les graphes portent alors `data-no-swipe`, sans quoi le carrousel d'onglets
+  partirait avec le geste.
+- **Une plage libre se compare** à autant de jours juste avant
+  (`comparisonFor`), à date si elle contient aujourd'hui.
+- Une tranche coupée par la période (une semaine commencée un mercredi, le mois
+  du bord) ne compte que ses jours, et son détail le dit : « Du 12 au 16 août »,
+  pas « Semaine du 10 août ».
+- Une plage écrit son année quand ce n'est pas celle d'aujourd'hui, et les deux
+  quand elle en chevauche deux. Sur plusieurs années, l'axe des mois l'écrit sur
+  janvier (« janv 26 ») et sur le premier mois.
+- ⚠️ **La feuille est portée dans `<body>`.** Rendue dans la page, elle vivrait
+  dans un calque du carrousel (`SwipePager`), qui porte `will-change:
+  transform` : un contexte d'empilement, **et** le repère de ses
+  `position: fixed`. La barre du bas passait par-dessus (et restait touchable),
+  et la feuille se décalait d'autant que la page avait défilé. Toutes les
+  modales rendues dans une page ont ce défaut (`MesoDetailModal` depuis le
+  calendrier, par exemple) ; celles que rend le shell y échappent.
 
 **La heatmap de régularité** (`components/ActivityHeatmap.jsx`) ferme la page :
 53 semaines × 7 jours, l'année écoulée quelle que soit la période (le titre le
