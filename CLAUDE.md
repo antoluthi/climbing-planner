@@ -65,6 +65,9 @@ src/
 │   │                               haut, créneau touché (pur, testé sous Node)
 │   ├── home-phrase.js            — salutation et phrase de l'accueil, jours de repos
 │   │                               (pur, testé sous Node)
+│   ├── garmin.js                 — Garmin côté app : plages à demander et reprise d'un import,
+│   │                               nuits, journées de récupération, liaison des activités
+│   │                               aux séances, relance, appel à /api/garmin (pur, testé)
 │   └── stats.js                  — la page Stats : périodes et plages libres, découpage,
 │                                   comparaison à date, fait / manqué / prévu, lectures de
 │                                   chaque section (pur, testé sous Node)
@@ -83,7 +86,9 @@ src/
 │   │                                (le moteur de synchro, lui, vit dans context/DataProvider.jsx)
 │   ├── useCommunitySessionsSync.js — sync séances communautaires (lecture seule)
 │   ├── useSessionsCatalog.js      — CRUD sessions_catalog (bibliothèque de modèles)
-│   └── useCoachAthletes.js        — relations coach-athlète (coach_athletes)
+│   ├── useCoachAthletes.js        — relations coach-athlète (coach_athletes)
+│   └── useGarminSync.js           — import Garmin : nuits, récupération, activités (ouverture,
+│                                    réveil, compte)
 │
 └── components/
     ├── ui/SwipePager.jsx          — carrousel de pages (balayage au doigt entre onglets)
@@ -129,6 +134,7 @@ src/
     ├── CalendarSyncSection.jsx    — section sync calendrier (CalDAV/iCal)
     ├── RunBlocksSection.jsx       — blocs de course (objectif km) dans Cycles
     ├── RunGoalSection.jsx         — bascule « objectif km » dans Compte
+    ├── GarminSection.jsx          — clé d'API personnelle Garmin (dans Compte)
     ├── SportFilterSheet.jsx       — choix des sports affichés dans Stats
     ├── ProfileView.jsx            — avatar, infos, thème, gestion athlètes
     ├── CoachLibraryView.jsx       — bibliothèque de séances modèles
@@ -156,8 +162,13 @@ src/
   weekMeta: {},        // { "2026-W10": { mesocycle, microcycle, objective, rpe } }
   customSessions: [],  // sessions personnalisées (legacy, migré → sessions_catalog)
   mesocycles: [],      // DEFAULT_MESOCYCLES
-  sleep: [],           // [{ date, total, deep, rem, light, awake, score }] : plus rien ne le lit
-                       // (l'import CSV Garmin a été retiré en octobre 2026)
+  sleep: [],           // [{ date, total, deep, light, rem, awake, score, start, end, need, source }]
+                       // les nuits Garmin (API personnelle), minutes, date du réveil
+                       // (les anciennes nuits du CSV n'ont ni start/end/need ni source)
+  recovery: {},        // { "2026-10-28": { rhr, stress, bbMax, bbMin, bbCharged, bbDrained,
+                       //                   hrv, hrvWeek, hrvStatus, hrvLow, hrvHigh } } (Garmin)
+  garminSeen: {},      // { <activityId>: "2026-10-28" } activités Garmin déjà traitées,
+                       // oubliées au bout de 60 jours (voir « Garmin Connect »)
   hooper: [],          // [{ date, fatigue, stress, douleur, humeur, sommeil }]
   notes: {},           // { "2026-03-09": "texte" }
   creatine: {},        // { "2026-03-09": true }
@@ -175,6 +186,12 @@ src/
   runBlocks: [],       // blocs de course : [{ id, label, color, startDate, durationWeeks,
                        //                     baseKm, increasePct, overrides: { <index>: km } }]
   runLocked: true,     // verrou de la piste course — indépendant de cyclesLocked
+  // profile.garmin : { linked, since, broken?, through?, backfill? } — une clé
+  //                  Garmin est enregistrée (sur le serveur, jamais ici) ; `broken` :
+  //                  Garmin l'a refusée ; `through` / `backfill` : où en est l'import
+  // profile.garminAddUnplanned : false pour ne pas ajouter les activités non prévues
+  // séance.garmin : { activityId, start, durationMin, distanceKm, elevation, avgHr,
+  //                   maxHr, calories, load, aerobic, type, name } l'activité liée
 }
 ```
 
@@ -187,6 +204,7 @@ src/
 | `sessions_catalog` | bibliothèque de séances du coach | own rows |
 | `session_blocks` | **plus utilisée** — la table reste, l'app n'y touche plus (blocs supprimés) | own rows |
 | `session_feedbacks` | retours athlète sur les séances | authenticated read-all |
+| `garmin_links` | clé d'API personnelle Garmin d'un compte, dernier jeton, état de la synchro | **aucun client** : RLS sans policy, seul `service_role` (`api/garmin`) y touche |
 
 - Auth : magic link email + password, `persistSession: true`, `storageKey: "climbing-planner-auth"`
 - Sync : debounce 1500ms, upsert on conflict user_id
@@ -323,7 +341,8 @@ Même chose dans Vercel Dashboard > Settings > Environment Variables.
 ```
 SUPABASE_SERVICE_ROLE_KEY=<service role key>
 ```
-Sans cette variable, les endpoints `/api/caldav/*` et `/api/calendar/*` retournent 503.
+Sans cette variable, les endpoints `/api/caldav/*`, `/api/calendar/*` et
+`/api/garmin/*` retournent 503.
 
 ## Vues disponibles
 
@@ -1076,17 +1095,21 @@ répondait mal aux questions simples. Elle se lit maintenant de haut en bas, et
    durée n'est saisie).
 5. **Récupération** : le Hooper sur **l'échelle du journal** (`lib/hooper.js` :
    ≤ 14 bien récupéré, ≤ 17 modérément fatigué, au-delà très fatigué), et le
-   critère qui pèse le plus.
-6. **Ressenti face au plan** : l'écart moyen (ressenti − prévu) dit en une
+   critère qui pèse le plus. Puis, avec Garmin, **ce que mesure la montre** :
+   VFC, FC au repos, Body Battery, stress (voir « Garmin Connect » plus bas).
+6. **Sommeil** (nuits Garmin) : durée moyenne par nuit, score, barres des
+   phases face au besoin de sommeil, coucher et lever moyens, et les nuits qui
+   suivent une grosse journée comparées aux autres (voir plus bas).
+7. **Ressenti face au plan** : l'écart moyen (ressenti − prévu) dit en une
    phrase, par tranche et par sport, et la qualité moyenne en étoiles.
-7. **Course** (course et trail) : km faits et prévus, l'objectif de la semaine
+8. **Course** (course et trail) : km faits et prévus, l'objectif de la semaine
    en trait sur les semaines entières, « objectif tenu n semaines sur m » sur
    les semaines terminées. Ni D+ ni allure, à dessein pour l'instant.
-8. **Poids** (axe au demi-kilo, variation sur la période) et **Repas**
+9. **Poids** (axe au demi-kilo, variation sur la période) et **Repas**
    (moyennes par jour noté, pas par jour du calendrier).
-9. **Habitudes** : la tenue de chaque rappel, et les jours de journal remplis,
-   comptés depuis le premier jour jamais noté.
-10. **Régularité** : la heatmap, toujours l'année écoulée (voir plus bas).
+10. **Habitudes** : la tenue de chaque rappel, et les jours de journal remplis,
+    comptés depuis le premier jour jamais noté.
+11. **Régularité** : la heatmap, toujours l'année écoulée (voir plus bas).
 
 Les règles qui ne se voient pas :
 
@@ -1118,14 +1141,19 @@ Les règles qui ne se voient pas :
   survit pas au changement de période.
 - Un sport isolé (filtre) sort aussi les **échéances** : elles n'ont pas de
   sport.
-- Le **sommeil** a été retiré avec son import CSV Garmin, qui ne fonctionnait
-  pas. `data.sleep` reste dans le blob, rien ne le lit plus.
-- Tests : `npm run test:stats` (32 cas) : périodes et bornes du mois,
+- Le **sommeil** revient en octobre 2026 par l'API personnelle de Garmin
+  (l'ancien import CSV, qui ne fonctionnait pas, est parti) : section
+  **Sommeil**, juste après Récupération. Voir « Garmin Connect » plus bas.
+- Tests : `npm run test:stats` (41 cas) : périodes et bornes du mois,
   comparaison à date (31 mars → 28 février compris), état d'une séance, résumé,
   charge empilée, répartition, écart pondéré, Hooper, poids, repas, course et
   objectifs, rappels et journal, écriture des nombres ; et pour les plages
   libres : découpage d'office, plafond de tranches, tranches coupées, années
-  sur l'axe, flèches, comparaison, raccourcis, cycles, erreurs de saisie.
+  sur l'axe, flèches, comparaison, raccourcis, cycles, erreurs de saisie ; et
+  le sommeil : moyennes par nuit, phases, coucher de part et d'autre de minuit,
+  paliers du score, nuits après une grosse journée ; et la récupération de la
+  montre : moyennes, zone de VFC, nuits basses d'affilée ; et le réel de la
+  montre préféré au prévu dans le résumé.
 
 **Une plage libre, et le découpage à part** (`StatsRangePicker.jsx`,
 `lib/stats.js`). Choisir la plage et choisir la finesse des barres sont deux
@@ -1590,6 +1618,235 @@ mésocycles, activée par une bascule dans **Compte > Objectif de course**
   s'allongerait de six lignes vides. Les décimales y sont arrondies : à 9 px,
   « 36,3 » est du bruit.
 
+### Garmin Connect : la montre dans l'app (`api/_garmin*.js`, `lib/garmin.js`, `useGarminSync`, `GarminSection`)
+
+Garmin ouvre depuis octobre 2026 une **API personnelle** : chacun génère sur
+Garmin Connect une clé qui donne accès à ses propres données (sommeil, VFC,
+Body Battery, stress, activités, pesées…), en lecture seule. La clé se colle
+dans **Compte > Garmin Connect** ; le serveur la vérifie auprès de Garmin, la
+garde, et l'app importe trois choses : les **nuits** (`data.sleep`), les
+**journées de récupération** (`data.recovery`) et les **activités**, qui se
+posent sur les séances du planning.
+
+La FAQ de Garmin le dit : l'API personnelle n'est pas faite pour une
+application commerciale qui servirait plusieurs utilisateurs. Ici chacun colle
+**sa** clé et ne lit que **ses** données : c'est l'usage prévu.
+
+**Le protocole** (spécification OpenAPI de Garmin, embarquée dans la page
+`developer.garmin.com/gc-developer-program/personal/swagger-docs/` : la page
+ne montre rien sans JavaScript, la spec se lit dans son paquet JavaScript,
+qu'un simple `curl` récupère) :
+
+1. la clé ne sert jamais directement : `POST https://personal.connectapi.garmin.com/personalapitoken-service/personal-api/personal-api-key/token`
+   avec `Authorization: ApiKey <clé>`, et le **corps de la réponse est le
+   jeton** (un JWT valable 24 h, sans jeton de rafraîchissement) ;
+2. les données se lisent en GET avec `Authorization: Bearer <jeton>`. Quatre
+   lectures par plage de 31 jours au plus :
+   - nuits : `/sleep-service/sleep/dailySleepSummariesByDate?startDate&endDate`,
+     une liste de `DailySleepDTO` ;
+   - journées : `/usersummary-service/v2/dailysummaries?startDate&endDate`,
+     `{ data: [UserDailySummaryV2DTO] }` (`heartRate.restingValue`,
+     `stress.avgLevel`, `bodyBattery` min, max, rechargé, dépensé) ;
+   - VFC : `/hrv-service/hrv/daily/<début>/<fin>`, `{ hrvSummaries: [...] }`
+     (`lastNightAvg`, `weeklyAvg`, `status`, `baseline.balancedLow/Upper`) ;
+   - activités : `/activitylist-service/activities/search/activities?startDate&endDate&start&limit=99&sortOrder=asc`,
+     par pages de 99 (quatre au plus), des `SummarizedActivityDTO`
+     (`activityId`, `startTimeLocal`, `activityType.typeKey`, `duration` en
+     secondes, `distance` en mètres, `elevationGain`, `averageHR`,
+     `activityTrainingLoad`…).
+
+**La clé ne quitte jamais le serveur.** Elle vaut jusqu'à un an d'accès aux
+données de santé du compte Garmin :
+
+- table `garmin_links` (migration `20261030`) : RLS **sans policy**, REVOKE à
+  `anon` et `authenticated`, GRANT au seul `service_role`. Le client ne peut
+  pas la lire, pas même sa propre ligne ;
+- surtout pas dans `data` : le coach le lit, et pour un planning public, toute
+  personne qui a la clé anon ;
+- `api/garmin/[action].js` (→ `_garmin-handler.js`) authentifie l'appel par le
+  jeton Supabase de l'utilisateur (`auth.getUser`), et ne rend jamais que les
+  quatre derniers caractères de la clé (`hint`) ;
+- le dernier jeton Garmin est gardé à côté et réutilisé tant qu'il lui reste
+  plus d'une heure, comme le fait le client officiel. Révoqué avant l'heure
+  (401), on en reprend un, **une seule fois**, pour les seules lectures
+  refusées.
+
+Routes : `GET status` · `POST key { apiKey }` (vérifiée auprès de Garmin
+**avant** d'être enregistrée : une clé mal collée se dit tout de suite) ·
+`DELETE key` · `GET sync?start&end`. Les quatre lectures d'une passe partent
+**ensemble**, et l'une peut échouer sans emporter les autres (une montre sans
+VFC, une route saturée) : son erreur revient dans `partial`
+(`{ hrv: "garmin_error" }`), le reste arrive. Toutes en échec : l'erreur, comme
+avant. Les erreurs sont des codes (`key_rejected`, `rate_limited`,
+`garmin_timeout`, `not_installed`…) que `garminMessage()` met en phrases. Table
+absente ou droits manquants → `not_installed` (503) : c'est que la migration
+n'est pas passée.
+
+**L'import** (`useGarminSync`, monté dans le shell) :
+
+- à la liaison, **un an** en douze plages de 31 jours, **la plus récente
+  d'abord** : les dernières nuits s'affichent pendant que l'historique arrive.
+  Ensuite, seulement depuis l'avant-dernier jour lu (Garmin affine une nuit
+  après coup) ;
+- ⚠️ **un import arrêté en route reprend là où il s'est arrêté**
+  (`planSync`, `syncCursor`). Douze plages d'affilée, c'est une cinquantaine
+  d'appels : si Garmin cale au milieu (limite de débit, panne), recommencer par
+  le plus récent buterait chaque fois au même endroit et l'historique ne se
+  remplirait jamais. D'où deux repères dans `profile.garmin`, partagés par les
+  appareils : `through`, le jour le plus récent lu, et `backfill`, le dernier
+  jour de l'historique qui reste à lire (absent quand tout est là). La passe
+  suivante lit les jours récents, **puis** ce qui reste. Une lecture en panne
+  passagère (`isTransient` : `rate_limited`, `garmin_down`, `garmin_timeout`,
+  `garmin_unreachable`) arrête la passe et laisse sa plage à relire ; une
+  lecture refusée pour de bon (`garmin_error`, une route que la montre ne
+  connaît pas) ne se retente pas, sans quoi elle bloquerait tout. Changer de
+  clé garde les repères ; « Délier » les efface ;
+- trois déclencheurs : l'ouverture, chaque retour au premier plan, et le bouton
+  « Synchroniser ». Les deux premiers sont espacés (`autoSyncDue`) : toutes les
+  30 min tant que la nuit dernière manque (la montre se synchronise au réveil),
+  toutes les 6 h sinon. L'espacement compte les **tentatives**, ratées
+  comprises, et vit en localStorage (`climbing_garmin_sync_at`) ;
+- `mergeNights` et `mergeRecovery` rendent **l'objet d'origine** quand rien ne
+  change, `linkActivities` aussi, sans quoi chaque passe marquerait le
+  planning « modifié » ;
+- `profile.garmin = { linked, since }` voyage avec le planning : relier depuis
+  l'ordinateur suffit pour que le téléphone importe. Clé oubliée ailleurs
+  (`no_key`) → le drapeau tombe ; refusée par Garmin (`key_rejected`, clé
+  expirée) → `broken`, plus de relance automatique jusqu'à la nouvelle clé.
+  La section du compte recale le drapeau sur `/status` à chaque visite ;
+- ⚠️ **rien ne part en vue athlète** : `data` y est le planning de l'athlète, la
+  clé serait celle du coach, et ses nuits atterriraient chez l'athlète. La
+  garde est relue après **chaque** réponse (le coach peut changer de vue pendant
+  un import), depuis une référence tenue à jour dans un `useLayoutEffect` : un
+  effet ordinaire laisserait passer une réponse entre le changement de vue et
+  sa mise à jour.
+
+Une nuit garde : `date` (celle du réveil, le `calendarDate` de Garmin), `total`
+et ses phases **en minutes**, `score`, `start` / `end` à l'heure locale, `need`
+(le besoin de sommeil calculé par Garmin), `source: "garmin"`. Ce qui n'est
+pas gardé : une montre au tiroir (`off_wrist`), une nuit vide, et un
+**fragment** sans phase ni score (une heure captée au réveil), qui ferait
+plonger les moyennes. Un besoin hors de 3 h à 15 h est écarté : mieux vaut rien
+qu'une valeur lue dans la mauvaise unité.
+
+Une journée (`data.recovery[date]`, `normalizeDays`) garde la FC au repos,
+le stress moyen, la Body Battery (au plus haut, au plus bas, rechargée,
+dépensée) et la VFC de la nuit avec sa moyenne sur 7 jours, le statut de
+Garmin et sa **zone habituelle** (`hrvLow` / `hrvHigh`). Chaque valeur hors de
+ses bornes plausibles (FC 25 à 130, VFC 5 à 300…) est écartée, et un statut
+inconnu aussi : seuls `BALANCED`, `UNBALANCED`, `LOW`, `POOR` ont un sens.
+
+**Une activité trouve sa séance** (`linkActivities`). C'est le cœur de la
+fonction, et la question qui compte : comment éviter qu'une sortie ne fasse
+deux séances, une prévue et une importée.
+
+- **Même jour** (le jour local de départ de l'activité) et **discipline
+  compatible** : `disciplineOf()` traduit le `typeKey` de Garmin (`running`,
+  `trail_running`, `indoor_climbing`, `bouldering`, `road_biking`,
+  `strength_training`, `yoga`…). Course et trail s'acceptent l'un l'autre ;
+  vélo, escalade, renfo et mobilité seulement eux-mêmes. Une marche, une
+  natation : discipline « autre », jamais liée à une séance d'escalade.
+- **L'heure ne fait que départager.** Le footing prévu à midi et couru à 7 h,
+  c'est le même footing. Quand une journée porte deux séances de la même
+  discipline, toutes les paires possibles sont rangées par écart d'heure (une
+  séance sans heure compte 6 h d'écart) puis prises dans l'ordre, chacune une
+  seule fois : les deux séances et les deux activités se répartissent
+  **ensemble**, au lieu que la première activité prenne la séance qui
+  convenait mieux à la seconde.
+- **Un statut posé à la main n'est jamais réécrit.** La séance déjà notée
+  (faite, adaptée) reçoit la trace de l'activité, rien d'autre ; une séance
+  sans statut devient `{ status: "done", done: true, auto: "garmin" }`. Une
+  séance **manquée** ne reçoit rien : la montre ne contredit pas ce qu'on a
+  déclaré. Une échéance non plus.
+- **Ce qui était prévu ne bouge pas** (`chargePlanned`, durée, distance
+  prévues) : le réel vit à côté, dans `séance.garmin`, et la fenêtre de la
+  séance l'affiche (« Enregistrée sur ta montre » : départ, durée, distance,
+  D+, FC moyenne, charge Garmin). Les stats, elles, préfèrent **le réel** pour
+  une séance faite : `sessionMinutes` et `runKm` (`lib/stats.js`), `weekRunKm`
+  (`lib/run-goals.js`).
+- **Une activité sans séance prévue devient une séance faite**, si elle en vaut
+  une : bascule « Ajouter les activités non prévues » allumée
+  (`profile.garminAddUnplanned`, par défaut oui), au plus **14 jours** (la
+  liaison remonte un an, on ne remplit pas le calendrier de toute une année),
+  **15 min** et plus, une discipline connue (pas « autre ») et parmi les
+  sports du profil s'il en déclare. Ses métriques (distance, D+) sont celles
+  de l'activité, que la fenêtre ne répète donc pas.
+- ⚠️ **Son identifiant vient de l'activité** (`garmin-<activityId>`) : le
+  téléphone et l'ordinateur qui l'ajoutent en même temps créent **la même**
+  séance, que la fusion à trois voies reconnaît comme une seule.
+- ⚠️ **Une activité n'est traitée qu'une fois** : le registre
+  `data.garminSeen` (`activityId → date`) l'empêche d'être liée deux fois, et
+  surtout d'être **recréée** quand on a supprimé la séance qu'elle avait
+  ajoutée. Il oublie ce qui a plus de 60 jours : une synchro ne relit jamais si
+  loin, sauf l'import d'un an, qui n'ajoute rien au-delà de 14 jours.
+- **Le ressenti reste à donner.** La montre dit que la séance a eu lieu, pas ce
+  qu'elle a coûté : une séance cochée par elle (`feedback.auto` sans `rpe`)
+  reste dans la cloche (`lib/todo.js`, « Ta montre l'a enregistrée, il reste
+  ton ressenti »), dès que l'activité est là, sans attendre l'heure de fin
+  prévue. Les notifications Android, elles, la tiennent pour faite : rappeler
+  le départ d'une séance déjà courue n'aurait pas de sens. Enregistrer le
+  ressenti réécrit le `feedback` sans `auto`.
+- Modifier ou déplacer la séance garde sa trace (`AutonomousShell`, synchro des
+  modèles dans `DataProvider`) ; la fusion connaît `recovery` et `garminSeen`
+  (clé par clé, comme les notes).
+
+**Dans les stats** (`sleepStats`) :
+
+- les barres disent le **sommeil** (profond, léger, paradoxal, et le non classé,
+  dont la somme fait le total) ; l'éveil n'y est **pas empilé**, sans quoi elles
+  mesureraient le temps au lit et ne se compareraient plus au besoin de
+  sommeil, en pointillés sur le même axe ;
+- les phases forment une **rampe ordonnée d'une seule teinte** (`DATA.sleep`),
+  pas des catégories : c'est l'ordre des hypnogrammes. Validée contre la carte
+  de chaque thème (marches de luminosité visibles, l'extrémité la plus proche
+  du fond à plus de 2:1) ; en sombre l'ancre s'inverse, le profond reste le plus
+  contrasté. Un filet de 2 px à la couleur de la carte sépare les phases ;
+- coucher et lever moyens arrondis à 5 min, **minuit compris** : une heure du
+  matin compte comme la suite de la veille, sinon 23 h et 1 h donneraient midi ;
+- « après une grosse journée » : la nuit datée du 12 suit la journée du 11 ;
+  grosse = charge **faite** d'au moins 7 (`HARD_DAY_CHARGE`, le seuil de
+  « soutenu »), échéances comprises. Jugée sur toutes les séances, même quand un
+  sport est isolé. Rien n'est dit sous trois nuits de chaque côté.
+
+**La récupération de la montre** (`recoveryStats`, `WatchRecovery` dans
+`Dashboard.jsx`) se lit dans la section **Récupération**, sous le Hooper : ce
+qu'on ressent, puis ce que la montre mesure. La section s'affiche dès que l'un
+des deux a servi.
+
+- Quatre tuiles : la **VFC** moyenne de la période et le statut que Garmin pose
+  sur la dernière nuit (« basse en ce moment », « en fin de période » pour une
+  période passée : la tuile dit lequel des deux on lit), la **FC au repos** et
+  son écart à la période d'avant, la **Body Battery** au plus haut, le
+  **stress** moyen et son palier (repos, faible, moyen, élevé).
+- Toucher une tuile change la courbe dessous. Celle de la VFC porte en vert la
+  **zone habituelle** selon Garmin. L'axe est gradué à un pas rond (laissé à
+  lui-même, Recharts tombait sur 50, 57, 64, 71), et l'axe des dates a une
+  marge aux deux bouts pour que la dernière ne soit pas coupée.
+- Deux phrases : « VFC dans ta zone habituelle n nuits sur m », et, quand les
+  **deux dernières nuits au moins** sont sous la zone (et qu'elles sont
+  récentes), « garde de la marge sur l'intensité » ; puis la FC au repos face à
+  la période d'avant.
+
+Tests : `npm run test:garmin` (44 cas) : clé, jeton, dates, nuits, journées,
+activités, et le gestionnaire contre un faux Garmin et une fausse table (clé
+jamais rendue, vérifiée avant d'être enregistrée, jeton réutilisé, renouvelé,
+repris après révocation, une lecture en échec sans les autres, pages
+d'activités, chaque panne avec son code) ; côté app, plages, reprise d'un
+import interrompu, fusion, relance, et la liaison : même jour, paires les plus
+proches choisies ensemble, statut manuel gardé, manquée et échéance exclues,
+activité non prévue ajoutée (ou non), registre, deux appareils.
+
+Le parcours entier a été joué dans Chromium contre une fausse base Supabase
+(session simulée) et une fausse API interceptée : mauvaise clé, bonne clé,
+import d'un an, clé absente du navigateur **et** de la ligne synchronisée,
+relance au réveil limitée aux derniers jours, nuits gardées après « Délier ».
+Puis, avec 41 activités simulées sur six semaines : les 35 qui avaient une
+séance prévue sont toutes arrivées sur **la bonne**, deux non prévues ajoutées
+(un vélo, un bloc), et rien pour une marche, une natation, dix minutes de yoga
+ou un trail vieux de trois semaines ; aucun doublon ; une seconde passe ne
+change rien ; une séance ajoutée puis supprimée ne revient pas ; un import qui
+cale au 6e appel (429) reprend à la passe suivante par les 7 plages restantes.
+
 ### Isoler un sport dans les stats (`SportFilterSheet`, `filterDataBySports`)
 
 Deux chemins vers la même feuille : un **appui long sur l'onglet « Stats »**
@@ -1606,7 +1863,7 @@ ordinateur.
   écartées de `weeks`, et tout ce qui en dérive suit (résumé, charge,
   répartition, écart, course, heatmap). Les échéances sortent aussi
   (`buildDayIndex(data, { includeEvents: false })`) : elles n'ont pas de sport.
-  Poids, Hooper et repas voyagent dans le même objet et restent entiers : ils
+  Poids, Hooper, sommeil et repas voyagent dans le même objet et restent entiers : ils
   ne dépendent d'aucun sport. Sans filtre, la fonction renvoie
   l'objet **d'origine** : une nouvelle identité à chaque rendu ferait retracer
   tous les graphes.
@@ -1629,6 +1886,7 @@ ordinateur.
 | `supabase/migrations/20260824_climbing_plans_status_solo.sql` | `CHECK` de `climbing_plans.status` élargi à `'solo'` — la contrainte d'origine ne connaissait que coach/athlete/auto, donc « athlète solo » repartait en 23514 et le rôle n'était jamais enregistré | ✅ appliquée |
 | `supabase/migrations/20260825_drop_auto_role.sql` | `status = 'auto'` → `'coach'` — le rôle « autonome » ne se distinguait du coach nulle part et a été retiré de l'app | ⏳ **à coller** (facultatif : l'app lit déjà 'auto' comme coach) |
 | `supabase/migrations/20261020_explicit_api_grants.sql` | `GRANT SELECT` sur `climbing_plans` à `anon` (plannings publics) et à `service_role` (CalDAV, iCal) : les deux seuls accès qui ne tenaient qu'aux anciens droits par défaut de Supabase | **sans effet sur le projet actuel** (les tables existantes gardent leurs droits) ; à passer sur une base recréée |
+| `supabase/migrations/20261030_garmin_links.sql` | Table `garmin_links` (clé d'API personnelle Garmin) : RLS sans policy, REVOKE à anon/authenticated, GRANT au seul `service_role` | ⏳ **à coller** (sans elle, `/api/garmin` répond `not_installed`) |
 
 Statuts vérifiés le 20 août 2026 contre le projet Supabase (existence des
 tables, colonnes, RPC et buckets via l'API REST) ; les trois d'août sur
@@ -2394,7 +2652,7 @@ curl -s "$U""diag.json"                     # tailles, temps, href suspects
 npm run dev      # dev server http://localhost:5173
 npm run build    # build prod dans dist/
 npm run lint     # ESLint
-npm run test     # tous les tests (CalDAV, notes, couleurs, rappels, migrations, allure, fusion, grille, accueil, stats)
+npm run test     # tous les tests (CalDAV, notes, couleurs, rappels, migrations, allure, fusion, grille, accueil, stats, Garmin)
 npm run test:caldav  # protocole CalDAV (node --test, sans dépendance)
 npm run test:text    # saisie en liste et filtrage des liens (lib/rich-text.js)
 npm run test:color   # conversions HSL ↔ hex (lib/color.js)
@@ -2405,6 +2663,7 @@ npm run test:merge     # fusion à trois voies des plannings (lib/merge-plan.js)
 npm run test:grid      # grille horaire de la semaine : durée, cascade, rangée du haut (lib/time-grid.js)
 npm run test:phrase    # phrase d'accueil : jours de repos, règles d'écriture (lib/home-phrase.js)
 npm run test:stats     # page Stats : périodes, comparaison à date, sections (lib/stats.js)
+npm run test:garmin    # Garmin : clé, jeton, passe complète, reprise, liaison des activités (api/_garmin*.js, lib/garmin.js)
 npm run cap:sync # build mode capacitor (sans SW) + sync du projet android/
 npm run cap:open # ouvre Android Studio
 ./run-android.sh # one-shot : émulateur/téléphone + build + install + lancement
@@ -2416,8 +2675,12 @@ npm run cap:open # ouvre Android Studio
 - Code-splitting via `manualChunks` (Recharts séparé du bundle principal)
 - ~~Migrer le stockage avatar base64 → Supabase Storage (URL)~~ ✅ fait (avatar-storage.js + bucket `avatars`)
 - Tests unitaires (helpers, charge, storage) + CI GitHub Actions — amorcé avec `lib/rich-text.js` (`npm run test:text`)
-- ~~Sommeil Garmin (sync ou import CSV)~~ abandonné en octobre 2026 : l'import ne
-  fonctionnait pas, la section et son code ont été retirés
+- ~~Sommeil Garmin (sync ou import CSV)~~ ✅ fait en octobre 2026 par l'API
+  personnelle de Garmin (l'import CSV, qui ne fonctionnait pas, est parti)
+- ~~Garmin : activités qui cochent les séances, VFC et Body Battery à côté du
+  Hooper~~ ✅ fait en octobre 2026
+- Garmin, la suite : pesées de la balance, charge d'entraînement aiguë/chronique,
+  fréquence cardiaque d'une séance (zones)
 - Notifications push PWA
 - Vue "tableau de bord coach" : résumé de tous les athlètes sur une seule page
 - Invitation coach→athlète par lien (au lieu de recherche par nom)

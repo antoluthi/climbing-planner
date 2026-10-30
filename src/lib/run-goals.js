@@ -130,7 +130,8 @@ export function weekRunKm(data, date) {
   for (const day of days) {
     for (const s of day || []) {
       if (!s || !RUN_DISCIPLINES.includes(s.discipline)) continue;
-      const km = Number(s.metrics?.distanceKm);
+      // Courue avec la montre : les kilomètres de l'activité, pas ceux du plan.
+      const km = Number(s.garmin?.distanceKm ?? s.metrics?.distanceKm);
       if (!Number.isFinite(km) || km <= 0) continue;
       const fb = s.feedback;
       if (fb?.done === true) done += km;

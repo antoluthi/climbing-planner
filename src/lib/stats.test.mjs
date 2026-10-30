@@ -8,6 +8,7 @@ import {
   windowOf, autoGrain, pointsFor, grainAllowed, resolveGrain, bucketsFor, stepSelection,
   selectionIsCurrent, rangeLabel, selectionCaption, previousPhrase, comparisonFor,
   quickRanges, cycleRanges, rangeError, tickInterval, MAX_POINTS,
+  sleepStats, averageClock, sleepScoreLabel, recoveryStats, stressLabel,
 } from "./stats.js";
 
 // Mardi 20 octobre 2026 : un milieu de semaine, un milieu de mois.
@@ -449,4 +450,133 @@ test("course jour par jour : l'objectif de la semaine seulement sur une vraie se
   assert.equal(runStats(idx, bucketsFor("2026-10-19", "2026-10-25", "day"), data, TODAY).weekGoal, 20);
   assert.equal(runStats(idx, bucketsFor("2026-10-01", "2026-10-30", "day"), data, TODAY).weekGoal, null);
   assert.equal(runStats(idx, bucketsFor("2026-10-21", "2026-10-27", "day"), data, TODAY).weekGoal, null);
+});
+
+// ─── Sommeil ─────────────────────────────────────────────────────────────────
+
+const night = (date, props = {}) => ({ date, total: 450, deep: 90, light: 240, rem: 120, awake: 20, score: 80, start: "23:10", end: "07:00", need: 480, source: "garmin", ...props });
+
+test("sommeil : moyennes par nuit, et les phases font le total", () => {
+  const data = { sleep: [
+    night("2026-10-12", { total: 420, deep: 60, light: 240, rem: 120, score: 70 }),
+    night("2026-10-13", { total: 480, deep: 120, light: 240, rem: 120, score: 90 }),
+    // L'ancien import CSV : un total sans phases ni score.
+    { date: "2026-10-14", total: 400 },
+    night("2026-09-01"),                                   // hors période
+  ] };
+  const p = periodOf("sem", new Date("2026-10-14T12:00:00"));
+  const st = sleepStats(data, new Map(), p.start, p.end, p.buckets);
+  assert.equal(st.n, 3);
+  assert.equal(st.total, 433);                             // (420 + 480 + 400) / 3
+  assert.equal(st.score, 80);                              // la nuit sans score ne compte pas
+  assert.equal(st.scoreLabel, "Bon");
+  // Profond + léger + paradoxal + non classé = le total, nuit par nuit.
+  const ph = st.phases;
+  assert.equal(ph.other, 133);                             // 400 de la nuit sans phases, / 3
+  assert.ok(Math.abs(ph.deep + ph.light + ph.rem + ph.other - st.total) <= 1);
+  // Mercredi : une seule nuit, sans phases ; dimanche : aucune.
+  const wed = st.perBucket[2];
+  assert.deepEqual([wed.n, wed.total, wed.deep, wed.other, wed.score], [1, 400, 0, 400, null]);
+  assert.deepEqual([st.perBucket[6].n, st.perBucket[6].total], [0, null]);
+});
+
+test("sommeil : coucher et lever moyens, minuit compris", () => {
+  assert.equal(averageClock(["23:30", "00:30"], { night: true }), "00:00");
+  assert.equal(averageClock(["22:50", "23:10", "23:40"], { night: true }), "23:15");
+  assert.equal(averageClock(["06:55", "07:20"]), "07:10");
+  assert.equal(averageClock([null, "pas une heure"]), null);
+  const data = { sleep: [night("2026-10-19", { start: "23:50" }), night("2026-10-20", { start: "00:20", end: "07:30" })] };
+  const st = sleepStats(data, new Map(), "2026-10-19", "2026-10-20", bucketsFor("2026-10-19", "2026-10-20", "day"));
+  assert.equal(st.bedtime, "00:05");
+  assert.equal(st.wake, "07:15");
+  assert.equal(st.need, 480);
+});
+
+test("sommeil : les paliers du score de Garmin", () => {
+  assert.equal(sleepScoreLabel(95), "Excellent");
+  assert.equal(sleepScoreLabel(80), "Bon");
+  assert.equal(sleepScoreLabel(79), "Passable");
+  assert.equal(sleepScoreLabel(42), "Mauvais");
+  assert.equal(sleepScoreLabel(null), null);
+});
+
+test("sommeil : les nuits qui suivent une grosse journée, à part", () => {
+  // Grosses journées (charge faite >= 7) les lundis, mardis et mercredis de
+  // deux semaines ; la nuit datée du lendemain les suit.
+  const big = [done({ chargePlanned: 8 })];
+  const data = {
+    weeks: {
+      ...week("2026-10-05", [big, big, big, [done({ chargePlanned: 3 })]]),
+      ...week("2026-10-12", [big, [missed({ chargePlanned: 9 })]]),
+    },
+    sleep: [
+      night("2026-10-06", { total: 400 }), night("2026-10-07", { total: 390 }), night("2026-10-08", { total: 410 }),
+      night("2026-10-13", { total: 400 }),
+      night("2026-10-09", { total: 470 }), night("2026-10-10", { total: 460 }), night("2026-10-11", { total: 480 }),
+      night("2026-10-14", { total: 470 }),                 // après une séance manquée : pas une grosse journée
+    ],
+  };
+  const index = buildDayIndex(data);
+  const st = sleepStats(data, index, "2026-10-01", "2026-10-31", bucketsFor("2026-10-01", "2026-10-31", "week"));
+  assert.deepEqual(st.afterHard, { hardN: 4, hard: 400, otherN: 4, other: 470 });
+  // Moins de trois nuits d'un côté : rien à conclure.
+  const few = { ...data, sleep: data.sleep.slice(0, 5) };
+  assert.equal(sleepStats(few, index, "2026-10-01", "2026-10-31", []).afterHard, null);
+});
+
+test("sommeil : aucune nuit sur la période", () => {
+  const st = sleepStats({ sleep: [night("2026-01-01")] }, new Map(), "2026-10-19", "2026-10-25", bucketsFor("2026-10-19", "2026-10-25", "day"));
+  assert.equal(st.n, 0);
+  assert.equal(st.perBucket.length, 7);
+  assert.equal(st.afterHard, null);
+});
+
+// ─── Récupération mesurée ────────────────────────────────────────────────────
+
+test("récupération : moyennes de la période et des tranches, chaque mesure à part", () => {
+  const data = { recovery: {
+    "2026-10-19": { rhr: 48, hrv: 60, hrvLow: 55, hrvHigh: 70, bbMax: 80, stress: 24 },
+    "2026-10-20": { rhr: 50, hrv: 52, hrvLow: 55, hrvHigh: 70, bbMax: 62 },
+    "2026-10-21": { rhr: 49 },                                        // nuit sans VFC
+    "2026-09-01": { rhr: 60 },                                        // hors période
+  } };
+  const st = recoveryStats(data, "2026-10-19", "2026-10-25", bucketsFor("2026-10-19", "2026-10-25", "day"));
+  assert.equal(st.n, 3);
+  assert.deepEqual(st.metrics, { hrv: 56, rhr: 49, bbMax: 71, stress: 24 });
+  assert.deepEqual([st.perBucket[0].hrv, st.perBucket[2].hrv, st.perBucket[2].rhr, st.perBucket[6].rhr], [60, null, 49, null]);
+});
+
+test("récupération : la VFC contre sa zone habituelle, nuit par nuit", () => {
+  const night = (hrv, lo = 55, hi = 70) => ({ hrv, hrvLow: lo, hrvHigh: hi });
+  const data = { recovery: {
+    "2026-10-15": { ...night(62), hrvStatus: "BALANCED" },
+    "2026-10-16": night(66),
+    "2026-10-17": night(50),
+    "2026-10-18": night(53, 54, 69),
+    "2026-10-19": { ...night(51, 54, 69), hrvStatus: "LOW" },
+  } };
+  const st = recoveryStats(data, "2026-10-12", "2026-10-25", []);
+  assert.deepEqual(st.band, { low: 54, high: 69 });          // la zone la plus récente
+  assert.equal(st.hrvNights, 5);
+  assert.equal(st.inZone, 2);
+  assert.equal(st.lowStreak, 3);                              // les trois dernières nuits
+  assert.equal(st.lastHrvDate, "2026-10-19");
+  assert.equal(st.lastStatus, "LOW");
+});
+
+test("récupération : rien sur la période, et les paliers du stress", () => {
+  const st = recoveryStats({ recovery: { "2026-01-01": { rhr: 50 } } }, "2026-10-19", "2026-10-25", []);
+  assert.equal(st.n, 0);
+  assert.equal(st.band, null);
+  assert.deepEqual(st.metrics, { hrv: null, rhr: null, bbMax: null, stress: null });
+  assert.equal(recoveryStats({}, "2026-10-19", "2026-10-25", []).n, 0);
+  assert.deepEqual([stressLabel(20), stressLabel(40), stressLabel(60), stressLabel(90), stressLabel(null)], ["repos", "faible", "moyen", "élevé", null]);
+});
+
+test("une séance liée à Garmin compte le réel : durée et kilomètres de l'activité", () => {
+  const s = S({ discipline: "running", estimatedTime: 45, metrics: { durationMin: 45, distanceKm: 8 }, garmin: { activityId: "1", durationMin: 52, distanceKm: 9.4 }, feedback: { status: "done", done: true } });
+  const data = week("2026-10-19", [[s]]);
+  const sum = summarize(buildDayIndex({ weeks: data }), "2026-10-19", "2026-10-25", TODAY);
+  assert.equal(sum.minutes, 52);
+  assert.equal(sum.km, 9.4);
 });

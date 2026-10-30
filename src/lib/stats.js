@@ -384,14 +384,16 @@ export function sessionState(s, dateISO, todayISO) {
 
 export const sportOf = (s) => s?.discipline || "climbing";
 
+// Une séance liée à une activité Garmin (`s.garmin`) compte ce qui a été fait,
+// pas ce qui était prévu : la durée et les kilomètres enregistrés par la montre.
 export function sessionMinutes(s) {
-  const m = Number(s?.metrics?.durationMin ?? s?.estimatedTime);
+  const m = Number(s?.garmin?.durationMin ?? s?.metrics?.durationMin ?? s?.estimatedTime);
   return Number.isFinite(m) && m > 0 ? m : 0;
 }
 
 export function runKm(s) {
   if (!RUN_DISCIPLINES.includes(s?.discipline)) return 0;
-  const km = Number(s?.metrics?.distanceKm);
+  const km = Number(s?.garmin?.distanceKm ?? s?.metrics?.distanceKm);
   return Number.isFinite(km) && km > 0 ? km : 0;
 }
 
@@ -619,6 +621,160 @@ export function hooperStats(data, start, end, buckets) {
       const m = avg(vals);
       return { label: b.label, start: b.start, end: b.end, total: m == null ? null : Math.round(m), n: vals.length };
     }),
+  };
+}
+
+// ── Sommeil ──────────────────────────────────────────────────────────────────
+// Les nuits de `data.sleep` (Garmin, ou l'ancien import CSV), datées du jour
+// du réveil, durées en minutes. Chaque nuit se décompose en profond, léger,
+// paradoxal et « non classé » (ce que la montre n'a pas su ranger, ou une nuit
+// sans phases), dont la somme fait le sommeil total ; l'éveil s'y ajoute. Les
+// moyennes se font par nuit enregistrée : une semaine de trois nuits n'est pas
+// une semaine de sept nuits courtes.
+export const SLEEP_PHASES = ["deep", "light", "rem", "other", "awake"];
+// Une « grosse journée » : charge faite d'au moins 7 sur l'échelle 0-10, le
+// seuil de « soutenu » (`getChargeColor`).
+export const HARD_DAY_CHARGE = 7;
+
+const nightMinutes = (n) => {
+  const v = (k) => { const x = Number(n?.[k]); return Number.isFinite(x) && x > 0 ? x : 0; };
+  const total = v("total");
+  const deep = v("deep"), light = v("light"), rem = v("rem");
+  return { total, deep, light, rem, other: Math.max(0, total - deep - light - rem), awake: v("awake") };
+};
+
+// Moyenne des heures « 23:14 » / « 00:41 » : une heure du matin compte comme
+// la suite de la veille, sinon 23 h et 1 h donneraient midi. Arrondie à 5 min,
+// on dit « vers 23 h 10 ».
+export function averageClock(times, { night = false } = {}) {
+  const mins = times
+    .map(t => (typeof t === "string" ? /^(\d{1,2}):(\d{2})$/.exec(t) : null))
+    .filter(Boolean)
+    .map(m => {
+      const v = Number(m[1]) * 60 + Number(m[2]);
+      return night && v < 12 * 60 ? v + 24 * 60 : v;
+    });
+  if (!mins.length) return null;
+  const v = (Math.round(avg(mins) / 5) * 5) % (24 * 60);
+  return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
+}
+
+// Le score de Garmin en toutes lettres, avec ses paliers.
+export function sleepScoreLabel(score) {
+  if (score == null) return null;
+  return score >= 90 ? "Excellent" : score >= 80 ? "Bon" : score >= 60 ? "Passable" : "Mauvais";
+}
+
+// La charge faite d'un jour : séances notées faites, et échéances (une
+// échéance passée a eu lieu, comme dans le résumé).
+function doneCharge(index, dateISO) {
+  const e = index?.get(dateISO);
+  if (!e) return 0;
+  let sum = 0;
+  for (const s of e.sessions) if (s?.feedback?.done === true) sum += getSessionCharge(s);
+  for (const ev of e.events) sum += getSessionCharge(ev);
+  return sum;
+}
+
+export function sleepStats(data, index, start, end, buckets) {
+  const nights = (data?.sleep || [])
+    .filter(n => n?.date && n.date >= start && n.date <= end && Number(n.total) > 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const mean = (list, k) => (list.length ? Math.round(avg(list.map(x => x[k]))) : null);
+  const decomposed = nights.map(nightMinutes);
+  const scoreOf = (list) => {
+    const v = list.map(n => Number(n.score)).filter(x => Number.isFinite(x) && x > 0);
+    return v.length ? Math.round(avg(v)) : null;
+  };
+
+  const perBucket = buckets.map(b => {
+    const inB = nights.filter(n => n.date >= b.start && n.date <= b.end);
+    const parts = inB.map(nightMinutes);
+    const row = { label: b.label, start: b.start, end: b.end, kind: b.kind, full: b.full, n: inB.length, score: scoreOf(inB) };
+    row.total = mean(parts, "total");
+    for (const k of SLEEP_PHASES) row[k] = mean(parts, k);
+    return row;
+  });
+  if (!nights.length) return { n: 0, perBucket, afterHard: null };
+
+  const phases = {};
+  for (const k of SLEEP_PHASES) phases[k] = mean(decomposed, k);
+  const needs = nights.map(n => Number(n.need)).filter(x => Number.isFinite(x) && x > 0);
+  const score = scoreOf(nights);
+
+  // La nuit datée du 12 suit la journée du 11.
+  const after = { hard: [], other: [] };
+  nights.forEach((n, i) => {
+    const day = iso(addDays(parse(n.date), -1));
+    (doneCharge(index, day) >= HARD_DAY_CHARGE ? after.hard : after.other).push(decomposed[i].total);
+  });
+  const afterHard = after.hard.length >= 3 && after.other.length >= 3
+    ? { hardN: after.hard.length, hard: Math.round(avg(after.hard)), otherN: after.other.length, other: Math.round(avg(after.other)) }
+    : null;
+
+  return {
+    n: nights.length,
+    total: mean(decomposed, "total"),
+    phases,
+    score,
+    scoreLabel: sleepScoreLabel(score),
+    need: needs.length ? Math.round(avg(needs)) : null,
+    bedtime: averageClock(nights.map(n => n.start), { night: true }),
+    wake: averageClock(nights.map(n => n.end)),
+    afterHard,
+    perBucket,
+  };
+}
+
+// ── Récupération mesurée (Garmin) ────────────────────────────────────────────
+// `data.recovery` : une journée par date (FC au repos, VFC de la nuit et sa
+// zone habituelle, Body Battery, stress). Le Hooper dit ce qu'on ressent, ces
+// valeurs ce que le corps mesure : les deux se lisent côte à côte.
+export const RECOVERY_METRICS = ["hrv", "rhr", "bbMax", "stress"];
+export const HRV_STATUS_LABEL = { BALANCED: "équilibrée", UNBALANCED: "déséquilibrée", LOW: "basse", POOR: "faible" };
+
+// Les paliers du stress de Garmin (0 à 100).
+export function stressLabel(v) {
+  if (v == null) return null;
+  return v <= 25 ? "repos" : v <= 50 ? "faible" : v <= 75 ? "moyen" : "élevé";
+}
+
+export function recoveryStats(data, start, end, buckets) {
+  const rows = Object.entries(data?.recovery || {})
+    .filter(([d, v]) => d >= start && d <= end && v && typeof v === "object")
+    .map(([date, v]) => ({ date, ...v }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const avgOf = (list, k) => {
+    const v = list.map(r => r[k]).filter(x => typeof x === "number" && Number.isFinite(x));
+    return v.length ? Math.round(avg(v)) : null;
+  };
+  const metrics = Object.fromEntries(RECOVERY_METRICS.map(k => [k, avgOf(rows, k)]));
+  const perBucket = buckets.map(b => {
+    const inB = rows.filter(r => r.date >= b.start && r.date <= b.end);
+    const row = { label: b.label, start: b.start, end: b.end, kind: b.kind, full: b.full, n: inB.length };
+    for (const k of RECOVERY_METRICS) row[k] = avgOf(inB, k);
+    return row;
+  });
+
+  // La VFC se lit contre la zone habituelle que Garmin calcule nuit après
+  // nuit : la plus récente sert de repère au graphe, et chaque nuit se compare
+  // à la sienne.
+  const banded = rows.filter(r => r.hrv != null && r.hrvLow != null && r.hrvHigh != null);
+  const last = banded.at(-1);
+  // Les nuits sous la zone, d'affilée, jusqu'à la dernière mesurée.
+  let lowStreak = 0;
+  for (let i = banded.length - 1; i >= 0 && banded[i].hrv < banded[i].hrvLow; i--) lowStreak++;
+
+  return {
+    n: rows.length,
+    metrics,
+    perBucket,
+    band: last ? { low: last.hrvLow, high: last.hrvHigh } : null,
+    hrvNights: banded.length,
+    inZone: banded.filter(r => r.hrv >= r.hrvLow && r.hrv <= r.hrvHigh).length,
+    lowStreak,
+    lastHrvDate: last?.date || null,
+    lastStatus: [...rows].reverse().find(r => r.hrvStatus)?.hrvStatus || null,
   };
 }
 

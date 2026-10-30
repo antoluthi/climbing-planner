@@ -52,6 +52,7 @@ import { NotificationsPanel } from "../components/NotificationsPanel.jsx";
 import { getSessionCharge } from "../lib/charge.js";
 import { softDeleteReminder } from "../lib/reminders.js";
 import { colors } from "../theme/palette.js";
+import { useGarminSync } from "../hooks/useGarminSync.js";
 
 export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan }) {
   const { session, setSession, syncStatus } = useAuth();
@@ -72,6 +73,10 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
     addQuickSession, editQuickSession, removeQuickSession,
     syncPlannedSessions,
   } = useData();
+
+  // Le sommeil Garmin : importé à l'ouverture, au réveil de l'app et depuis
+  // le compte. Coupé en vue athlète.
+  const garmin = useGarminSync({ session, data, setData, viewingAthlete });
 
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState("accueil");
@@ -772,6 +777,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
         return (
           <ProfileView
             onOpenPublicPlan={onOpenPublicPlan}
+            garmin={garmin}
             data={data}
             onUpdateProfile={profile => setData(d => ({ ...d, profile }))}
             session={session}
@@ -1202,6 +1208,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
                 const next = {
                   ...payload, isCustom: true,
                   feedback: before.feedback ?? null,
+                  ...(before.garmin ? { garmin: before.garmin } : {}),
                   startTime: sched.startTime || null,
                   endTime: sched.endTime ?? null,
                   location: sched.location || null,
