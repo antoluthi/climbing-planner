@@ -25,6 +25,9 @@ const DEFAULT_LEN_MIN = DEFAULT_SESSION_MIN;   // séance sans durée : due 1 h 
 // retiré, notes seules) n'est pas une séance notée — c'est même l'inverse.
 function isSettled(s) {
   const f = s?.feedback;
+  // Cochée faite par Garmin (`auto`) : la montre dit que la séance a eu lieu,
+  // pas ce qu'elle a coûté. Le ressenti reste à donner.
+  if (f?.auto && f.rpe == null) return false;
   return !!f && (f.done != null || f.status != null);
 }
 
@@ -79,7 +82,8 @@ export function pendingItems(data, now = new Date()) {
     const dayIndex = (date.getDay() + 6) % 7;
     const list = data?.weeks?.[wKey]?.[dayIndex] || [];
     list.forEach((s, sessionIndex) => {
-      if (!s || isEventItem(s) || isSettled(s) || !isOver(s, date, now)) return;
+      // Vue par la montre, la séance a eu lieu, quelle que soit l'heure prévue.
+      if (!s || isEventItem(s) || isSettled(s) || !(s.garmin || isOver(s, date, now))) return;
       out.push({
         id: `feedback:${s.id || `${dateISO}-${sessionIndex}`}`,
         kind: "feedback",
@@ -89,7 +93,7 @@ export function pendingItems(data, now = new Date()) {
         dayIndex,
         sessionIndex,
         title: s.name || "Séance",
-        body: "Séance passée sans retour.",
+        body: s.feedback?.auto ? "Ta montre l'a enregistrée, il reste ton ressenti." : "Séance passée sans retour.",
       });
     });
   }

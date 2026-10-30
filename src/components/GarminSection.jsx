@@ -11,7 +11,9 @@ import { garminCall, garminMessage, GARMIN_KEY_URL } from "../lib/garmin.js";
 // si une clé existe. Le drapeau `profile.garmin` du planning n'en est que le
 // reflet, recalé ici à chaque visite (une clé reliée ou oubliée depuis un
 // autre appareil).
-export function GarminSection({ isDark, styles, garmin, sleep, flagLinked }) {
+export function GarminSection({ isDark, styles, garmin, data, profile, onUpdateProfile }) {
+  const sleep = data?.sleep;
+  const flagLinked = !!profile?.garmin?.linked;
   const c = colors(isDark);
   const [status, setStatus] = useState(null);       // null = en cours
   const [editing, setEditing] = useState(false);
@@ -47,7 +49,9 @@ export function GarminSection({ isDark, styles, garmin, sleep, flagLinked }) {
     setStatus(res.data);
     setKeyInput("");
     setEditing(false);
-    setMessage({ text: "Clé acceptée par Garmin. L'import de ton sommeil commence.", tone: c.textMuted });
+    // L'avancement s'affiche juste au-dessus : le message n'a pas à le redire
+    // (et resterait affiché une fois l'import fini).
+    setMessage({ text: "Clé acceptée par Garmin.", tone: c.textMuted });
     markLinked();
   };
 
@@ -59,13 +63,17 @@ export function GarminSection({ isDark, styles, garmin, sleep, flagLinked }) {
     setConfirmUnlink(false);
     if (!res.ok) { setMessage({ text: garminMessage(res.error), tone: c.danger }); return; }
     setStatus({ linked: false });
-    setMessage({ text: "Clé oubliée. Les nuits déjà importées restent dans tes stats.", tone: c.textMuted });
+    setMessage({ text: "Clé oubliée. Ce qui est déjà importé reste dans tes stats.", tone: c.textMuted });
     markUnlinked();
   };
 
   const linked = !!status?.linked;
   const garminNights = (sleep || []).filter(n => n?.source === "garmin");
   const lastNight = garminNights.reduce((m, n) => (n.date > m ? n.date : m), "");
+  let linkedSessions = 0;
+  for (const days of Object.values(data?.weeks || {})) for (const d of days || []) for (const x of d || []) if (x?.garmin) linkedSessions++;
+  const addUnplanned = profile?.garminAddUnplanned !== false;
+  const PART = { sleep: "le sommeil", days: "la FC au repos, le stress et la Body Battery", hrv: "la VFC", activities: "les activités" };
   const syncError = garmin.error || (garmin.broken ? "key_rejected" : null);
 
   const btn = (primary) => ({
@@ -124,10 +132,10 @@ export function GarminSection({ isDark, styles, garmin, sleep, flagLinked }) {
         <div style={muted}>…</div>
       ) : !linked ? (
         <>
-          <div style={{ fontSize: 12, color: c.text, fontWeight: 500 }}>Sommeil de ta montre</div>
+          <div style={{ fontSize: 12, color: c.text, fontWeight: 500 }}>Ta montre dans l'app</div>
           <div style={{ ...muted, marginTop: 3 }}>
-            Relie ton compte Garmin pour retrouver tes nuits dans les stats : durée, phases, score, et
-            les nuits qui suivent une grosse journée d'entraînement.
+            Relie ton compte Garmin : tes nuits et ta récupération (VFC, FC au repos, Body Battery,
+            stress) arrivent dans les stats, et tes activités cochent toutes seules les séances prévues.
           </div>
           {keyForm}
         </>
@@ -140,11 +148,24 @@ export function GarminSection({ isDark, styles, garmin, sleep, flagLinked }) {
           </div>
           <div style={{ ...muted, marginTop: 4 }}>
             {garmin.running
-              ? `Import du sommeil : ${garmin.done} sur ${garmin.total}…`
+              ? `Import en cours : ${garmin.done} sur ${garmin.total}…`
               : garminNights.length
-                ? `${garminNights.length} ${garminNights.length > 1 ? "nuits importées" : "nuit importée"}, la dernière le ${shortDay(lastNight)}.`
+                ? `${garminNights.length} ${garminNights.length > 1 ? "nuits importées" : "nuit importée"}, la dernière le ${shortDay(lastNight)}. ${linkedSessions} ${linkedSessions > 1 ? "séances liées" : "séance liée"} à une activité.`
                 : "Aucune nuit importée pour l'instant."}
           </div>
+          {!garmin.running && (garmin.checked > 0 || garmin.added > 0) && (
+            <div style={{ ...muted, marginTop: 2 }}>
+              Dernière synchro : {[
+                garmin.checked ? `${garmin.checked} ${garmin.checked > 1 ? "séances cochées" : "séance cochée"}` : null,
+                garmin.added ? `${garmin.added} ${garmin.added > 1 ? "activités ajoutées" : "activité ajoutée"}` : null,
+              ].filter(Boolean).join(", ")}.
+            </div>
+          )}
+          {!garmin.running && garmin.partial && (
+            <div style={{ ...muted, color: c.textDim, marginTop: 2 }}>
+              Garmin n'a pas renvoyé {Object.keys(garmin.partial).map(k => PART[k] || k).join(", ")} cette fois-ci.
+            </div>
+          )}
           {syncError && !garmin.running && (
             <div style={{ ...muted, color: c.danger, marginTop: 4 }}>{garminMessage(syncError)}</div>
           )}
@@ -152,7 +173,7 @@ export function GarminSection({ isDark, styles, garmin, sleep, flagLinked }) {
           {confirmUnlink ? (
             <div style={{ marginTop: 10 }}>
               <div style={{ ...muted, color: c.text }}>
-                Le serveur oublie la clé et l'import s'arrête. Les nuits déjà importées restent.
+                Le serveur oublie la clé et l'import s'arrête. Ce qui est déjà importé reste : nuits, récupération, séances liées.
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button type="button" onClick={unlink} style={{ ...btn(false), color: c.danger, borderColor: c.danger }}>
@@ -180,6 +201,33 @@ export function GarminSection({ isDark, styles, garmin, sleep, flagLinked }) {
             </div>
           )}
           {editing && keyForm}
+
+          {/* Les activités sans séance prévue : ajoutées ou non. */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginTop: 14 }}>
+            <div style={{ maxWidth: 260 }}>
+              <div style={{ fontSize: 12, color: c.text, fontWeight: 500 }}>Ajouter les activités non prévues</div>
+              <div style={{ ...muted, marginTop: 3 }}>
+                Une activité sans séance prévue ce jour-là devient une séance faite : tes sports seulement,
+                15 min et plus, sur les deux dernières semaines.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onUpdateProfile({ ...profile, garminAddUnplanned: !addUnplanned })}
+              aria-pressed={addUnplanned}
+              aria-label="Ajouter les activités non prévues"
+              style={{
+                flexShrink: 0, width: 44, height: 24, borderRadius: 12, border: "none",
+                background: addUnplanned ? c.accent : c.border, position: "relative", cursor: "pointer",
+                transition: "background 0.25s", padding: 0,
+              }}
+            >
+              <div style={{
+                position: "absolute", top: 3, left: addUnplanned ? 23 : 3, width: 18, height: 18, borderRadius: "50%",
+                background: c.onColor, transition: "left 0.25s", boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+              }} />
+            </button>
+          </div>
         </>
       )}
 

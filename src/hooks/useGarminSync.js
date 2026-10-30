@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  garminCall, syncWindows, mergeNights, lastGarminNight,
-  autoSyncDue, readLastAttempt, writeLastAttempt,
+  garminCall, planSync, syncCursor, isTransient, mergeNights, mergeRecovery, linkActivities,
+  lastGarminNight, autoSyncDue, readLastAttempt, writeLastAttempt,
 } from "../lib/garmin.js";
 import { localDateStr } from "../lib/helpers.js";
 
-// ─── SYNCHRO DU SOMMEIL GARMIN ───────────────────────────────────────────────
-// Va chercher les nuits auprès de `api/garmin` et les range dans `data.sleep`.
+// ─── SYNCHRO GARMIN ──────────────────────────────────────────────────────────
+// Une passe par plage de 31 jours (`api/garmin/sync`) : les nuits vont dans
+// `data.sleep`, les journées (FC au repos, VFC, Body Battery, stress) dans
+// `data.recovery`, et les activités cochent les séances prévues
+// (`linkActivities`) ou deviennent des séances faites.
 // Trois déclencheurs : l'ouverture de l'app, chaque retour au premier plan, et
 // le bouton du compte. Les deux premiers sont espacés (`autoSyncDue`) ; le
 // troisième passe toujours.
@@ -28,10 +31,13 @@ export function useGarminSync({ session, data, setData, viewingAthlete }) {
   const canSync = !!session && !viewingAthlete;
   const auto = canSync && linked && !garmin?.broken;
 
-  const [state, setState] = useState({ running: false, done: 0, total: 0, error: null, at: null });
+  const [state, setState] = useState({ running: false, done: 0, total: 0, error: null, at: null, partial: null, checked: 0, added: 0 });
   const busy = useRef(false);
-  const live = useRef({ canSync, linked, sleep: data.sleep });
-  useLayoutEffect(() => { live.current = { canSync, linked, sleep: data.sleep }; });
+  const live = useRef({ canSync, linked, sleep: data.sleep, through: garmin?.through, backfill: garmin?.backfill });
+  useLayoutEffect(() => { live.current = { canSync, linked, sleep: data.sleep, through: garmin?.through, backfill: garmin?.backfill }; });
+  // Ce qu'a fait chaque plage, rangé par plage : en développement, React
+  // appelle deux fois une mise à jour ; une simple addition compterait double.
+  const report = useRef({});
 
   // `justLinked` : la clé vient d'être enregistrée, le drapeau n'a pas encore
   // fait le tour du rendu.
@@ -39,38 +45,88 @@ export function useGarminSync({ session, data, setData, viewingAthlete }) {
     const L = live.current;
     if (!L.canSync || !(L.linked || justLinked) || busy.current) return;
     const today = localDateStr(new Date());
-    const last = lastGarminNight(L.sleep);
-    if (!force && !autoSyncDue(last, today, Date.now(), readLastAttempt())) return;
+    const lastNight = lastGarminNight(L.sleep);
+    if (!force && !autoSyncDue(lastNight, today, Date.now(), readLastAttempt())) return;
 
     busy.current = true;
     writeLastAttempt(Date.now());
-    const windows = syncWindows(last, today);
-    setState(s => ({ ...s, running: true, done: 0, total: windows.length, error: null }));
+    // Où reprendre : le dernier jour lu (`through`, partagé par tous les
+    // appareils), sinon la dernière nuit ; sans l'un ni l'autre, un an. Se fier
+    // aux seules nuits referait l'année entière, à chaque passe, pour qui ne
+    // porte pas sa montre la nuit. Puis ce qui reste de l'historique
+    // (`backfill`), si un import s'est arrêté en route.
+    const windows = planSync({ through: L.through, backfill: L.backfill, lastNight }, today);
+    report.current = {};
+    setState(s => ({ ...s, running: true, done: 0, total: windows.length, error: null, partial: null, checked: 0, added: 0 }));
     let error = null;
-    for (const w of windows) {
-      const res = await garminCall("sleep", { query: w });
-      if (!live.current.canSync) break;
-      if (!res.ok) { error = res.error; break; }
-      const nights = res.data?.nights || [];
+    let failedAt = null;
+    const partial = {};
+    for (let i = 0; i < windows.length; i++) {
+      const w = windows[i];
+      const res = await garminCall("sync", { query: w });
+      if (!live.current.canSync) { failedAt = i; break; }
+      if (!res.ok) { error = res.error; failedAt = i; break; }
+      const { nights = [], days = [], activities = [] } = res.data || {};
+      Object.assign(partial, res.data?.partial || {});
       setData(d => {
+        let next = d;
         const sleep = mergeNights(d.sleep, nights);
-        return sleep === d.sleep ? d : { ...d, sleep };
+        if (sleep !== d.sleep) next = { ...next, sleep };
+        const recovery = mergeRecovery(d.recovery, days);
+        if (recovery !== d.recovery) next = { ...next, recovery };
+        const out = linkActivities(next, activities, {
+          todayISO: today,
+          autoAdd: d.profile?.garminAddUnplanned !== false,
+          sports: d.profile?.sports,
+        });
+        report.current[w.start] = { checked: out.linked.filter(l => l.checked).length, added: out.added.length };
+        return out.data;
       });
       setState(s => ({ ...s, done: s.done + 1 }));
+      // Une lecture en panne passagère : ce qui est arrivé est gardé, mais la
+      // plage reste à relire. Inutile d'aller plus loin, Garmin est occupé.
+      if (Object.values(res.data?.partial || {}).some(isTransient)) { failedAt = i; break; }
     }
+    if (live.current.canSync) {
+      const next = syncCursor(windows, failedAt, today, L);
+      // Rarement : chaque écriture du profil repart en synchro. Aujourd'hui
+      // déjà noté et rien en attente, on n'écrit rien.
+      if (next.through !== (L.through || null) || next.backfill !== (L.backfill || null)) {
+        setData(d => {
+          if (!d.profile?.garmin) return d;
+          const garmin = { ...d.profile.garmin, through: next.through };
+          if (next.backfill) garmin.backfill = next.backfill;
+          else delete garmin.backfill;
+          return { ...d, profile: { ...d.profile, garmin } };
+        });
+      }
+    }
+
     if (live.current.canSync) {
       // La clé a été oubliée ailleurs : on cesse d'importer. Refusée par
       // Garmin : on cesse de réessayer tout seul, jusqu'à la nouvelle clé.
       if (error === "no_key") setData(d => ({ ...d, profile: { ...d.profile, garmin: null } }));
       if (error === "key_rejected") setData(d => ({ ...d, profile: { ...d.profile, garmin: { ...(d.profile?.garmin || {}), broken: true } } }));
     }
-    setState(s => ({ ...s, running: false, error, at: error ? s.at : Date.now() }));
+    // Le bilan se lit dans la mise à jour, pas tout de suite : les mises à jour
+    // du planning passent avant (le fournisseur des données se dessine avant
+    // ce composant), celles de chaque plage sont donc déjà comptées.
+    setState(s => {
+      const totals = Object.values(report.current).reduce((t, r) => ({ checked: t.checked + r.checked, added: t.added + r.added }), { checked: 0, added: 0 });
+      return { ...s, running: false, error, at: error ? s.at : Date.now(), partial: Object.keys(partial).length ? partial : null, ...totals };
+    });
     busy.current = false;
   }, [setData]);
 
   // La clé enregistrée : le drapeau, puis l'import d'un an, tout de suite.
+  // Une clé changée reprend où l'ancienne s'était arrêtée (`through`,
+  // `backfill`).
   const markLinked = useCallback(() => {
-    setData(d => ({ ...d, profile: { ...d.profile, garmin: { linked: true, since: localDateStr(new Date()) } } }));
+    setData(d => {
+      const { through, backfill } = d.profile?.garmin || {};
+      const garmin = { linked: true, since: localDateStr(new Date()), ...(through ? { through } : {}), ...(backfill ? { backfill } : {}) };
+      return { ...d, profile: { ...d.profile, garmin } };
+    });
     sync({ force: true, justLinked: true });
   }, [setData, sync]);
 

@@ -495,7 +495,7 @@ export function SessionModal({
                     </div>
                     {plannedCharge != null && (
                       <div style={{ fontSize: 11, color: textLight, marginBottom: 8 }}>
-                        Prévu : {plannedCharge}/10 — ajuste si c'était plus ou moins soutenu.
+                        Prévu : {plannedCharge}/10. Ajuste si c'était plus ou moins soutenu.
                       </div>
                     )}
                     <input
@@ -631,8 +631,9 @@ export function SessionModal({
                     </div>
                   )}
 
-                  {/* Métriques (course, vélo, renforcement…) */}
-                  {hasMetrics && (
+                  {/* Métriques (course, vélo, renforcement…). Une séance ajoutée par
+                      la montre n'a que celles de son activité : le bloc montre les dit. */}
+                  {hasMetrics && session.source !== "garmin" && (
                     <div style={{ padding: "10px 14px", background: surfaceCard, border: `1px solid ${border}`, borderRadius: 10 }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: textLight, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>
                         Métriques
@@ -661,8 +662,12 @@ export function SessionModal({
                     </div>
                   )}
 
+                  {/* Ce que la montre a enregistré : la séance telle qu'elle a eu
+                      lieu, à côté de ce qui était prévu. */}
+                  {session.garmin && <GarminTrace g={session.garmin} sessionName={session.name} isDark={isDark} />}
+
                   {/* Récap discipline / charge / durée — fallback minimal */}
-                  {!hasContent && !hasSessionNotes && !hasDescription && !hasEventContent && !hasMetrics && (() => {
+                  {!hasContent && !hasSessionNotes && !hasDescription && !hasEventContent && !hasMetrics && !session.garmin && (() => {
                     const disc = getDiscipline(session.discipline || "climbing");
                     const planned = session.chargePlanned ?? (session.charge != null ? normalizeCharge10(session.charge) : null);
                     return (
@@ -895,6 +900,39 @@ function renderMovePanel({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── L'activité Garmin liée à la séance ───────────────────────────────────────
+function GarminTrace({ g, sessionName, isDark }) {
+  const c = colors(isDark);
+  const dur = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `${m} min`);
+  const tiles = [
+    g.start && ["Départ", g.start.replace(":", " h ")],
+    g.durationMin && ["Durée", dur(g.durationMin)],
+    g.distanceKm && ["Distance", `${String(g.distanceKm).replace(".", ",")} km`],
+    g.elevation && ["D+", `${g.elevation} m`],
+    g.avgHr && ["FC moyenne", `${g.avgHr}`],
+    g.load && ["Charge Garmin", `${g.load}`],
+  ].filter(Boolean);
+  return (
+    <div style={{ padding: "10px 14px", background: c.card, border: `1px solid ${c.borderSubtle}`, borderRadius: 10 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: c.textMuted, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>
+        Enregistrée sur ta montre
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {tiles.map(([label, value]) => (
+          <div key={label} style={{
+            background: c.surface, border: `1px solid ${c.borderSubtle}`, borderRadius: 8,
+            padding: "6px 10px", display: "flex", flexDirection: "column", gap: 1, minWidth: 70,
+          }}>
+            <span style={{ fontSize: 9, color: c.textMuted, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: c.text, whiteSpace: "nowrap" }}>{value}</span>
+          </div>
+        ))}
+      </div>
+      {g.name && g.name !== sessionName && <div style={{ fontSize: 11, color: c.textMuted, marginTop: 8 }}>{g.name}</div>}
     </div>
   );
 }

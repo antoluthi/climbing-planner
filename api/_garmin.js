@@ -11,12 +11,29 @@
 //      POST {BASE}{TOKEN_PATH}, en-tête `Authorization: ApiKey <clé>`, et le
 //      corps de la réponse **est** le jeton (un JWT, valable 24 h) ;
 //   2. les données se lisent en GET avec `Authorization: Bearer <jeton>`.
-// Le sommeil se lit par plages de 31 nuits au plus.
+// La FAQ de Garmin le confirme, et la spécification OpenAPI de l'API
+// (https://developer.garmin.com/gc-developer-program/personal/swagger-docs/,
+// embarquée dans la page) donne les routes et les champs lus ici.
+//
+// Une passe de synchronisation lit, pour une plage de 31 jours au plus (la
+// limite du sommeil, la plus courte des quatre) :
+//   · les nuits             dailySleepSummariesByDate → DailySleepDTO[]
+//   · les résumés du jour   v2/dailysummaries          → { data: UserDailySummaryV2DTO[] }
+//     (FC au repos, stress, Body Battery)
+//   · la VFC de la nuit     hrv/daily/{du}/{au}        → { hrvSummaries: HrvSummaryDTO[] }
+//   · les activités         activities/search          → SummarizedActivityDTO[]
 
 export const GARMIN_BASE = "https://personal.connectapi.garmin.com";
 export const TOKEN_PATH = "/personalapitoken-service/personal-api/personal-api-key/token";
 export const SLEEP_PATH = "/sleep-service/sleep/dailySleepSummariesByDate";
+export const DAILY_PATH = "/usersummary-service/v2/dailysummaries";
+export const HRV_PATH = "/hrv-service/hrv/daily";
+export const ACTIVITIES_PATH = "/activitylist-service/activities/search/activities";
 export const MAX_RANGE_DAYS = 31;
+// 99 activités par page (le maximum par défaut de Garmin) ; quatre pages
+// couvrent largement 31 jours, même à trois séances par jour.
+export const ACTIVITIES_PAGE = 99;
+export const ACTIVITIES_MAX_PAGES = 4;
 
 // Un jeton à moins d'une heure de sa fin est renouvelé avant usage, comme le
 // fait le client officiel : un appel ne doit pas partir avec un jeton qui
@@ -171,4 +188,103 @@ export function normalizeSleep(payload) {
     if (night) byDate.set(night.date, night);
   }
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ── Récupération ─────────────────────────────────────────────────────────────
+//
+// Une journée : { date, rhr, stress, bbMax, bbMin, bbCharged, bbDrained, hrv,
+// hrvWeek, hrvStatus, hrvLow, hrvHigh }, chaque champ absent quand Garmin n'a
+// rien. Les bornes écartent les valeurs « sans mesure » de Garmin (un stress à
+// -1 ou -2, une FC à 0 pour une montre au tiroir) : mieux vaut un trou qu'une
+// fausse moyenne.
+
+const within = (v, lo, hi) => {
+  const n = num(v);
+  return n != null && n >= lo && n <= hi ? Math.round(n) : null;
+};
+export const HRV_STATUSES = ["BALANCED", "UNBALANCED", "LOW", "POOR"];
+
+export function normalizeDays(summaries, hrv) {
+  const days = new Map();
+  const put = (date, fields) => {
+    const clean = Object.fromEntries(Object.entries(fields).filter(([, v]) => v != null));
+    if (!Object.keys(clean).length) return;
+    days.set(date, { ...(days.get(date) || { date }), ...clean });
+  };
+  const rows = Array.isArray(summaries?.data) ? summaries.data : Array.isArray(summaries) ? summaries : [];
+  for (const r of rows) {
+    if (!validDay(r?.calendarDate)) continue;
+    put(r.calendarDate, {
+      rhr: within(r.heartRate?.restingValue, 25, 130),
+      stress: within(r.stress?.avgLevel, 0, 100),
+      bbMax: within(r.bodyBattery?.maxValue, 0, 100),
+      bbMin: within(r.bodyBattery?.minValue, 0, 100),
+      // Sur une journée, la charge peut dépasser 100 (recharge, dépense,
+      // recharge) : on ne la borne qu'à ce qui reste plausible.
+      bbCharged: within(r.bodyBattery?.chargedValue, 0, 200),
+      bbDrained: within(r.bodyBattery?.drainedValue, 0, 200),
+    });
+  }
+  const nights = Array.isArray(hrv?.hrvSummaries) ? hrv.hrvSummaries : [];
+  for (const h of nights) {
+    if (!validDay(h?.calendarDate)) continue;
+    const value = within(h.lastNightAvg, 5, 300);
+    if (value == null) continue;
+    put(h.calendarDate, {
+      hrv: value,
+      hrvWeek: within(h.weeklyAvg, 5, 300),
+      // NONE et INVALID : Garmin n'a pas encore de référence (les premières
+      // semaines) ou la nuit n'est pas exploitable.
+      hrvStatus: HRV_STATUSES.includes(h.status) ? h.status : null,
+      hrvLow: within(h.baseline?.balancedLow, 5, 300),
+      hrvHigh: within(h.baseline?.balancedUpper, 5, 300),
+    });
+  }
+  return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ── Activités ────────────────────────────────────────────────────────────────
+//
+// Une activité : { id, date, start, type, name, durationMin, distanceKm,
+// elevation, avgHr, maxHr, calories, load, aerobic }. `date` et `start` sont
+// ceux de l'heure locale de départ (« yyyy-MM-dd HH:mm:ss », sans fuseau) :
+// c'est le jour du calendrier de l'utilisateur, pas celui de Greenwich. `type`
+// est la clé Garmin (`running`, `trail_running`, `indoor_climbing`…) ; c'est
+// l'app qui la traduit en discipline. L'identifiant devient une chaîne : il
+// sert de clé.
+
+export function normalizeActivity(a) {
+  const id = num(a?.activityId);
+  if (!id || id <= 0) return null;
+  const m = typeof a.startTimeLocal === "string" ? /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/.exec(a.startTimeLocal) : null;
+  if (!m || !validDay(m[1])) return null;
+  const durationMin = minutes(a.duration ?? a.movingDuration ?? a.elapsedDuration);
+  if (!durationMin) return null;
+  const meters = num(a.distance);
+  const te = num(a.aerobicTrainingEffect);
+  const out = {
+    id: String(Math.round(id)),
+    date: m[1],
+    start: `${m[2]}:${m[3]}`,
+    type: typeof a.activityType?.typeKey === "string" ? a.activityType.typeKey : null,
+    name: typeof a.activityName === "string" && a.activityName.trim() ? a.activityName.trim().slice(0, 80) : null,
+    durationMin,
+    distanceKm: meters != null && meters >= 10 ? Math.round(meters / 10) / 100 : null,
+    elevation: within(a.elevationGain, 1, 10000),
+    avgHr: within(a.averageHR, 30, 230),
+    maxHr: within(a.maxHR, 30, 240),
+    calories: within(a.calories, 1, 20000),
+    load: within(a.activityTrainingLoad, 1, 2000),
+    aerobic: te != null && te > 0 && te <= 5 ? Math.round(te * 10) / 10 : null,
+  };
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v != null));
+}
+
+export function normalizeActivities(list) {
+  const byId = new Map();
+  for (const a of Array.isArray(list) ? list : []) {
+    const n = normalizeActivity(a);
+    if (n) byId.set(n.id, n);
+  }
+  return [...byId.values()].sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
 }

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   BarChart, Bar, Cell, LineChart, Line, ComposedChart, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine,
+  Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from "recharts";
 import { useThemeCtx } from "../theme/ThemeContext.jsx";
 import { colors, DATA } from "../theme/palette.js";
@@ -14,7 +14,8 @@ import {
   previousPhrase, comparisonFor, tickInterval, buildDayIndex, summarize, delta, chargeSeries,
   stackKeys, averageDone, itemsBetween, sportBreakdown, feelStats, deviationVerdict,
   hooperStats, weightStats, nutritionStats, runStats, habitStats, runKm, EVENT_KEY,
-  sleepStats, HARD_DAY_CHARGE, fmtNum, fmtSigned, fmtDuration, shiftISO,
+  sleepStats, HARD_DAY_CHARGE, recoveryStats, RECOVERY_METRICS, HRV_STATUS_LABEL, stressLabel,
+  fmtNum, fmtSigned, fmtDuration, shiftISO,
 } from "../lib/stats.js";
 import { ActivityHeatmap } from "./ActivityHeatmap.jsx";
 import { StatsRangePicker } from "./StatsRangePicker.jsx";
@@ -100,6 +101,7 @@ function DashboardBody({ data: rawData, sports, onEditSports, onOpenDay }) {
       run, rated,
       hooper: (data.hooper || []).length > 0,
       sleep: (data.sleep || []).length > 0,
+      recovery: Object.keys(data.recovery || {}).length > 0,
       weight: Object.values(data.weight || {}).some(v => v != null),
       nutrition: Object.values(data.nutrition || {}).some(m => Array.isArray(m) && m.length),
       reminders: (data.reminders || []).length > 0,
@@ -137,6 +139,8 @@ function DashboardBody({ data: rawData, sports, onEditSports, onOpenDay }) {
   // Le sommeil ne dépend d'aucun sport, mais « une grosse journée » se juge
   // sur toutes les séances : l'index d'origine, même quand un sport est isolé.
   const sleep = sleepStats(data, fullIndex, period.start, period.end, period.buckets);
+  const recovery = recoveryStats(data, period.start, period.end, period.buckets);
+  const prevRecovery = cmp ? recoveryStats(data, cmp.prev.start, cmp.prev.end, []) : null;
   const weight = weightStats(data, period.start, period.end, period.buckets);
   const food = nutritionStats(data, period.start, period.end, period.buckets);
   const run = runStats(index, period.buckets, data, todayISO);
@@ -391,11 +395,12 @@ function DashboardBody({ data: rawData, sports, onEditSports, onOpenDay }) {
         )}
       </Section>
 
-      {/* ── Récupération ── */}
-      {used.hooper && (
+      {/* ── Récupération ── ce qu'on ressent (Hooper), puis ce que la montre
+           mesure (VFC, FC au repos, Body Battery, stress). */}
+      {(used.hooper || used.recovery) && (
         <Section isDark={isDark} id="stats-hooper" title="Récupération"
-          right={hooper.n ? plural(hooper.n, "jour noté", "jours notés") : null}>
-          {hooper.n ? (
+          right={hooper.n ? plural(hooper.n, "jour noté", "jours notés") : recovery.n ? plural(recovery.n, "jour mesuré", "jours mesurés") : null}>
+          {!used.hooper ? null : hooper.n ? (
             <>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
                 <span style={{ font: `700 26px ${MONO}`, color: hooperColor(Math.round(hooper.avg), isDark) }}>{fmtNum(hooper.avg)}</span>
@@ -459,6 +464,20 @@ function DashboardBody({ data: rawData, sports, onEditSports, onOpenDay }) {
             </>
           ) : (
             <Empty isDark={isDark}>Aucun ressenti noté sur la période.</Empty>
+          )}
+          {used.recovery && (
+            <>
+              {used.hooper && <div style={{ height: 0.5, background: c.border, margin: "16px 0 14px" }} />}
+              {recovery.n ? (
+                <WatchRecovery
+                  isDark={isDark} rec={recovery} prev={prevRecovery} todayISO={todayISO}
+                  dense={dense} ticks={ticks} periodKey={periodKey} glideZone={glideZone}
+                  axisTick={axisTick} tooltipStyle={tooltipStyle} gridStroke={styles.dashGrid}
+                />
+              ) : (
+                <Empty isDark={isDark}>Aucune mesure de ta montre sur la période.</Empty>
+              )}
+            </>
           )}
         </Section>
       )}
@@ -936,6 +955,135 @@ function SleepBody({ isDark, sleep, dense, ticks, periodKey, glideZone, axisTick
             {plural(hard.hardN, "nuit", "nuits")} après une grosse journée, {plural(hard.otherN, "autre", "autres")}.
           </div>
         </>
+      )}
+    </>
+  );
+}
+
+// ── Récupération mesurée ─────────────────────────────────────────────────────
+// Quatre tuiles (VFC, FC au repos, Body Battery, stress) ; toucher une tuile
+// montre sa courbe. Une mesure par graphe : quatre échelles différentes sur
+// un même axe ne se liraient pas. La VFC se lit dans sa zone habituelle, en
+// bande derrière la courbe.
+const RECOVERY_INFO = {
+  hrv: { label: "VFC", unit: "ms", title: "VFC de la nuit" },
+  rhr: { label: "FC au repos", unit: "bpm", title: "FC au repos" },
+  bbMax: { label: "Body Battery", unit: "", title: "Body Battery au plus haut" },
+  stress: { label: "Stress", unit: "", title: "Stress moyen" },
+};
+
+function WatchRecovery({ isDark, rec, prev, todayISO, dense, ticks, periodKey, glideZone, axisTick, tooltipStyle, gridStroke }) {
+  const c = colors(isDark);
+  const available = RECOVERY_METRICS.filter(k => rec.metrics[k] != null);
+  const [chosen, setChosen] = useState(null);
+  const k = available.includes(chosen) ? chosen : available[0];
+  const statusTone = { BALANCED: c.success, UNBALANCED: c.warn, LOW: c.danger, POOR: c.danger };
+  const recent = rec.lastHrvDate && rec.lastHrvDate >= shiftISO(todayISO, -2);
+  // La tuile donne la moyenne de la période ; le statut, lui, est celui que
+  // Garmin pose sur la dernière nuit : la phrase dit lequel des deux on lit.
+  const sub = {
+    hrv: rec.lastStatus
+      ? { text: `${HRV_STATUS_LABEL[rec.lastStatus]} ${recent ? "en ce moment" : "en fin de période"}`, color: statusTone[rec.lastStatus] }
+      : rec.band ? { text: `zone ${rec.band.low} à ${rec.band.high}` } : null,
+    rhr: prev?.metrics.rhr != null && rec.metrics.rhr != null && rec.metrics.rhr !== prev.metrics.rhr
+      ? { text: `${fmtSigned(rec.metrics.rhr - prev.metrics.rhr, 0)} vs avant` } : { text: "en moyenne" },
+    bbMax: { text: "au plus haut" },
+    stress: { text: stressLabel(rec.metrics.stress) },
+  };
+  const values = rec.perBucket.map(b => b[k]).filter(v => v != null);
+  if (k === "hrv" && rec.band) values.push(rec.band.low, rec.band.high);
+  // Un axe gradué à un pas rond (5, 10, 20…) : laissé à lui-même, l'axe
+  // tombait sur 50, 57, 64, 71.
+  const rawLo = values.length ? Math.min(...values) - 3 : 0;
+  const rawHi = values.length ? Math.max(...values) + 3 : 100;
+  const step = [1, 2, 5, 10, 20, 50].find(s => s >= (rawHi - rawLo) / 4) || 50;
+  const lo = Math.max(0, Math.floor(rawLo / step) * step);
+  const hi = Math.ceil(rawHi / step) * step;
+  const yTicks = Array.from({ length: Math.round((hi - lo) / step) + 1 }, (_, i) => lo + i * step);
+  const muted = { fontSize: 12, color: c.textMuted, lineHeight: 1.5 };
+
+  return (
+    <>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase", color: c.textDim, marginBottom: 8 }}>
+        Ta montre
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+        {available.map(m => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setChosen(m)}
+            aria-pressed={m === k}
+            style={{
+              textAlign: "left", background: m === k ? c.tint : "none", cursor: "pointer", fontFamily: SANS,
+              border: `1px solid ${m === k ? c.accent : c.border}`, borderRadius: 12, padding: "8px 10px",
+              display: "flex", flexDirection: "column", gap: 2, minWidth: 0,
+            }}
+          >
+            <span style={{ fontSize: 11, color: c.textMuted }}>{RECOVERY_INFO[m].label}</span>
+            <span style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+              <span style={{ font: `700 18px ${MONO}`, color: c.text }}>{rec.metrics[m]}</span>
+              {RECOVERY_INFO[m].unit && <span style={{ fontSize: 11, color: c.textMuted }}>{RECOVERY_INFO[m].unit}</span>}
+            </span>
+            {sub[m]?.text && <span style={{ fontSize: 11, color: sub[m].color || c.textMuted, fontWeight: sub[m].color ? 600 : 400 }}>{sub[m].text}</span>}
+          </button>
+        ))}
+      </div>
+
+      <div {...glideZone}>
+        <ResponsiveContainer key={periodKey + k} width="100%" height={140}>
+          <LineChart data={rec.perBucket} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+            {/* Une marge aux deux bouts : le premier et le dernier point ne
+                tombent pas sur le bord, et leur date n'est pas coupée. */}
+            <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} interval={ticks} padding={{ left: 12, right: 12 }} />
+            <YAxis domain={[lo, hi]} ticks={yTicks} tick={axisTick} axisLine={false} tickLine={false} width={30} allowDecimals={false} />
+            {k === "hrv" && rec.band && (
+              <ReferenceArea y1={rec.band.low} y2={rec.band.high} fill={c.successBg} fillOpacity={1} stroke="none" ifOverflow="extendDomain" />
+            )}
+            <Tooltip cursor={{ stroke: c.border }}
+              content={({ active, payload }) => {
+                const row = active && payload?.[0]?.payload;
+                if (!row || row[k] == null) return null;
+                return (
+                  <div style={tooltipStyle}>
+                    <b>{bucketTitle(row)}</b>
+                    <div style={{ marginTop: 2 }}>
+                      {RECOVERY_INFO[k].title} : {row[k]}{RECOVERY_INFO[k].unit ? ` ${RECOVERY_INFO[k].unit}` : ""}
+                      {row.n > 1 ? <span style={{ color: c.textMuted }}>, moyenne de {row.n} jours</span> : null}
+                    </div>
+                  </div>
+                );
+              }} />
+            <Line type="monotone" dataKey={k} stroke={c.info} strokeWidth={2} connectNulls isAnimationActive={false}
+                  dot={dense ? false : { r: 3, fill: c.info }} activeDot={{ r: 5 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div style={{ ...muted, fontSize: 11, marginTop: 6 }}>
+        {k === "hrv" && rec.band
+          ? <>En vert : ta zone habituelle selon Garmin ({rec.band.low} à {rec.band.high} ms). </>
+          : null}
+        Touche une tuile pour voir sa courbe.
+      </div>
+
+      {(rec.hrvNights > 0 || (prev?.metrics.rhr != null && rec.metrics.rhr != null)) && (
+        <div style={{ fontSize: 13, color: c.text, lineHeight: 1.5, marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+          {rec.hrvNights > 0 && (
+            <span>
+              VFC dans ta zone habituelle {plural(rec.inZone, "nuit", "nuits")} sur {rec.hrvNights}.
+              {recent && rec.lowStreak >= 2 && <> Sous ta zone ces <b>{rec.lowStreak} dernières nuits</b> : garde de la marge sur l'intensité.</>}
+            </span>
+          )}
+          {prev?.metrics.rhr != null && rec.metrics.rhr != null && (
+            <span>
+              {rec.metrics.rhr === prev.metrics.rhr
+                ? <>FC au repos stable, {rec.metrics.rhr} en moyenne.</>
+                : <>FC au repos : {rec.metrics.rhr} en moyenne, {Math.abs(rec.metrics.rhr - prev.metrics.rhr)} de {rec.metrics.rhr > prev.metrics.rhr ? "plus" : "moins"} que la période d'avant.</>}
+            </span>
+          )}
+        </div>
       )}
     </>
   );

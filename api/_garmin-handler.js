@@ -3,7 +3,10 @@
 //   GET    /api/garmin/status                      la clé est-elle enregistrée ?
 //   POST   /api/garmin/key      { apiKey }         vérifier puis enregistrer la clé
 //   DELETE /api/garmin/key                          l'oublier
-//   GET    /api/garmin/sleep?start=…&end=…         les nuits d'une plage (31 au plus)
+//   GET    /api/garmin/sync?start=…&end=…          une plage de 31 jours au plus :
+//                                                   nuits, journées (FC au repos,
+//                                                   stress, Body Battery, VFC) et
+//                                                   activités
 //
 // Chaque appel porte le jeton Supabase de l'utilisateur (`Authorization:
 // Bearer …`) : c'est lui qui dit à qui appartient la clé.
@@ -22,13 +25,16 @@
 
 import { createClient } from "@supabase/supabase-js";
 import {
-  GARMIN_BASE, TOKEN_PATH, SLEEP_PATH, TOKEN_FALLBACK_MS,
-  cleanKey, keyHint, jwtExpiry, tokenUsable, parseRange, normalizeSleep,
+  GARMIN_BASE, TOKEN_PATH, SLEEP_PATH, DAILY_PATH, HRV_PATH, ACTIVITIES_PATH,
+  ACTIVITIES_PAGE, ACTIVITIES_MAX_PAGES, TOKEN_FALLBACK_MS,
+  cleanKey, keyHint, jwtExpiry, tokenUsable, parseRange,
+  normalizeSleep, normalizeDays, normalizeActivities,
 } from "./_garmin.js";
 
 const METHODS = "GET, POST, DELETE, OPTIONS";
 // Une fonction Vercel s'arrête à 10 s. Un échange de clé suivi d'une lecture
-// doit tenir dedans, retentative comprise.
+// doit tenir dedans. Les quatre lectures d'une passe partent ensemble : la
+// plus lente fixe la durée.
 const TOKEN_TIMEOUT_MS = 4000;
 const DATA_TIMEOUT_MS = 6000;
 
@@ -77,7 +83,7 @@ async function exchangeKey(apiKey, deps) {
 async function garminGet(path, params, token, deps) {
   let res;
   try {
-    res = await deps.fetch(`${GARMIN_BASE}${path}?${new URLSearchParams(params)}`, {
+    res = await deps.fetch(`${GARMIN_BASE}${path}${params ? `?${new URLSearchParams(params)}` : ""}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(DATA_TIMEOUT_MS),
     });
@@ -128,7 +134,35 @@ async function saveKey(userId, body, deps) {
   return ok(describe(row));
 }
 
-async function readSleep(userId, query, deps) {
+// Les activités d'une plage, page après page : 99 par page, et la suivante
+// seulement si celle-ci était pleine.
+async function readActivities(range, token, deps) {
+  const all = [];
+  for (let page = 0; page < ACTIVITIES_MAX_PAGES; page++) {
+    const r = await garminGet(ACTIVITIES_PATH, {
+      startDate: range.start, endDate: range.end,
+      start: page * ACTIVITIES_PAGE, limit: ACTIVITIES_PAGE, sortOrder: "asc",
+    }, token, deps);
+    if (r.error) return r;
+    const rows = Array.isArray(r.data) ? r.data : [];
+    all.push(...rows);
+    if (rows.length < ACTIVITIES_PAGE) break;
+  }
+  return { data: all };
+}
+
+// Une passe : les quatre lectures en parallèle. L'une peut échouer sans
+// emporter les autres (une montre sans VFC, une route saturée) : son erreur
+// part dans `partial`, le reste arrive. Elles échouent toutes : on renvoie
+// l'erreur, comme avant.
+const PARTS = {
+  sleep: (r, t, d) => garminGet(SLEEP_PATH, { startDate: r.start, endDate: r.end }, t, d),
+  days: (r, t, d) => garminGet(DAILY_PATH, { startDate: r.start, endDate: r.end }, t, d),
+  hrv: (r, t, d) => garminGet(`${HRV_PATH}/${r.start}/${r.end}`, null, t, d),
+  activities: (r, t, d) => readActivities(r, t, d),
+};
+
+async function readSync(userId, query, deps) {
   const range = parseRange(query);
   if (range.error) return fail(range.error);
   const row = await deps.store.get(userId);
@@ -143,30 +177,45 @@ async function readSleep(userId, query, deps) {
     token = t.token; expiresAt = t.expiresAt; fresh = true;
     return null;
   };
+  // Ces notes de suivi ne doivent jamais coûter ce qu'on vient de lire : un
+  // échec d'écriture ici est ignoré.
+  const note = (fields) => Promise.resolve().then(() => deps.store.patch(userId, fields)).catch(() => {});
 
   let error = !token || !tokenUsable(expiresAt, deps.now()) ? await renew() : null;
-  let res = error ? null : await garminGet(SLEEP_PATH, { startDate: range.start, endDate: range.end }, token, deps);
-  // Un jeton peut être révoqué avant l'heure : on en reprend un, une fois.
-  if (res?.error === "token_rejected" && !fresh) {
-    error = await renew();
-    if (!error) res = await garminGet(SLEEP_PATH, { startDate: range.start, endDate: range.end }, token, deps);
+  const results = {};
+  if (!error) {
+    const run = (names) => Promise.all(names.map(async n => { results[n] = await PARTS[n](range, token, deps); }));
+    await run(Object.keys(PARTS));
+    // Un jeton peut être révoqué avant l'heure : on en reprend un, une fois,
+    // pour les seules lectures refusées.
+    const refused = Object.keys(PARTS).filter(n => results[n].error === "token_rejected");
+    if (refused.length && !fresh) {
+      error = await renew();
+      if (!error) await run(refused);
+    }
   }
-  if (!error && res?.error) error = res.error === "token_rejected" ? "key_rejected" : res.error;
-  // Ces notes de suivi ne doivent jamais coûter les nuits qu'on vient de
-  // lire : un échec d'écriture ici est ignoré.
-  const note = (fields) => Promise.resolve().then(() => deps.store.patch(userId, fields)).catch(() => {});
+  const failed = Object.keys(PARTS).filter(n => results[n]?.error);
+  if (!error && failed.length === Object.keys(PARTS).length) error = results[failed[0]].error;
   if (error) {
+    error = error === "token_rejected" ? "key_rejected" : error;
     await note({ last_error: error });
     return fail(error);
   }
 
-  const nights = normalizeSleep(res.data);
+  const data = (n) => (results[n].error ? null : results[n].data);
+  const partial = Object.fromEntries(failed.map(n => [n, results[n].error === "token_rejected" ? "key_rejected" : results[n].error]));
   await note({
     last_sync_at: new Date(deps.now()).toISOString(),
     last_error: null,
     ...(fresh ? { access_token: token, token_expires_at: new Date(expiresAt).toISOString() } : {}),
   });
-  return ok({ start: range.start, end: range.end, nights });
+  return ok({
+    start: range.start, end: range.end,
+    nights: normalizeSleep(data("sleep")),
+    days: normalizeDays(data("days"), data("hrv")),
+    activities: normalizeActivities(data("activities")),
+    ...(failed.length ? { partial } : {}),
+  });
 }
 
 export async function handleGarmin({ method, action, query, body, authorization }, deps) {
@@ -189,9 +238,9 @@ export async function handleGarmin({ method, action, query, body, authorization 
       }
       return fail("method_not_allowed");
     }
-    if (action === "sleep") {
+    if (action === "sync") {
       if (method !== "GET") return fail("method_not_allowed");
-      return await readSleep(userId, query, deps);
+      return await readSync(userId, query, deps);
     }
     return fail("not_found");
   } catch (e) {

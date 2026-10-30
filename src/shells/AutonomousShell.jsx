@@ -1208,6 +1208,7 @@ export function AutonomousShell({ isDark, toggleTheme, styles, onOpenPublicPlan 
                 const next = {
                   ...payload, isCustom: true,
                   feedback: before.feedback ?? null,
+                  ...(before.garmin ? { garmin: before.garmin } : {}),
                   startTime: sched.startTime || null,
                   endTime: sched.endTime ?? null,
                   location: sched.location || null,

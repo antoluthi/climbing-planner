@@ -307,8 +307,9 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
           isDark={isDark}
           styles={styles}
           garmin={garmin}
-          sleep={data.sleep}
-          flagLinked={!!profile.garmin?.linked}
+          data={data}
+          profile={profile}
+          onUpdateProfile={onUpdateProfile}
         />
       )}
 

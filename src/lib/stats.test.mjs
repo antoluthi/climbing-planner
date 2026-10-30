@@ -8,7 +8,7 @@ import {
   windowOf, autoGrain, pointsFor, grainAllowed, resolveGrain, bucketsFor, stepSelection,
   selectionIsCurrent, rangeLabel, selectionCaption, previousPhrase, comparisonFor,
   quickRanges, cycleRanges, rangeError, tickInterval, MAX_POINTS,
-  sleepStats, averageClock, sleepScoreLabel,
+  sleepStats, averageClock, sleepScoreLabel, recoveryStats, stressLabel,
 } from "./stats.js";
 
 // Mardi 20 octobre 2026 : un milieu de semaine, un milieu de mois.
@@ -529,4 +529,54 @@ test("sommeil : aucune nuit sur la période", () => {
   assert.equal(st.n, 0);
   assert.equal(st.perBucket.length, 7);
   assert.equal(st.afterHard, null);
+});
+
+// ─── Récupération mesurée ────────────────────────────────────────────────────
+
+test("récupération : moyennes de la période et des tranches, chaque mesure à part", () => {
+  const data = { recovery: {
+    "2026-10-19": { rhr: 48, hrv: 60, hrvLow: 55, hrvHigh: 70, bbMax: 80, stress: 24 },
+    "2026-10-20": { rhr: 50, hrv: 52, hrvLow: 55, hrvHigh: 70, bbMax: 62 },
+    "2026-10-21": { rhr: 49 },                                        // nuit sans VFC
+    "2026-09-01": { rhr: 60 },                                        // hors période
+  } };
+  const st = recoveryStats(data, "2026-10-19", "2026-10-25", bucketsFor("2026-10-19", "2026-10-25", "day"));
+  assert.equal(st.n, 3);
+  assert.deepEqual(st.metrics, { hrv: 56, rhr: 49, bbMax: 71, stress: 24 });
+  assert.deepEqual([st.perBucket[0].hrv, st.perBucket[2].hrv, st.perBucket[2].rhr, st.perBucket[6].rhr], [60, null, 49, null]);
+});
+
+test("récupération : la VFC contre sa zone habituelle, nuit par nuit", () => {
+  const night = (hrv, lo = 55, hi = 70) => ({ hrv, hrvLow: lo, hrvHigh: hi });
+  const data = { recovery: {
+    "2026-10-15": { ...night(62), hrvStatus: "BALANCED" },
+    "2026-10-16": night(66),
+    "2026-10-17": night(50),
+    "2026-10-18": night(53, 54, 69),
+    "2026-10-19": { ...night(51, 54, 69), hrvStatus: "LOW" },
+  } };
+  const st = recoveryStats(data, "2026-10-12", "2026-10-25", []);
+  assert.deepEqual(st.band, { low: 54, high: 69 });          // la zone la plus récente
+  assert.equal(st.hrvNights, 5);
+  assert.equal(st.inZone, 2);
+  assert.equal(st.lowStreak, 3);                              // les trois dernières nuits
+  assert.equal(st.lastHrvDate, "2026-10-19");
+  assert.equal(st.lastStatus, "LOW");
+});
+
+test("récupération : rien sur la période, et les paliers du stress", () => {
+  const st = recoveryStats({ recovery: { "2026-01-01": { rhr: 50 } } }, "2026-10-19", "2026-10-25", []);
+  assert.equal(st.n, 0);
+  assert.equal(st.band, null);
+  assert.deepEqual(st.metrics, { hrv: null, rhr: null, bbMax: null, stress: null });
+  assert.equal(recoveryStats({}, "2026-10-19", "2026-10-25", []).n, 0);
+  assert.deepEqual([stressLabel(20), stressLabel(40), stressLabel(60), stressLabel(90), stressLabel(null)], ["repos", "faible", "moyen", "élevé", null]);
+});
+
+test("une séance liée à Garmin compte le réel : durée et kilomètres de l'activité", () => {
+  const s = S({ discipline: "running", estimatedTime: 45, metrics: { durationMin: 45, distanceKm: 8 }, garmin: { activityId: "1", durationMin: 52, distanceKm: 9.4 }, feedback: { status: "done", done: true } });
+  const data = week("2026-10-19", [[s]]);
+  const sum = summarize(buildDayIndex({ weeks: data }), "2026-10-19", "2026-10-25", TODAY);
+  assert.equal(sum.minutes, 52);
+  assert.equal(sum.km, 9.4);
 });

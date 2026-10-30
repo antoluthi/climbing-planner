@@ -9,7 +9,8 @@ import assert from "node:assert/strict";
 
 import {
   cleanKey, keyHint, jwtExpiry, tokenUsable, parseRange, localClock,
-  normalizeNight, normalizeSleep, GARMIN_BASE, TOKEN_PATH, SLEEP_PATH,
+  normalizeNight, normalizeSleep, normalizeDays, normalizeActivity, normalizeActivities,
+  GARMIN_BASE, TOKEN_PATH, SLEEP_PATH, DAILY_PATH, HRV_PATH, ACTIVITIES_PATH,
 } from "./_garmin.js";
 import { handleGarmin } from "./_garmin-handler.js";
 
@@ -196,72 +197,153 @@ test("l'état dit si une clé est là, sans jamais la montrer", async () => {
   assert.deepEqual((await call({ action: "status" }, deps({ store: fakeStore(), garmin }))).body, { linked: false });
 });
 
-test("le sommeil se lit avec le jeton gardé, sans repasser par la clé", async () => {
-  const store = fakeStore({ api_key: "cle-1234-abcd", access_token: TOKEN_A, token_expires_at: new Date(NOW + 20 * 3600 * 1000).toISOString() });
-  const garmin = fakeGarmin([[SLEEP_PATH, { status: 200, body: [NIGHT] }]]);
-  const out = await call({ action: "sleep", query: { start: "2026-10-01", end: "2026-10-30" } }, deps({ store, garmin }));
+// Ce que rend Garmin pour une passe : une nuit, une journée, la VFC, une activité.
+const DAY = { calendarDate: "2026-10-29", heartRate: { restingValue: 47 }, stress: { avgLevel: 26 }, bodyBattery: { maxValue: 88, minValue: 21, chargedValue: 64, drainedValue: 71 } };
+const HRV = { hrvSummaries: [{ calendarDate: "2026-10-29", lastNightAvg: 62, weeklyAvg: 60, status: "BALANCED", baseline: { balancedLow: 55, balancedUpper: 71 } }] };
+const RUN = { activityId: 21234567890, startTimeLocal: "2026-10-29 18:42:07", activityType: { typeKey: "trail_running" }, activityName: "Trail du soir", duration: 2895, distance: 9234, averageHR: 151, activityTrainingLoad: 132 };
+const routesOk = (auth) => [
+  [SLEEP_PATH, (u, i) => (auth && i.headers.Authorization !== auth ? { status: 401, body: "" } : { status: 200, body: [NIGHT] })],
+  [DAILY_PATH, (u, i) => (auth && i.headers.Authorization !== auth ? { status: 401, body: "" } : { status: 200, body: { data: [DAY] } })],
+  [HRV_PATH, (u, i) => (auth && i.headers.Authorization !== auth ? { status: 401, body: "" } : { status: 200, body: HRV })],
+  [ACTIVITIES_PATH, (u, i) => (auth && i.headers.Authorization !== auth ? { status: 401, body: "" } : { status: 200, body: [RUN] })],
+];
+const validToken = () => ({ api_key: "cle-1234-abcd", access_token: TOKEN_A, token_expires_at: new Date(NOW + 20 * 3600 * 1000).toISOString() });
+const SYNC = { action: "sync", query: { start: "2026-10-01", end: "2026-10-30" } };
+
+test("une passe lit nuits, journées, VFC et activités, avec le jeton gardé", async () => {
+  const store = fakeStore(validToken());
+  const garmin = fakeGarmin(routesOk());
+  const out = await call(SYNC, deps({ store, garmin }));
 
   assert.equal(out.status, 200);
   assert.deepEqual(out.body.nights.map(n => n.date), ["2026-10-29"]);
-  assert.equal(garmin.calls.length, 1);
-  assert.equal(garmin.calls[0].auth, `Bearer ${TOKEN_A}`);
-  assert.ok(garmin.calls[0].url.endsWith(`${SLEEP_PATH}?startDate=2026-10-01&endDate=2026-10-30`));
+  // FC au repos, stress et Body Battery d'un côté, VFC de l'autre : une journée.
+  assert.deepEqual(out.body.days, [{ date: "2026-10-29", rhr: 47, stress: 26, bbMax: 88, bbMin: 21, bbCharged: 64, bbDrained: 71, hrv: 62, hrvWeek: 60, hrvStatus: "BALANCED", hrvLow: 55, hrvHigh: 71 }]);
+  assert.deepEqual(out.body.activities.map(a => [a.id, a.date, a.start, a.type, a.distanceKm]), [["21234567890", "2026-10-29", "18:42", "trail_running", 9.23]]);
+  assert.equal(out.body.partial, undefined);
+
+  // Quatre lectures, aucun échange de clé, toutes avec le jeton gardé.
+  assert.equal(garmin.calls.length, 4);
+  assert.ok(garmin.calls.every(c => c.method === "GET" && c.auth === `Bearer ${TOKEN_A}`));
+  const urls = garmin.calls.map(c => c.url.replace(GARMIN_BASE, "")).sort();
+  assert.deepEqual(urls, [
+    `${ACTIVITIES_PATH}?startDate=2026-10-01&endDate=2026-10-30&start=0&limit=99&sortOrder=asc`,
+    `${HRV_PATH}/2026-10-01/2026-10-30`,
+    `${SLEEP_PATH}?startDate=2026-10-01&endDate=2026-10-30`,
+    `${DAILY_PATH}?startDate=2026-10-01&endDate=2026-10-30`,
+  ].sort());
   assert.equal(store.rows.get("u1").last_sync_at, new Date(NOW).toISOString());
 });
 
 test("un jeton près de sa fin est renouvelé, et le nouveau est gardé", async () => {
   const store = fakeStore({ api_key: "cle-1234-abcd", access_token: TOKEN_A, token_expires_at: new Date(NOW + 10 * 60 * 1000).toISOString() });
-  const garmin = fakeGarmin([[TOKEN_PATH, { status: 200, body: TOKEN_B }], [SLEEP_PATH, { status: 200, body: [] }]]);
-  const out = await call({ action: "sleep", query: { start: "2026-10-29", end: "2026-10-30" } }, deps({ store, garmin }));
+  const garmin = fakeGarmin([[TOKEN_PATH, { status: 200, body: TOKEN_B }], ...routesOk()]);
+  const out = await call(SYNC, deps({ store, garmin }));
   assert.equal(out.status, 200);
-  assert.deepEqual(garmin.calls.map(c => c.method), ["POST", "GET"]);
-  assert.equal(garmin.calls[1].auth, `Bearer ${TOKEN_B}`);
+  assert.equal(garmin.calls[0].method, "POST");
+  assert.ok(garmin.calls.slice(1).every(c => c.auth === `Bearer ${TOKEN_B}`));
   assert.equal(store.rows.get("u1").access_token, TOKEN_B);
 });
 
-test("un jeton révoqué avant l'heure : un nouveau, et une seule autre tentative", async () => {
-  const store = fakeStore({ api_key: "cle-1234-abcd", access_token: TOKEN_A, token_expires_at: new Date(NOW + 20 * 3600 * 1000).toISOString() });
-  const garmin = fakeGarmin([
-    [TOKEN_PATH, { status: 200, body: TOKEN_B }],
-    [SLEEP_PATH, (url, init) => (init.headers.Authorization === `Bearer ${TOKEN_A}` ? { status: 401, body: "" } : { status: 200, body: [NIGHT] })],
-  ]);
-  const out = await call({ action: "sleep", query: { start: "2026-10-29", end: "2026-10-30" } }, deps({ store, garmin }));
+test("un jeton révoqué avant l'heure : un nouveau, une seule fois, pour ce qui a été refusé", async () => {
+  const store = fakeStore(validToken());
+  const garmin = fakeGarmin([[TOKEN_PATH, { status: 200, body: TOKEN_B }], ...routesOk(`Bearer ${TOKEN_B}`)]);
+  const out = await call(SYNC, deps({ store, garmin }));
   assert.equal(out.status, 200);
   assert.equal(out.body.nights.length, 1);
-  assert.deepEqual(garmin.calls.map(c => c.method), ["GET", "POST", "GET"]);
+  assert.deepEqual(garmin.calls.map(c => c.method), ["GET", "GET", "GET", "GET", "POST", "GET", "GET", "GET", "GET"]);
 });
 
 test("une clé expirée chez Garmin se dit, et se note", async () => {
   const store = fakeStore({ api_key: "cle-1234-abcd", access_token: null, token_expires_at: null });
   const garmin = fakeGarmin([[TOKEN_PATH, { status: 401, body: "" }]]);
-  const out = await call({ action: "sleep", query: { start: "2026-10-29", end: "2026-10-30" } }, deps({ store, garmin }));
-  assert.deepEqual(out, { status: 422, body: { error: "key_rejected" } });
+  assert.deepEqual(await call(SYNC, deps({ store, garmin })), { status: 422, body: { error: "key_rejected" } });
   assert.equal(store.rows.get("u1").last_error, "key_rejected");
 
-  // Jeton tout neuf et pourtant refusé : inutile d'insister.
+  // Jeton tout neuf et pourtant refusé partout : inutile d'insister.
   const store2 = fakeStore({ api_key: "cle-1234-abcd" });
-  const garmin2 = fakeGarmin([[TOKEN_PATH, { status: 200, body: TOKEN_B }], [SLEEP_PATH, { status: 401, body: "" }]]);
-  const out2 = await call({ action: "sleep", query: { start: "2026-10-29", end: "2026-10-30" } }, deps({ store: store2, garmin: garmin2 }));
-  assert.deepEqual(out2, { status: 422, body: { error: "key_rejected" } });
-  assert.deepEqual(garmin2.calls.map(c => c.method), ["POST", "GET"]);
+  const garmin2 = fakeGarmin([[TOKEN_PATH, { status: 200, body: TOKEN_B }], ...routesOk("Bearer personne")]);
+  assert.deepEqual(await call(SYNC, deps({ store: store2, garmin: garmin2 })), { status: 422, body: { error: "key_rejected" } });
+  assert.equal(garmin2.calls.filter(c => c.method === "POST").length, 1);
+});
+
+test("une lecture qui échoue n'emporte pas les autres", async () => {
+  const store = fakeStore(validToken());
+  const garmin = fakeGarmin([[HRV_PATH, { status: 403, body: "" }], ...routesOk()]);
+  const out = await call(SYNC, deps({ store, garmin }));
+  assert.equal(out.status, 200);
+  assert.deepEqual(out.body.partial, { hrv: "garmin_forbidden" });
+  assert.equal(out.body.nights.length, 1);
+  assert.equal(out.body.activities.length, 1);
+  assert.equal(out.body.days[0].rhr, 47);
+  assert.equal(out.body.days[0].hrv, undefined);
+});
+
+test("toutes en échec : l'erreur commune, avec son code", async () => {
+  const q = SYNC;
+  const all = (reply) => fakeGarmin([[GARMIN_BASE, reply]]);
+  const timeout = Object.assign(new Error("timeout"), { name: "TimeoutError" });
+  assert.deepEqual((await call(q, deps({ store: fakeStore(validToken()), garmin: all(timeout) }))).body, { error: "garmin_timeout" });
+  assert.equal((await call(q, deps({ store: fakeStore(validToken()), garmin: all({ status: 429, body: "" }) }))).status, 429);
+  assert.deepEqual((await call(q, deps({ store: fakeStore(validToken()), garmin: all({ status: 503, body: "" }) }))).body, { error: "garmin_down" });
+  assert.deepEqual((await call(q, deps({ store: fakeStore(validToken()), garmin: all({ status: 200, body: "<html>" }) }))).body, { error: "garmin_error" });
+});
+
+test("les activités se lisent page après page", async () => {
+  const page = (n, from) => Array.from({ length: n }, (_, i) => ({ ...RUN, activityId: from + i }));
+  const garmin = fakeGarmin([
+    [ACTIVITIES_PATH, (url) => ({ status: 200, body: url.includes("start=0&") ? page(99, 1) : page(2, 100) })],
+    ...routesOk(),
+  ]);
+  const out = await call(SYNC, deps({ store: fakeStore(validToken()), garmin }));
+  assert.equal(out.body.activities.length, 101);
+  assert.equal(garmin.calls.filter(c => c.url.includes(ACTIVITIES_PATH)).length, 2);
+  assert.ok(garmin.calls.some(c => c.url.includes("start=99&")));
 });
 
 test("sans clé, ou avec une plage trop longue, Garmin n'est pas appelé", async () => {
   const garmin = fakeGarmin([]);
-  assert.deepEqual(await call({ action: "sleep", query: { start: "2026-10-01", end: "2026-10-30" } }, deps({ store: fakeStore(), garmin })), { status: 404, body: { error: "no_key" } });
+  assert.deepEqual(await call(SYNC, deps({ store: fakeStore(), garmin })), { status: 404, body: { error: "no_key" } });
   const store = fakeStore({ api_key: "cle-1234-abcd" });
-  assert.deepEqual(await call({ action: "sleep", query: { start: "2026-09-01", end: "2026-10-30" } }, deps({ store, garmin })), { status: 400, body: { error: "range_too_long" } });
+  assert.deepEqual(await call({ action: "sync", query: { start: "2026-09-01", end: "2026-10-30" } }, deps({ store, garmin })), { status: 400, body: { error: "range_too_long" } });
   assert.equal(garmin.calls.length, 0);
 });
 
-test("Garmin lent, saturé ou en panne : chaque cas a son code", async () => {
-  const store = () => fakeStore({ api_key: "cle-1234-abcd", access_token: TOKEN_A, token_expires_at: new Date(NOW + 20 * 3600 * 1000).toISOString() });
-  const q = { action: "sleep", query: { start: "2026-10-29", end: "2026-10-30" } };
-  const timeout = Object.assign(new Error("timeout"), { name: "TimeoutError" });
-  assert.deepEqual((await call(q, deps({ store: store(), garmin: fakeGarmin([[SLEEP_PATH, timeout]]) }))).body, { error: "garmin_timeout" });
-  assert.deepEqual((await call(q, deps({ store: store(), garmin: fakeGarmin([[SLEEP_PATH, { status: 429, body: "" }]]) }))).status, 429);
-  assert.deepEqual((await call(q, deps({ store: store(), garmin: fakeGarmin([[SLEEP_PATH, { status: 503, body: "" }]]) }))).body, { error: "garmin_down" });
-  assert.deepEqual((await call(q, deps({ store: store(), garmin: fakeGarmin([[SLEEP_PATH, { status: 200, body: "<html>" }]]) }))).body, { error: "garmin_error" });
+// ─── Journées et activités ───────────────────────────────────────────────────
+
+test("une journée : les valeurs sans mesure de Garmin restent des trous", () => {
+  const days = normalizeDays(
+    { data: [
+      { calendarDate: "2026-10-28", heartRate: { restingValue: 0 }, stress: { avgLevel: -1 }, bodyBattery: {} },   // montre au tiroir
+      { calendarDate: "2026-10-29", heartRate: { restingValue: 49 }, stress: { avgLevel: -2 }, bodyBattery: { maxValue: 74 } },
+      { calendarDate: "pas une date", heartRate: { restingValue: 50 } },
+    ] },
+    { hrvSummaries: [
+      { calendarDate: "2026-10-27", lastNightAvg: 58, status: "NONE", baseline: {} },     // pas encore de référence
+      { calendarDate: "2026-10-29", lastNightAvg: null, status: "INVALID" },
+    ] },
+  );
+  assert.deepEqual(days, [
+    { date: "2026-10-27", hrv: 58 },
+    { date: "2026-10-29", rhr: 49, bbMax: 74 },
+  ]);
+  assert.deepEqual(normalizeDays(null, null), []);
+});
+
+test("une activité : le jour et l'heure de son départ local, en minutes et en km", () => {
+  assert.deepEqual(normalizeActivity({ ...RUN, elevationGain: 412.6, maxHR: 178, calories: 640, aerobicTrainingEffect: 3.46 }), {
+    id: "21234567890", date: "2026-10-29", start: "18:42", type: "trail_running", name: "Trail du soir",
+    durationMin: 48, distanceKm: 9.23, elevation: 413, avgHr: 151, maxHr: 178, calories: 640, load: 132, aerobic: 3.5,
+  });
+  // Une séance de bloc : ni distance ni D+.
+  const bloc = normalizeActivity({ activityId: 7, startTimeLocal: "2026-10-28T19:05:00", activityType: { typeKey: "bouldering" }, duration: 5400, distance: 0 });
+  assert.deepEqual(bloc, { id: "7", date: "2026-10-28", start: "19:05", type: "bouldering", durationMin: 90 });
+  assert.equal(normalizeActivity({ ...RUN, startTimeLocal: null }), null);
+  assert.equal(normalizeActivity({ ...RUN, duration: 0 }), null);
+  assert.equal(normalizeActivity({ ...RUN, activityId: null }), null);
+  // Une même activité ne sort qu'une fois, et la liste suit l'heure de départ.
+  const list = normalizeActivities([{ ...RUN, activityId: 2, startTimeLocal: "2026-10-29 07:00:00" }, RUN, { ...RUN, activityId: 2, startTimeLocal: "2026-10-29 07:00:00" }]);
+  assert.deepEqual(list.map(a => a.id), ["2", "21234567890"]);
 });
 
 test("oublier la clé, et une base sans la table", async () => {

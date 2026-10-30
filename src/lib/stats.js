@@ -384,14 +384,16 @@ export function sessionState(s, dateISO, todayISO) {
 
 export const sportOf = (s) => s?.discipline || "climbing";
 
+// Une séance liée à une activité Garmin (`s.garmin`) compte ce qui a été fait,
+// pas ce qui était prévu : la durée et les kilomètres enregistrés par la montre.
 export function sessionMinutes(s) {
-  const m = Number(s?.metrics?.durationMin ?? s?.estimatedTime);
+  const m = Number(s?.garmin?.durationMin ?? s?.metrics?.durationMin ?? s?.estimatedTime);
   return Number.isFinite(m) && m > 0 ? m : 0;
 }
 
 export function runKm(s) {
   if (!RUN_DISCIPLINES.includes(s?.discipline)) return 0;
-  const km = Number(s?.metrics?.distanceKm);
+  const km = Number(s?.garmin?.distanceKm ?? s?.metrics?.distanceKm);
   return Number.isFinite(km) && km > 0 ? km : 0;
 }
 
@@ -721,6 +723,58 @@ export function sleepStats(data, index, start, end, buckets) {
     wake: averageClock(nights.map(n => n.end)),
     afterHard,
     perBucket,
+  };
+}
+
+// ── Récupération mesurée (Garmin) ────────────────────────────────────────────
+// `data.recovery` : une journée par date (FC au repos, VFC de la nuit et sa
+// zone habituelle, Body Battery, stress). Le Hooper dit ce qu'on ressent, ces
+// valeurs ce que le corps mesure : les deux se lisent côte à côte.
+export const RECOVERY_METRICS = ["hrv", "rhr", "bbMax", "stress"];
+export const HRV_STATUS_LABEL = { BALANCED: "équilibrée", UNBALANCED: "déséquilibrée", LOW: "basse", POOR: "faible" };
+
+// Les paliers du stress de Garmin (0 à 100).
+export function stressLabel(v) {
+  if (v == null) return null;
+  return v <= 25 ? "repos" : v <= 50 ? "faible" : v <= 75 ? "moyen" : "élevé";
+}
+
+export function recoveryStats(data, start, end, buckets) {
+  const rows = Object.entries(data?.recovery || {})
+    .filter(([d, v]) => d >= start && d <= end && v && typeof v === "object")
+    .map(([date, v]) => ({ date, ...v }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const avgOf = (list, k) => {
+    const v = list.map(r => r[k]).filter(x => typeof x === "number" && Number.isFinite(x));
+    return v.length ? Math.round(avg(v)) : null;
+  };
+  const metrics = Object.fromEntries(RECOVERY_METRICS.map(k => [k, avgOf(rows, k)]));
+  const perBucket = buckets.map(b => {
+    const inB = rows.filter(r => r.date >= b.start && r.date <= b.end);
+    const row = { label: b.label, start: b.start, end: b.end, kind: b.kind, full: b.full, n: inB.length };
+    for (const k of RECOVERY_METRICS) row[k] = avgOf(inB, k);
+    return row;
+  });
+
+  // La VFC se lit contre la zone habituelle que Garmin calcule nuit après
+  // nuit : la plus récente sert de repère au graphe, et chaque nuit se compare
+  // à la sienne.
+  const banded = rows.filter(r => r.hrv != null && r.hrvLow != null && r.hrvHigh != null);
+  const last = banded.at(-1);
+  // Les nuits sous la zone, d'affilée, jusqu'à la dernière mesurée.
+  let lowStreak = 0;
+  for (let i = banded.length - 1; i >= 0 && banded[i].hrv < banded[i].hrvLow; i--) lowStreak++;
+
+  return {
+    n: rows.length,
+    metrics,
+    perBucket,
+    band: last ? { low: last.hrvLow, high: last.hrvHigh } : null,
+    hrvNights: banded.length,
+    inZone: banded.filter(r => r.hrv >= r.hrvLow && r.hrv <= r.hrvHigh).length,
+    lowStreak,
+    lastHrvDate: last?.date || null,
+    lastStatus: [...rows].reverse().find(r => r.hrvStatus)?.hrvStatus || null,
   };
 }
 

@@ -640,7 +640,7 @@ export function DataProvider({ children }) {
               ? dayArr.map(s => {
                   if (s.id === updatedSession.id && !s.isBlock) {
                     changed = true;
-                    return { ...updatedSession, feedback: s.feedback, startTime: s.startTime, endTime: s.endTime, coachNote: s.coachNote, date: s.date };
+                    return { ...updatedSession, feedback: s.feedback, ...(s.garmin ? { garmin: s.garmin } : {}), startTime: s.startTime, endTime: s.endTime, coachNote: s.coachNote, date: s.date };
                   }
                   return s;
                 })

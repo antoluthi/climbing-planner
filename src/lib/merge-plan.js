@@ -255,6 +255,7 @@ const shallow2 = (l, c) => ({ ...(isObj(c) ? c : {}), ...(isObj(l) ? l : {}) });
 const STRATEGIES_2 = {
   weeks: mergeWeeks2, weekMeta: shallow2, notes: shallow2, creatine: shallow2, weight: shallow2,
   nutrition: shallow2, profile: shallow2, reminderState: mergeNested2,
+  recovery: shallow2, garminSeen: shallow2,
   hooper: (l, c) => mergeById2(l, c, "date"), sleep: (l, c) => mergeById2(l, c, "date"),
   mesocycles: mergeById2, customCycles: mergeById2, customSessions: mergeById2, quickSessions: mergeById2,
   reminders: mergeById2, runBlocks: mergeById2, moveSuggestions: mergeById2,
