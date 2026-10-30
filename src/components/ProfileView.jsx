@@ -17,13 +17,14 @@ import { RowCard, Row, Segmented, Chip, RoundIconButton, SANS, MONO } from "./ui
 import { PublicPlansSection } from "./PublicPlansSection.jsx";
 import { NotificationsSection } from "./NotificationsSection.jsx";
 import { RunGoalSection } from "./RunGoalSection.jsx";
+import { GarminSection } from "./GarminSection.jsx";
 
 // ─── PROFILE VIEW ─────────────────────────────────────────────────────────────
 
 export function ProfileView({ data, onUpdateProfile, session, onAuthChange, syncStatus, onUpload, onPull, onImport, toggleTheme, isDark,
   athletes, onSearchAthletes, onInviteAthlete, sentInvites, onRemoveAthlete,
   myCoaches, onLeaveCoach, accountRole, onChangeRole, onBack,
-  viewingAthlete, onToggleViewAthlete, onOpenPublicPlan }) {
+  viewingAthlete, onToggleViewAthlete, onOpenPublicPlan, garmin }) {
   const { styles } = useThemeCtx();
   const profile = data.profile || {};
 
@@ -297,6 +298,19 @@ export function ProfileView({ data, onUpdateProfile, session, onAuthChange, sync
         enabled={!!profile.kmGoal}
         onChange={val => onUpdateProfile({ ...profile, kmGoal: val })}
       />
+
+      {/* ── Garmin Connect ── la clé vit sur le serveur, il faut donc un
+           compte ; masqué en vue athlète (ce n'est pas notre profil, et la
+           clé serait la nôtre). */}
+      {session && !viewingAthlete && garmin && (
+        <GarminSection
+          isDark={isDark}
+          styles={styles}
+          garmin={garmin}
+          sleep={data.sleep}
+          flagLinked={!!profile.garmin?.linked}
+        />
+      )}
 
       {/* ── Rôle ── modifiable, sauf en vue athlète (le profil affiché n'est
            pas le nôtre). */}

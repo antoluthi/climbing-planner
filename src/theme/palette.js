@@ -217,6 +217,18 @@ export const DATA = {
   // ce sont des catégories, pas des états du thème.
   hands: { left: "#6d5f8a", right: "#a05a72" },
 
+  // Phases du sommeil (Garmin). L'ordre des hypnogrammes (profond, léger,
+  // paradoxal, éveil) se lit dans une seule teinte, par marches de luminosité
+  // : une rampe ordonnée, pas des catégories. Validée contre la carte de chaque
+  // thème (marches visibles, l'extrémité la plus proche du fond à plus de 2:1).
+  // En sombre l'ancre s'inverse : le profond, ce qui compte le plus, reste le
+  // plus contrasté sur le noir. `other` (non classé) est un gris neutre, hors
+  // de la rampe ; `total`, la couleur de la barre unique en vue simplifiée.
+  sleep: {
+    light: { deep: "#0d366b", light: "#1c5cab", rem: "#3987e5", awake: "#6da7ec", other: "#a3a3a8", total: "#2a78d6" },
+    dark:  { deep: "#b7d3f6", light: "#6da7ec", rem: "#2a78d6", awake: "#184f95", other: "#5a5a5e", total: "#3987e5" },
+  },
+
   // Couleur de repli quand un libellé n'a pas de couleur connue.
   fallback: "#8a8a8f",
 };

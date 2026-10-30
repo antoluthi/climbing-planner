@@ -14,7 +14,7 @@ import {
   previousPhrase, comparisonFor, tickInterval, buildDayIndex, summarize, delta, chargeSeries,
   stackKeys, averageDone, itemsBetween, sportBreakdown, feelStats, deviationVerdict,
   hooperStats, weightStats, nutritionStats, runStats, habitStats, runKm, EVENT_KEY,
-  fmtNum, fmtSigned, fmtDuration, shiftISO,
+  sleepStats, HARD_DAY_CHARGE, fmtNum, fmtSigned, fmtDuration, shiftISO,
 } from "../lib/stats.js";
 import { ActivityHeatmap } from "./ActivityHeatmap.jsx";
 import { StatsRangePicker } from "./StatsRangePicker.jsx";
@@ -32,7 +32,7 @@ import {
 //
 // Les calculs vivent dans `lib/stats.js` (purs, testés) ; ce fichier ne fait
 // que les dessiner. Un sport isolé (`sports`) filtre tout ce qui dépend des
-// séances ; Hooper, poids et repas ne dépendent d'aucun sport et restent
+// séances ; Hooper, sommeil, poids et repas ne dépendent d'aucun sport et restent
 // entiers.
 
 export function Dashboard(props) {
@@ -53,6 +53,7 @@ function DashboardBody({ data: rawData, sports, onEditSports, onOpenDay }) {
   const data = useMemo(() => filterDataBySports(rawData, sports), [rawData, sports]);
   const filtered = !!sports?.length;
   const index = useMemo(() => buildDayIndex(data, { includeEvents: !filtered }), [data, filtered]);
+  const fullIndex = useMemo(() => (filtered ? buildDayIndex(rawData) : index), [rawData, filtered, index]);
 
   // Deux réglages indépendants : la période (un raccourci, ou une plage libre
   // choisie dans la feuille « Dates ») et le découpage (jour, semaine, mois).
@@ -98,6 +99,7 @@ function DashboardBody({ data: rawData, sports, onEditSports, onOpenDay }) {
     return {
       run, rated,
       hooper: (data.hooper || []).length > 0,
+      sleep: (data.sleep || []).length > 0,
       weight: Object.values(data.weight || {}).some(v => v != null),
       nutrition: Object.values(data.nutrition || {}).some(m => Array.isArray(m) && m.length),
       reminders: (data.reminders || []).length > 0,
@@ -132,6 +134,9 @@ function DashboardBody({ data: rawData, sports, onEditSports, onOpenDay }) {
   const split = sportBreakdown(index, period.start, elapsedEnd, todayISO);
   const feel = feelStats(index, period.start, elapsedEnd, period.buckets, todayISO);
   const hooper = hooperStats(data, period.start, period.end, period.buckets);
+  // Le sommeil ne dépend d'aucun sport, mais « une grosse journée » se juge
+  // sur toutes les séances : l'index d'origine, même quand un sport est isolé.
+  const sleep = sleepStats(data, fullIndex, period.start, period.end, period.buckets);
   const weight = weightStats(data, period.start, period.end, period.buckets);
   const food = nutritionStats(data, period.start, period.end, period.buckets);
   const run = runStats(index, period.buckets, data, todayISO);
@@ -454,6 +459,21 @@ function DashboardBody({ data: rawData, sports, onEditSports, onOpenDay }) {
             </>
           ) : (
             <Empty isDark={isDark}>Aucun ressenti noté sur la période.</Empty>
+          )}
+        </Section>
+      )}
+
+      {/* ── Sommeil ── */}
+      {used.sleep && (
+        <Section isDark={isDark} id="stats-sleep" title="Sommeil"
+          right={sleep.n ? plural(sleep.n, "nuit", "nuits") : null}>
+          {sleep.n ? (
+            <SleepBody
+              isDark={isDark} sleep={sleep} dense={dense} ticks={ticks} periodKey={periodKey}
+              glideZone={glideZone} axisTick={axisTick} tooltipStyle={tooltipStyle} gridStroke={styles.dashGrid}
+            />
+          ) : (
+            <Empty isDark={isDark}>Aucune nuit sur la période.</Empty>
           )}
         </Section>
       )}
@@ -787,6 +807,137 @@ function Summary({ isDark, cur, prev, ahead, hooper, showKm, showHooper, nothing
         </button>
       ))}
     </div>
+  );
+}
+
+// ── Sommeil ──────────────────────────────────────────────────────────────────
+// Les barres disent le sommeil (profond, léger, paradoxal, et ce que la montre
+// n'a pas classé) : l'éveil n'y est pas empilé, sans quoi la barre mesurerait
+// le temps passé au lit et ne se comparerait plus au besoin de sommeil, en
+// pointillés sur le même axe. Il est dit dessous, avec les autres phases.
+const PHASE_LABEL = { deep: "Profond", light: "Léger", rem: "Paradoxal", other: "Non classé", awake: "Éveillé" };
+const SLEEP_BARS = ["deep", "light", "rem", "other"];
+// Espaces insécables : « 8 h 07 » ne se coupe pas en fin de ligne.
+const NBSP = "\u00a0";
+const clockText = (hm) => {
+  if (!hm) return "";
+  const [h, m] = hm.split(":").map(Number);
+  return m ? `${h}${NBSP}h${NBSP}${String(m).padStart(2, "0")}` : `${h}${NBSP}h`;
+};
+const dur = (m) => fmtDuration(m).replace(/ /g, NBSP);
+
+function SleepBody({ isDark, sleep, dense, ticks, periodKey, glideZone, axisTick, tooltipStyle, gridStroke }) {
+  const c = colors(isDark);
+  const tint = isDark ? DATA.sleep.dark : DATA.sleep.light;
+  const muted = { fontSize: 12, color: c.textMuted, lineHeight: 1.5 };
+  const bars = SLEEP_BARS.filter(k => k !== "other" || sleep.perBucket.some(b => b.other > 0));
+  const top = Math.max(9 * 60, sleep.need || 0, ...sleep.perBucket.map(b => b.total || 0));
+  const yTicks = [];
+  for (let v = 0; v <= Math.ceil(top / 120) * 120; v += 120) yTicks.push(v);
+  const rows = ["deep", "light", "rem", "other", "awake"].filter(k => k !== "other" || sleep.phases.other > 0);
+  const hard = sleep.afterHard;
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <span style={{ font: `700 26px ${MONO}`, color: c.text }}><Duration minutes={sleep.total} /></span>
+        <span style={{ fontSize: 12, color: c.textMuted }}>par nuit</span>
+        {sleep.score != null && (
+          <span style={{ fontSize: 13, color: c.text, fontWeight: 600, marginLeft: 6 }}>
+            score {sleep.score} <span style={{ color: c.textMuted, fontWeight: 400 }}>· {sleep.scoreLabel}</span>
+          </span>
+        )}
+      </div>
+
+      <div {...glideZone}>
+        <ResponsiveContainer key={periodKey} width="100%" height={170}>
+          <BarChart data={sleep.perBucket} margin={{ top: 6, right: 4, left: 0, bottom: 0 }} barCategoryGap={dense ? "8%" : "28%"}>
+            <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+            <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} interval={ticks} />
+            <YAxis domain={[0, yTicks.at(-1)]} ticks={yTicks} tick={axisTick} axisLine={false} tickLine={false} width={30}
+                   tickFormatter={v => `${v / 60} h`} />
+            <Tooltip cursor={{ fill: c.tint }}
+              content={({ active, payload }) => {
+                const row = active && payload?.[0]?.payload;
+                if (!row) return null;
+                return (
+                  <div style={{ ...tooltipStyle, maxWidth: 230 }}>
+                    <b>{bucketTitle(row)}</b>
+                    {row.n ? (
+                      <>
+                        <div style={{ marginTop: 2 }}>
+                          {dur(row.total)} de sommeil{row.n > 1 ? `, en moyenne sur ${row.n} nuits` : ""}
+                        </div>
+                        {/* Une phase ne se coupe pas en deux d'une ligne à l'autre. */}
+                        <div style={{ color: c.textMuted, display: "flex", flexWrap: "wrap", columnGap: 8 }}>
+                          {["deep", "light", "rem"].map(k => (
+                            <span key={k} style={{ whiteSpace: "nowrap" }}>{PHASE_LABEL[k]} {dur(row[k])}</span>
+                          ))}
+                        </div>
+                        {row.score != null && <div style={{ color: c.textMuted }}>Score {row.score}</div>}
+                      </>
+                    ) : (
+                      <div style={{ marginTop: 2, color: c.textMuted }}>Aucune nuit</div>
+                    )}
+                  </div>
+                );
+              }} />
+            {sleep.need != null && (
+              <ReferenceLine y={sleep.need} stroke={c.textMuted} strokeDasharray="4 4" strokeOpacity={0.8} />
+            )}
+            {dense
+              ? <Bar dataKey="total" fill={tint.total} isAnimationActive={false} />
+              // Un filet de 2 px à la couleur de la carte entre deux phases :
+              // deux marches voisines de la même teinte se liraient sinon
+              // comme un seul bloc.
+              : bars.map(k => (
+                <Bar key={k} dataKey={k} stackId="s" fill={tint[k]} stroke={c.card} strokeWidth={2}
+                     maxBarSize={24} isAnimationActive={false} />
+              ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Les phases en toutes lettres : la légende du graphe, et ses valeurs. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 10 }}>
+        {rows.map(k => (
+          <div key={k} style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            {/* L'éveil n'est pas dessiné dans les barres : pas de pastille,
+                elle laisserait croire le contraire. */}
+            <span style={{ width: 9, height: 9, borderRadius: 2, flexShrink: 0, background: k === "awake" ? "transparent" : tint[k] }} />
+            <span style={{ flex: 1, fontSize: 13, color: k === "awake" ? c.textMuted : c.textCard }}>{PHASE_LABEL[k]}</span>
+            <span style={{ ...TABULAR, fontSize: 12, fontWeight: 600, color: c.text }}>{fmtDuration(sleep.phases[k])}</span>
+            <span style={{ ...TABULAR, fontSize: 12, color: c.textMuted, minWidth: 36, textAlign: "right" }}>
+              {k === "awake" || !sleep.total ? "" : `${Math.round((sleep.phases[k] / sleep.total) * 100)} %`}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ ...muted, fontSize: 11, marginTop: 10 }}>
+        {dense ? "Une seule couleur à cette échelle, les phases sont dans la liste. " : ""}
+        {sleep.need != null && <>Pointillés : ton besoin de sommeil selon Garmin, {dur(sleep.need)} en moyenne. </>}
+        {sleep.bedtime && sleep.wake && <>Coucher vers {clockText(sleep.bedtime)}, lever vers {clockText(sleep.wake)}.</>}
+      </div>
+
+      {hard && (
+        <>
+          <div style={{ height: 0.5, background: c.border, margin: "14px 0 12px" }} />
+          <div style={{ fontSize: 13, color: c.text, lineHeight: 1.5 }}>
+            {Math.abs(hard.hard - hard.other) < 10 ? (
+              <>Après une grosse journée (charge {HARD_DAY_CHARGE} et plus), tu dors autant que les autres nuits : {dur(hard.hard)} contre {dur(hard.other)}.</>
+            ) : hard.hard < hard.other ? (
+              <>Après une grosse journée (charge {HARD_DAY_CHARGE} et plus), tu dors <b>{dur(hard.hard)}</b> en moyenne, contre {dur(hard.other)} les autres nuits.</>
+            ) : (
+              <>Après une grosse journée (charge {HARD_DAY_CHARGE} et plus), tu dors plus : <b>{dur(hard.hard)}</b> en moyenne, contre {dur(hard.other)} les autres nuits.</>
+            )}
+          </div>
+          <div style={{ ...muted, fontSize: 11, marginTop: 4 }}>
+            {plural(hard.hardN, "nuit", "nuits")} après une grosse journée, {plural(hard.otherN, "autre", "autres")}.
+          </div>
+        </>
+      )}
+    </>
   );
 }
 

@@ -622,6 +622,108 @@ export function hooperStats(data, start, end, buckets) {
   };
 }
 
+// ── Sommeil ──────────────────────────────────────────────────────────────────
+// Les nuits de `data.sleep` (Garmin, ou l'ancien import CSV), datées du jour
+// du réveil, durées en minutes. Chaque nuit se décompose en profond, léger,
+// paradoxal et « non classé » (ce que la montre n'a pas su ranger, ou une nuit
+// sans phases), dont la somme fait le sommeil total ; l'éveil s'y ajoute. Les
+// moyennes se font par nuit enregistrée : une semaine de trois nuits n'est pas
+// une semaine de sept nuits courtes.
+export const SLEEP_PHASES = ["deep", "light", "rem", "other", "awake"];
+// Une « grosse journée » : charge faite d'au moins 7 sur l'échelle 0-10, le
+// seuil de « soutenu » (`getChargeColor`).
+export const HARD_DAY_CHARGE = 7;
+
+const nightMinutes = (n) => {
+  const v = (k) => { const x = Number(n?.[k]); return Number.isFinite(x) && x > 0 ? x : 0; };
+  const total = v("total");
+  const deep = v("deep"), light = v("light"), rem = v("rem");
+  return { total, deep, light, rem, other: Math.max(0, total - deep - light - rem), awake: v("awake") };
+};
+
+// Moyenne des heures « 23:14 » / « 00:41 » : une heure du matin compte comme
+// la suite de la veille, sinon 23 h et 1 h donneraient midi. Arrondie à 5 min,
+// on dit « vers 23 h 10 ».
+export function averageClock(times, { night = false } = {}) {
+  const mins = times
+    .map(t => (typeof t === "string" ? /^(\d{1,2}):(\d{2})$/.exec(t) : null))
+    .filter(Boolean)
+    .map(m => {
+      const v = Number(m[1]) * 60 + Number(m[2]);
+      return night && v < 12 * 60 ? v + 24 * 60 : v;
+    });
+  if (!mins.length) return null;
+  const v = (Math.round(avg(mins) / 5) * 5) % (24 * 60);
+  return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
+}
+
+// Le score de Garmin en toutes lettres, avec ses paliers.
+export function sleepScoreLabel(score) {
+  if (score == null) return null;
+  return score >= 90 ? "Excellent" : score >= 80 ? "Bon" : score >= 60 ? "Passable" : "Mauvais";
+}
+
+// La charge faite d'un jour : séances notées faites, et échéances (une
+// échéance passée a eu lieu, comme dans le résumé).
+function doneCharge(index, dateISO) {
+  const e = index?.get(dateISO);
+  if (!e) return 0;
+  let sum = 0;
+  for (const s of e.sessions) if (s?.feedback?.done === true) sum += getSessionCharge(s);
+  for (const ev of e.events) sum += getSessionCharge(ev);
+  return sum;
+}
+
+export function sleepStats(data, index, start, end, buckets) {
+  const nights = (data?.sleep || [])
+    .filter(n => n?.date && n.date >= start && n.date <= end && Number(n.total) > 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const mean = (list, k) => (list.length ? Math.round(avg(list.map(x => x[k]))) : null);
+  const decomposed = nights.map(nightMinutes);
+  const scoreOf = (list) => {
+    const v = list.map(n => Number(n.score)).filter(x => Number.isFinite(x) && x > 0);
+    return v.length ? Math.round(avg(v)) : null;
+  };
+
+  const perBucket = buckets.map(b => {
+    const inB = nights.filter(n => n.date >= b.start && n.date <= b.end);
+    const parts = inB.map(nightMinutes);
+    const row = { label: b.label, start: b.start, end: b.end, kind: b.kind, full: b.full, n: inB.length, score: scoreOf(inB) };
+    row.total = mean(parts, "total");
+    for (const k of SLEEP_PHASES) row[k] = mean(parts, k);
+    return row;
+  });
+  if (!nights.length) return { n: 0, perBucket, afterHard: null };
+
+  const phases = {};
+  for (const k of SLEEP_PHASES) phases[k] = mean(decomposed, k);
+  const needs = nights.map(n => Number(n.need)).filter(x => Number.isFinite(x) && x > 0);
+  const score = scoreOf(nights);
+
+  // La nuit datée du 12 suit la journée du 11.
+  const after = { hard: [], other: [] };
+  nights.forEach((n, i) => {
+    const day = iso(addDays(parse(n.date), -1));
+    (doneCharge(index, day) >= HARD_DAY_CHARGE ? after.hard : after.other).push(decomposed[i].total);
+  });
+  const afterHard = after.hard.length >= 3 && after.other.length >= 3
+    ? { hardN: after.hard.length, hard: Math.round(avg(after.hard)), otherN: after.other.length, other: Math.round(avg(after.other)) }
+    : null;
+
+  return {
+    n: nights.length,
+    total: mean(decomposed, "total"),
+    phases,
+    score,
+    scoreLabel: sleepScoreLabel(score),
+    need: needs.length ? Math.round(avg(needs)) : null,
+    bedtime: averageClock(nights.map(n => n.start), { night: true }),
+    wake: averageClock(nights.map(n => n.end)),
+    afterHard,
+    perBucket,
+  };
+}
+
 // ── Poids ────────────────────────────────────────────────────────────────────
 // Un point par tranche (la moyenne des pesées), la dernière pesée et la
 // variation depuis la première de la période. L'axe se gradue au demi-kilo :
